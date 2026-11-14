@@ -17,6 +17,11 @@ extension ReplayContext {
         if messageId.peerId != accountPeerId, messageId.peerId.namespace == Namespaces.Peer.CloudUser, let timestamp = timestamp {
             recordPeerActivityTimestamp(peerId: messageId.peerId, timestamp: timestamp, into: &peerActivityTimestamps)
         }
+        // MARK: AyuGram
+        if messageId.peerId != accountPeerId, messageId.peerId.namespace == Namespaces.Peer.CloudUser {
+            AyuReadDates.shared.recordOutgoingRead(peerId: messageId.peerId, maxId: messageId.id, date: timestamp ?? Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970))
+        }
+        //
     }
     
     func applyResetReadState(_ peerId: PeerId, _ namespace: MessageId.Namespace, _ maxIncomingReadId: MessageId.Id, _ maxOutgoingReadId: MessageId.Id, _ maxKnownId: MessageId.Id, _ count: Int32, _ markedUnread: Bool?) {

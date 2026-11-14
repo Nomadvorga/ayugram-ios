@@ -331,3 +331,7 @@
 "Ayu.ExclusionDontSave" = "Не сохранять";
 "Ayu.ExclusionAlwaysSave" = "Всегда сохранять";
 "Ayu.DisableAds" = "Отключить рекламу";
+"Ayu.SpySaveReadMarks" = "Сохранять дату чтения";
+"Ayu.SpySaveReadMarksDescription" = "Локально сохраняет данные о чтении сообщений. Будет использоваться, если Telegram не предоставит дату чтения.";
+"Ayu.DeleteDateMenuText" = "Дата удаления";
+"Ayu.ReadDateMenuText" = "Дата прочтения";

@@ -33,6 +33,7 @@ private enum AyuBoolSetting: String {
     case saveDeletedMessages
     case saveMessagesHistory
     case saveForBots
+    case saveReadDate
     case semiTransparentDeletedMessages
     case disableAds
     case disableStories
@@ -111,6 +112,8 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveDeletedMessages, value: save.saveDeletedMessages, text: i18n("Ayu.SaveDeletedMessages", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveMessagesHistory, value: save.saveMessagesHistory, text: i18n("Ayu.SaveMessagesHistory", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveForBots, value: save.saveForBots, text: i18n("Ayu.MessageSavingSaveForBots", lang), enabled: save.saveDeletedMessages || save.saveMessagesHistory))
+    entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveReadDate, value: save.saveReadDate, text: i18n("Ayu.SpySaveReadMarks", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .spyEssentials, text: i18n("Ayu.SpySaveReadMarksDescription", lang)))
 
     entries.append(.header(id: id.count, section: .customization, text: i18n("Ayu.CustomizationHeader", lang), badge: nil))
     entries.append(.oneFromManySelector(id: id.count, section: .customization, settingName: .deletedMark, text: i18n("Ayu.DeletedMarkText", lang), value: deletedMarkTitle(customization.deletedMark, lang: lang), enabled: true))
@@ -156,6 +159,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuSaveSettings.shared.saveMessagesHistory = value
             case .saveForBots:
                 AyuSaveSettings.shared.saveForBots = value
+            case .saveReadDate:
+                AyuSaveSettings.shared.saveReadDate = value
             case .semiTransparentDeletedMessages:
                 AyuCustomizationSettings.shared.semiTransparentDeletedMessages = value
             case .disableAds:

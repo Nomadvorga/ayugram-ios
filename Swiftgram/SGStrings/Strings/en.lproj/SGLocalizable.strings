@@ -339,3 +339,7 @@
 "Ayu.ExclusionDontSave" = "Never Save";
 "Ayu.ExclusionAlwaysSave" = "Always Save";
 "Ayu.DisableAds" = "Disable Ads";
+"Ayu.SpySaveReadMarks" = "Save Read Date";
+"Ayu.SpySaveReadMarksDescription" = "Locally saves data about reading messages. This will be shown if Telegram does not provide a read date.";
+"Ayu.DeleteDateMenuText" = "Delete Date";
+"Ayu.ReadDateMenuText" = "Read Date";

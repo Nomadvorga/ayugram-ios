@@ -8,6 +8,7 @@ public final class AyuSaveSettings: @unchecked Sendable {
         case saveDeletedMessages
         case saveMessagesHistory
         case saveForBots
+        case saveReadDate
     }
 
     private static let keyPrefix = "ayu."
@@ -16,6 +17,7 @@ public final class AyuSaveSettings: @unchecked Sendable {
         keyPrefix + Keys.saveDeletedMessages.rawValue: true,
         keyPrefix + Keys.saveMessagesHistory.rawValue: true,
         keyPrefix + Keys.saveForBots.rawValue: false,
+        keyPrefix + Keys.saveReadDate.rawValue: true,
     ]
 
     private let defaults: UserDefaults
@@ -33,6 +35,11 @@ public final class AyuSaveSettings: @unchecked Sendable {
     public var saveMessagesHistory: Bool {
         get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveMessagesHistory.rawValue) }
         set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveMessagesHistory.rawValue) }
+    }
+
+    public var saveReadDate: Bool {
+        get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveReadDate.rawValue) }
+        set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveReadDate.rawValue) }
     }
 
     public var saveForBots: Bool {

@@ -37,6 +37,30 @@ func ayuMakeEditHistoryContextMenuAction(controllerInteraction: ChatControllerIn
     }))
 }
 
+// "Delete Date" for kept deleted messages and "Read Date" saved locally for outgoing ones.
+func ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> [ContextMenuItem] {
+    let lang = chatPresentationInterfaceState.strings.baseLanguageCode
+    let formatter = DateFormatter()
+    formatter.dateStyle = .short
+    formatter.timeStyle = .short
+    let makeItem: (String, Int32) -> ContextMenuItem = { title, date in
+        let text = "\(title): \(formatter.string(from: Date(timeIntervalSince1970: TimeInterval(date))))"
+        return .action(ContextMenuActionItem(text: text, textFont: .small, icon: { _ in
+            return nil
+        }, action: { _, f in
+            f(.default)
+        }))
+    }
+    var items: [ContextMenuItem] = []
+    if let deletedDate = message.ayuDeletedDate {
+        items.append(makeItem(i18n("Ayu.DeleteDateMenuText", lang), deletedDate))
+    }
+    if !message.flags.contains(.Incoming), message.id.peerId.namespace == Namespaces.Peer.CloudUser, let readDate = AyuReadDates.shared.readDate(messageId: message.id) {
+        items.append(makeItem(i18n("Ayu.ReadDateMenuText", lang), readDate))
+    }
+    return items
+}
+
 final class AyuEditHistoryViewController: UITableViewController {
     struct Version {
         let date: Int32

@@ -1601,6 +1601,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if let editHistoryAction = ayuMakeEditHistoryContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(editHistoryAction)
         }
+        actions.append(contentsOf: ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, message: message))
         //
         
         var threadId: Int64?
