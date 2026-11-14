@@ -305,3 +305,6 @@
 "Ayu.Save.Header" = "SAVING";
 "Ayu.Save.DeletedMessages" = "Save Deleted Messages";
 "Ayu.Save.DeletedMessages.Notice" = "Messages deleted by others stay in the chat marked with 🧹. They are kept only on this device.";
+"Ayu.Save.MessagesHistory" = "Save Edit History";
+"Ayu.EditHistory.Title" = "Edit History";
+"Ayu.EditHistory.Current" = "Current";

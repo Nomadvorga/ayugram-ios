@@ -1597,6 +1597,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             sgActions.append(showJsonAction)
         }
         //
+        // MARK: AyuGram
+        if let editHistoryAction = ayuMakeEditHistoryContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(editHistoryAction)
+        }
+        //
         
         var threadId: Int64?
         var threadMessageCount: Int = 0

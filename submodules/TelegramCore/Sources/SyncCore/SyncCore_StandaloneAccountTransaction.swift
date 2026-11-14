@@ -187,6 +187,16 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             if let previousEphemeralReplacement, !updated.contains(where: { $0 is EphemeralReplacementMessageAttribute }) {
                 updated.append(previousEphemeralReplacement)
             }
+            // MARK: AyuGram
+            // Local only: the server's copy of a message never carries these.
+            for attribute in previous {
+                if attribute is AyuDeletedMessageAttribute, !updated.contains(where: { $0 is AyuDeletedMessageAttribute }) {
+                    updated.append(attribute)
+                } else if attribute is AyuEditHistoryMessageAttribute, !updated.contains(where: { $0 is AyuEditHistoryMessageAttribute }) {
+                    updated.append(attribute)
+                }
+            }
+            //
         },
         decodeMessageThreadInfo: { entry in
             guard let data = entry.get(MessageHistoryThreadData.self) else {

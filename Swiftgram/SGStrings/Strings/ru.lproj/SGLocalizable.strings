@@ -297,3 +297,6 @@
 "Ayu.Save.Header" = "СОХРАНЕНИЕ";
 "Ayu.Save.DeletedMessages" = "Сохранять удалённые сообщения";
 "Ayu.Save.DeletedMessages.Notice" = "Сообщения, удалённые собеседником, остаются в чате с пометкой 🧹. Они хранятся только на этом устройстве.";
+"Ayu.Save.MessagesHistory" = "Сохранять историю правок";
+"Ayu.EditHistory.Title" = "История изменений";
+"Ayu.EditHistory.Current" = "Текущая";

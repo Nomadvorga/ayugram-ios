@@ -118,6 +118,7 @@ private enum SGBoolSetting: String {
     case ayuDontSendTyping
     case ayuOfflineAfterSending
     case ayuSaveDeletedMessages
+    case ayuSaveMessagesHistory
 }
 
 private enum SGOneFromManySetting: String {
@@ -175,6 +176,7 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     entries.append(.notice(id: id.count, section: .ghostMode, text: i18n("Ayu.Ghost.Notice", lang)))
     entries.append(.header(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.Header", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveDeletedMessages, value: AyuSaveSettings.shared.saveDeletedMessages, text: i18n("Ayu.Save.DeletedMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveMessagesHistory, value: AyuSaveSettings.shared.saveMessagesHistory, text: i18n("Ayu.Save.MessagesHistory", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.DeletedMessages.Notice", lang)))
     //
     
@@ -581,6 +583,9 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
             simplePromise.set(true)
         case .ayuSaveDeletedMessages:
             AyuSaveSettings.shared.saveDeletedMessages = value
+            simplePromise.set(true)
+        case .ayuSaveMessagesHistory:
+            AyuSaveSettings.shared.saveMessagesHistory = value
             simplePromise.set(true)
         }
     }, updateSliderValue: { setting, value in
