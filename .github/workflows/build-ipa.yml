@@ -57,17 +57,10 @@ jobs:
           echo "version=${ACTUAL}" >> "$GITHUB_OUTPUT"
           echo "Using Xcode ${ACTUAL}"
 
+      # Xcode installs stay: Bazel's xcode_configure probes every Xcode it finds.
       - name: Free disk space in background
         run: |
-          SELECTED=$(cd "$(xcode-select -p)/../.." && pwd -P)
-          (
-            for app in /Applications/Xcode_*.app; do
-              [ -L "$app" ] && continue
-              [ "$(cd "$app" && pwd -P)" = "$SELECTED" ] && continue
-              sudo rm -rf "$app"
-            done
-            sudo rm -rf "$HOME/Library/Android" /usr/local/share/dotnet "$HOME/.dotnet" "$HOME/.ghcup" 2>/dev/null
-          ) > /dev/null 2>&1 &
+          (sudo rm -rf "$HOME/Library/Android" /usr/local/share/dotnet "$HOME/.dotnet" "$HOME/.ghcup") > /dev/null 2>&1 &
           df -h /
 
       - name: Restore Bazel disk cache
