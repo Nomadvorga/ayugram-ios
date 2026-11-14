@@ -7,6 +7,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public enum Keys: String, CaseIterable {
         case deletedMark
         case semiTransparentDeletedMessages
+        case disableAds
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -34,6 +35,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     private static let defaultValues: [String: Any] = [
         keyPrefix + Keys.deletedMark.rawValue: DeletedMark.trashBin.rawValue,
         keyPrefix + Keys.semiTransparentDeletedMessages.rawValue: true,
+        keyPrefix + Keys.disableAds.rawValue: true,
     ]
 
     private let defaults: UserDefaults
@@ -51,5 +53,11 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var semiTransparentDeletedMessages: Bool {
         get { return self.defaults.bool(forKey: AyuCustomizationSettings.keyPrefix + Keys.semiTransparentDeletedMessages.rawValue) }
         set { self.defaults.set(newValue, forKey: AyuCustomizationSettings.keyPrefix + Keys.semiTransparentDeletedMessages.rawValue) }
+    }
+
+    // Sponsored messages in channels and sponsored peers in search.
+    public var disableAds: Bool {
+        get { return self.defaults.bool(forKey: AyuCustomizationSettings.keyPrefix + Keys.disableAds.rawValue) }
+        set { self.defaults.set(newValue, forKey: AyuCustomizationSettings.keyPrefix + Keys.disableAds.rawValue) }
     }
 }

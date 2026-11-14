@@ -34,6 +34,7 @@ private enum AyuBoolSetting: String {
     case saveMessagesHistory
     case saveForBots
     case semiTransparentDeletedMessages
+    case disableAds
     case disableStories
     case showPeerId
     case showMessageSeconds
@@ -116,6 +117,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .customization, settingName: .semiTransparentDeletedMessages, value: customization.semiTransparentDeletedMessages, text: i18n("Ayu.SemiTransparentDeletedMessages", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableStories, value: SGSimpleSettings.shared.hideStories, text: i18n("Ayu.DisableStories", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .showPeerId, value: SGSimpleSettings.shared.showProfileId, text: i18n("Ayu.SettingsShowID", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .showMessageSeconds, value: SGSimpleSettings.shared.secondsInMessages, text: i18n("Ayu.SettingsShowMessageSeconds", lang), enabled: true))
@@ -156,6 +158,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuSaveSettings.shared.saveForBots = value
             case .semiTransparentDeletedMessages:
                 AyuCustomizationSettings.shared.semiTransparentDeletedMessages = value
+            case .disableAds:
+                AyuCustomizationSettings.shared.disableAds = value
             case .disableStories:
                 SGSimpleSettings.shared.hideStories = value
             case .showPeerId:

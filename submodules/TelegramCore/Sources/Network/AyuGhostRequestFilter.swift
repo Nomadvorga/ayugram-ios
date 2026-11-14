@@ -24,6 +24,11 @@ private let ayuTypingFunctions: Set<String> = [
     "messages.setEncryptedTyping",
 ]
 
+private let ayuAdFunctions: Set<String> = [
+    "messages.getSponsoredMessages",
+    "contacts.getSponsoredPeers",
+]
+
 private let ayuMessageSendingFunctions: Set<String> = [
     "messages.sendMessage",
     "messages.sendMedia",
@@ -43,6 +48,9 @@ func ayuGhostShouldDrop(_ description: FunctionDescription) -> Bool {
     }
     if ayuTypingFunctions.contains(functionName) {
         return ayuShouldDrop(kind: .typing, droppedByDefault: !settings.sendUploadProgress, description: description)
+    }
+    if ayuAdFunctions.contains(functionName) {
+        return AyuCustomizationSettings.shared.disableAds
     }
     return false
 }
