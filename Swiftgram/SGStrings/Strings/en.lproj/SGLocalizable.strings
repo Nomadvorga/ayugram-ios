@@ -328,3 +328,13 @@
 "Ayu.SettingsShowMessageSeconds" = "Show Message Seconds";
 "Ayu.EditsHistoryTitle" = "Edits History";
 "Ayu.EditsHistoryCurrent" = "Current";
+"Ayu.ReadExclusionMenuText" = "Read Exclusion";
+"Ayu.TypingExclusionMenuText" = "Typing Exclusion";
+"Ayu.SavingExclusionMenuText" = "Saving Exclusion";
+"Ayu.ExclusionUseDefault" = "Default";
+"Ayu.ExclusionDontRead" = "Never Read";
+"Ayu.ExclusionAlwaysRead" = "Always Read";
+"Ayu.ExclusionDontType" = "Never Type";
+"Ayu.ExclusionAlwaysType" = "Always Type";
+"Ayu.ExclusionDontSave" = "Never Save";
+"Ayu.ExclusionAlwaysSave" = "Always Save";

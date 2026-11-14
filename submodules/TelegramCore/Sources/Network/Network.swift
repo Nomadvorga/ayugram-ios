@@ -1378,7 +1378,7 @@ public final class Network: NSObject {
         let requestService = self.requestService
         return Signal { [requestService, weak self] subscriber in
             // MARK: AyuGram
-            if ayuGhostShouldDrop(data.0.name) {
+            if ayuGhostShouldDrop(data.0) {
                 return (ayuGhostDroppedRequestResult(T.self)
                 |> map { NetworkRequestResult<T>.result($0) }).start(next: { value in
                     subscriber.putNext(value)
@@ -1441,7 +1441,7 @@ public final class Network: NSObject {
         let requestService = self.requestService
         return Signal { [requestService, weak self] subscriber in
             // MARK: AyuGram
-            if !ayuBypassGhost && ayuGhostShouldDrop(data.0.name) {
+            if !ayuBypassGhost && ayuGhostShouldDrop(data.0) {
                 return ayuGhostDroppedRequestResult(T.self).start(next: { value in
                     subscriber.putNext(value)
                 }, error: { error in

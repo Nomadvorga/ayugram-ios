@@ -9,6 +9,14 @@ enum SGContextMenuAction {
     case copy(text: String, copyTitle: String, copiedTitle: String)
     case copyLink(text: String)
     case openURL(url: String, title: String)
+    case options([SGContextMenuOption]) // MARK: AyuGram
+}
+
+// MARK: AyuGram
+struct SGContextMenuOption {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
 }
 
 private func sgContextExtractedContentContainingNode(for node: ASDisplayNode) -> ContextExtractedContentContainingNode? {
@@ -63,6 +71,20 @@ extension PeerInfoScreenNode {
                     self?.openUrl(url: url, concealed: false, external: false)
                 }
             })))
+        // MARK: AyuGram
+        case let .options(options):
+            for option in options {
+                items.append(.action(ContextMenuActionItem(text: option.title, icon: { theme in
+                    if !option.isSelected {
+                        return nil
+                    }
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                }, action: { c, _ in
+                    c?.dismiss {
+                        option.action()
+                    }
+                })))
+            }
         }
 
         let actions = ContextController.Items(content: .list(items))

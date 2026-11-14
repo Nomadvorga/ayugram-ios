@@ -8,7 +8,11 @@ import SGSimpleSettings
 // they remove the message locally before the server echoes the update.
 // Returns true when the message is kept and must not be deleted.
 func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
-    if !AyuSaveSettings.shared.saveDeletedMessages || id.namespace != Namespaces.Message.Cloud {
+    if id.namespace != Namespaces.Message.Cloud {
+        return false
+    }
+    let exclusion = ayuSavingExclusion(peerId: id.peerId)
+    if exclusion == .never || (exclusion == .default && !AyuSaveSettings.shared.saveDeletedMessages) {
         return false
     }
     guard let message = transaction.getMessage(id) else {
@@ -20,7 +24,7 @@ func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
     if message.media.contains(where: { $0 is TelegramMediaAction }) {
         return false
     }
-    if !AyuSaveSettings.shared.saveForBots, ayuIsBotDialog(message) {
+    if exclusion == .default && !AyuSaveSettings.shared.saveForBots && ayuIsBotDialog(message) {
         return false
     }
     let deletionDate = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
@@ -31,6 +35,10 @@ func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
         return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
     })
     return true
+}
+
+func ayuSavingExclusion(peerId: PeerId) -> AyuExclusions.Mode {
+    return AyuExclusions.shared.mode(.saving, peerId: peerId.toInt64())
 }
 
 func ayuIsBotDialog(_ message: Message) -> Bool {

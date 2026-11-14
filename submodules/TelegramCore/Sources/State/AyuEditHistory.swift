@@ -7,10 +7,11 @@ private let ayuMaxEditHistoryEntries = 50
 
 // Appends the version being replaced to the message's edit history when its text changes.
 func ayuMessageWithEditHistory(previous: Message, updated: StoreMessage) -> StoreMessage {
-    if !AyuSaveSettings.shared.saveMessagesHistory {
+    let exclusion = ayuSavingExclusion(peerId: previous.id.peerId)
+    if exclusion == .never {
         return updated
     }
-    if !AyuSaveSettings.shared.saveForBots, ayuIsBotDialog(previous) {
+    if exclusion == .default && (!AyuSaveSettings.shared.saveMessagesHistory || (!AyuSaveSettings.shared.saveForBots && ayuIsBotDialog(previous))) {
         return updated
     }
     let previousEntities = previous.textEntitiesAttribute?.entities ?? []

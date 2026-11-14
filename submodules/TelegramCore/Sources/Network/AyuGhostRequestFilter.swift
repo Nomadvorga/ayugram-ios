@@ -32,18 +32,59 @@ private let ayuMessageSendingFunctions: Set<String> = [
     "messages.sendInlineBotResult",
 ]
 
-func ayuGhostShouldDrop(_ functionName: String) -> Bool {
+func ayuGhostShouldDrop(_ description: FunctionDescription) -> Bool {
     let settings = AyuGhostSettings.shared
+    let functionName = description.name
     if ayuReadMessageFunctions.contains(functionName) {
-        return !settings.sendReadMessagePackets
+        return ayuShouldDrop(kind: .read, droppedByDefault: !settings.sendReadMessagePackets, description: description)
     }
     if ayuReadStoryFunctions.contains(functionName) {
         return !settings.sendReadStoryPackets
     }
     if ayuTypingFunctions.contains(functionName) {
-        return !settings.sendUploadProgress
+        return ayuShouldDrop(kind: .typing, droppedByDefault: !settings.sendUploadProgress, description: description)
     }
     return false
+}
+
+private func ayuShouldDrop(kind: AyuExclusions.Kind, droppedByDefault: Bool, description: FunctionDescription) -> Bool {
+    let exclusions = AyuExclusions.shared
+    // Describing the parameters decodes the request, so it is done only when some chat has an exclusion.
+    if exclusions.hasAny(kind), let peerId = ayuRequestPeerId(description) {
+        switch exclusions.mode(kind, peerId: peerId.toInt64()) {
+        case .never:
+            return true
+        case .always:
+            return false
+        case .default:
+            break
+        }
+    }
+    return droppedByDefault
+}
+
+private func ayuRequestPeerId(_ description: FunctionDescription) -> PeerId? {
+    for (name, parameter) in description.parameters {
+        if name == "peer", let inputPeer = parameter.value as? Api.InputPeer {
+            switch inputPeer {
+            case let .inputPeerUser(inputPeerUserData):
+                return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(inputPeerUserData.userId))
+            case let .inputPeerChat(inputPeerChatData):
+                return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(inputPeerChatData.chatId))
+            case let .inputPeerChannel(inputPeerChannelData):
+                return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(inputPeerChannelData.channelId))
+            default:
+                return nil
+            }
+        }
+        if name == "channel", let inputChannel = parameter.value as? Api.InputChannel {
+            if case let .inputChannel(inputChannelData) = inputChannel {
+                return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(inputChannelData.channelId))
+            }
+            return nil
+        }
+    }
+    return nil
 }
 
 // Only results that carry no server state are faked. messages.AffectedMessages holds pts,

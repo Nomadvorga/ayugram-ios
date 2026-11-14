@@ -320,3 +320,13 @@
 "Ayu.SettingsShowMessageSeconds" = "Показывать секунды у сообщений";
 "Ayu.EditsHistoryTitle" = "История правок";
 "Ayu.EditsHistoryCurrent" = "Текущая";
+"Ayu.ReadExclusionMenuText" = "Исключение нечиталки";
+"Ayu.TypingExclusionMenuText" = "Исключение неписалки";
+"Ayu.SavingExclusionMenuText" = "Исключение сохранения";
+"Ayu.ExclusionUseDefault" = "По умолчанию";
+"Ayu.ExclusionDontRead" = "Никогда не читать";
+"Ayu.ExclusionAlwaysRead" = "Всегда читать";
+"Ayu.ExclusionDontType" = "Никогда не писать";
+"Ayu.ExclusionAlwaysType" = "Всегда писать";
+"Ayu.ExclusionDontSave" = "Не сохранять";
+"Ayu.ExclusionAlwaysSave" = "Всегда сохранять";

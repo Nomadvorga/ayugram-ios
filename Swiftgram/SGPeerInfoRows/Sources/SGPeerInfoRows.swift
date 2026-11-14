@@ -134,6 +134,43 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
             itemId += 1
         }
     }
+    // MARK: AyuGram
+    if !isMyProfile, let peer = data.peer, peer.id != context.account.peerId, peer.id.namespace == Namespaces.Peer.CloudUser || peer.id.namespace == Namespaces.Peer.CloudGroup || peer.id.namespace == Namespaces.Peer.CloudChannel {
+        let lang = presentationData.strings.baseLanguageCode
+        let peerIdValue = peer.id.toInt64()
+        let exclusionRows: [(kind: AyuExclusions.Kind, label: String, never: String, always: String)] = [
+            (.read, "Ayu.ReadExclusionMenuText", "Ayu.ExclusionDontRead", "Ayu.ExclusionAlwaysRead"),
+            (.typing, "Ayu.TypingExclusionMenuText", "Ayu.ExclusionDontType", "Ayu.ExclusionAlwaysType"),
+            (.saving, "Ayu.SavingExclusionMenuText", "Ayu.ExclusionDontSave", "Ayu.ExclusionAlwaysSave"),
+        ]
+        for row in exclusionRows {
+            let titles: [AyuExclusions.Mode: String] = [
+                .default: i18n("Ayu.ExclusionUseDefault", lang),
+                .never: i18n(row.never, lang),
+                .always: i18n(row.always, lang),
+            ]
+            let kind = row.kind
+            let makeOptions: () -> SGContextMenuAction = {
+                let current = AyuExclusions.shared.mode(kind, peerId: peerIdValue)
+                return .options(AyuExclusions.Mode.allCases.map { value in
+                    return SGContextMenuOption(title: titles[value] ?? "", isSelected: value == current, action: {
+                        AyuExclusions.shared.setMode(value, kind: kind, peerId: peerIdValue)
+                        interaction.requestLayout(true)
+                    })
+                })
+            }
+            let currentMode = AyuExclusions.shared.mode(kind, peerId: peerIdValue)
+            items.append(PeerInfoScreenLabeledValueItem(id: itemId, context: context, label: i18n(row.label, lang), text: titles[currentMode] ?? "", textColor: .primary, action: { node, _ in
+                interaction.openSgContextMenu(node, nil, makeOptions())
+            }, longTapAction: nil, contextAction: { node, gesture, _ in
+                interaction.openSgContextMenu(node, gesture, makeOptions())
+            }, requestLayout: { _ in
+                interaction.requestLayout(false)
+            }))
+            itemId += 1
+        }
+    }
+    //
     if isMutualContact && !isMyProfile {
         items.append(PeerInfoScreenLabeledValueItem(id: itemId, label: i18n("MutualContact.Label", presentationData.strings.baseLanguageCode), text: "", action: nil, longTapAction: { _ in }, requestLayout: { _ in
             interaction.requestLayout(false)
