@@ -3,6 +3,7 @@ internal import TelegramApi
 import Postbox
 import SwiftSignalKit
 import MtProtoKit
+import SGSimpleSettings
 
 private typealias SignalKitTimer = SwiftSignalKit.Timer
 
@@ -17,6 +18,8 @@ private final class AccountPresenceManagerImpl {
     private var onlineTimer: SignalKitTimer?
     
     private var wasOnline: Bool = false
+    // MARK: AyuGram
+    private var ayuLastSentOnline: Bool = false
     
     init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         self.queue = queue
@@ -53,10 +56,27 @@ private final class AccountPresenceManagerImpl {
             }, queue: self.queue)
             self.onlineTimer = timer
             timer.start()
-            request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
+            // MARK: AyuGram
+            // An offline packet also moves "last seen" to now, so in ghost mode one is sent
+            // only to end an online status this session has actually announced.
+            if !AyuGhostSettings.shared.sendOnlinePackets {
+                if !self.ayuLastSentOnline {
+                    return
+                }
+                self.ayuLastSentOnline = false
+                request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
+            } else {
+                self.ayuLastSentOnline = true
+                request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
+            }
         } else {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil
+            // MARK: AyuGram
+            if !AyuGhostSettings.shared.sendOnlinePackets && !self.ayuLastSentOnline {
+                return
+            }
+            self.ayuLastSentOnline = false
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         }
         self.isPerformingUpdate.set(true)

@@ -1376,7 +1376,19 @@ public final class Network: NSObject {
     
     func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         let requestService = self.requestService
-        return Signal { [requestService] subscriber in
+        return Signal { [requestService, weak self] subscriber in
+            // MARK: AyuGram
+            if ayuGhostShouldDrop(data.0.name) {
+                return (ayuGhostDroppedRequestResult(T.self)
+                |> map { NetworkRequestResult<T>.result($0) }).start(next: { value in
+                    subscriber.putNext(value)
+                }, error: { error in
+                    subscriber.putError(error)
+                }, completed: {
+                    subscriber.putCompletion()
+                })
+            }
+            //
             let request = NetworkEngineRequest(
                 payload: data.1.makeData(),
                 metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag),
@@ -1406,6 +1418,11 @@ public final class Network: NSObject {
                         if let result = (response.result as! BoxedMessage).body as? T {
                             subscriber.putNext(.result(result))
                             subscriber.putCompletion()
+                            // MARK: AyuGram
+                            if let self {
+                                ayuGhostRequestSucceeded(data.0.name, network: self)
+                            }
+                            //
                         }
                         else {
                             subscriber.putError(MTRpcError(errorCode: 500, errorDescription: "TL_VERIFICATION_ERROR"))
@@ -1422,7 +1439,18 @@ public final class Network: NSObject {
     
     func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
-        return Signal { [requestService] subscriber in
+        return Signal { [requestService, weak self] subscriber in
+            // MARK: AyuGram
+            if ayuGhostShouldDrop(data.0.name) {
+                return ayuGhostDroppedRequestResult(T.self).start(next: { value in
+                    subscriber.putNext(value)
+                }, error: { error in
+                    subscriber.putError(error)
+                }, completed: {
+                    subscriber.putCompletion()
+                })
+            }
+            //
             let request = NetworkEngineRequest(
                 payload: data.1.makeData(),
                 metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag),
@@ -1444,6 +1472,11 @@ public final class Network: NSObject {
                         if let result = (response.result as! BoxedMessage).body as? T {
                             subscriber.putNext(result)
                             subscriber.putCompletion()
+                            // MARK: AyuGram
+                            if let self {
+                                ayuGhostRequestSucceeded(data.0.name, network: self)
+                            }
+                            //
                         }
                         else {
                             subscriber.putError(MTRpcError(errorCode: 500, errorDescription: "TL_VERIFICATION_ERROR"))

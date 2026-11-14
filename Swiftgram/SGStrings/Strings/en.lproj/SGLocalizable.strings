@@ -292,3 +292,13 @@
 "Settings.NY.Style.lightning" = "Lightning";
 "Settings.NY.Notice" = "Available for a limited time only!";
 "Settings.HideAccountInNotifications" = "Hide Account in Notifications";
+
+/* AyuGram */
+"Ayu.Ghost.Header" = "GHOST MODE";
+"Ayu.Ghost.Toggle" = "Ghost Mode";
+"Ayu.Ghost.DontReadMessages" = "Don't Read Messages";
+"Ayu.Ghost.DontReadStories" = "Don't Read Stories";
+"Ayu.Ghost.DontSendOnline" = "Don't Send Online";
+"Ayu.Ghost.DontSendTyping" = "Don't Send Typing";
+"Ayu.Ghost.OfflineAfterSending" = "Go Offline After Sending";
+"Ayu.Ghost.Notice" = "Messages and stories are marked as read only on this device. Sending a message still updates your last seen time.";
