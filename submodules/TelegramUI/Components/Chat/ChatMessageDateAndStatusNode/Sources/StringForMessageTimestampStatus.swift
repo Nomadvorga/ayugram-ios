@@ -258,5 +258,10 @@ public func stringForMessageTimestampStatus(
         }
     }
     
+    // MARK: AyuGram
+    if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }) {
+        dateText = "🧹 \(dateText)"
+    }
+    
     return dateText
 }

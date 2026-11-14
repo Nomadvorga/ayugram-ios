@@ -27,6 +27,7 @@ import UndoUI
 private enum SGControllerSection: Int32, SGItemListSection {
     case search
     case ghostMode // MARK: AyuGram
+    case ayuSaving // MARK: AyuGram
     case trending
     case content
     case tabs
@@ -116,6 +117,7 @@ private enum SGBoolSetting: String {
     case ayuDontSendOnline
     case ayuDontSendTyping
     case ayuOfflineAfterSending
+    case ayuSaveDeletedMessages
 }
 
 private enum SGOneFromManySetting: String {
@@ -171,6 +173,9 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontSendTyping, value: !ghost.sendUploadProgress, text: i18n("Ayu.Ghost.DontSendTyping", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuOfflineAfterSending, value: ghost.sendOfflinePacketAfterOnline, text: i18n("Ayu.Ghost.OfflineAfterSending", lang), enabled: !ghost.sendOnlinePackets))
     entries.append(.notice(id: id.count, section: .ghostMode, text: i18n("Ayu.Ghost.Notice", lang)))
+    entries.append(.header(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.Header", lang), badge: nil))
+    entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveDeletedMessages, value: AyuSaveSettings.shared.saveDeletedMessages, text: i18n("Ayu.Save.DeletedMessages", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.DeletedMessages.Notice", lang)))
     //
     
     
@@ -573,6 +578,9 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
             simplePromise.set(true)
         case .ayuOfflineAfterSending:
             AyuGhostSettings.shared.sendOfflinePacketAfterOnline = value
+            simplePromise.set(true)
+        case .ayuSaveDeletedMessages:
+            AyuSaveSettings.shared.saveDeletedMessages = value
             simplePromise.set(true)
         }
     }, updateSliderValue: { setting, value in
