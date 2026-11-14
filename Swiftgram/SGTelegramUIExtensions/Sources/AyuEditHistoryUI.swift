@@ -16,7 +16,7 @@ func ayuMakeEditHistoryContextMenuAction(controllerInteraction: ChatControllerIn
     }
     let lang = chatPresentationInterfaceState.strings.baseLanguageCode
     let isDark = chatPresentationInterfaceState.theme.overallDarkAppearance
-    return .action(ContextMenuActionItem(text: i18n("Ayu.EditHistory.Title", lang), icon: { theme in
+    return .action(ContextMenuActionItem(text: i18n("Ayu.EditsHistoryTitle", lang), icon: { theme in
         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
     }, action: { _, f in
         if let rootController = controllerInteraction.navigationController()?.view.window?.rootViewController {
@@ -24,8 +24,8 @@ func ayuMakeEditHistoryContextMenuAction(controllerInteraction: ChatControllerIn
             var versions = history.map { AyuEditHistoryViewController.Version(date: $0.date, text: $0.text) }
             versions.append(AyuEditHistoryViewController.Version(date: currentDate, text: message.text))
             let controller = AyuEditHistoryViewController(
-                title: i18n("Ayu.EditHistory.Title", lang),
-                currentLabel: i18n("Ayu.EditHistory.Current", lang),
+                title: i18n("Ayu.EditsHistoryTitle", lang),
+                currentLabel: i18n("Ayu.EditsHistoryCurrent", lang),
                 copyLabel: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy,
                 versions: versions.reversed()
             )

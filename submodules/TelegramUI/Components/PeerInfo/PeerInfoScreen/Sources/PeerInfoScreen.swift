@@ -169,6 +169,7 @@ enum PeerInfoContextSubject {
 }
 
 enum PeerInfoSettingsSection {
+    case ayugram // MARK: AyuGram
     // MARK: Swiftgram
     case swiftgram
     case swiftgramPro

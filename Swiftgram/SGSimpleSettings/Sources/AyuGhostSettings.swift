@@ -13,6 +13,14 @@ public final class AyuGhostSettings: @unchecked Sendable {
         case sendUploadProgress
         case sendOfflinePacketAfterOnline
         case markReadAfterAction
+        case useScheduledMessages
+        case sendWithoutSound
+    }
+
+    public enum SendWithoutSound: Int, CaseIterable {
+        case never = 0
+        case inGhostMode = 1
+        case always = 2
     }
 
     private static let keyPrefix = "ayu."
@@ -24,6 +32,8 @@ public final class AyuGhostSettings: @unchecked Sendable {
         keyPrefix + Keys.sendUploadProgress.rawValue: true,
         keyPrefix + Keys.sendOfflinePacketAfterOnline.rawValue: false,
         keyPrefix + Keys.markReadAfterAction.rawValue: true,
+        keyPrefix + Keys.useScheduledMessages.rawValue: false,
+        keyPrefix + Keys.sendWithoutSound.rawValue: SendWithoutSound.never.rawValue,
     ]
 
     private let defaults: UserDefaults
@@ -70,6 +80,17 @@ public final class AyuGhostSettings: @unchecked Sendable {
     public var markReadAfterAction: Bool {
         get { return self.value(.markReadAfterAction) }
         set { self.set(.markReadAfterAction, newValue) }
+    }
+
+    // Outgoing messages are scheduled a few seconds ahead, so sending them does not make the account online.
+    public var useScheduledMessages: Bool {
+        get { return self.value(.useScheduledMessages) }
+        set { self.set(.useScheduledMessages, newValue) }
+    }
+
+    public var sendWithoutSound: SendWithoutSound {
+        get { return SendWithoutSound(rawValue: self.defaults.integer(forKey: AyuGhostSettings.keyPrefix + Keys.sendWithoutSound.rawValue)) ?? .never }
+        set { self.defaults.set(newValue.rawValue, forKey: AyuGhostSettings.keyPrefix + Keys.sendWithoutSound.rawValue) }
     }
 
     public var isGhostModeActive: Bool {

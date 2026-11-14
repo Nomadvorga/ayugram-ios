@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings // MARK: AyuGram
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -259,8 +260,8 @@ public func stringForMessageTimestampStatus(
     }
     
     // MARK: AyuGram
-    if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }) {
-        dateText = "🧹 \(dateText)"
+    if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }), let mark = AyuCustomizationSettings.shared.deletedMark.text {
+        dateText = "\(mark) \(dateText)"
     }
     
     return dateText

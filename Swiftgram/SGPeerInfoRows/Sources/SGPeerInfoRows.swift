@@ -177,6 +177,11 @@ func sgPeerInfoSettingsItems(context: AccountContext, paymentsEnabled: Bool, pre
     }
 
     var items: [PeerInfoScreenItem] = []
+    // MARK: AyuGram
+    items.append(PeerInfoScreenDisclosureItem(id: 2, label: .none, text: "AyuGram", icon: PresentationResourcesSettings.swiftgram, action: {
+        interaction.openSettings(.ayugram)
+    }))
+    //
     if paymentsEnabled || context.sharedContext.immediateSGStatus.status > 1 {
         items.append(PeerInfoScreenDisclosureItem(id: 0, label: swiftgramProLabel, text: "Swiftgram Pro", icon: PresentationResourcesSettings.swiftgramPro, action: {
             interaction.openSettings(.swiftgramPro)

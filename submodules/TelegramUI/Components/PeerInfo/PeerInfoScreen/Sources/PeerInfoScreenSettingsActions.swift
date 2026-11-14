@@ -54,6 +54,8 @@ extension PeerInfoScreenNode {
             }
         }
         switch section {
+        case .ayugram: // MARK: AyuGram
+            self.controller?.push(ayuSettingsController(context: self.context))
         case .swiftgram:
             self.controller?.push(sgSettingsController(context: self.context))
         case .swiftgramPro:

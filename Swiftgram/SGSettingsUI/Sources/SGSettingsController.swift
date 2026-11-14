@@ -26,8 +26,6 @@ import UndoUI
 
 private enum SGControllerSection: Int32, SGItemListSection {
     case search
-    case ghostMode // MARK: AyuGram
-    case ayuSaving // MARK: AyuGram
     case trending
     case content
     case tabs
@@ -110,16 +108,6 @@ private enum SGBoolSetting: String {
     case videoControlsInFooter
     case combinedMediaViewer
     case hideAccountInNotifications
-    // MARK: AyuGram
-    case ayuGhostMode
-    case ayuDontReadMessages
-    case ayuDontReadStories
-    case ayuDontSendOnline
-    case ayuDontSendTyping
-    case ayuOfflineAfterSending
-    case ayuSaveDeletedMessages
-    case ayuSaveMessagesHistory
-    case ayuMarkReadAfterAction
 }
 
 private enum SGOneFromManySetting: String {
@@ -164,23 +152,6 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     let id = SGItemListCounter()
     
     entries.append(.searchInput(id: id.count, section: .search, title: NSAttributedString(string: "🔍"), text: state.searchQuery ?? "", placeholder: strings.Common_Search))
-    
-    // MARK: AyuGram
-    let ghost = AyuGhostSettings.shared
-    entries.append(.header(id: id.count, section: .ghostMode, text: i18n("Ayu.Ghost.Header", lang), badge: nil))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuGhostMode, value: ghost.isGhostModeActive, text: i18n("Ayu.Ghost.Toggle", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontReadMessages, value: !ghost.sendReadMessagePackets, text: i18n("Ayu.Ghost.DontReadMessages", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontReadStories, value: !ghost.sendReadStoryPackets, text: i18n("Ayu.Ghost.DontReadStories", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontSendOnline, value: !ghost.sendOnlinePackets, text: i18n("Ayu.Ghost.DontSendOnline", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontSendTyping, value: !ghost.sendUploadProgress, text: i18n("Ayu.Ghost.DontSendTyping", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuOfflineAfterSending, value: ghost.sendOfflinePacketAfterOnline, text: i18n("Ayu.Ghost.OfflineAfterSending", lang), enabled: !ghost.sendOnlinePackets))
-    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuMarkReadAfterAction, value: ghost.markReadAfterAction, text: i18n("Ayu.Ghost.MarkReadAfterAction", lang), enabled: !ghost.sendReadMessagePackets))
-    entries.append(.notice(id: id.count, section: .ghostMode, text: i18n("Ayu.Ghost.Notice", lang)))
-    entries.append(.header(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.Header", lang), badge: nil))
-    entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveDeletedMessages, value: AyuSaveSettings.shared.saveDeletedMessages, text: i18n("Ayu.Save.DeletedMessages", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveMessagesHistory, value: AyuSaveSettings.shared.saveMessagesHistory, text: i18n("Ayu.Save.MessagesHistory", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.DeletedMessages.Notice", lang)))
-    //
     
     
     if SGSimpleSettings.shared.canUseNY {
@@ -564,34 +535,6 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
         case .hideAccountInNotifications:
             SGSimpleSettings.shared.hideAccountInNotifications = value
             SGSimpleSettings.shared.synchronizeShared()
-        // MARK: AyuGram
-        case .ayuGhostMode:
-            AyuGhostSettings.shared.setGhostModeActive(value)
-            simplePromise.set(true)
-        case .ayuDontReadMessages:
-            AyuGhostSettings.shared.sendReadMessagePackets = !value
-            simplePromise.set(true)
-        case .ayuDontReadStories:
-            AyuGhostSettings.shared.sendReadStoryPackets = !value
-            simplePromise.set(true)
-        case .ayuDontSendOnline:
-            AyuGhostSettings.shared.sendOnlinePackets = !value
-            simplePromise.set(true)
-        case .ayuDontSendTyping:
-            AyuGhostSettings.shared.sendUploadProgress = !value
-            simplePromise.set(true)
-        case .ayuOfflineAfterSending:
-            AyuGhostSettings.shared.sendOfflinePacketAfterOnline = value
-            simplePromise.set(true)
-        case .ayuSaveDeletedMessages:
-            AyuSaveSettings.shared.saveDeletedMessages = value
-            simplePromise.set(true)
-        case .ayuSaveMessagesHistory:
-            AyuSaveSettings.shared.saveMessagesHistory = value
-            simplePromise.set(true)
-        case .ayuMarkReadAfterAction:
-            AyuGhostSettings.shared.markReadAfterAction = value
-            simplePromise.set(true)
         }
     }, updateSliderValue: { setting, value in
         switch (setting) {

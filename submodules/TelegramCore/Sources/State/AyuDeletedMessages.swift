@@ -20,6 +20,9 @@ func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
     if message.media.contains(where: { $0 is TelegramMediaAction }) {
         return false
     }
+    if !AyuSaveSettings.shared.saveForBots, ayuIsBotDialog(message) {
+        return false
+    }
     let deletionDate = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
     transaction.updateMessage(id, update: { currentMessage in
         let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
@@ -28,6 +31,13 @@ func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
         return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
     })
     return true
+}
+
+func ayuIsBotDialog(_ message: Message) -> Bool {
+    if let user = message.peers[message.id.peerId] as? TelegramUser, user.botInfo != nil {
+        return true
+    }
+    return false
 }
 
 // Keeps what can be kept and returns the global ids that still have to be deleted.

@@ -10,6 +10,9 @@ func ayuMessageWithEditHistory(previous: Message, updated: StoreMessage) -> Stor
     if !AyuSaveSettings.shared.saveMessagesHistory {
         return updated
     }
+    if !AyuSaveSettings.shared.saveForBots, ayuIsBotDialog(previous) {
+        return updated
+    }
     let previousEntities = previous.textEntitiesAttribute?.entities ?? []
     let updatedEntities = (updated.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) as? TextEntitiesMessageAttribute)?.entities ?? []
     if previous.text == updated.text && previousEntities == updatedEntities {
