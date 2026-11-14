@@ -1,0 +1,199 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'debug_arm64 builds much faster; release_arm64 is optimized'
+        type: choice
+        options:
+          - debug_arm64
+          - release_arm64
+        default: debug_arm64
+
+concurrency:
+  group: build-ipa-${{ github.ref }}-${{ inputs.configuration || 'debug_arm64' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 355
+    env:
+      CONFIGURATION: ${{ inputs.configuration || 'debug_arm64' }}
+      DISK_CACHE: /Users/runner/bazel-disk-cache
+      REPO_CACHE: /Users/runner/bazel-repo-cache
+      # GitHub rejects cache entries above 10 GB; the disk cache compresses well.
+      DISK_CACHE_LIMIT_GB: '9'
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Select Xcode
+        id: xcode
+        run: |
+          set -euo pipefail
+          REQUIRED=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
+          if [ -d "/Applications/Xcode_${REQUIRED}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${REQUIRED}.app/Contents/Developer"
+            echo "override=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Xcode ${REQUIRED} is not installed on this runner, using the default one"
+            echo "override=--overrideXcodeVersion" >> "$GITHUB_OUTPUT"
+          fi
+          ACTUAL=$(xcodebuild -version | awk 'NR==1{print $2}')
+          echo "version=${ACTUAL}" >> "$GITHUB_OUTPUT"
+          echo "Using Xcode ${ACTUAL}"
+
+      - name: Free disk space in background
+        run: |
+          SELECTED=$(cd "$(xcode-select -p)/../.." && pwd -P)
+          (
+            for app in /Applications/Xcode_*.app; do
+              [ -L "$app" ] && continue
+              [ "$(cd "$app" && pwd -P)" = "$SELECTED" ] && continue
+              sudo rm -rf "$app"
+            done
+            sudo rm -rf "$HOME/Library/Android" /usr/local/share/dotnet "$HOME/.dotnet" "$HOME/.ghcup" 2>/dev/null
+          ) > /dev/null 2>&1 &
+          df -h /
+
+      - name: Restore Bazel disk cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.DISK_CACHE }}
+          key: bazel-disk-${{ env.CONFIGURATION }}-xcode${{ steps.xcode.outputs.version }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-disk-${{ env.CONFIGURATION }}-xcode${{ steps.xcode.outputs.version }}-
+
+      - name: Restore Bazel repository cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.REPO_CACHE }}
+          key: bazel-repo-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', 'versions.json') }}
+          restore-keys: |
+            bazel-repo-
+
+      - name: Prepare build configuration
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_ID}" ] || [ -z "${API_HASH}" ]; then
+            echo "::warning::API_ID / API_HASH secrets are not set: the IPA will build, but login will not work"
+            API_ID=0
+            API_HASH=00000000000000000000000000000000
+          fi
+          mkdir -p "$DISK_CACHE" "$REPO_CACHE" build-input
+          # bundle_id and team_id must match the profiles in build-system/fake-codesigning;
+          # the IPA is re-signed with your own Apple ID by Sideloadly / AltStore.
+          cat > build-input/ci-configuration.json <<EOF
+          {
+            "sg_config": "",
+            "bundle_id": "ph.telegra.Telegraph",
+            "api_id": "${API_ID}",
+            "api_hash": "${API_HASH}",
+            "team_id": "C67CF9S4VU",
+            "is_internal_build": "false",
+            "is_appstore_build": "false",
+            "appstore_id": "0",
+            "app_specific_url_scheme": "tg",
+            "premium_iap_product_id": "",
+            "enable_siri": false,
+            "enable_icloud": false
+          }
+          EOF
+          cat > "$HOME/.bazelrc" <<EOF
+          common --repository_cache=${REPO_CACHE}
+          build --show_progress_rate_limit=60
+          EOF
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+
+      - name: Build
+        timeout-minutes: 320
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=$(( $(cat build_number_offset) + ${{ github.run_number }} ))
+          EXTRA_ARGS=""
+          if [ "$CONFIGURATION" = "release_arm64" ]; then
+            EXTRA_ARGS="--enableParallelSwiftmoduleGeneration"
+          fi
+          python3 -u build-system/Make/Make.py \
+            ${{ steps.xcode.outputs.override }} \
+            --cacheDir="$DISK_CACHE" \
+            build \
+            --configurationPath=build-input/ci-configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration="$CONFIGURATION" \
+            --buildNumber="$BUILD_NUMBER" \
+            --outputBuildArtifactsPath=build/artifacts \
+            $EXTRA_ARGS
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-iOS-${{ env.CONFIGURATION }}-${{ github.run_number }}
+          path: build/artifacts/*.ipa
+          compression-level: 0
+          retention-days: 14
+
+      - name: Trim Bazel disk cache (oldest entries first)
+        if: always()
+        run: |
+          python3 - "$DISK_CACHE" "$DISK_CACHE_LIMIT_GB" <<'EOF'
+          import os, sys
+          root, limit = sys.argv[1], int(sys.argv[2]) * 1024 ** 3
+          files, total = [], 0
+          for dirpath, _, names in os.walk(root):
+              for name in names:
+                  path = os.path.join(dirpath, name)
+                  try:
+                      st = os.stat(path)
+                  except FileNotFoundError:
+                      continue
+                  files.append((st.st_mtime, st.st_size, path))
+                  total += st.st_size
+          files.sort()
+          for _, size, path in files:
+              if total <= limit:
+                  break
+              os.remove(path)
+              total -= size
+          print(f"disk cache: {total / 1024 ** 3:.2f} GB")
+          EOF
+
+      - name: Save Bazel disk cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.DISK_CACHE }}
+          key: bazel-disk-${{ env.CONFIGURATION }}-xcode${{ steps.xcode.outputs.version }}-${{ github.run_id }}
+
+      - name: Delete older disk caches
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: bazel-disk-${{ env.CONFIGURATION }}-
+          CURRENT: bazel-disk-${{ env.CONFIGURATION }}-xcode${{ steps.xcode.outputs.version }}-${{ github.run_id }}
+        run: |
+          KEYS=$(gh cache list --repo "$GITHUB_REPOSITORY" --key "$PREFIX" --ref "$GITHUB_REF" --limit 100 --json key --jq '.[].key')
+          if ! grep -qx "$CURRENT" <<< "$KEYS"; then
+            echo "Current cache was not saved, keeping the older ones"
+            exit 0
+          fi
+          grep -vx "$CURRENT" <<< "$KEYS" | while read -r key; do
+            [ -n "$key" ] && gh cache delete "$key" --repo "$GITHUB_REPOSITORY" || true
+          done
