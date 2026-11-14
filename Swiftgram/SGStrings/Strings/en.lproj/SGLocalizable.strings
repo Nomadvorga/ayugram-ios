@@ -301,6 +301,7 @@
 "Ayu.Ghost.DontSendOnline" = "Don't Send Online";
 "Ayu.Ghost.DontSendTyping" = "Don't Send Typing";
 "Ayu.Ghost.OfflineAfterSending" = "Go Offline After Sending";
+"Ayu.Ghost.MarkReadAfterAction" = "Read Chat After Replying";
 "Ayu.Ghost.Notice" = "Messages and stories are marked as read only on this device. Sending a message still updates your last seen time.";
 "Ayu.Save.Header" = "SAVING";
 "Ayu.Save.DeletedMessages" = "Save Deleted Messages";

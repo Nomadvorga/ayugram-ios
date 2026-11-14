@@ -1437,11 +1437,11 @@ public final class Network: NSObject {
         }
     }
     
-    func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
+    func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil, ayuBypassGhost: Bool = false) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
         return Signal { [requestService, weak self] subscriber in
             // MARK: AyuGram
-            if ayuGhostShouldDrop(data.0.name) {
+            if !ayuBypassGhost && ayuGhostShouldDrop(data.0.name) {
                 return ayuGhostDroppedRequestResult(T.self).start(next: { value in
                     subscriber.putNext(value)
                 }, error: { error in

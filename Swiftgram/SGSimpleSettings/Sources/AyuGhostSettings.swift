@@ -12,6 +12,7 @@ public final class AyuGhostSettings: @unchecked Sendable {
         case sendOnlinePackets
         case sendUploadProgress
         case sendOfflinePacketAfterOnline
+        case markReadAfterAction
     }
 
     private static let keyPrefix = "ayu."
@@ -22,6 +23,7 @@ public final class AyuGhostSettings: @unchecked Sendable {
         keyPrefix + Keys.sendOnlinePackets.rawValue: true,
         keyPrefix + Keys.sendUploadProgress.rawValue: true,
         keyPrefix + Keys.sendOfflinePacketAfterOnline.rawValue: false,
+        keyPrefix + Keys.markReadAfterAction.rawValue: true,
     ]
 
     private let defaults: UserDefaults
@@ -62,6 +64,12 @@ public final class AyuGhostSettings: @unchecked Sendable {
     public var sendOfflinePacketAfterOnline: Bool {
         get { return self.value(.sendOfflinePacketAfterOnline) }
         set { self.set(.sendOfflinePacketAfterOnline, newValue) }
+    }
+
+    // With read packets off, sending a message to a chat still marks it as read there.
+    public var markReadAfterAction: Bool {
+        get { return self.value(.markReadAfterAction) }
+        set { self.set(.markReadAfterAction, newValue) }
     }
 
     public var isGhostModeActive: Bool {

@@ -119,6 +119,7 @@ private enum SGBoolSetting: String {
     case ayuOfflineAfterSending
     case ayuSaveDeletedMessages
     case ayuSaveMessagesHistory
+    case ayuMarkReadAfterAction
 }
 
 private enum SGOneFromManySetting: String {
@@ -173,6 +174,7 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontSendOnline, value: !ghost.sendOnlinePackets, text: i18n("Ayu.Ghost.DontSendOnline", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuDontSendTyping, value: !ghost.sendUploadProgress, text: i18n("Ayu.Ghost.DontSendTyping", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuOfflineAfterSending, value: ghost.sendOfflinePacketAfterOnline, text: i18n("Ayu.Ghost.OfflineAfterSending", lang), enabled: !ghost.sendOnlinePackets))
+    entries.append(.toggle(id: id.count, section: .ghostMode, settingName: .ayuMarkReadAfterAction, value: ghost.markReadAfterAction, text: i18n("Ayu.Ghost.MarkReadAfterAction", lang), enabled: !ghost.sendReadMessagePackets))
     entries.append(.notice(id: id.count, section: .ghostMode, text: i18n("Ayu.Ghost.Notice", lang)))
     entries.append(.header(id: id.count, section: .ayuSaving, text: i18n("Ayu.Save.Header", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .ayuSaving, settingName: .ayuSaveDeletedMessages, value: AyuSaveSettings.shared.saveDeletedMessages, text: i18n("Ayu.Save.DeletedMessages", lang), enabled: true))
@@ -586,6 +588,9 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
             simplePromise.set(true)
         case .ayuSaveMessagesHistory:
             AyuSaveSettings.shared.saveMessagesHistory = value
+            simplePromise.set(true)
+        case .ayuMarkReadAfterAction:
+            AyuGhostSettings.shared.markReadAfterAction = value
             simplePromise.set(true)
         }
     }, updateSliderValue: { setting, value in

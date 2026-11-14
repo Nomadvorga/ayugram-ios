@@ -293,6 +293,7 @@
 "Ayu.Ghost.DontSendOnline" = "Не отправлять «онлайн»";
 "Ayu.Ghost.DontSendTyping" = "Не отправлять «печатает»";
 "Ayu.Ghost.OfflineAfterSending" = "Оффлайн после отправки";
+"Ayu.Ghost.MarkReadAfterAction" = "Читать чат после ответа";
 "Ayu.Ghost.Notice" = "Сообщения и истории отмечаются прочитанными только на этом устройстве. Отправка сообщения всё равно обновляет время последнего визита.";
 "Ayu.Save.Header" = "СОХРАНЕНИЕ";
 "Ayu.Save.DeletedMessages" = "Сохранять удалённые сообщения";
