@@ -180,13 +180,16 @@ func chatHistoryEntriesForView(
     } else if chatPeer is TelegramGroup {
         ayuHidesReactions = AyuCustomizationSettings.shared.hideGroupReactions
     }
-    let ayuShadowBanned = AyuShadowBan.shared.peerIds
+    var ayuHiddenAuthors = AyuShadowBan.shared.peerIds
+    if AyuCustomizationSettings.shared.hideFromBlocked {
+        ayuHiddenAuthors.formUnion(AyuBlockedPeers.shared.blockedPeerIds(account: context.account))
+    }
     //
     var count = 0
     loop: for entry in view.entries {
         var message = entry.message.withAppliedEphemeralReplacementMessage()
         // MARK: AyuGram
-        if !ayuShadowBanned.isEmpty, let authorId = message.author?.id, authorId != message.id.peerId, ayuShadowBanned.contains(authorId.toInt64()) {
+        if !ayuHiddenAuthors.isEmpty, let authorId = message.author?.id, authorId != message.id.peerId, ayuHiddenAuthors.contains(authorId.toInt64()) {
             continue loop
         }
         if ayuHidesReactions, message.attributes.contains(where: { $0 is ReactionsMessageAttribute }) {

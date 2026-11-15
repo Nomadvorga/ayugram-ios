@@ -46,6 +46,7 @@ private enum AyuBoolSetting: String {
     case hideNotificationBadge
     case hideFolderCounters
     case copyUsernameAsLink
+    case hideFromBlocked
     case hidePremiumStatuses
     case hideGroupReactions
     case hideChannelReactions
@@ -173,6 +174,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableSimilarChannels, value: customization.disableSimilarChannels, text: i18n("Ayu.DisableSimilarChannels", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideFolderCounters, value: customization.hideFolderCounters, text: i18n("Ayu.HideNotificationCounters", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideNotificationBadge, value: customization.hideNotificationBadge, text: i18n("Ayu.HideNotificationBadge", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideFromBlocked, value: customization.hideFromBlocked, text: i18n("Ayu.FiltersHideFromBlocked", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .usefulFeatures, text: i18n("Ayu.HideNotificationBadgeDescription", lang)))
 
     let confirmations = AyuSendConfirmations.shared
@@ -241,6 +243,9 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.hideFolderCounters = value
             case .copyUsernameAsLink:
                 AyuCustomizationSettings.shared.copyUsernameAsLink = value
+            case .hideFromBlocked:
+                AyuCustomizationSettings.shared.hideFromBlocked = value
+                NotificationCenter.default.post(name: ayuMessageFiltersDidChangeNotification, object: nil)
             case .hidePremiumStatuses:
                 AyuCustomizationSettings.shared.hidePremiumStatuses = value
             case .hideGroupReactions:

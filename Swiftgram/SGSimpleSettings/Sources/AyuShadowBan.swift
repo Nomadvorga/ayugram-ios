@@ -1,12 +1,12 @@
 import Foundation
 
 // MARK: AyuGram
+// Posted on the main queue when the shadow ban list or the blocked users change, so open chats re-filter their history.
+public let ayuMessageFiltersDidChangeNotification = Notification.Name("AyuMessageFiltersDidChange")
+
 // "Shadow Ban": messages of these users are hidden locally in groups and channels' comments.
 public final class AyuShadowBan {
     public static let shared = AyuShadowBan()
-
-    // Posted after the list changes, so open chats re-filter their history.
-    public static let didChangeNotification = Notification.Name("AyuShadowBanDidChange")
 
     private static let key = "ayu.filters.shadowBan"
 
@@ -43,6 +43,6 @@ public final class AyuShadowBan {
         self.cachedPeerIds = Set(values.keys.compactMap(Int64.init))
         self.lock.unlock()
         self.store.setIntDictionary(values, AyuShadowBan.key)
-        NotificationCenter.default.post(name: AyuShadowBan.didChangeNotification, object: nil)
+        NotificationCenter.default.post(name: ayuMessageFiltersDidChangeNotification, object: nil)
     }
 }

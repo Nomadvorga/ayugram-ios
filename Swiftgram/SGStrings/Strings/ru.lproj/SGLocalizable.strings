@@ -390,3 +390,4 @@
 "Ayu.FiltersShadowBan" = "Теневой бан";
 "Ayu.FiltersQuickShadowBan" = "В теневой бан";
 "Ayu.FiltersQuickUnshadowBan" = "Снять теневой бан";
+"Ayu.FiltersHideFromBlocked" = "Скрывать сообщения от пользователей в ЧС";

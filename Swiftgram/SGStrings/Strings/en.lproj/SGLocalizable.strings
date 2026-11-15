@@ -398,3 +398,4 @@
 "Ayu.FiltersShadowBan" = "Shadow Ban";
 "Ayu.FiltersQuickShadowBan" = "Shadow Ban";
 "Ayu.FiltersQuickUnshadowBan" = "Unshadow Ban";
+"Ayu.FiltersHideFromBlocked" = "Hide Messages from Blocked Users";

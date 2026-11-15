@@ -21,6 +21,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case hideChannelReactions
         case hideGroupReactions
         case hidePremiumStatuses
+        case hideFromBlocked
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -90,6 +91,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.hideChannelReactions): false,
             AyuCustomizationSettings.key(.hideGroupReactions): false,
             AyuCustomizationSettings.key(.hidePremiumStatuses): false,
+            AyuCustomizationSettings.key(.hideFromBlocked): false,
         ])
     }
 
@@ -176,6 +178,12 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var hidePremiumStatuses: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.hidePremiumStatuses)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hidePremiumStatuses)) }
+    }
+
+    // Messages of blocked users are hidden in groups.
+    public var hideFromBlocked: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.hideFromBlocked)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hideFromBlocked)) }
     }
 
     // What copying a username puts on the pasteboard.

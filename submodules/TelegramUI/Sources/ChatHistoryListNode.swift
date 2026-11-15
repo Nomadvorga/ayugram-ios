@@ -1878,7 +1878,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         
         // MARK: AyuGram
         if self.ayuShadowBanObserver == nil {
-            self.ayuShadowBanObserver = NotificationCenter.default.addObserver(forName: AyuShadowBan.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self.ayuShadowBanObserver = NotificationCenter.default.addObserver(forName: ayuMessageFiltersDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 guard let self else {
                     return
                 }
