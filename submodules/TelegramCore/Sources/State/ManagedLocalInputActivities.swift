@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
+import SGSimpleSettings // MARK: AyuGram
 
 
 public struct PeerActivitySpace: Hashable {
@@ -142,6 +143,18 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
 }
 
 private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {
+    // MARK: AyuGram
+    // As in Telegram-iOS-Ghost: typing and uploads are dropped before any Postbox or network work. Cancelling,
+    // speaking in a group call and emoji interactions are kept.
+    if let activity, ayuSuppressesTyping(peerId: peerId) {
+        switch activity {
+        case .speakingInGroupCall, .interactingWithEmoji, .seeingEmojiInteraction:
+            break
+        default:
+            return .complete()
+        }
+    }
+    //
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(peerId) {
             if peerId == accountPeerId {

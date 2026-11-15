@@ -55,6 +55,19 @@ func ayuGhostShouldDrop(_ description: FunctionDescription) -> Bool {
     if ayuAdFunctions.contains(functionName) {
         return AyuCustomizationSettings.shared.disableAds
     }
+    if functionName == "account.updateStatus", settings.suppressOnlineStatus {
+        return ayuIsOnlineStatusUpdate(description)
+    }
+    return false
+}
+
+// An online packet from anywhere but the presence manager and the send pulse, which bypass the filter.
+private func ayuIsOnlineStatusUpdate(_ description: FunctionDescription) -> Bool {
+    for (name, parameter) in description.parameters where name == "offline" {
+        if let offline = parameter.value as? Api.Bool, case .boolFalse = offline {
+            return true
+        }
+    }
     return false
 }
 
@@ -84,6 +97,17 @@ func ayuSuppressesReadState(peerId: PeerId) -> Bool {
         return false
     case .default:
         return AyuGhostSettings.shared.suppressReadMessages
+    }
+}
+
+func ayuSuppressesTyping(peerId: PeerId) -> Bool {
+    switch AyuExclusions.shared.mode(.typing, peerId: peerId.toInt64()) {
+    case .never:
+        return true
+    case .always:
+        return false
+    case .default:
+        return AyuGhostSettings.shared.suppressTyping
     }
 }
 
@@ -146,10 +170,10 @@ func ayuGhostRequestSucceeded(_ functionName: String, network: Network) {
     let settings = AyuGhostSettings.shared
     // The server shows a sender online anyway; with the pulse it is for 0.2 s only.
     if settings.pulseOnlineOnSend {
-        let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse)).start()
+        let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true).start()
         Queue.mainQueue().after(0.2) {
             if AyuGhostSettings.shared.suppressOnlineStatus {
-                let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
+                let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue), ayuBypassGhost: true).start()
                 AyuGhostLastSeen.shared.recordNow()
             }
         }

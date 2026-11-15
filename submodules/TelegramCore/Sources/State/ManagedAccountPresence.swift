@@ -20,10 +20,20 @@ private final class AccountPresenceManagerImpl {
     private var wasOnline: Bool = false
     // MARK: AyuGram
     private var ayuLastSentOnline: Bool = false
+    private var ayuSuppressesOnline: Bool = AyuGhostSettings.shared.suppressOnlineStatus
+    private var ayuSettingsObserver: NSObjectProtocol?
     
     init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         self.queue = queue
         self.network = network
+        
+        // MARK: AyuGram
+        // Turning ghost mode on while the app is open hides the online status at once, turning it off shows it.
+        self.ayuSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil, using: { [weak self] _ in
+            queue.async {
+                self?.ayuGhostSettingsChanged()
+            }
+        })
         
         self.shouldKeepOnlinePresenceDisposable = (shouldKeepOnlinePresence
         |> distinctUntilChanged
@@ -43,11 +53,38 @@ private final class AccountPresenceManagerImpl {
         self.shouldKeepOnlinePresenceDisposable?.dispose()
         self.currentRequestDisposable.dispose()
         self.onlineTimer?.invalidate()
+        if let ayuSettingsObserver = self.ayuSettingsObserver {
+            NotificationCenter.default.removeObserver(ayuSettingsObserver)
+        }
+    }
+    
+    // MARK: AyuGram
+    private func ayuGhostSettingsChanged() {
+        let suppressesOnline = AyuGhostSettings.shared.suppressOnlineStatus
+        if suppressesOnline != self.ayuSuppressesOnline {
+            self.ayuSuppressesOnline = suppressesOnline
+            if self.wasOnline {
+                self.updatePresence(true)
+            }
+        }
     }
     
     private func updatePresence(_ isOnline: Bool) {
         let request: Signal<Api.Bool, MTRpcError>
-        if isOnline {
+        // MARK: AyuGram
+        // Ghost presence as in Telegram-iOS-Ghost: Telegram's 30-second online refresh timer is not created; an
+        // online status already announced is ended at once, and "Send offline packet" keeps "last seen" moving.
+        if isOnline && AyuGhostSettings.shared.suppressOnlineStatus {
+            self.onlineTimer?.invalidate()
+            self.onlineTimer = nil
+            if !self.ayuLastSentOnline && !AyuGhostSettings.shared.sendAutomaticOffline {
+                self.currentRequestDisposable.set(nil)
+                self.isPerformingUpdate.set(false)
+                return
+            }
+            self.ayuLastSentOnline = false
+            request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue), ayuBypassGhost: true)
+        } else if isOnline {
             let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
                 guard let strongSelf = self else {
                     return
@@ -56,24 +93,13 @@ private final class AccountPresenceManagerImpl {
             }, queue: self.queue)
             self.onlineTimer = timer
             timer.start()
-            // MARK: AyuGram
-            // An offline packet also moves "last seen" to now, so in ghost mode one is sent
-            // only to end an online status this session has actually announced.
-            if AyuGhostSettings.shared.suppressOnlineStatus {
-                if !self.ayuLastSentOnline {
-                    return
-                }
-                self.ayuLastSentOnline = false
-                request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
-            } else {
-                self.ayuLastSentOnline = true
-                request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
-            }
+            self.ayuLastSentOnline = true // MARK: AyuGram
+            request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true)
         } else {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil
             // MARK: AyuGram
-            if AyuGhostSettings.shared.suppressOnlineStatus && !self.ayuLastSentOnline {
+            if AyuGhostSettings.shared.suppressOnlineStatus && !self.ayuLastSentOnline && !AyuGhostSettings.shared.sendAutomaticOffline {
                 return
             }
             self.ayuLastSentOnline = false
