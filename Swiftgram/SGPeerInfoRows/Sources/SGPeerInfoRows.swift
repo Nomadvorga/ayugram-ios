@@ -186,6 +186,26 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
             interaction.requestLayout(false)
         }))
         itemId += 1
+
+        var isGroup = false
+        if case .legacyGroup = data.peer {
+            isGroup = true
+        } else if case let .channel(channel) = data.peer, case .group = channel.info {
+            isGroup = true
+        }
+        if isGroup {
+            let deleteOwnAction: SGContextMenuAction = .options([SGContextMenuOption(title: i18n("Ayu.DeleteOwnMessages", lang), isSelected: false, action: {
+                let _ = ayuDeleteOwnMessages(context: context, peerId: peer.id).start()
+            })])
+            items.append(PeerInfoScreenLabeledValueItem(id: itemId, context: context, label: i18n("Ayu.DeleteOwnMessages", lang), text: i18n("Ayu.DeleteOwnMessagesConfirmation", lang), textColor: .primary, action: { node, _ in
+                interaction.openSgContextMenu(node, nil, deleteOwnAction)
+            }, longTapAction: nil, contextAction: { node, gesture, _ in
+                interaction.openSgContextMenu(node, gesture, deleteOwnAction)
+            }, requestLayout: { _ in
+                interaction.requestLayout(false)
+            }))
+            itemId += 1
+        }
     }
     //
     if isMutualContact && !isMyProfile {
@@ -220,4 +240,29 @@ func sgPeerInfoSettingsItems(context: AccountContext, paymentsEnabled: Bool, pre
         interaction.openSettings(.swiftgram)
     }))
     return items
+}
+
+// MARK: AyuGram
+// "Delete own messages": finds the account's messages in the chat on the server, 100 at a time, and deletes them for everyone.
+func ayuDeleteOwnMessages(context: AccountContext, peerId: EnginePeer.Id) -> Signal<Int, NoError> {
+    let accountPeerId = context.account.peerId
+    func step(deleted: Set<EngineMessage.Id>, iteration: Int) -> Signal<Int, NoError> {
+        if iteration >= 200 {
+            return .single(deleted.count)
+        }
+        return context.engine.messages.searchMessages(location: .peer(peerId: peerId, fromId: accountPeerId, tags: nil, reactions: nil, threadId: nil, minDate: nil, maxDate: nil), query: "", state: nil, limit: 100)
+        |> take(1)
+        |> mapToSignal { result, _ -> Signal<Int, NoError> in
+            let ids = result.messages.map(\.id).filter { $0.peerId == peerId && !deleted.contains($0) }
+            if ids.isEmpty {
+                return .single(deleted.count)
+            }
+            return (context.engine.messages.deleteMessagesInteractively(messageIds: ids, type: .forEveryone)
+            |> mapToSignal { _ -> Signal<Int, NoError> in
+                return .complete()
+            })
+            |> then(step(deleted: deleted.union(ids), iteration: iteration + 1))
+        }
+    }
+    return step(deleted: Set(), iteration: 0)
 }
