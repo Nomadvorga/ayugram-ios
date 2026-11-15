@@ -134,6 +134,9 @@ jobs:
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath=build/artifacts \
             $EXTRA_ARGS
+          for ipa in build/artifacts/*.ipa; do
+            [ "$ipa" = build/artifacts/AyuGram.ipa ] || mv "$ipa" build/artifacts/AyuGram.ipa
+          done
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
