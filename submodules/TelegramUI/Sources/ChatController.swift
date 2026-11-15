@@ -6964,7 +6964,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 if let darkAppearancePreview = darkAppearancePreview {
                                     useDarkAppearance = darkAppearancePreview
                                 }
-                                if let theme = makePresentationTheme(cloudTheme: theme, dark: useDarkAppearance, preferredBaseTheme: modeTheme.referenceTheme.baseTheme) { // MARK: AyuGram
+                                if let theme = makePresentationTheme(cloudTheme: theme, dark: useDarkAppearance) {
                                     theme.forceSync = true
                                     presentationData = presentationData.withUpdated(theme: theme).withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
                                     
@@ -6977,7 +6977,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             if let darkAppearancePreview = darkAppearancePreview {
                                 useDarkAppearance = darkAppearancePreview
                             }
-                            if let theme = makePresentationTheme(chatTheme: chatTheme, dark: useDarkAppearance, preferredBaseTheme: modeTheme.referenceTheme.baseTheme) { // MARK: AyuGram
+                            if let theme = makePresentationTheme(chatTheme: chatTheme, dark: useDarkAppearance) {
                                 theme.forceSync = true
                                 presentationData = presentationData.withUpdated(theme: theme).withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
                                 
