@@ -413,6 +413,11 @@ public extension Peer {
     }
     
     var emojiStatus: PeerEmojiStatus? {
+        // MARK: AyuGram
+        if ayuHidesPremiumStatuses() {
+            return nil
+        }
+        //
         switch self {
         case let user as TelegramUser:
             return user.emojiStatus
@@ -648,4 +653,10 @@ public extension PeerId {
     var isSecretChat: Bool {
         return self.namespace == Namespaces.Peer.SecretChat
     }
+}
+
+// MARK: AyuGram
+// "Hide Premium Statuses": no emoji statuses and no premium stars next to names.
+public func ayuHidesPremiumStatuses() -> Bool {
+    return AyuCustomizationSettings.shared.hidePremiumStatuses
 }

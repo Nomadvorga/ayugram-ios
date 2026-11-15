@@ -46,6 +46,7 @@ private enum AyuBoolSetting: String {
     case hideNotificationBadge
     case hideFolderCounters
     case copyUsernameAsLink
+    case hidePremiumStatuses
     case hideGroupReactions
     case hideChannelReactions
     case simpleQuotesAndReplies
@@ -163,6 +164,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .customization, settingName: .simpleQuotesAndReplies, value: customization.simpleQuotesAndReplies, text: i18n("Ayu.SimpleQuotesAndReplies", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .hideChannelReactions, value: customization.hideChannelReactions, text: i18n("Ayu.HideChannelReactions", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .hideGroupReactions, value: customization.hideGroupReactions, text: i18n("Ayu.HideGroupReactions", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .customization, settingName: .hidePremiumStatuses, value: customization.hidePremiumStatuses, text: i18n("Ayu.HidePremiumStatuses", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
@@ -239,6 +241,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.hideFolderCounters = value
             case .copyUsernameAsLink:
                 AyuCustomizationSettings.shared.copyUsernameAsLink = value
+            case .hidePremiumStatuses:
+                AyuCustomizationSettings.shared.hidePremiumStatuses = value
             case .hideGroupReactions:
                 AyuCustomizationSettings.shared.hideGroupReactions = value
             case .hideChannelReactions:

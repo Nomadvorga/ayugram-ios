@@ -20,6 +20,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case simpleQuotesAndReplies
         case hideChannelReactions
         case hideGroupReactions
+        case hidePremiumStatuses
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -88,6 +89,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.simpleQuotesAndReplies): false,
             AyuCustomizationSettings.key(.hideChannelReactions): false,
             AyuCustomizationSettings.key(.hideGroupReactions): false,
+            AyuCustomizationSettings.key(.hidePremiumStatuses): false,
         ])
     }
 
@@ -169,6 +171,11 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var hideGroupReactions: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.hideGroupReactions)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hideGroupReactions)) }
+    }
+
+    public var hidePremiumStatuses: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.hidePremiumStatuses)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hidePremiumStatuses)) }
     }
 
     // What copying a username puts on the pasteboard.

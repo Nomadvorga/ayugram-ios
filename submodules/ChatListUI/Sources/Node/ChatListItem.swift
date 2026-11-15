@@ -3804,7 +3804,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 if let color = emojiStatus.color {
                                     currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
                                 }
-                            } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
+                            } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !ayuHidesPremiumStatuses() { // MARK: AyuGram
                                 currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
                             }
                             
@@ -3835,7 +3835,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         if let color = emojiStatus.color {
                             currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
                         }
-                    } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
+                    } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !ayuHidesPremiumStatuses() { // MARK: AyuGram
                         currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
                     }
                     
