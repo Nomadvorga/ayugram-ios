@@ -99,7 +99,101 @@ private func ayuPeerInfoMenuItems(context: AccountContext, peer: EnginePeer, pre
         }))
     }
 
+    items.append(.separator)
+    items.append(.action(ContextMenuActionItem(text: "Тема чата: данные", icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
+    }, action: { c, _ in
+        c?.pushItems(items: ayuChatThemeDiagnosticsItems(context: context, peer: peer, presentationData: presentationData))
+    })))
+
     return items
+}
+
+// Temporary: what the server sends for this chat's theme, to compare with Telegram from the App Store.
+private func ayuChatThemeDiagnosticsItems(context: AccountContext, peer: EnginePeer, presentationData: PresentationData) -> Signal<ContextController.Items, NoError> {
+    let accountManager = context.sharedContext.accountManager
+    let cachedThemes = context.engine.themes.getChatThemes(accountManager: accountManager, onlyCached: true)
+    |> take(1)
+    let fetchedThemes: Signal<[TelegramTheme]?, NoError> = context.engine.themes.getChatThemes(accountManager: accountManager, forceUpdate: true)
+    |> take(1)
+    |> map(Optional.init)
+    |> timeout(15.0, queue: Queue.mainQueue(), alternate: .single(nil))
+    let chatTheme = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.ChatTheme(id: peer.id))
+
+    return combineLatest(queue: Queue.mainQueue(), chatTheme, cachedThemes, fetchedThemes)
+    |> map { chatTheme, cachedThemes, fetchedThemes -> ContextController.Items in
+        let arguments = context.sharedContext.networkArguments
+        let theme = presentationData.theme
+        var lines: [String] = []
+        lines.append("api_id: \(arguments.apiId), версия \(arguments.appVersion)")
+        lines.append("Тема приложения: \(theme.referenceTheme), тёмная: \(theme.overallDarkAppearance ? "да" : "нет")")
+        switch chatTheme {
+        case let .some(.emoticon(emoticon)):
+            lines.append("Тема чата: эмодзи \(emoticon)")
+            let find: ([TelegramTheme]) -> TelegramTheme? = { $0.first(where: { $0.emoticon == emoticon }) }
+            lines.append("")
+            lines.append("Из кэша:")
+            lines.append(contentsOf: ayuThemeSettingsLines(find(cachedThemes)?.settings))
+            lines.append("")
+            lines.append("С сервера сейчас:")
+            if let fetchedThemes {
+                lines.append(contentsOf: ayuThemeSettingsLines(find(fetchedThemes)?.settings))
+            } else {
+                lines.append("нет ответа")
+            }
+        case let .some(.gift(gift, themeSettings)):
+            if case let .unique(uniqueGift) = gift {
+                lines.append("Тема чата: подарок \(uniqueGift.slug)")
+            } else {
+                lines.append("Тема чата: подарок")
+            }
+            lines.append("")
+            lines.append(contentsOf: ayuThemeSettingsLines(themeSettings))
+        case .none:
+            lines.append("Тема чата: нет")
+        }
+        let text = lines.joined(separator: "\n")
+
+        let items: [ContextMenuItem] = [
+            ayuBackItem(presentationData),
+            .separator,
+            .action(ContextMenuActionItem(text: text, textLayout: .multiline, textFont: .small, icon: { _ in
+                return nil
+            }, action: nil as ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)?)),
+            .action(ContextMenuActionItem(text: presentationData.strings.Conversation_ContextMenuCopy, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
+            }, action: { _, f in
+                UIPasteboard.general.string = text
+                f(.default)
+            })),
+        ]
+        return ContextController.Items(content: .list(items))
+    }
+}
+
+private func ayuThemeSettingsLines(_ settings: [TelegramThemeSettings]?) -> [String] {
+    guard let settings, !settings.isEmpty else {
+        return ["вариантов нет"]
+    }
+    let hex: (UInt32) -> String = { String(format: "#%06x", $0 & 0xffffff) }
+    return settings.map { item in
+        var wallpaper = "нет"
+        if let value = item.wallpaper {
+            switch value {
+            case let .color(color):
+                wallpaper = "цвет \(hex(color))"
+            case let .gradient(gradient):
+                wallpaper = "градиент " + gradient.colors.map(hex).joined(separator: " ")
+            case let .file(file):
+                wallpaper = "узор " + file.settings.colors.map(hex).joined(separator: " ") + " (\(file.settings.intensity ?? 0))"
+            default:
+                wallpaper = "другие"
+            }
+        }
+        let messageColors = item.messageColors.isEmpty ? "нет" : item.messageColors.map(hex).joined(separator: " ")
+        let outgoingAccent = item.outgoingAccentColor.flatMap(hex) ?? "нет"
+        return "• \(item.baseTheme): акцент \(hex(item.accentColor)), исходящий акцент \(outgoingAccent), пузыри \(messageColors), анимация \(item.animateMessageColors ? "да" : "нет"), обои: \(wallpaper)"
+    }
 }
 
 // A destructive action asks again on its own page before running.
