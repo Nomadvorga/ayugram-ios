@@ -918,7 +918,7 @@ final class ChannelAppearanceScreenComponent: Component {
                 case .builtin:
                     presentationTheme = makePresentationTheme(mediaBox: component.context.sharedContext.accountManager.mediaBox, themeReference: .builtin(environment.theme.overallDarkAppearance ? .night : .dayClassic))
                 case let .cloud(cloudTheme):
-                    presentationTheme = makePresentationTheme(cloudTheme: cloudTheme.theme, dark: environment.theme.overallDarkAppearance)
+                    presentationTheme = makePresentationTheme(cloudTheme: cloudTheme.theme, dark: environment.theme.overallDarkAppearance, preferredBaseTheme: environment.theme.referenceTheme.baseTheme) // MARK: AyuGram
                 default:
                     presentationTheme = makePresentationTheme(mediaBox: component.context.sharedContext.accountManager.mediaBox, themeReference: currentTheme)
                 }

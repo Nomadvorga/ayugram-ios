@@ -1130,8 +1130,7 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
             ApplicationSpecificSharedDataKeys.presentationThemeSettings,
             ApplicationSpecificSharedDataKeys.chatSettings,
             ApplicationSpecificSharedDataKeys.mediaDisplaySettings,
-            SharedDataKeys.chatThemes,
-            ApplicationSpecificSharedDataKeys.sgStatus // MARK: Swiftgram
+            SharedDataKeys.chatThemes
         ]),
         cloudThemes.get(),
         availableAppIcons,
@@ -1146,9 +1145,7 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
         let chatSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.chatSettings]?.get(ChatSettings.self) ?? ChatSettings.defaultSettings
         let mediaSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.mediaDisplaySettings]?.get(MediaDisplaySettings.self) ?? MediaDisplaySettings.defaultSettings
         
-        // MARK: Swiftgram
-        let sgStatus = sharedData.entries[ApplicationSpecificSharedDataKeys.sgStatus]?.get(SGStatus.self) ?? SGStatus.default
-        let isPremium = sgStatus.status > 1
+        let isPremium = peerView.peers[peerView.peerId]?.isPremium ?? false
         
         let bubbleMode = settings.chatBubbleSettings.bubbleMode
         

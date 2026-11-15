@@ -70,9 +70,9 @@ public func makePresentationTheme(settings: TelegramThemeSettings, title: String
     return customizePresentationTheme(defaultTheme, editing: true, title: title, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false) -> PresentationTheme? {
+public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false, preferredBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
     let settings: TelegramThemeSettings?
-    if let exactSettings = ayuChatThemeSettings(cloudTheme.settings ?? [], dark: dark) { // MARK: AyuGram
+    if let exactSettings = ayuChatThemeSettings(cloudTheme.settings ?? [], dark: dark, preferredBaseTheme: preferredBaseTheme) { // MARK: AyuGram
         settings = exactSettings
     } else if let firstSettings = cloudTheme.settings?.first {
         settings = firstSettings
@@ -86,12 +86,12 @@ public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false)
     return customizePresentationTheme(defaultTheme, editing: true, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false) -> PresentationTheme? {
+public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false, preferredBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
     guard case let .gift(_, themeSettings) = chatTheme else {
         return nil
     }
     let settings: TelegramThemeSettings?
-    if let exactSettings = ayuChatThemeSettings(themeSettings, dark: dark) { // MARK: AyuGram
+    if let exactSettings = ayuChatThemeSettings(themeSettings, dark: dark, preferredBaseTheme: preferredBaseTheme) { // MARK: AyuGram
         settings = exactSettings
     } else if let firstSettings = themeSettings.first {
         settings = firstSettings
@@ -226,12 +226,13 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
 }
 
 // MARK: AyuGram
-// A chat theme's variant for the appearance. In dark mode Night comes before Tinted, as in Telegram from the App Store:
-// taking whichever dark variant the server lists first showed many chat themes in their muted Tinted variant.
-private func ayuChatThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool) -> TelegramThemeSettings? {
-    if dark {
-        return settings.first(where: { $0.baseTheme == .night }) ?? settings.first(where: { $0.baseTheme == .tinted })
-    } else {
-        return settings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })
+/// A chat theme's variant for the appearance: the one built on the app theme's own base (Night or Tinted Night, Classic or
+/// Day) when the chat theme has it, as Telegram from the App Store shows them; otherwise the first variant of that
+/// appearance.
+public func ayuChatThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool, preferredBaseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {
+    let isDarkBaseTheme: (TelegramBaseTheme) -> Bool = { $0 == .night || $0 == .tinted }
+    if let preferredBaseTheme, isDarkBaseTheme(preferredBaseTheme) == dark, let preferredSettings = settings.first(where: { $0.baseTheme == preferredBaseTheme }) {
+        return preferredSettings
     }
+    return settings.first(where: { isDarkBaseTheme($0.baseTheme) == dark })
 }

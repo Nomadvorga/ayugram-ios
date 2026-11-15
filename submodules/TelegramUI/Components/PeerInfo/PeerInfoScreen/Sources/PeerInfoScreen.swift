@@ -7019,7 +7019,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
                     switch chatTheme {
                     case let .emoticon(emoticon):
                         if let theme = chatThemes.first(where: { $0.emoticon == emoticon }) {
-                            if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
+                            if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance, preferredBaseTheme: presentationData.theme.referenceTheme.baseTheme) { // MARK: AyuGram
                                 presentationData = presentationData.withUpdated(theme: theme)
                                 presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
                             }
