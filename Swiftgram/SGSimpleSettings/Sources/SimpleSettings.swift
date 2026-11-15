@@ -51,6 +51,19 @@ public class SGSimpleSettings {
             }
             UserDefaults.standard.set(true, forKey: chatListLinesMigrationKey)
         }
+
+        // MARK: AyuGram
+        // Swiftgram's features are off: values saved by Swiftgram are dropped once, so every setting is back to
+        // Telegram's behaviour. The exteraGram tab sets the few that exteraGram has.
+        let ayuResetKey = "ayu_swiftgram_settings_reset_v1"
+        if !Bundle.main.bundlePath.hasSuffix(".appex"), !UserDefaults.standard.bool(forKey: ayuResetKey) {
+            let groupUserDefaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER)
+            for key in Keys.allCases {
+                UserDefaults.standard.removeObject(forKey: key.rawValue)
+                groupUserDefaults?.removeObject(forKey: key.rawValue)
+            }
+            UserDefaults.standard.set(true, forKey: ayuResetKey)
+        }
     }
     
     private func preCacheValues() {
@@ -260,7 +273,7 @@ public class SGSimpleSettings {
     }
     
     public static let defaultValues: [String: Any] = [
-        Keys.hidePhoneInSettings.rawValue: true,
+        Keys.hidePhoneInSettings.rawValue: false, // MARK: AyuGram
         Keys.showTabNames.rawValue: true,
         Keys.startTelescopeWithRearCam.rawValue: false,
         Keys.accountColorsSaturation.rawValue: 100,
@@ -303,8 +316,8 @@ public class SGSimpleSettings {
         Keys.hideRecordingButton.rawValue: false,
         Keys.hideTabBar.rawValue: false,
         Keys.showDC.rawValue: false,
-        Keys.showCreationDate.rawValue: true,
-        Keys.showRegDate.rawValue: true,
+        Keys.showCreationDate.rawValue: false, // MARK: AyuGram
+        Keys.showRegDate.rawValue: false, // MARK: AyuGram
         Keys.regDateCache.rawValue: [:],
         Keys.compactChatList.rawValue: false,
         Keys.chatListLines.rawValue: ChatListLines.defaultValue.rawValue,
@@ -319,7 +332,7 @@ public class SGSimpleSettings {
         Keys.hideChannelBottomButton.rawValue: false,
         Keys.secondsInMessages.rawValue: false,
         Keys.forceSystemSharing.rawValue: false,
-        Keys.confirmCalls.rawValue: true,
+        Keys.confirmCalls.rawValue: false, // MARK: AyuGram
         Keys.videoPIPSwipeDirection.rawValue: VideoPIPSwipeDirection.up.rawValue,
         Keys.messageFilterKeywords.rawValue: [],
         Keys.inputToolbar.rawValue: false,
@@ -336,7 +349,7 @@ public class SGSimpleSettings {
         Keys.tabBarSearchEnabled.rawValue: true,
         Keys.hideStories.rawValue: false,
         Keys.warnOnStoriesOpen.rawValue: false,
-        Keys.showProfileId.rawValue: true,
+        Keys.showProfileId.rawValue: false, // MARK: AyuGram
         Keys.sendWithReturnKey.rawValue: false,
         Keys.videoControlsInFooter.rawValue: false,
         Keys.combinedMediaViewer.rawValue: false,

@@ -1994,24 +1994,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], nil)
                     f(.dismissWithoutContent)
                 })))
-                if message.id.peerId != context.account.peerId {
-                    // MARK: Swiftgram
-                    let action = sgMakeContextMenuAction(.saveToCloud(interfaceInteraction: interfaceInteraction, selectAll: selectAll, isImage: isImage, messages: messages), chatPresentationInterfaceState: chatPresentationInterfaceState, message: message)
-                    if SGSimpleSettings.shared.contextShowSaveToCloud {
-                        actions.append(action)
-                    } else {
-                        sgActions.append(action)
-                    }
-                    //
-                }
-                // MARK: Swiftgram
-                let action = sgMakeContextMenuAction(.hideForwardName(interfaceInteraction: interfaceInteraction, selectAll: selectAll, isImage: isImage, messages: messages), chatPresentationInterfaceState: chatPresentationInterfaceState, message: message)
-                if SGSimpleSettings.shared.contextShowHideForwardName {
-                    actions.append(action)
-                } else {
-                    sgActions.append(action)
-                }
-                //
             }
         }
         
@@ -2244,19 +2226,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if !isPinnedMessages, !isReplyThreadHead, data.canSelect {
             sgActionsIndex = actions.count
             var didAddSeparator = false
-            // MARK: Swiftgram
-            if let action = sgMakeSelectFromUserContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction, message: message) {
-                if SGSimpleSettings.shared.contextShowSelectFromUser {
-                    if !actions.isEmpty && !didAddSeparator {
-                        didAddSeparator = true
-                        actions.append(.separator)
-                    }
-                    actions.append(action)
-                } else {
-                    sgActions.append(action)
-                }
-            }
-            //
             
             if !selectAll || messages.count == 1 {
                 if !actions.isEmpty && !didAddSeparator {

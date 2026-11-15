@@ -1512,20 +1512,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     #endif
                     //
                     
-                    // MARK: Swiftgram
-                    updateSGWebSettingsInteractivelly(context: context.context)
-                    updateSGGHSettingsInteractivelly(context: context.context)
-                    let _ = (context.context.sharedContext.presentationData.start(next: { presentationData in
-                        SGLocalizationManager.shared.downloadLocale(presentationData.strings.baseLanguageCode)
-                    }))
-                    if #available(iOS 13.0, *) {
-                        let _ = Task {
-                            let primaryContext = await self.getPrimaryContext(anyContext: context.context)
-                            SGLogger.shared.log("SGIAP", "Verifying Status \(primaryContext.sharedContext.immediateSGStatus.status) for: \(primaryContext.account.peerId.id._internalGetInt64Value())")
-                            let _ = await self.fetchSGStatus(primaryContext: primaryContext)
-                        }
-                    }
-                    //
+                    // MARK: AyuGram
+                    // No requests to Swiftgram's servers and bots: web settings, GitHub settings, status.
+
                     
                 }))
             } else {
@@ -2213,8 +2202,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     func runForegroundTasks() {
         
         
-        var sgTasksLaunched: Bool = false // MARK: Swiftgram
-        
+
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedApplicationContext in
@@ -2222,13 +2210,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
              |> take(1)
              |> deliverOnMainQueue).start(next: { activeAccounts in
                 for (_, context, _) in activeAccounts.accounts {
-                    // MARK: Swiftgram
-                    if !sgTasksLaunched {
-                        updateSGWebSettingsInteractivelly(context: context)
-                        updateSGGHSettingsInteractivelly(context: context)
-                        sgTasksLaunched = true
-                    }
-                    //
+
                     (context.downloadedMediaStoreManager as? DownloadedMediaStoreManagerImpl)?.runTasks()
                 }
             })

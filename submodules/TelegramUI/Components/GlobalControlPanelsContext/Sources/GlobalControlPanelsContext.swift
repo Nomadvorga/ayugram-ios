@@ -339,7 +339,7 @@ public final class GlobalControlPanelsContext {
                 let starsSubscriptionsContextPromise = Promise<StarsSubscriptionsContext?>(nil)
                 
                 let suggestedChatListNoticeSignal: Signal<ChatListNotice?, NoError> = combineLatest(
-                    getSGProvidedSuggestions(account: context.account), // MARK: Swiftgram
+                    Signal<Data?, NoError>.single(nil), // MARK: AyuGram: no Swiftgram announcements
                     context.engine.notices.getServerProvidedSuggestions(),
                     context.engine.notices.getServerDismissedSuggestions(),
                     needsPasswordSetup,
