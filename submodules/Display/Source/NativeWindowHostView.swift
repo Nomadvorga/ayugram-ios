@@ -177,9 +177,23 @@ private final class WindowRootViewController: UIViewController {
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        if #available(iOS 12.0, *) {
-            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: self.traitCollection.userInterfaceStyle))
+        self.updateSystemUserInterfaceStyle()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        self.updateSystemUserInterfaceStyle()
+    }
+    
+    // MARK: AyuGram
+    // Before the controller is in a window its trait collection is unspecified, which used to be taken for light;
+    // and from iOS 27 the deprecated traitCollectionDidChange is not called for appearance changes.
+    private func updateSystemUserInterfaceStyle() {
+        var style = self.traitCollection.userInterfaceStyle
+        if style == .unspecified {
+            style = UITraitCollection.current.userInterfaceStyle
         }
+        self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: style))
     }
     
     init() {
@@ -190,10 +204,11 @@ private final class WindowRootViewController: UIViewController {
         self.voiceOverStatusObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: OperationQueue.main, using: { _ in
         })
         
-        if #available(iOS 13.0, *) {
-            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: self.traitCollection.userInterfaceStyle))
-        } else {
-            self._systemUserInterfaceStyle.set(.light)
+        self.updateSystemUserInterfaceStyle()
+        if #available(iOS 17.0, *) {
+            let _ = self.registerForTraitChanges([UITraitUserInterfaceStyle.self], handler: { (controller: WindowRootViewController, _: UITraitCollection) in
+                controller.updateSystemUserInterfaceStyle()
+            })
         }
     }
     

@@ -343,3 +343,14 @@
 "Ayu.SpySaveReadMarksDescription" = "Locally saves data about reading messages. This will be shown if Telegram does not provide a read date.";
 "Ayu.DeleteDateMenuText" = "Delete Date";
 "Ayu.ReadDateMenuText" = "Read Date";
+"Ayu.OnlinePulseOnSend" = "Online for 0.2 s When Sending";
+"Ayu.GhostModeDescription" = "The options above work while Ghost Mode is on.";
+"Ayu.ShowDeletedMarker" = "Show Deleted Mark";
+"Ayu.DeletedMarkTextStyle" = "Text";
+"Ayu.DeletedMarkCompact" = "Compact";
+"Ayu.DeletedMarkColorText" = "Mark Color";
+"Ayu.DeletedMarkColorRed" = "Red";
+"Ayu.DeletedMarkColorOrange" = "Orange";
+"Ayu.DeletedMarkColorGray" = "Gray";
+"Ayu.DeletedMarkColorPurple" = "Purple";
+"Ayu.DeletedMarkColorTheme" = "As Time";

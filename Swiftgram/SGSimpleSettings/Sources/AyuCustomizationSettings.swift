@@ -1,63 +1,113 @@
 import Foundation
+import UIKit
 
-// Key names match AyuGram for Android (AyuConfig).
+// Deleted message styles of AyuGram for Android and AyuGram iOS (Telegram-iOS-Ghost) together.
 public final class AyuCustomizationSettings: @unchecked Sendable {
     public static let shared = AyuCustomizationSettings()
 
     public enum Keys: String, CaseIterable {
+        case showDeletedMarker
         case deletedMark
+        case deletedMarkColor
         case semiTransparentDeletedMessages
         case disableAds
     }
 
     public enum DeletedMark: Int, CaseIterable {
-        case nothing = 0
-        case trashBin = 1
+        case trashBin = 0
+        case text = 1
         case cross = 2
-        case eyeCrossed = 3
+        case compact = 3
+        case eyeCrossed = 4
 
-        public var text: String? {
+        public func text(lang: String) -> String {
             switch self {
-            case .nothing:
-                return nil
             case .trashBin:
                 return "🗑"
+            case .text:
+                return lang.hasPrefix("ru") || lang.hasPrefix("uk") || lang.hasPrefix("be") ? "Удалено" : "Deleted"
             case .cross:
                 return "✕"
+            case .compact:
+                return "DEL"
             case .eyeCrossed:
                 return "🙈"
             }
         }
     }
 
+    public enum DeletedMarkColor: Int, CaseIterable {
+        case red = 0
+        case orange = 1
+        case gray = 2
+        case purple = 3
+        case theme = 4
+
+        public var color: UIColor? {
+            switch self {
+            case .red:
+                return UIColor.systemRed
+            case .orange:
+                return UIColor.systemOrange
+            case .gray:
+                return UIColor.systemGray
+            case .purple:
+                return UIColor.systemPurple
+            case .theme:
+                return nil
+            }
+        }
+    }
+
     private static let keyPrefix = "ayu."
 
-    private static let defaultValues: [String: Any] = [
-        keyPrefix + Keys.deletedMark.rawValue: DeletedMark.trashBin.rawValue,
-        keyPrefix + Keys.semiTransparentDeletedMessages.rawValue: true,
-        keyPrefix + Keys.disableAds.rawValue: true,
-    ]
-
-    private let defaults: UserDefaults
+    private let store = AyuSettingsStore.shared
 
     private init() {
-        self.defaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER) ?? .standard
-        self.defaults.register(defaults: AyuCustomizationSettings.defaultValues)
+        self.store.register(defaults: [
+            AyuCustomizationSettings.key(.showDeletedMarker): true,
+            AyuCustomizationSettings.key(.deletedMark): DeletedMark.trashBin.rawValue,
+            AyuCustomizationSettings.key(.deletedMarkColor): DeletedMarkColor.red.rawValue,
+            AyuCustomizationSettings.key(.semiTransparentDeletedMessages): true,
+            AyuCustomizationSettings.key(.disableAds): true,
+        ])
+    }
+
+    private static func key(_ key: Keys) -> String {
+        return keyPrefix + key.rawValue
+    }
+
+    public var showDeletedMarker: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.showDeletedMarker)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.showDeletedMarker)) }
     }
 
     public var deletedMark: DeletedMark {
-        get { return DeletedMark(rawValue: self.defaults.integer(forKey: AyuCustomizationSettings.keyPrefix + Keys.deletedMark.rawValue)) ?? .trashBin }
-        set { self.defaults.set(newValue.rawValue, forKey: AyuCustomizationSettings.keyPrefix + Keys.deletedMark.rawValue) }
+        get { return DeletedMark(rawValue: self.store.int(AyuCustomizationSettings.key(.deletedMark))) ?? .trashBin }
+        set { self.store.setInt(newValue.rawValue, AyuCustomizationSettings.key(.deletedMark)) }
+    }
+
+    public var deletedMarkColor: DeletedMarkColor {
+        get { return DeletedMarkColor(rawValue: self.store.int(AyuCustomizationSettings.key(.deletedMarkColor))) ?? .red }
+        set { self.store.setInt(newValue.rawValue, AyuCustomizationSettings.key(.deletedMarkColor)) }
     }
 
     public var semiTransparentDeletedMessages: Bool {
-        get { return self.defaults.bool(forKey: AyuCustomizationSettings.keyPrefix + Keys.semiTransparentDeletedMessages.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuCustomizationSettings.keyPrefix + Keys.semiTransparentDeletedMessages.rawValue) }
+        get { return self.store.bool(AyuCustomizationSettings.key(.semiTransparentDeletedMessages)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.semiTransparentDeletedMessages)) }
     }
 
     // Sponsored messages in channels and sponsored peers in search.
     public var disableAds: Bool {
-        get { return self.defaults.bool(forKey: AyuCustomizationSettings.keyPrefix + Keys.disableAds.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuCustomizationSettings.keyPrefix + Keys.disableAds.rawValue) }
+        get { return self.store.bool(AyuCustomizationSettings.key(.disableAds)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableAds)) }
+    }
+
+    // The prefix of a deleted message's time, nil when the mark is hidden.
+    public func deletedMarkPrefix(lang: String) -> String? {
+        if !self.showDeletedMarker {
+            return nil
+        }
+        return self.deletedMark.text(lang: lang)
     }
 }

@@ -149,8 +149,14 @@ public func makePresentationTheme(mediaBox: MediaBox, themeReference: Presentati
             }
         case let .cloud(info):
             let settings: TelegramThemeSettings?
+            // MARK: AyuGram
+            // Emoji themes often have only a tinted dark variant: a night request falling back to the first
+            // (light) variant left the app light in night mode.
+            let isDarkBaseTheme: (TelegramBaseTheme) -> Bool = { $0 == .night || $0 == .tinted }
             if let exactSettings = info.theme.settings?.first(where: { $0.baseTheme == baseTheme }) {
                 settings = exactSettings
+            } else if let baseTheme, let similarSettings = info.theme.settings?.first(where: { isDarkBaseTheme($0.baseTheme) == isDarkBaseTheme(baseTheme) }) {
+                settings = similarSettings
             } else if let firstSettings = info.theme.settings?.first {
                 settings = firstSettings
             } else {

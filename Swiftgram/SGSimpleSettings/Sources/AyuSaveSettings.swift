@@ -13,37 +13,38 @@ public final class AyuSaveSettings: @unchecked Sendable {
 
     private static let keyPrefix = "ayu."
 
-    private static let defaultValues: [String: Any] = [
-        keyPrefix + Keys.saveDeletedMessages.rawValue: true,
-        keyPrefix + Keys.saveMessagesHistory.rawValue: true,
-        keyPrefix + Keys.saveForBots.rawValue: false,
-        keyPrefix + Keys.saveReadDate.rawValue: true,
-    ]
-
-    private let defaults: UserDefaults
+    private let store = AyuSettingsStore.shared
 
     private init() {
-        self.defaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER) ?? .standard
-        self.defaults.register(defaults: AyuSaveSettings.defaultValues)
+        self.store.register(defaults: [
+            AyuSaveSettings.key(.saveDeletedMessages): true,
+            AyuSaveSettings.key(.saveMessagesHistory): true,
+            AyuSaveSettings.key(.saveForBots): false,
+            AyuSaveSettings.key(.saveReadDate): true,
+        ])
+    }
+
+    private static func key(_ key: Keys) -> String {
+        return keyPrefix + key.rawValue
     }
 
     public var saveDeletedMessages: Bool {
-        get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveDeletedMessages.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveDeletedMessages.rawValue) }
+        get { return self.store.bool(AyuSaveSettings.key(.saveDeletedMessages)) }
+        set { self.store.setBool(newValue, AyuSaveSettings.key(.saveDeletedMessages)) }
     }
 
     public var saveMessagesHistory: Bool {
-        get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveMessagesHistory.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveMessagesHistory.rawValue) }
-    }
-
-    public var saveReadDate: Bool {
-        get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveReadDate.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveReadDate.rawValue) }
+        get { return self.store.bool(AyuSaveSettings.key(.saveMessagesHistory)) }
+        set { self.store.setBool(newValue, AyuSaveSettings.key(.saveMessagesHistory)) }
     }
 
     public var saveForBots: Bool {
-        get { return self.defaults.bool(forKey: AyuSaveSettings.keyPrefix + Keys.saveForBots.rawValue) }
-        set { self.defaults.set(newValue, forKey: AyuSaveSettings.keyPrefix + Keys.saveForBots.rawValue) }
+        get { return self.store.bool(AyuSaveSettings.key(.saveForBots)) }
+        set { self.store.setBool(newValue, AyuSaveSettings.key(.saveForBots)) }
+    }
+
+    public var saveReadDate: Bool {
+        get { return self.store.bool(AyuSaveSettings.key(.saveReadDate)) }
+        set { self.store.setBool(newValue, AyuSaveSettings.key(.saveReadDate)) }
     }
 }

@@ -18,38 +18,33 @@ public final class AyuExclusions: @unchecked Sendable {
         case always = 2
     }
 
-    private let defaults: UserDefaults
+    private let store = AyuSettingsStore.shared
 
     private init() {
-        self.defaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER) ?? .standard
     }
 
     private func key(_ kind: Kind) -> String {
         return "ayu.exclusions.\(kind.rawValue)"
     }
 
-    private func entries(_ kind: Kind) -> [String: Int] {
-        return self.defaults.dictionary(forKey: self.key(kind)) as? [String: Int] ?? [:]
-    }
-
     public func hasAny(_ kind: Kind) -> Bool {
-        return !self.entries(kind).isEmpty
+        return !self.store.intDictionary(self.key(kind)).isEmpty
     }
 
     public func mode(_ kind: Kind, peerId: Int64) -> Mode {
-        guard let rawValue = self.entries(kind)[String(peerId)] else {
+        guard let rawValue = self.store.intDictionary(self.key(kind))[String(peerId)] else {
             return .default
         }
         return Mode(rawValue: rawValue) ?? .default
     }
 
     public func setMode(_ mode: Mode, kind: Kind, peerId: Int64) {
-        var entries = self.entries(kind)
+        var entries = self.store.intDictionary(self.key(kind))
         if mode == .default {
             entries.removeValue(forKey: String(peerId))
         } else {
             entries[String(peerId)] = mode.rawValue
         }
-        self.defaults.set(entries, forKey: self.key(kind))
+        self.store.setIntDictionary(entries, self.key(kind))
     }
 }

@@ -260,7 +260,7 @@ public func stringForMessageTimestampStatus(
     }
     
     // MARK: AyuGram
-    if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }), let mark = AyuCustomizationSettings.shared.deletedMark.text {
+    if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }), let mark = AyuCustomizationSettings.shared.deletedMarkPrefix(lang: strings.baseLanguageCode) {
         dateText = "\(mark) \(dateText)"
     }
     

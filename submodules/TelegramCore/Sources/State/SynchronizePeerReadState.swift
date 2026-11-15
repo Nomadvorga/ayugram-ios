@@ -437,7 +437,7 @@ func synchronizePeerReadState(network: Network, postbox: Postbox, stateManager: 
 
     return keepsReadState
     |> mapToSignal { keepsReadState -> Signal<Never, PeerReadStateValidationError> in
-        if !keepsReadState {
+        if !keepsReadState || ayuSuppressesReadState(peerId: peerId) { // MARK: AyuGram
             return confirmSynchronized(postbox: postbox, peerId: peerId)
             |> ignoreValues
         }

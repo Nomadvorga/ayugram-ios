@@ -2,6 +2,7 @@
 import SGRegDateScheme
 import SGRegDate
 //
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import TelegramCore
@@ -1323,6 +1324,13 @@ func peerInfoScreenData(
                         return .none
                     }
                     if user.id == context.account.peerId {
+                        // MARK: AyuGram
+                        // Telegram hides the account's own presence here; while ghost mode hides it from others,
+                        // the last moment it was allowed online is shown instead.
+                        if AyuGhostSettings.shared.suppressOnlineStatus {
+                            let timestamp = AyuGhostLastSeen.shared.timestamp
+                            return .presence(TelegramUserPresence(status: .present(until: timestamp), lastActivity: timestamp))
+                        }
                         return .none
                     }
                     if user.isDeleted {

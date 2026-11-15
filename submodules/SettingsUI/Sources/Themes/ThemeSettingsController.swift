@@ -1343,6 +1343,12 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
             }
 
             let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
+                // MARK: AyuGram
+                // Tapping the theme that is already selected changes nothing.
+                if current.currentModeTheme.index == updatedTheme.index && (!autoNightModeTriggered || current.currentModeAutomaticThemeSwitchSetting.theme.index == updatedTheme.index) {
+                    return current
+                }
+                //
                 if !current.chatBubbleSettings.bubbleMode {
                     var updated = current
                     updated.currentModeTheme = updatedTheme

@@ -59,7 +59,7 @@ private final class AccountPresenceManagerImpl {
             // MARK: AyuGram
             // An offline packet also moves "last seen" to now, so in ghost mode one is sent
             // only to end an online status this session has actually announced.
-            if !AyuGhostSettings.shared.sendOnlinePackets {
+            if AyuGhostSettings.shared.suppressOnlineStatus {
                 if !self.ayuLastSentOnline {
                     return
                 }
@@ -73,7 +73,7 @@ private final class AccountPresenceManagerImpl {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil
             // MARK: AyuGram
-            if !AyuGhostSettings.shared.sendOnlinePackets && !self.ayuLastSentOnline {
+            if AyuGhostSettings.shared.suppressOnlineStatus && !self.ayuLastSentOnline {
                 return
             }
             self.ayuLastSentOnline = false

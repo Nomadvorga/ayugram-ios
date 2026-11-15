@@ -335,3 +335,14 @@
 "Ayu.SpySaveReadMarksDescription" = "Локально сохраняет данные о чтении сообщений. Будет использоваться, если Telegram не предоставит дату чтения.";
 "Ayu.DeleteDateMenuText" = "Дата удаления";
 "Ayu.ReadDateMenuText" = "Дата прочтения";
+"Ayu.OnlinePulseOnSend" = "Онлайн на 0,2 с при отправке";
+"Ayu.GhostModeDescription" = "Пункты выше работают, пока включён режим призрака.";
+"Ayu.ShowDeletedMarker" = "Показывать метку удаления";
+"Ayu.DeletedMarkTextStyle" = "Текст";
+"Ayu.DeletedMarkCompact" = "Компактно";
+"Ayu.DeletedMarkColorText" = "Цвет метки";
+"Ayu.DeletedMarkColorRed" = "Красный";
+"Ayu.DeletedMarkColorOrange" = "Оранжевый";
+"Ayu.DeletedMarkColorGray" = "Серый";
+"Ayu.DeletedMarkColorPurple" = "Фиолетовый";
+"Ayu.DeletedMarkColorTheme" = "Как время";

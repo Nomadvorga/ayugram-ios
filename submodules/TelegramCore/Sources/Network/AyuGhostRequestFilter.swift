@@ -41,18 +41,50 @@ func ayuGhostShouldDrop(_ description: FunctionDescription) -> Bool {
     let settings = AyuGhostSettings.shared
     let functionName = description.name
     if ayuReadMessageFunctions.contains(functionName) {
-        return ayuShouldDrop(kind: .read, droppedByDefault: !settings.sendReadMessagePackets, description: description)
+        return ayuShouldDrop(kind: .read, droppedByDefault: settings.suppressReadMessages, description: description)
     }
     if ayuReadStoryFunctions.contains(functionName) {
-        return !settings.sendReadStoryPackets
+        return settings.suppressStoryViews
     }
     if ayuTypingFunctions.contains(functionName) {
-        return ayuShouldDrop(kind: .typing, droppedByDefault: !settings.sendUploadProgress, description: description)
+        if ayuIsTypingRequiredByTelegram(description) {
+            return false
+        }
+        return ayuShouldDrop(kind: .typing, droppedByDefault: settings.suppressTyping, description: description)
     }
     if ayuAdFunctions.contains(functionName) {
         return AyuCustomizationSettings.shared.disableAds
     }
     return false
+}
+
+// Speaking in a group call and emoji interactions are not typing: hiding them breaks calls and animations.
+private func ayuIsTypingRequiredByTelegram(_ description: FunctionDescription) -> Bool {
+    for (name, parameter) in description.parameters where name == "action" {
+        guard let action = parameter.value as? Api.SendMessageAction else {
+            return false
+        }
+        switch action {
+        case .speakingInGroupCallAction, .sendMessageEmojiInteraction, .sendMessageEmojiInteractionSeen:
+            return true
+        default:
+            return false
+        }
+    }
+    return false
+}
+
+// Read state pushes are replaced by confirming the queued operation locally: neither readHistory nor the
+// validation that would bring the server's unread state back is sent.
+func ayuSuppressesReadState(peerId: PeerId) -> Bool {
+    switch AyuExclusions.shared.mode(.read, peerId: peerId.toInt64()) {
+    case .never:
+        return true
+    case .always:
+        return false
+    case .default:
+        return AyuGhostSettings.shared.suppressReadMessages
+    }
 }
 
 private func ayuShouldDrop(kind: AyuExclusions.Kind, droppedByDefault: Bool, description: FunctionDescription) -> Bool {
@@ -112,17 +144,25 @@ func ayuGhostRequestSucceeded(_ functionName: String, network: Network) {
         return
     }
     let settings = AyuGhostSettings.shared
-    if settings.sendOnlinePackets || !settings.sendOfflinePacketAfterOnline {
-        return
+    // The server shows a sender online anyway; with the pulse it is for 0.2 s only.
+    if settings.pulseOnlineOnSend {
+        let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse)).start()
+        Queue.mainQueue().after(0.2) {
+            if AyuGhostSettings.shared.suppressOnlineStatus {
+                let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
+                AyuGhostLastSeen.shared.recordNow()
+            }
+        }
+    } else if settings.sendAutomaticOffline {
+        let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
+        AyuGhostLastSeen.shared.recordNow()
     }
-    let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
 }
 
 // Replying gives the read state away anyway, so with markReadAfterAction the chat is
 // marked as read on the server once a message is sent to it.
 func ayuMarkReadAfterAction(account: Account, peerId: PeerId) {
-    let settings = AyuGhostSettings.shared
-    if settings.sendReadMessagePackets || !settings.markReadAfterAction {
+    if !ayuSuppressesReadState(peerId: peerId) || !AyuGhostSettings.shared.markReadAfterAction {
         return
     }
     let network = account.network

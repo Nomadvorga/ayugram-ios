@@ -137,6 +137,11 @@ func infoItems(
         let ItemAgentProvidersInfo = 9102
         let ItemCommunity = 10000
         
+        // MARK: AyuGram
+        AyuProfileFieldCache.remember(peerId: user.id, phone: user.phone, username: user.addressName, note: (data.cachedData as? CachedUserData)?.note?.text)
+        let ayuCachedProfile = AyuProfileFieldCache.value(peerId: user.id)
+        //
+        
         if let cachedUserData = data.cachedData as? CachedUserData, cachedUserData.flags.contains(.unofficialSecurityRisk) {
             items[.unofficial]!.append(PeerInfoScreenInfoItem(id: 0, title: "", text: .plain(presentationData.strings.PeerInfo_UnofficialSecurityRisk(EnginePeer(user).compactDisplayTitle).string), style: .compact, linkAction: nil))
         }
@@ -180,7 +185,7 @@ func infoItems(
             ))
         }
         
-        if let phone = user.phone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) {
+        if let phone = user.phone ?? ayuCachedProfile.phone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) { // MARK: AyuGram
             let formattedPhone = formatPhoneNumber(context: context, number: phone)
             let label: String
             if formattedPhone.hasPrefix("+888 ") {
@@ -196,7 +201,7 @@ func infoItems(
                 interaction.requestLayout(animated)
             }))
         }
-        if let mainUsername = user.addressName {
+        if let mainUsername = user.addressName ?? ayuCachedProfile.username { // MARK: AyuGram
             var additionalUsernames: String?
             let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
             if !usernames.isEmpty {
@@ -257,6 +262,8 @@ func infoItems(
             }
             var hasNote = false
             if let note = cachedData.note, !note.text.isEmpty {
+                hasNote = true
+            } else if let noteText = ayuCachedProfile.note, !noteText.isEmpty { // MARK: AyuGram
                 hasNote = true
             }
             
@@ -337,6 +344,10 @@ func infoItems(
                         entities = generateTextEntities(note.text, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: entities)
                     }
                     items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemNote, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: entities, handleSpoilers: true, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
+                        interaction.requestLayout(animated)
+                    }))
+                } else if let noteText = ayuCachedProfile.note, !noteText.isEmpty { // MARK: AyuGram
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemNote, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: noteText, entities: [], handleSpoilers: false, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }))
                 }

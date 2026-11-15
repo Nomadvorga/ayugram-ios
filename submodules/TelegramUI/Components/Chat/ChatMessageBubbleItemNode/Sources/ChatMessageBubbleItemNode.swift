@@ -4511,7 +4511,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         strongSelf.contentContainersWrapperNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         
         // MARK: AyuGram
-        if AyuCustomizationSettings.shared.semiTransparentDeletedMessages, item.content.firstMessage.ayuDeletedDate != nil {
+        if item.content.firstMessage.ayuDeletedDate != nil, AyuCustomizationSettings.shared.semiTransparentDeletedMessages {
             strongSelf.mainContextSourceNode.contentNode.alpha = 0.6
         } else if strongSelf.appliedItem?.content.firstMessage.ayuDeletedDate != nil {
             strongSelf.mainContextSourceNode.contentNode.alpha = 1.0

@@ -408,7 +408,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
         let reactionButtonsContainer = self.reactionButtonsContainer
         
         return { [weak self] arguments in
-            let dateColor: UIColor
+            var dateColor: UIColor
             var backgroundImage: UIImage?
             var blurredBackgroundColor: (UIColor, Bool)?
             var outgoingStatus: ChatMessageDateAndStatusOutgoingType?
@@ -606,6 +606,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     starsImage = graphics.freeTonIcon
                 }
             }
+            
+            // MARK: AyuGram
+            if let markPrefix = AyuCustomizationSettings.shared.deletedMarkPrefix(lang: arguments.presentationData.strings.baseLanguageCode), arguments.dateText.hasPrefix(markPrefix + " "), let markColor = AyuCustomizationSettings.shared.deletedMarkColor.color {
+                dateColor = markColor
+            }
+            //
             
             var updatedDateText = arguments.dateText
             if arguments.edited {

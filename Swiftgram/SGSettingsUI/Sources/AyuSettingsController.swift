@@ -23,27 +23,27 @@ private enum AyuControllerSection: Int32, SGItemListSection {
 
 private enum AyuBoolSetting: String {
     case ghostMode
-    case dontReadMessages
-    case dontReadStories
-    case dontSendOnline
-    case dontSendTyping
-    case offlineAutomatically
+    case hideReadMessages
+    case hideReadStories
+    case hideOnline
+    case hideTyping
+    case automaticOffline
+    case onlinePulseOnSend
     case markReadAfterAction
     case useScheduledMessages
     case saveDeletedMessages
     case saveMessagesHistory
     case saveForBots
     case saveReadDate
+    case showDeletedMarker
     case semiTransparentDeletedMessages
     case disableAds
-    case disableStories
-    case showPeerId
-    case showMessageSeconds
 }
 
 private enum AyuOneFromManySetting: String {
     case sendWithoutSound
     case deletedMark
+    case deletedMarkColor
 }
 
 private enum AyuSliderSetting: String {
@@ -70,19 +70,33 @@ private func sendWithoutSoundTitle(_ value: AyuGhostSettings.SendWithoutSound, l
 private func deletedMarkTitle(_ value: AyuCustomizationSettings.DeletedMark, lang: String) -> String {
     let title: String
     switch value {
-    case .nothing:
-        title = i18n("Ayu.DeletedMarkNothing", lang)
     case .trashBin:
         title = i18n("Ayu.DeletedMarkTrashBin", lang)
+    case .text:
+        title = i18n("Ayu.DeletedMarkTextStyle", lang)
     case .cross:
         title = i18n("Ayu.DeletedMarkCross", lang)
+    case .compact:
+        title = i18n("Ayu.DeletedMarkCompact", lang)
     case .eyeCrossed:
         title = i18n("Ayu.DeletedMarkEyeCrossed", lang)
     }
-    if let text = value.text {
-        return "\(text) \(title)"
+    return "\(value.text(lang: lang)) · \(title)"
+}
+
+private func deletedMarkColorTitle(_ value: AyuCustomizationSettings.DeletedMarkColor, lang: String) -> String {
+    switch value {
+    case .red:
+        return i18n("Ayu.DeletedMarkColorRed", lang)
+    case .orange:
+        return i18n("Ayu.DeletedMarkColorOrange", lang)
+    case .gray:
+        return i18n("Ayu.DeletedMarkColorGray", lang)
+    case .purple:
+        return i18n("Ayu.DeletedMarkColorPurple", lang)
+    case .theme:
+        return i18n("Ayu.DeletedMarkColorTheme", lang)
     }
-    return title
 }
 
 private func ayuControllerEntries(presentationData: PresentationData) -> [AyuControllerEntry] {
@@ -95,11 +109,13 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
 
     entries.append(.header(id: id.count, section: .ghostEssentials, text: i18n("Ayu.GhostEssentialsHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .ghostMode, value: ghost.isGhostModeActive, text: i18n("Ayu.GhostModeToggle", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .dontReadMessages, value: !ghost.sendReadMessagePackets, text: i18n("Ayu.DontReadMessages", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .dontReadStories, value: !ghost.sendReadStoryPackets, text: i18n("Ayu.DontReadStories", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .dontSendOnline, value: !ghost.sendOnlinePackets, text: i18n("Ayu.DontSendOnlinePackets", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .dontSendTyping, value: !ghost.sendUploadProgress, text: i18n("Ayu.DontSendUploadProgress", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .offlineAutomatically, value: ghost.sendOfflinePacketAfterOnline, text: i18n("Ayu.SendOfflinePacketAfterOnline", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideReadMessages, value: ghost.value(.hideReadMessages), text: i18n("Ayu.DontReadMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideReadStories, value: ghost.value(.hideReadStories), text: i18n("Ayu.DontReadStories", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideOnline, value: ghost.value(.hideOnline), text: i18n("Ayu.DontSendOnlinePackets", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideTyping, value: ghost.value(.hideTyping), text: i18n("Ayu.DontSendUploadProgress", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .automaticOffline, value: ghost.value(.automaticOffline), text: i18n("Ayu.SendOfflinePacketAfterOnline", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .onlinePulseOnSend, value: ghost.value(.onlinePulseOnSend), text: i18n("Ayu.OnlinePulseOnSend", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .ghostEssentials, text: i18n("Ayu.GhostModeDescription", lang)))
 
     entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .markReadAfterAction, value: ghost.markReadAfterAction, text: i18n("Ayu.MarkReadAfterAction", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.MarkReadAfterActionDescription", lang)))
@@ -116,14 +132,13 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.notice(id: id.count, section: .spyEssentials, text: i18n("Ayu.SpySaveReadMarksDescription", lang)))
 
     entries.append(.header(id: id.count, section: .customization, text: i18n("Ayu.CustomizationHeader", lang), badge: nil))
-    entries.append(.oneFromManySelector(id: id.count, section: .customization, settingName: .deletedMark, text: i18n("Ayu.DeletedMarkText", lang), value: deletedMarkTitle(customization.deletedMark, lang: lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .customization, settingName: .showDeletedMarker, value: customization.showDeletedMarker, text: i18n("Ayu.ShowDeletedMarker", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .customization, settingName: .deletedMark, text: i18n("Ayu.DeletedMarkText", lang), value: deletedMarkTitle(customization.deletedMark, lang: lang), enabled: customization.showDeletedMarker))
+    entries.append(.oneFromManySelector(id: id.count, section: .customization, settingName: .deletedMarkColor, text: i18n("Ayu.DeletedMarkColorText", lang), value: deletedMarkColorTitle(customization.deletedMarkColor, lang: lang), enabled: customization.showDeletedMarker))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .semiTransparentDeletedMessages, value: customization.semiTransparentDeletedMessages, text: i18n("Ayu.SemiTransparentDeletedMessages", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableStories, value: SGSimpleSettings.shared.hideStories, text: i18n("Ayu.DisableStories", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .showPeerId, value: SGSimpleSettings.shared.showProfileId, text: i18n("Ayu.SettingsShowID", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .showMessageSeconds, value: SGSimpleSettings.shared.secondsInMessages, text: i18n("Ayu.SettingsShowMessageSeconds", lang), enabled: true))
 
     return entries
 }
@@ -136,19 +151,22 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
         context: context,
         setBoolValue: { setting, value in
             let ghost = AyuGhostSettings.shared
+            let wasHidingOnline = ghost.suppressOnlineStatus
             switch setting {
             case .ghostMode:
                 ghost.setGhostModeActive(value)
-            case .dontReadMessages:
-                ghost.sendReadMessagePackets = !value
-            case .dontReadStories:
-                ghost.sendReadStoryPackets = !value
-            case .dontSendOnline:
-                ghost.sendOnlinePackets = !value
-            case .dontSendTyping:
-                ghost.sendUploadProgress = !value
-            case .offlineAutomatically:
-                ghost.sendOfflinePacketAfterOnline = value
+            case .hideReadMessages:
+                ghost.set(.hideReadMessages, value)
+            case .hideReadStories:
+                ghost.set(.hideReadStories, value)
+            case .hideOnline:
+                ghost.set(.hideOnline, value)
+            case .hideTyping:
+                ghost.set(.hideTyping, value)
+            case .automaticOffline:
+                ghost.set(.automaticOffline, value)
+            case .onlinePulseOnSend:
+                ghost.set(.onlinePulseOnSend, value)
             case .markReadAfterAction:
                 ghost.markReadAfterAction = value
             case .useScheduledMessages:
@@ -161,16 +179,15 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuSaveSettings.shared.saveForBots = value
             case .saveReadDate:
                 AyuSaveSettings.shared.saveReadDate = value
+            case .showDeletedMarker:
+                AyuCustomizationSettings.shared.showDeletedMarker = value
             case .semiTransparentDeletedMessages:
                 AyuCustomizationSettings.shared.semiTransparentDeletedMessages = value
             case .disableAds:
                 AyuCustomizationSettings.shared.disableAds = value
-            case .disableStories:
-                SGSimpleSettings.shared.hideStories = value
-            case .showPeerId:
-                SGSimpleSettings.shared.showProfileId = value
-            case .showMessageSeconds:
-                SGSimpleSettings.shared.secondsInMessages = value
+            }
+            if !wasHidingOnline && ghost.suppressOnlineStatus {
+                AyuGhostLastSeen.shared.recordNow()
             }
             updatePromise.set(true)
         },
@@ -189,6 +206,13 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 for value in AyuCustomizationSettings.DeletedMark.allCases {
                     options.append(SGOneFromManyOption(title: deletedMarkTitle(value, lang: lang), isSelected: AyuCustomizationSettings.shared.deletedMark == value, action: {
                         AyuCustomizationSettings.shared.deletedMark = value
+                        updatePromise.set(true)
+                    }))
+                }
+            case .deletedMarkColor:
+                for value in AyuCustomizationSettings.DeletedMarkColor.allCases {
+                    options.append(SGOneFromManyOption(title: deletedMarkColorTitle(value, lang: lang), isSelected: AyuCustomizationSettings.shared.deletedMarkColor == value, action: {
+                        AyuCustomizationSettings.shared.deletedMarkColor = value
                         updatePromise.set(true)
                     }))
                 }
