@@ -193,7 +193,10 @@ func _internal_managedRecentlyUsedInlineBots(postbox: Postbox, network: Network,
             return postbox.transaction { transaction -> Void in
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                 
-                let sortedPeersWithRating = peersWithRating.sorted(by: { $0.1 > $1.1 })
+                // MARK: AyuGram
+                // A bot can be in both requested categories (inline bots and bot apps); the list takes each peer once.
+                var seenPeerIds = Set<PeerId>()
+                let sortedPeersWithRating = peersWithRating.sorted(by: { $0.1 > $1.1 }).filter { seenPeerIds.insert($0.0).inserted }
                 
                 transaction.replaceOrderedItemListItems(collectionId: Namespaces.OrderedItemList.CloudRecentInlineBots, items: sortedPeersWithRating.compactMap { (peerId, rating) in
                     if let entry = CodableEntry(RecentPeerItem(rating: rating)) {
