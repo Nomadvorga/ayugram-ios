@@ -538,7 +538,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                             var bubbleColor: UIColor?
                             if let theme = item.chatTheme, case let .gift(_, themeSettings) = theme {
                                 if item.nightMode {
-                                    if let theme = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) {
+                                    if let theme = themeSettings.first(where: { $0.baseTheme == .night }) ?? themeSettings.first(where: { $0.baseTheme == .tinted }) { // MARK: AyuGram: Night first, as in the chat
                                         let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
                                         bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
                                     }
@@ -1274,7 +1274,7 @@ private final class ChatThemeSheetContentComponent: Component {
                 let themeReference: PresentationThemeReference
                 let wallpaper: TelegramWallpaper?
                 if isDarkAppearance {
-                    wallpaper = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted })?.wallpaper
+                    wallpaper = (themeSettings.first(where: { $0.baseTheme == .night }) ?? themeSettings.first(where: { $0.baseTheme == .tinted }))?.wallpaper // MARK: AyuGram: Night first, as in the chat
                     themeReference = .builtin(.night)
                 } else {
                     wallpaper = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })?.wallpaper

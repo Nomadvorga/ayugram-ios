@@ -72,7 +72,7 @@ public func makePresentationTheme(settings: TelegramThemeSettings, title: String
 
 public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false) -> PresentationTheme? {
     let settings: TelegramThemeSettings?
-    if let exactSettings = cloudTheme.settings?.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
+    if let exactSettings = ayuChatThemeSettings(cloudTheme.settings ?? [], dark: dark) { // MARK: AyuGram
         settings = exactSettings
     } else if let firstSettings = cloudTheme.settings?.first {
         settings = firstSettings
@@ -91,7 +91,7 @@ public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false) -> P
         return nil
     }
     let settings: TelegramThemeSettings?
-    if let exactSettings = themeSettings.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
+    if let exactSettings = ayuChatThemeSettings(themeSettings, dark: dark) { // MARK: AyuGram
         settings = exactSettings
     } else if let firstSettings = themeSettings.first {
         settings = firstSettings
@@ -223,4 +223,15 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
     // wallpaper here.
     let theme = makePresentationTheme(mediaBox: mediaBox, themeReference: reference, baseTheme: preferredBaseTheme, accentColor: colors?.colorFor(baseTheme: preferredBaseTheme ?? .day), bubbleColors: bubbleColors, wallpaper: wallpaper, baseColor: colors?.baseColor, serviceBackgroundColor: nil) ?? defaultPresentationTheme
     return bubblelessPresentationTheme(theme)
+}
+
+// MARK: AyuGram
+// A chat theme's variant for the appearance. In dark mode Night comes before Tinted, as in Telegram from the App Store:
+// taking whichever dark variant the server lists first showed many chat themes in their muted Tinted variant.
+private func ayuChatThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool) -> TelegramThemeSettings? {
+    if dark {
+        return settings.first(where: { $0.baseTheme == .night }) ?? settings.first(where: { $0.baseTheme == .tinted })
+    } else {
+        return settings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })
+    }
 }
