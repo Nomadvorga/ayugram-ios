@@ -1,12 +1,7 @@
 // MARK: Swiftgram
 import StoreKit
-import SGAPI
-import SGDeviceToken
-import SGAPIToken
 
 import SGActionRequestHandlerSanitizer
-import SGGHSettings
-import SGAPIWebSettings
 import SGLogging
 import SGStrings
 import SGSimpleSettings

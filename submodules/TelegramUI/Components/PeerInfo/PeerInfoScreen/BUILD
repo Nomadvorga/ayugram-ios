@@ -6,8 +6,6 @@ sgdeps = [
     "//Swiftgram/SGStrings:SGStrings",
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
 
-    "//Swiftgram/SGRegDate:SGRegDate",
-    "//Swiftgram/SGRegDateScheme:SGRegDateScheme",
 ]
 #
 # MARK: Swiftgram

@@ -9,17 +9,13 @@ load(
 sgdeps = [
     "//Swiftgram/SGSettingsUI:SGSettingsUI",
     "//Swiftgram/SGConfig:SGConfig",
-    "//Swiftgram/SGAPIWebSettings:SGAPIWebSettings",
     "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
-    "//Swiftgram/SFSafariViewControllerPlus:SFSafariViewControllerPlus",
     "//Swiftgram/SGLogging:SGLogging",
     "//Swiftgram/SGStrings:SGStrings",
     "//Swiftgram/SGActionRequestHandlerSanitizer:SGActionRequestHandlerSanitizer",
     "//Swiftgram/Wrap:Wrap",
-    "//Swiftgram/SGDeviceToken:SGDeviceToken",
     "//Swiftgram/SGInputToolbar:SGInputToolbar",
-    "//Swiftgram/SGGHSettings:SGGHSettings",
     # "//Swiftgram/SGContentAnalysis:SGContentAnalysis"
 ]
 
@@ -28,7 +24,6 @@ sgsrcs = [
     "//Swiftgram/ChatControllerImplExtension:ChatControllerImplExtension",
     "//Swiftgram/SGSharedAccountContextMigration:SGSharedAccountContextMigration",
     "//Swiftgram/SGOutgoingTranslationLanguageSelection:SGOutgoingTranslationLanguageSelection",
-    "//Swiftgram/SGSafariControllerUrlOpening:SGSafariControllerUrlOpening",
     "//Swiftgram/SGTelegramUIExtensions:SGTelegramUIExtensions", # MARK: Swiftgram
 ]
 

@@ -4,8 +4,6 @@ load("@build_bazel_rules_apple//apple/testing/default_runner:ios_test_runner.bzl
 
 sgdeps = [
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
-    "//Swiftgram/SGAPIWebSettings:SGAPIWebSettings",
-    "//Swiftgram/SGAPIToken:SGAPIToken"
 ]
 sgsrcs = [
     "//Swiftgram/SGChatListSimpleSettingsSignal:SGChatListSimpleSettingsSignal",

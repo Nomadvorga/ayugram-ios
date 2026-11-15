@@ -12,9 +12,7 @@ sgdeps = [
 ]
 
 sgsrc = [
-    "//Swiftgram/SGIQTP:SGIQTP",
     # MARK: Swiftgram
-    "//Swiftgram/SGServerSuggestions:SGServerSuggestions",
     "//Swiftgram/SGTranslate:SGTranslate",
     "//Swiftgram/SGLocalizationInfoExtension:SGLocalizationInfoExtension",
     #

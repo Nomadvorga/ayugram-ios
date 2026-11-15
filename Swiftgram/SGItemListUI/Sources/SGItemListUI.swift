@@ -2,7 +2,6 @@
 import SGLogging
 import SGSimpleSettings
 import SGStrings
-import SGAPIToken
 
 import Foundation
 import UIKit

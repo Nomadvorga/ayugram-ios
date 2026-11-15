@@ -17,45 +17,6 @@ import UIKit
 import ChatControllerInteraction
 import ChatPresentationInterfaceState
 
-func sgHandleInternalUrlRoute(context: AccountContext, parsedUrl: URL, navigationController: NavigationController?) -> Bool {
-    guard let path = parsedUrl.pathComponents.last else {
-        return false
-    }
-    switch path {
-    case "debug":
-        if let debugController = context.sharedContext.makeDebugSettingsController(context: context) {
-            navigationController?.pushViewController(debugController)
-            return true
-        }
-    case "settings":
-        navigationController?.pushViewController(sgSettingsController(context: context))
-        return true
-    case "ios_settings":
-        context.sharedContext.applicationBindings.openSettings()
-        return true
-    case "contacts":
-        if let lastViewController = navigationController?.viewControllers.last as? ViewController {
-            lastViewController.present(ContactsController(context: context), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-        }
-        return true
-    case "restart":
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let lang = presentationData.strings.baseLanguageCode
-        context.sharedContext.presentGlobalController(
-            UndoOverlayController(
-                presentationData: presentationData,
-                content: .info(title: nil, text: "Common.RestartRequired".i18n(lang), timeout: nil, customUndoText: "Common.RestartNow".i18n(lang)),
-                elevatedLayout: false,
-                action: { action in if action == .undo { exit(0) }; return true }
-            ),
-            nil
-        )
-    default:
-        break
-    }
-    return false
-}
-
 func sgCanRevealContent(messages: [EngineRawMessage], context: AccountContext, copyProtectionEnabled: Bool) -> Bool {
     guard !copyProtectionEnabled else {
         return false

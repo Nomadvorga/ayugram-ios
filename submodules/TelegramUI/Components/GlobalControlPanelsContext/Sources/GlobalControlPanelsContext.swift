@@ -69,7 +69,6 @@ public final class GlobalControlPanelsContext {
     
     public enum ChatListNotice: Equatable {
         case clearStorage(sizeFraction: Double)
-        case sgUrl(id: String, title: String, text: String?, url: String, needAuth: Bool, permanent: Bool) // MARK: Swiftgram
         case setupPassword
         case premiumUpgrade(discount: Int32)
         case premiumAnnualDiscount(discount: Int32)
@@ -339,7 +338,6 @@ public final class GlobalControlPanelsContext {
                 let starsSubscriptionsContextPromise = Promise<StarsSubscriptionsContext?>(nil)
                 
                 let suggestedChatListNoticeSignal: Signal<ChatListNotice?, NoError> = combineLatest(
-                    Signal<Data?, NoError>.single(nil), // MARK: AyuGram: no Swiftgram announcements
                     context.engine.notices.getServerProvidedSuggestions(),
                     context.engine.notices.getServerDismissedSuggestions(),
                     needsPasswordSetup,
@@ -353,18 +351,10 @@ public final class GlobalControlPanelsContext {
                     starsSubscriptionsContextPromise.get(),
                     accountFreezeConfiguration
                 )
-                |> mapToSignal { sgSuggestionsData, suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in // MARK: Swiftgram
+                |> mapToSignal { suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in // MARK: Swiftgram
                     let (accountPeer, birthday) = data
                     
 
-                    // MARK: Swiftgram
-                    if let sgSuggestionsData = sgSuggestionsData, let dictionary = try? JSONSerialization.jsonObject(with: sgSuggestionsData, options: []), let sgSuggestions = dictionary as? [[String: Any]], let sgSuggestion = sgSuggestions.first, let sgSuggestionId = sgSuggestion["id"] as? String {
-                        if let sgSuggestionType = sgSuggestion["type"] as? String, sgSuggestionType == "SG_URL", let sgSuggestionTitle = sgSuggestion["title"] as? String, let sgSuggestionUrl = sgSuggestion["url"] as? String {
-                            return .single(.sgUrl(id: sgSuggestionId, title: sgSuggestionTitle, text: sgSuggestion["text"] as? String, url: sgSuggestionUrl, needAuth: sgSuggestion["need_auth"] as? Bool ?? false, permanent: sgSuggestion["permanent"] as? Bool ?? false))
-                            
-                        }
-                    }
-                    //
                     if let newSessionReview = newSessionReviews.first {
                         return .single(.reviewLogin(newSessionReview: newSessionReview, totalCount: newSessionReviews.count))
                     }

@@ -1491,10 +1491,6 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                             return
                         }
                         switch notice {
-                        // MARK: Swiftgram
-                        case let .sgUrl(id, _, _, url, needAuth, permanent):
-                            self.effectiveContainerNode.currentItemNode.interaction?.openSGAnnouncement(id, url, needAuth, permanent)
-                        //
                         case .clearStorage:
                             self.effectiveContainerNode.currentItemNode.interaction?.openStorageManagement()
                         case .setupPassword:

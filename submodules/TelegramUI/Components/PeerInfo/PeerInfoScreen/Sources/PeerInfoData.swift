@@ -1,6 +1,4 @@
 // MARK: Swiftgram
-import SGRegDateScheme
-import SGRegDate
 //
 import SGSimpleSettings // MARK: AyuGram
 import Foundation
@@ -419,7 +417,6 @@ private func peerInfoStatusWithHiddenCommunityPrefix(_ status: PeerInfoStatusDat
 
 final class PeerInfoScreenData {
     // MARK: Swiftgram
-    let regDate: RegDate?
     let channelCreationTimestamp: Int32?
     //
     let peer: EnginePeer?
@@ -488,7 +485,6 @@ final class PeerInfoScreenData {
     
     init(
         // MARK: Swiftgram
-        regDate: RegDate? = nil,
         channelCreationTimestamp: Int32? = nil,
         //
         peer: EnginePeer?,
@@ -543,7 +539,6 @@ final class PeerInfoScreenData {
         agentState: AgentSettingsContext.State? = nil
     ) {
         // MARK: Swiftgram
-        self.regDate = regDate
         self.channelCreationTimestamp = channelCreationTimestamp
         //
         self.peer = peer
@@ -1643,7 +1638,6 @@ func peerInfoScreenData(
             let forcedLinkedCommunityId = Atomic<EnginePeer.Id?>(value: nil)
             
             return combineLatest(
-                Signal<RegDate?, NoError>.single(nil), // MARK: AyuGram: no request to Swiftgram's API
                 context.account.viewTracker.peerView(peerId, updateData: true),
                 peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
@@ -1667,7 +1661,7 @@ func peerInfoScreenData(
                 savedMusicContext.state,
                 combineLatest(businessConnectedBot, walletBalance, agentState)
             )
-            |> mapToSignal { regDate, peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBotAndWalletBalanceAndAgentState -> Signal<PeerInfoScreenData, NoError> in // MARK: Swiftgram
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBotAndWalletBalanceAndAgentState -> Signal<PeerInfoScreenData, NoError> in // MARK: Swiftgram
                 let (businessConnectedBot, walletBalance, agentState) = businessConnectedBotAndWalletBalanceAndAgentState
                 var availablePanes = availablePanes
                 if isMyProfile {
@@ -1807,7 +1801,6 @@ func peerInfoScreenData(
                     }
                     
                     return PeerInfoScreenData(
-                        regDate: regDate, // MARK: Swiftgram
                         peer: peer.flatMap(EnginePeer.init),
                         chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
                         savedMessagesPeer: savedMessagesPeer,
