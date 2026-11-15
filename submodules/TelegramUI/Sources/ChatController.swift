@@ -6929,6 +6929,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         chatTheme = nil
                     }
                 }
+                // MARK: AyuGram
+                if chatThemePreview == nil, AyuCustomizationSettings.shared.disableCustomBackgrounds {
+                    chatTheme = nil
+                    chatWallpaper = nil
+                }
+                //
                 if strongSelf.chatLocation.peerId == strongSelf.context.account.peerId {
                     chatTheme = nil
                 }

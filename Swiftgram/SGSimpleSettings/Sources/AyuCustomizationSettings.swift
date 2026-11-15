@@ -16,6 +16,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case hideFolderCounters
         case copyUsernameAsLink
         case disableSimilarChannels
+        case disableCustomBackgrounds
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -80,6 +81,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.hideFolderCounters): false,
             AyuCustomizationSettings.key(.copyUsernameAsLink): true,
             AyuCustomizationSettings.key(.disableSimilarChannels): false,
+            AyuCustomizationSettings.key(.disableCustomBackgrounds): false,
         ])
     }
 
@@ -139,6 +141,12 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var disableSimilarChannels: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.disableSimilarChannels)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableSimilarChannels)) }
+    }
+
+    // Chats keep the app wallpaper instead of the theme or wallpaper the other side set.
+    public var disableCustomBackgrounds: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.disableCustomBackgrounds)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableCustomBackgrounds)) }
     }
 
     // What copying a username puts on the pasteboard.

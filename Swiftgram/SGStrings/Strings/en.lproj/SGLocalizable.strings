@@ -389,3 +389,4 @@
 "Ayu.DisableSimilarChannels" = "Disable Similar Channels";
 "Ayu.DeleteOwnMessages" = "Delete own messages";
 "Ayu.DeleteOwnMessagesConfirmation" = "Are you sure you want to delete all your messages from this group?";
+"Ayu.DisableCustomBackgrounds" = "Disable Custom Backgrounds";
