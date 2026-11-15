@@ -8,7 +8,6 @@ import AccountContext
 import TelegramUIPreferences
 import TelegramCore
 import SGSimpleSettings // MARK: AyuGram
-import SGChatListSimpleSettingsSignal // MARK: AyuGram
 
 // MARK: AyuGram
 public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {

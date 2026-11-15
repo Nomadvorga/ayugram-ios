@@ -112,6 +112,7 @@ jobs:
           cat > "$HOME/.bazelrc" <<EOF
           common --repository_cache=${REPO_CACHE}
           build --show_progress_rate_limit=60
+          build --keep_going
           EOF
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
