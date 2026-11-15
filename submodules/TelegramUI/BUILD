@@ -16,14 +16,12 @@ sgdeps = [
     "//Swiftgram/SGActionRequestHandlerSanitizer:SGActionRequestHandlerSanitizer",
     "//Swiftgram/Wrap:Wrap",
     "//Swiftgram/SGInputToolbar:SGInputToolbar",
-    # "//Swiftgram/SGContentAnalysis:SGContentAnalysis"
 ]
 
 sgsrcs = [
     "//Swiftgram/SGDBReset:SGDBReset",
     "//Swiftgram/ChatControllerImplExtension:ChatControllerImplExtension",
     "//Swiftgram/SGSharedAccountContextMigration:SGSharedAccountContextMigration",
-    "//Swiftgram/SGOutgoingTranslationLanguageSelection:SGOutgoingTranslationLanguageSelection",
     "//Swiftgram/SGTelegramUIExtensions:SGTelegramUIExtensions", # MARK: Swiftgram
 ]
 

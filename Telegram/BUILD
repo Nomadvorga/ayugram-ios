@@ -2102,7 +2102,6 @@ ios_application(
         ":AppStringResources",
     ],
     # MARK: Swiftgram
-    settings_bundle = "//Swiftgram/SGSettingsBundle:SGSettingsBundle",
     extensions = select({
         ":disableExtensionsSetting": [],
         "//conditions:default": [

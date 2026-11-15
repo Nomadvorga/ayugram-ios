@@ -1280,6 +1280,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         if !self.controlsVisibility() || hideControls {
             playbackControlsIsVisible = false
         }
+        
         let playbackControlsSize = self.playbackControls.update(
             transition: ComponentTransition(transition),
             component: AnyComponent(VideoPlaybackControlsComponent(
@@ -3538,9 +3539,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
 
 
-    private typealias SGContextMenuItems = (items: [ContextMenuItem], topItems: [ContextMenuItem])
-
-    private func contextMenuMainItems(isSettings: Bool, dismiss: @escaping () -> Void) -> Signal<SGContextMenuItems, NoError> {
+    private func contextMenuMainItems(isSettings: Bool, dismiss: @escaping () -> Void) -> Signal<(items: [ContextMenuItem], topItems: [ContextMenuItem]), NoError> {
         guard let videoNode = self.videoNode, let item = self.item else {
             return .single(([], []))
         }
@@ -3552,12 +3551,15 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             peer = .single(nil)
         }
 
-        func mapMenu(values: (MediaPlayerStatus?, EnginePeer?, (current: Int, preferred: UniversalVideoContentVideoQuality, available: [Int])?)) -> SGContextMenuItems {
-            let (status, peer, videoQualityState) = values
-            guard let status = status else {
-                return (items: [], topItems: [])
+        return combineLatest(queue: Queue.mainQueue(),
+            videoNode.status |> take(1),
+            peer,
+            videoNode.videoQualityStateSignal()
+        )
+        |> map { [weak self] status, peer, videoQualityState -> (items: [ContextMenuItem], topItems: [ContextMenuItem]) in
+            guard let status = status, let strongSelf = self else {
+                return ([], [])
             }
-            let strongSelf = self
 
             var topItems: [ContextMenuItem] = []
             var items: [ContextMenuItem] = []
@@ -3588,7 +3590,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                             } else {
                                 return UIImage()
                             }
-                        }), action: { [weak self] _, f in
+                        }), action: { _, f in
                             f(.default)
                             
                             guard let strongSelf = self, let videoNode = strongSelf.videoNode else {
@@ -3693,7 +3695,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
             } else {
                 if let (message, maybeFile, _) = strongSelf.contentInfo(), let file = maybeFile, !message.isCopyProtected() && !item.peerIsCopyProtected && message.paidContent == nil {
-                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Gallery_MenuSaveToGallery, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Download"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] c, _ in
+                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Gallery_MenuSaveToGallery, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Download"), color: theme.actionSheet.primaryTextColor) }, action: { c, _ in
                         guard let self else {
                             c?.dismiss(result: .default, completion: nil)
                             return
@@ -3888,8 +3890,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     })))
                 }
                                 
-                // MARK: Swiftgram
-                
                 if let (message, _, _) = strongSelf.contentInfo() {
                     for media in message.media {
                         if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content {
@@ -3897,7 +3897,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                             
                             let item = OpenInItem.url(url: url)
                             let openText = strongSelf.presentationData.strings.Conversation_FileOpenIn
-                            items.append(.action(ContextMenuActionItem(text: openText, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Share"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                            items.append(.action(ContextMenuActionItem(text: openText, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Share"), color: theme.contextMenu.primaryColor) }, action: { _, f in
                                 f(.default)
                                 
                                 if let strongSelf = self, let controller = strongSelf.galleryController() {
@@ -3939,7 +3939,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
                 
                 if strongSelf.canDelete() {
-                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Common_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
+                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Common_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { _, f in
                         f(.default)
                         
                         if let strongSelf = self {
@@ -3947,50 +3947,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                         }
                     })))
                 }
-
-                // MARK: Swiftgram
-                if #available(iOS 11.0, *) {
-                    items.append(.action(ContextMenuActionItem(text: "AirPlay", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/AirPlay"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
-                        f(.default)
-                        guard let strongSelf = self else {
-                            return
-                        }
-                        strongSelf.beginAirPlaySetup()
-                    })))
-                }
             }
 
-            return (items: items, topItems: topItems)
-        }
-
-        return combineLatest(queue: Queue.mainQueue(),
-            videoNode.status |> take(1),
-            peer,
-            videoNode.videoQualityStateSignal() |> take(1)
-        )
-        |> take(1)
-        |> map(mapMenu(values:))
-    }
-
-    private var isAirPlayActive = false
-    private var externalVideoPlayer: ExternalVideoPlayer?
-
-    func beginAirPlaySetup() {
-        guard let content = self.item?.content as? NativeVideoContent else {
-            return
-        }
-        if #available(iOS 11.0, *) {
-            self.externalVideoPlayer = ExternalVideoPlayer(context: self.context, content: content)
-            self.externalVideoPlayer?.openRouteSelection()
-            self.externalVideoPlayer?.isActiveUpdated = { [weak self] isActive in
-                if let strongSelf = self {
-                    if strongSelf.isAirPlayActive && !isActive {
-                        strongSelf.externalVideoPlayer = nil
-                    }
-                    strongSelf.isAirPlayActive = isActive
-                    strongSelf.updateDisplayPlaceholder()
-                }
-            }
+            return (items, topItems)
         }
     }
 

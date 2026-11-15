@@ -9,7 +9,6 @@ sgdeps = [
 ]
 
 sgsrc = [
-    "//Swiftgram/SGRecentSessionApiId:SGRecentSessionApiId",
 ]
 
 swift_library(
