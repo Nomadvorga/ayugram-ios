@@ -1168,6 +1168,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if let traitCollection = window.rootViewController?.traitCollection {
                 systemUserInterfaceStyle = WindowUserInterfaceStyle(style: traitCollection.userInterfaceStyle)
             }
+            // MARK: AyuGram
+            // At launch the root controller's traits can still be unspecified; the first frame would then be light.
+            if window.rootViewController?.traitCollection.userInterfaceStyle != .dark && window.rootViewController?.traitCollection.userInterfaceStyle != .light {
+                systemUserInterfaceStyle = WindowUserInterfaceStyle(style: UIScreen.main.traitCollection.userInterfaceStyle)
+            }
         }
         
         let sharedContextSignal = currentPresentationDataAndSettings(accountManager: accountManager, systemUserInterfaceStyle: systemUserInterfaceStyle)

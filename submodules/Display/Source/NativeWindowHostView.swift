@@ -187,11 +187,12 @@ private final class WindowRootViewController: UIViewController {
     
     // MARK: AyuGram
     // Before the controller is in a window its trait collection is unspecified, which used to be taken for light;
-    // and from iOS 27 the deprecated traitCollectionDidChange is not called for appearance changes.
+    // the screen always carries the system appearance. From iOS 27 the deprecated traitCollectionDidChange is not
+    // called for appearance changes.
     private func updateSystemUserInterfaceStyle() {
         var style = self.traitCollection.userInterfaceStyle
         if style == .unspecified {
-            style = UITraitCollection.current.userInterfaceStyle
+            style = (self.viewIfLoaded?.window?.windowScene?.screen ?? UIScreen.main).traitCollection.userInterfaceStyle
         }
         self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: style))
     }
