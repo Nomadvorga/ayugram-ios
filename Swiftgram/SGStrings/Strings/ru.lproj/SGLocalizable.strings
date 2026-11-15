@@ -420,3 +420,10 @@
 "Extera.DoubleTapOutgoingEdit" = "Двойной тап по исходящим: редактировать";
 "Extera.HideCameraTile" = "Скрыть плитку камеры";
 "Extera.RegDateInfo" = "Месяц регистрации из Telegram, если он его показывает, иначе приблизительная оценка по ID пользователя. Никуда ничего не отправляется.";
+"Extera.InAppVibration" = "Вибрация в приложении";
+"Extera.DisableNumberRounding" = "Отключить округление чисел";
+"Extera.ReplaceEditedWithIcon" = "Заменять \"%@\" иконкой";
+"Extera.HideShareButton" = "Скрыть боковую кнопку \"%@\"";
+"Extera.DisableGreetingSticker" = "Скрыть приветственный стикер";
+"Extera.FilterZalgo" = "Фильтр \"Zalgo\"";
+"Extera.FilterZalgoInfo" = "Убирает искажающие текст символы \"%@\" в именах и сообщениях.";

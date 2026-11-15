@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -430,6 +431,10 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 if incoming && item.associatedData.isSuspiciousPeer, let entities = messageEntities {
                     messageEntities = entities.filter(\.isShownFromSuspiciousPeer)
+                }
+                // MARK: AyuGram: exteraGram's "Filter Zalgo"; entities hold UTF-16 offsets, so formatted text is kept as is.
+                if messageEntities?.isEmpty ?? true {
+                    rawText = ExteraSettings.shared.filteredText(rawText)
                 }
                 
                 var formattedDateUpdatePeriod: Int32?

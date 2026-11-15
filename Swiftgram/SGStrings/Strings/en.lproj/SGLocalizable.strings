@@ -428,3 +428,10 @@
 "Extera.DoubleTapOutgoingEdit" = "Double Tap on Outgoing Messages: Edit";
 "Extera.HideCameraTile" = "Hide Instant Camera Tile";
 "Extera.RegDateInfo" = "Telegram's own registration month when it shows one, otherwise an approximate date estimated from the user ID. Nothing is sent anywhere.";
+"Extera.InAppVibration" = "In-App Vibration";
+"Extera.DisableNumberRounding" = "Disable Number Rounding";
+"Extera.ReplaceEditedWithIcon" = "Replace \"%@\" with an Icon";
+"Extera.HideShareButton" = "Hide Side \"%@\" Button";
+"Extera.DisableGreetingSticker" = "Disable Greeting Sticker";
+"Extera.FilterZalgo" = "Filter \"Zalgo\"";
+"Extera.FilterZalgoInfo" = "Removes \"%@\" symbols in names and messages.";

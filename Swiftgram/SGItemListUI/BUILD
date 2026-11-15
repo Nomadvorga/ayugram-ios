@@ -23,6 +23,8 @@ swift_library(
         "//submodules/AccountContext:AccountContext",
         "//submodules/AppBundle:AppBundle",
         "//submodules/TelegramUI/Components/Settings/PeerNameColorScreen",
+        "//submodules/ComponentFlow",
+        "//submodules/TelegramUI/Components/SliderComponent",
     ],
     visibility = [
         "//visibility:public",

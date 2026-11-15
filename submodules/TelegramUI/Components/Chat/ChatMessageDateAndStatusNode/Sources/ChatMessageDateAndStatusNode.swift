@@ -617,7 +617,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else {
-                    updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
+                    // MARK: AyuGram: exteraGram's "Replace 'edited' with an icon"
+                    updatedDateText = "\(ExteraSettings.shared.replaceEditedWithIcon ? "✎" : arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
                 }
             }
             if let impressionCount = arguments.impressionCount {

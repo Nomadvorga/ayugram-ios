@@ -2225,6 +2225,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             needsSummarizeButton = false
         }
         let isAd = item.content.firstMessage.adAttribute != nil
+        // MARK: AyuGram: exteraGram's "Hide side share button"
+        if ExteraSettings.shared.hideShareButton && !isAd {
+            needsShareButton = false
+        }
         if isAd {
             needsShareButton = true
         }

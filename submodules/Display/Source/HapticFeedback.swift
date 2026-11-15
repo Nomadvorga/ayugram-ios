@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AudioToolbox
 import CoreHaptics
@@ -144,6 +145,10 @@ public final class HapticFeedback {
     
     @available(iOSApplicationExtension 10.0, iOS 10.0, *)
     private func withImpl(_ f: (HapticFeedbackImpl) -> Void) {
+        // MARK: AyuGram: exteraGram's "In-App Vibration"
+        guard ExteraSettings.shared.inAppVibration else {
+            return
+        }
         if self.impl == nil {
             self.impl = HapticFeedbackImpl()
         }

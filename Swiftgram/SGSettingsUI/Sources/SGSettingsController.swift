@@ -35,6 +35,12 @@ private enum SGControllerSection: Int32, SGItemListSection {
 }
 
 private enum SGBoolSetting: String {
+    case inAppVibration
+    case disableNumberRounding
+    case replaceEditedWithIcon
+    case hideShareButton
+    case disableGreetingSticker
+    case filterZalgo
     case hidePhoneNumber
     case formatTimeWithSeconds
     case uploadSpeedBoost
@@ -166,6 +172,8 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .speedBoost, settingName: .uploadSpeedBoost, value: settings.uploadSpeedBoost, text: i18n("Extera.UploadSpeedBoost", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .speedBoost, text: i18n("Extera.SpeedBoostInfo", lang)))
 
+    entries.append(.toggle(id: id.count, section: .general, settingName: .inAppVibration, value: ExteraSettings.shared.inAppVibration, text: i18n("Extera.InAppVibration", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .general, settingName: .disableNumberRounding, value: ExteraSettings.shared.disableNumberRounding, text: i18n("Extera.DisableNumberRounding", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .general, settingName: .formatTimeWithSeconds, value: settings.secondsInMessages, text: i18n("Extera.FormatTimeWithSeconds", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .general, settingName: .hidePhoneNumber, value: settings.hidePhoneInSettings, text: i18n("Extera.HidePhoneNumber", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .general, settingName: .hideAccountInNotifications, value: settings.hideAccountInNotifications, text: i18n("Settings.HideAccountInNotifications", lang), enabled: true))
@@ -216,6 +224,11 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
 
     // Chats: exteraGram first, then gestures and stickers.
     entries.append(.header(id: id.count, section: .chats, text: i18n("Ayu.CategoryChats", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .replaceEditedWithIcon, value: ExteraSettings.shared.replaceEditedWithIcon, text: i18n("Extera.ReplaceEditedWithIcon", lang, strings.Conversation_MessageEditedLabel), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideShareButton, value: ExteraSettings.shared.hideShareButton, text: i18n("Extera.HideShareButton", lang, strings.Conversation_ContextMenuShare), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .disableGreetingSticker, value: ExteraSettings.shared.disableGreetingSticker, text: i18n("Extera.DisableGreetingSticker", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .filterZalgo, value: ExteraSettings.shared.filterZalgo, text: i18n("Extera.FilterZalgo", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .chats, text: i18n("Extera.FilterZalgoInfo", lang, "Zalgo")))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .widePosts, value: settings.wideChannelPosts, text: i18n("Extera.WidePosts", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .bottomButton, value: !settings.hideChannelBottomButton, text: i18n("Extera.BottomButton", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .quickTransitions, value: !settings.disableScrollToNextChannel, text: i18n("Extera.QuickTransitions", lang), enabled: true))
@@ -287,6 +300,18 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         setBoolValue: { setting, value in
         let settings = SGSimpleSettings.shared
         switch setting {
+        case .inAppVibration:
+            ExteraSettings.shared.set(.inAppVibration, value)
+        case .disableNumberRounding:
+            ExteraSettings.shared.set(.disableNumberRounding, value)
+        case .replaceEditedWithIcon:
+            ExteraSettings.shared.set(.replaceEditedWithIcon, value)
+        case .hideShareButton:
+            ExteraSettings.shared.set(.hideShareButton, value)
+        case .disableGreetingSticker:
+            ExteraSettings.shared.set(.disableGreetingSticker, value)
+        case .filterZalgo:
+            ExteraSettings.shared.set(.filterZalgo, value)
         case .hidePhoneNumber:
             settings.hidePhoneInSettings = value
             askForRestart?()

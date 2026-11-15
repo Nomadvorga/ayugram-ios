@@ -2,10 +2,16 @@ import Foundation
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
+import SGSimpleSettings // MARK: AyuGram
 //import PhoneNumberFormat
 
 public extension EnginePeer {
+    // MARK: AyuGram: exteraGram's "Filter Zalgo" applies to every displayed name.
     var compactDisplayTitle: String {
+        return ExteraSettings.shared.filteredText(self.rawCompactDisplayTitle)
+    }
+
+    private var rawCompactDisplayTitle: String {
         switch self {
         case let .user(user):
             if let firstName = user.firstName, !firstName.isEmpty {
@@ -29,6 +35,10 @@ public extension EnginePeer {
     }
 
     func displayTitle(strings: PresentationStrings, displayOrder: PresentationPersonNameOrder) -> String {
+        return ExteraSettings.shared.filteredText(self.rawDisplayTitle(strings: strings, displayOrder: displayOrder))
+    }
+
+    private func rawDisplayTitle(strings: PresentationStrings, displayOrder: PresentationPersonNameOrder) -> String {
         switch self {
         case let .user(user):
             if user.id.isReplies {

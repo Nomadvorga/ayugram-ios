@@ -1,8 +1,13 @@
 import Foundation
 import PresentationStrings
 import TelegramCore
+import SGSimpleSettings // MARK: AyuGram
 
 public func compactNumericCountString(_ count: Int, decimalSeparator: String = ".", showDecimalPart: Bool = true) -> String {
+    // MARK: AyuGram: exteraGram's "Disable Number Rounding"
+    if ExteraSettings.shared.disableNumberRounding {
+        return presentationStringsFormattedNumber(Int32(clamping: count), " ")
+    }
     if count >= 1000 * 1000 {
         let remainder = (count % (1000 * 1000)) / (1000 * 100)
         if remainder != 0 && showDecimalPart {

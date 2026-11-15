@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -1682,7 +1683,7 @@ public final class ChatEmptyNode: ASDisplayNode {
                     } else if interfaceState.isPremiumRequiredForMessaging {
                         contentType = .premiumRequired
                     } else {
-                        if peer.isDeleted || peer.botInfo != nil || peer.flags.contains(.isSupport) || peer.isScam || interfaceState.peerIsBlocked {
+                        if peer.isDeleted || peer.botInfo != nil || peer.flags.contains(.isSupport) || peer.isScam || interfaceState.peerIsBlocked || (ExteraSettings.shared.disableGreetingSticker && interfaceState.businessIntro == nil) /* MARK: AyuGram */ {
                             contentType = .regular
                         } else {
                             contentType = .greeting
