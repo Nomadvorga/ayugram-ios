@@ -232,16 +232,13 @@ public func getChatWallpaperImage(context: AccountContext, peerId: EnginePeer.Id
         
         var nightWallpaper: TelegramWallpaper?
         
-        let automaticTheme = themeSettings.automaticThemeSwitchSetting.theme
+        // MARK: AyuGram
+        let nightTheme = ayuNightTheme(settings: themeSettings)
+        let automaticTheme = nightTheme.theme
         let effectiveColors = themeSettings.themeSpecificAccentColors[automaticTheme.index]
         let nightThemeSpecificWallpaper = (themeSettings.themeSpecificChatWallpapers[coloredThemeIndex(reference: automaticTheme, accentColor: effectiveColors)] ?? themeSettings.themeSpecificChatWallpapers[automaticTheme.index])
         
-        var preferredBaseTheme: TelegramBaseTheme?
-        if let baseTheme = themeSettings.themePreferredBaseTheme[automaticTheme.index], [.night, .tinted].contains(baseTheme) {
-            preferredBaseTheme = baseTheme
-        } else {
-            preferredBaseTheme = .night
-        }
+        let preferredBaseTheme: TelegramBaseTheme? = nightTheme.baseTheme
         
         let darkTheme = makePresentationTheme(mediaBox: context.sharedContext.accountManager.mediaBox, themeReference: automaticTheme, baseTheme: preferredBaseTheme, accentColor: effectiveColors?.color, bubbleColors: effectiveColors?.customBubbleColors ?? [], wallpaper: effectiveColors?.wallpaper, baseColor: effectiveColors?.baseColor, serviceBackgroundColor: defaultServiceBackgroundColor) ?? defaultPresentationTheme
         

@@ -403,16 +403,13 @@ final class WallpaperGalleryItemNode: GalleryItemNode {
                 lightTheme = presentationData.theme
                 lightWallpaper = presentationData.chatWallpaper
                 
-                let automaticTheme = themeSettings.automaticThemeSwitchSetting.theme
+                // MARK: AyuGram
+                let nightTheme = ayuNightTheme(settings: themeSettings)
+                let automaticTheme = nightTheme.theme
                 let effectiveColors = themeSettings.themeSpecificAccentColors[automaticTheme.index]
                 let themeSpecificWallpaper = (themeSettings.themeSpecificChatWallpapers[coloredThemeIndex(reference: automaticTheme, accentColor: effectiveColors)] ?? themeSettings.themeSpecificChatWallpapers[automaticTheme.index])
                 
-                var preferredBaseTheme: TelegramBaseTheme?
-                if let baseTheme = themeSettings.themePreferredBaseTheme[automaticTheme.index], [.night, .tinted].contains(baseTheme) {
-                    preferredBaseTheme = baseTheme
-                } else {
-                    preferredBaseTheme = .night
-                }
+                let preferredBaseTheme: TelegramBaseTheme? = nightTheme.baseTheme
                 
                 darkTheme = makePresentationTheme(mediaBox: strongSelf.context.sharedContext.accountManager.mediaBox, themeReference: automaticTheme, baseTheme: preferredBaseTheme, accentColor: effectiveColors?.color, bubbleColors: effectiveColors?.customBubbleColors ?? [], wallpaper: effectiveColors?.wallpaper, baseColor: effectiveColors?.baseColor, serviceBackgroundColor: defaultServiceBackgroundColor) ?? defaultPresentationTheme
                 

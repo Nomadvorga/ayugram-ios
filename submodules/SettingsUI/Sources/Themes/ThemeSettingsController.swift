@@ -1347,7 +1347,21 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
                 }
                 var updatedAutomaticThemeSwitchSetting = current.automaticThemeSwitchSetting
                 if case let .cloud(info) = updatedTheme, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
-                    updatedAutomaticThemeSwitchSetting.theme = updatedTheme
+                    // MARK: AyuGram
+                    // A chat theme keeps the night theme chosen under Auto-Night: Night or Tinted Night is the base it is
+                    // drawn on at night, and a custom night theme stays unless the pick is made at night.
+                    let keptNightTheme: Bool
+                    switch updatedAutomaticThemeSwitchSetting.theme {
+                    case .builtin(.night), .builtin(.nightAccent):
+                        keptNightTheme = info.theme.emoticon != nil
+                    case .cloud, .local:
+                        keptNightTheme = info.theme.emoticon != nil && updatedAutomaticThemeSwitchSetting.theme.emoticon == nil && !autoNightModeTriggered
+                    default:
+                        keptNightTheme = false
+                    }
+                    if !keptNightTheme {
+                        updatedAutomaticThemeSwitchSetting.theme = updatedTheme
+                    }
                 } else if case let .builtin(theme) = updatedTheme {
                     if [.day, .dayClassic].contains(theme) {
                         if updatedAutomaticThemeSwitchSetting.theme.emoticon != nil || [.builtin(.dayClassic), .builtin(.day)].contains(updatedAutomaticThemeSwitchSetting.theme.generalThemeReference) {

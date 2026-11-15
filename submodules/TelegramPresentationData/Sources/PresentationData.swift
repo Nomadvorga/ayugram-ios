@@ -408,14 +408,11 @@ public func currentPresentationDataAndSettings(accountManager: AccountManager<Te
         let parameters = AutomaticThemeSwitchParameters(settings: themeSettings.automaticThemeSwitchSetting)
         let autoNightModeTriggered: Bool
         if automaticThemeShouldSwitchNow(parameters, systemUserInterfaceStyle: systemUserInterfaceStyle) {
-            effectiveTheme = themeSettings.automaticThemeSwitchSetting.theme
+            // MARK: AyuGram
+            let nightTheme = ayuNightTheme(settings: themeSettings)
+            effectiveTheme = nightTheme.theme
             autoNightModeTriggered = true
-            
-            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
-                preferredBaseTheme = baseTheme
-            } else {
-                preferredBaseTheme = .night
-            }
+            preferredBaseTheme = nightTheme.baseTheme
         } else {
             effectiveTheme = themeSettings.theme
             autoNightModeTriggered = false
@@ -800,7 +797,8 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
                         var switchedToNightModeWallpaper = false
                         var preferredBaseTheme: TelegramBaseTheme?
                         if autoNightModeTriggered {
-                            let automaticTheme = themeSettings.automaticThemeSwitchSetting.theme
+                            let nightTheme = ayuNightTheme(settings: themeSettings) // MARK: AyuGram
+                            let automaticTheme = nightTheme.theme
                             effectiveColors = themeSettings.themeSpecificAccentColors[automaticTheme.index]
                             
                             if automaticTheme == .builtin(.night) && effectiveColors == nil {
@@ -814,11 +812,7 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
                                 switchedToNightModeWallpaper = true
                             }
                             effectiveTheme = automaticTheme
-                            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
-                                preferredBaseTheme = baseTheme
-                            } else {
-                                preferredBaseTheme = .night
-                            }
+                            preferredBaseTheme = nightTheme.baseTheme
                         } else {
                             effectiveTheme = themeSettings.theme
                             if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {

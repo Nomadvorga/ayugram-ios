@@ -150,20 +150,22 @@ public func makePresentationTheme(mediaBox: MediaBox, themeReference: Presentati
         case let .cloud(info):
             let settings: TelegramThemeSettings?
             // MARK: AyuGram
-            // Emoji themes often have only a tinted dark variant: a night request falling back to the first
-            // (light) variant left the app light in night mode. The dark variant is used as Telegram designed it.
+            // Emoji themes often have only one dark variant: a night request falling back to the first (light)
+            // variant left the app light in night mode. The other dark variant's colors are drawn on the requested base.
             let isDarkBaseTheme: (TelegramBaseTheme) -> Bool = { $0 == .night || $0 == .tinted }
+            var builtinBaseTheme: TelegramBaseTheme?
             if let exactSettings = info.theme.settings?.first(where: { $0.baseTheme == baseTheme }) {
                 settings = exactSettings
             } else if let baseTheme, let similarSettings = info.theme.settings?.first(where: { isDarkBaseTheme($0.baseTheme) == isDarkBaseTheme(baseTheme) }) {
                 settings = similarSettings
+                builtinBaseTheme = isDarkBaseTheme(baseTheme) ? baseTheme : nil
             } else if let firstSettings = info.theme.settings?.first {
                 settings = firstSettings
             } else {
                 settings = nil
             }
             if let settings = settings {
-                if let loadedTheme = makePresentationTheme(mediaBox: mediaBox, themeReference: .builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)), extendingThemeReference: themeReference, accentColor: accentColor ?? UIColor(argb: settings.accentColor), outgoingAccentColor: outgoingAccentColor ?? settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: bubbleColors.isEmpty ? settings.messageColors : bubbleColors, animateBubbleColors: animateBubbleColors ?? settings.animateMessageColors, wallpaper: wallpaper ?? settings.wallpaper, serviceBackgroundColor: serviceBackgroundColor, preview: preview) {
+                if let loadedTheme = makePresentationTheme(mediaBox: mediaBox, themeReference: .builtin(PresentationBuiltinThemeReference(baseTheme: builtinBaseTheme ?? settings.baseTheme)), extendingThemeReference: themeReference, accentColor: accentColor ?? UIColor(argb: settings.accentColor), outgoingAccentColor: outgoingAccentColor ?? settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: bubbleColors.isEmpty ? settings.messageColors : bubbleColors, animateBubbleColors: animateBubbleColors ?? settings.animateMessageColors, wallpaper: wallpaper ?? settings.wallpaper, serviceBackgroundColor: serviceBackgroundColor, preview: preview) {
                     theme = loadedTheme
                 } else {
                     return nil
@@ -235,4 +237,20 @@ public func ayuChatThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool
         return preferredSettings
     }
     return settings.first(where: { isDarkBaseTheme($0.baseTheme) == dark })
+}
+
+/// The theme shown at night with bubbles, and the base it is built on. A chat theme picked in Appearance keeps the night
+/// theme chosen under Auto-Night (Night or Tinted Night) and is drawn on its base at night.
+public func ayuNightTheme(settings: PresentationThemeSettings) -> (theme: PresentationThemeReference, baseTheme: TelegramBaseTheme) {
+    let automaticTheme = settings.automaticThemeSwitchSetting.theme
+    if case let .builtin(nightTheme) = automaticTheme, nightTheme == .night || nightTheme == .nightAccent, case let .cloud(info) = settings.theme, info.theme.emoticon != nil, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
+        return (settings.theme, nightTheme.baseTheme)
+    }
+    if let baseTheme = settings.themePreferredBaseTheme[automaticTheme.index], [.night, .tinted].contains(baseTheme) {
+        return (automaticTheme, baseTheme)
+    }
+    if case let .cloud(info) = automaticTheme, let themeSettings = info.theme.settings, !themeSettings.contains(where: { $0.baseTheme == .night }), themeSettings.contains(where: { $0.baseTheme == .tinted }) {
+        return (automaticTheme, .tinted)
+    }
+    return (automaticTheme, .night)
 }
