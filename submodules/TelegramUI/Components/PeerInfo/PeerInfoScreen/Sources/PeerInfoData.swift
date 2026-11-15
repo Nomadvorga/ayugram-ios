@@ -1643,7 +1643,7 @@ func peerInfoScreenData(
             let forcedLinkedCommunityId = Atomic<EnginePeer.Id?>(value: nil)
             
             return combineLatest(
-                Signal<RegDate?, NoError>.single(nil) |> then (getRegDate(context: context, peerId: peerId.id._internalGetInt64Value())), // MARK: Swiftgram
+                Signal<RegDate?, NoError>.single(nil), // MARK: AyuGram: no request to Swiftgram's API
                 context.account.viewTracker.peerView(peerId, updateData: true),
                 peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),

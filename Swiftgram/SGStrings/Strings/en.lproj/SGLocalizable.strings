@@ -427,3 +427,4 @@
 "Extera.Gestures" = "Gestures";
 "Extera.DoubleTapOutgoingEdit" = "Double Tap on Outgoing Messages: Edit";
 "Extera.HideCameraTile" = "Hide Instant Camera Tile";
+"Extera.RegDateInfo" = "Telegram's own registration month when it shows one, otherwise an approximate date estimated from the user ID. Nothing is sent anywhere.";

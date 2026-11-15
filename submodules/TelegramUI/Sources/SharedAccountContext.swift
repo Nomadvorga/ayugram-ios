@@ -596,7 +596,6 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 SGSimpleSettings.shared.status = settings.status
             }
         })
-        self.initSGIAP(isMainApp: applicationBindings.isMainApp)
         //
         
         let _ = self.contactDataManager?.personNameDisplayOrder().start(next: { order in
