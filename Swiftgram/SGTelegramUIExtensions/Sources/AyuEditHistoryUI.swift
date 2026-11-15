@@ -6,6 +6,7 @@ import TelegramCore
 import AccountContext
 import ContextUI
 import SGStrings
+import SGSimpleSettings
 import ChatControllerInteraction
 import ChatPresentationInterfaceState
 
@@ -65,6 +66,21 @@ func ayuMakeRepeatMessageContextMenuAction(context: AccountContext, chatPresenta
         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
     }, action: { _, f in
         let _ = enqueueMessages(account: context.account, peerId: message.id.peerId, messages: [.forward(source: message.id, threadId: chatPresentationInterfaceState.chatLocation.threadId, grouping: .auto, attributes: [ForwardOptionsMessageAttribute(hideNames: true, hideCaptions: false)], correlationId: nil)]).start()
+        f(.default)
+    }))
+}
+
+// "Shadow Ban" for the author of a message in a group.
+func ayuMakeShadowBanContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+    guard let authorId = message.author?.id, authorId.namespace == Namespaces.Peer.CloudUser, authorId != context.account.peerId, authorId != message.id.peerId else {
+        return nil
+    }
+    let lang = chatPresentationInterfaceState.strings.baseLanguageCode
+    let isBanned = AyuShadowBan.shared.isBanned(peerId: authorId.toInt64())
+    return .action(ContextMenuActionItem(text: i18n(isBanned ? "Ayu.FiltersQuickUnshadowBan" : "Ayu.FiltersQuickShadowBan", lang), icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: isBanned ? "Chat/Context Menu/Unmute" : "Chat/Context Menu/Muted"), color: theme.actionSheet.primaryTextColor)
+    }, action: { _, f in
+        AyuShadowBan.shared.setBanned(!isBanned, peerId: authorId.toInt64())
         f(.default)
     }))
 }

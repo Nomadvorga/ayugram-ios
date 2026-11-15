@@ -387,3 +387,6 @@
 "Ayu.HideGroupReactions" = "Скрыть реакции в группах";
 "Ayu.HidePremiumStatuses" = "Скрыть премиум статусы";
 "Ayu.RepeatMessage" = "Повторить сообщение";
+"Ayu.FiltersShadowBan" = "Теневой бан";
+"Ayu.FiltersQuickShadowBan" = "В теневой бан";
+"Ayu.FiltersQuickUnshadowBan" = "Снять теневой бан";

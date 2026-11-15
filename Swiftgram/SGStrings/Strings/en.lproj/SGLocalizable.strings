@@ -395,3 +395,6 @@
 "Ayu.HideGroupReactions" = "Hide Reactions in Groups";
 "Ayu.HidePremiumStatuses" = "Hide Premium Statuses";
 "Ayu.RepeatMessage" = "Repeat Message";
+"Ayu.FiltersShadowBan" = "Shadow Ban";
+"Ayu.FiltersQuickShadowBan" = "Shadow Ban";
+"Ayu.FiltersQuickUnshadowBan" = "Unshadow Ban";

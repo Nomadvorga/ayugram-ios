@@ -1599,6 +1599,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if let repeatAction = ayuMakeRepeatMessageContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(repeatAction)
         }
+        if let shadowBanAction = ayuMakeShadowBanContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(shadowBanAction)
+        }
         actions.append(contentsOf: ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, message: message))
         //
         

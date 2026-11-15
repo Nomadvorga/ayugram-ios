@@ -170,6 +170,16 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
             }))
             itemId += 1
         }
+        if peer.id.namespace == Namespaces.Peer.CloudUser {
+            let isShadowBanned = AyuShadowBan.shared.isBanned(peerId: peerIdValue)
+            items.append(PeerInfoScreenLabeledValueItem(id: itemId, context: context, label: i18n("Ayu.FiltersShadowBan", lang), text: i18n(isShadowBanned ? "Ayu.FiltersQuickUnshadowBan" : "Ayu.FiltersQuickShadowBan", lang), textColor: .accent, action: { _, _ in
+                AyuShadowBan.shared.setBanned(!isShadowBanned, peerId: peerIdValue)
+                interaction.requestLayout(true)
+            }, longTapAction: nil, contextAction: nil, requestLayout: { _ in
+                interaction.requestLayout(false)
+            }))
+            itemId += 1
+        }
         // "Clear Deleted": the context menu's single item is the confirmation.
         let clearTitle = i18n("Ayu.ClearDeletedMenuText", lang)
         let clearAction: SGContextMenuAction = .options([SGContextMenuOption(title: i18n("Ayu.ClearDeletedMessagesActionText", lang), isSelected: false, action: {

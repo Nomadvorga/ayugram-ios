@@ -42,6 +42,7 @@ import ChatNewThreadInfoItem
 import PhoneNumberFormat
 import ChatHistoryListViewBackend
 import Postbox
+import SGSimpleSettings // MARK: AyuGram
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -681,6 +682,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
         }
     }
+    private var ayuShadowBanObserver: NSObjectProtocol? // MARK: AyuGram
     
     private let justSentTextMessagePromise = ValuePromise<Bool>(false)
     var justSentTextMessage: Bool = false {
@@ -1335,6 +1337,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     
     deinit {
         self.historyDisposable.dispose()
+        if let ayuShadowBanObserver = self.ayuShadowBanObserver { // MARK: AyuGram
+            NotificationCenter.default.removeObserver(ayuShadowBanObserver)
+        }
         self.readHistoryDisposable.dispose()
         self.interactiveReadActionDisposable?.dispose()
         self.interactiveReadReactionsDisposable?.dispose()
@@ -1871,6 +1876,16 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             translationState = .single(nil)
         }
         
+        // MARK: AyuGram
+        if self.ayuShadowBanObserver == nil {
+            self.ayuShadowBanObserver = NotificationCenter.default.addObserver(forName: AyuShadowBan.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.pendingRemovedMessagesPromise.set(self.pendingRemovedMessages)
+            }
+        }
+        //
         let promises = combineLatest(
             self.historyAppearsClearedPromise.get(),
             self.pendingUnpinnedAllMessagesPromise.get(),
