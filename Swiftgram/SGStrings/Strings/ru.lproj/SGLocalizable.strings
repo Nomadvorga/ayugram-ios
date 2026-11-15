@@ -350,3 +350,15 @@
 "Ayu.CategoryAppearance" = "Оформление";
 "Ayu.CategoryChats" = "Чаты";
 "Ayu.CategoryOther" = "Другое";
+"Ayu.ReadUntilMenuText" = "Прочитать";
+"Ayu.ClearDeletedMenuText" = "Очистить удалёнки";
+"Ayu.ClearDeletedMessagesText" = "Удалить с устройства все удалённые сообщения этого чата";
+"Ayu.ClearDeletedMessagesActionText" = "Очистить";
+"Ayu.SuggestGhostModeBeforeViewingStory" = "Предлагать призрака для сторис";
+"Ayu.SuggestGhostModeBeforeViewingStoryDescription" = "Показывает предупреждение перед открытием сторис, предлагая включить режим призрака.";
+"Ayu.SuggestGhostModeTitle" = "Режим призрака";
+"Ayu.SuggestGhostModeStoryText" = "Вы хотите включить **Режим призрака** перед просмотром истории?";
+"Ayu.SuggestGhostModeStoryActionTextYes" = "Да";
+"Ayu.SuggestGhostModeStoryActionTextNo" = "Нет";
+"Ayu.DisplayGhostStatus" = "Статус призрака в списке диалогов";
+"Ayu.DisplayGhostStatusDescription" = "Статус режима призрака будет отображаться в заголовке списка чатов.";

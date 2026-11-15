@@ -1,9 +1,14 @@
 import Foundation
 
+public let ayuSettingsDidChangeNotification = AyuSettingsStore.didChangeNotification
+
 // In-memory copy of the AyuGram settings. Hot paths (every network request, every message
 // layout) read from here: UserDefaults is read once per key and written only on changes.
 final class AyuSettingsStore: @unchecked Sendable {
     static let shared = AyuSettingsStore()
+
+    // Posted after any AyuGram setting changes, for UI that shows a setting outside its screen.
+    static let didChangeNotification = Notification.Name("AyuSettingsDidChange")
 
     let userDefaults: UserDefaults
     private let lock = NSLock()
@@ -33,6 +38,7 @@ final class AyuSettingsStore: @unchecked Sendable {
         self.values[key] = value
         self.lock.unlock()
         self.userDefaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: AyuSettingsStore.didChangeNotification, object: nil)
     }
 
     func int(_ key: String) -> Int {
@@ -51,6 +57,7 @@ final class AyuSettingsStore: @unchecked Sendable {
         self.values[key] = value
         self.lock.unlock()
         self.userDefaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: AyuSettingsStore.didChangeNotification, object: nil)
     }
 
     func intDictionary(_ key: String) -> [String: Int] {
@@ -69,5 +76,6 @@ final class AyuSettingsStore: @unchecked Sendable {
         self.values[key] = value
         self.lock.unlock()
         self.userDefaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: AyuSettingsStore.didChangeNotification, object: nil)
     }
 }

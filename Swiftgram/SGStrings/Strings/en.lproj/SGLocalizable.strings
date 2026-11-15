@@ -358,3 +358,15 @@
 "Ayu.CategoryAppearance" = "Appearance";
 "Ayu.CategoryChats" = "Chats";
 "Ayu.CategoryOther" = "Other";
+"Ayu.ReadUntilMenuText" = "Read Message";
+"Ayu.ClearDeletedMenuText" = "Clear Deleted";
+"Ayu.ClearDeletedMessagesText" = "Clear all deleted messages in this chat";
+"Ayu.ClearDeletedMessagesActionText" = "Clear";
+"Ayu.SuggestGhostModeBeforeViewingStory" = "Story Ghost Mode Alert";
+"Ayu.SuggestGhostModeBeforeViewingStoryDescription" = "Displays an alert before opening a story, suggesting you enable Ghost Mode.";
+"Ayu.SuggestGhostModeTitle" = "Ghost Mode";
+"Ayu.SuggestGhostModeStoryText" = "Do you want to enable **Ghost Mode** before viewing the story?";
+"Ayu.SuggestGhostModeStoryActionTextYes" = "Yes";
+"Ayu.SuggestGhostModeStoryActionTextNo" = "No";
+"Ayu.DisplayGhostStatus" = "Display Ghost Mode Status";
+"Ayu.DisplayGhostStatusDescription" = "Ghost Mode status will be visible in the chat list title.";

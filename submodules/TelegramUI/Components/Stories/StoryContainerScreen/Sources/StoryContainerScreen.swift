@@ -1,6 +1,8 @@
 // MARK: Swiftgram
 import TelegramUIPreferences
 import SGSimpleSettings
+import SGStrings // MARK: AyuGram
+import PresentationDataUtils // MARK: AyuGram
 
 import Foundation
 import UIKit
@@ -447,6 +449,7 @@ private final class StoryContainerScreenComponent: Component {
         private let storiesWarning = ComponentView<Empty>()
         private var displayStoriesWarningDisposable: Disposable?
         private var isDisplayingStoriesWarning: Bool = false
+        private var ayuIsAskingForGhostMode: Bool = false // MARK: AyuGram
         //
         
         private let interactionGuide = ComponentView<Empty>()
@@ -1435,6 +1438,34 @@ private final class StoryContainerScreenComponent: Component {
                     }
                 }
                 //
+                // MARK: AyuGram
+                // "Story Ghost Mode Alert": the story stays unseen until the question is answered.
+                if !self.isDisplayingStoriesWarning && AyuGhostSettings.shared.suggestGhostModeBeforeViewingStory && !AyuGhostSettings.shared.suppressStoryViews {
+                    self.isDisplayingStoriesWarning = true
+                    self.ayuIsAskingForGhostMode = true
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                    let lang = presentationData.strings.baseLanguageCode
+                    let finish: () -> Void = { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.ayuIsAskingForGhostMode = false
+                        self.isDisplayingStoriesWarning = false
+                        self.state?.updated(transition: .immediate)
+                    }
+                    let alert = textAlertController(context: component.context, title: i18n("Ayu.SuggestGhostModeTitle", lang), text: i18n("Ayu.SuggestGhostModeStoryText", lang), actions: [
+                        TextAlertAction(type: .genericAction, title: i18n("Ayu.SuggestGhostModeStoryActionTextNo", lang), action: {
+                            finish()
+                        }),
+                        TextAlertAction(type: .defaultAction, title: i18n("Ayu.SuggestGhostModeStoryActionTextYes", lang), action: {
+                            AyuGhostSettings.shared.set(.hideReadStories, true)
+                            AyuGhostSettings.shared.setGhostModeActive(true)
+                            finish()
+                        })
+                    ], parseMarkdown: true, dismissOnOutsideTap: false)
+                    component.context.sharedContext.presentGlobalController(alert, nil)
+                }
+                //
                 
                 update = true
             }
@@ -2175,7 +2206,7 @@ private final class StoryContainerScreenComponent: Component {
             }
             
             // MARK: Swiftgram
-            if self.isDisplayingStoriesWarning {
+            if self.isDisplayingStoriesWarning && !self.ayuIsAskingForGhostMode { // MARK: AyuGram
                 let _ = self.storiesWarning.update(
                     transition: .immediate,
                     component: AnyComponent(

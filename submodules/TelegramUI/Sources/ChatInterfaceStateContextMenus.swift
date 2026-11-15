@@ -1593,6 +1593,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if let editHistoryAction = ayuMakeEditHistoryContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(editHistoryAction)
         }
+        if let readUntilAction = ayuMakeReadUntilContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(readUntilAction)
+        }
         actions.append(contentsOf: ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, message: message))
         //
         

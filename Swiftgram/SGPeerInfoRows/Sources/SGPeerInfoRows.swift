@@ -7,6 +7,7 @@ import AccountContext
 import TelegramPresentationData
 import TelegramCore
 import TelegramStringFormatting
+import SwiftSignalKit // MARK: AyuGram
 
 func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: PeerInfoScreenData, context: AccountContext, presentationData: PresentationData, interaction: PeerInfoInteraction, isMyProfile: Bool) -> [PeerInfoScreenItem] {
     var items: [PeerInfoScreenItem] = []
@@ -169,6 +170,22 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
             }))
             itemId += 1
         }
+        // "Clear Deleted": the context menu's single item is the confirmation.
+        let clearTitle = i18n("Ayu.ClearDeletedMenuText", lang)
+        let clearAction: SGContextMenuAction = .options([SGContextMenuOption(title: i18n("Ayu.ClearDeletedMessagesActionText", lang), isSelected: false, action: {
+            let _ = (ayuClearDeletedMessages(account: context.account, peerId: peer.id)
+            |> deliverOnMainQueue).start(next: { _ in
+                interaction.requestLayout(true)
+            })
+        })])
+        items.append(PeerInfoScreenLabeledValueItem(id: itemId, context: context, label: clearTitle, text: i18n("Ayu.ClearDeletedMessagesText", lang), textColor: .primary, action: { node, _ in
+            interaction.openSgContextMenu(node, nil, clearAction)
+        }, longTapAction: nil, contextAction: { node, gesture, _ in
+            interaction.openSgContextMenu(node, gesture, clearAction)
+        }, requestLayout: { _ in
+            interaction.requestLayout(false)
+        }))
+        itemId += 1
     }
     //
     if isMutualContact && !isMyProfile {

@@ -3,6 +3,7 @@ import UIKit
 import Display
 import Postbox
 import TelegramCore
+import AccountContext
 import ContextUI
 import SGStrings
 import ChatControllerInteraction
@@ -33,6 +34,20 @@ func ayuMakeEditHistoryContextMenuAction(controllerInteraction: ChatControllerIn
             navigationController.overrideUserInterfaceStyle = isDark ? .dark : .light
             rootController.present(navigationController, animated: true)
         }
+        f(.default)
+    }))
+}
+
+// "Read Message": with the chat's read receipts hidden, marks it as read on the server up to this message.
+func ayuMakeReadUntilContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+    if !message.flags.contains(.Incoming) || message.id.namespace != Namespaces.Message.Cloud || !ayuIsReadStateHidden(peerId: message.id.peerId) {
+        return nil
+    }
+    let lang = chatPresentationInterfaceState.strings.baseLanguageCode
+    return .action(ContextMenuActionItem(text: i18n("Ayu.ReadUntilMenuText", lang), icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
+    }, action: { _, f in
+        ayuReadHistoryOnServer(account: context.account, peerId: message.id.peerId, maxId: message.id.id)
         f(.default)
     }))
 }

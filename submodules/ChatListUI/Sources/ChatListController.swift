@@ -6974,6 +6974,7 @@ private final class ChatListLocationContext {
     private var didShowProxyUnavailableTooltipController = false
     
     private var titleDisposable: Disposable?
+    private var ayuShowsGhostStatus = false // MARK: AyuGram
     
     private(set) var title: String = ""
     private(set) var chatTitleComponent: ChatTitleComponent?
@@ -7047,7 +7048,7 @@ private final class ChatListLocationContext {
         })
         
         // MARK: Swiftgram
-        let hideStoriesSignal = sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false)
+        let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()
@@ -7127,13 +7128,14 @@ private final class ChatListLocationContext {
                     peerStatus,
                     parentController.updatedPresentationData.1,
                     storyPostingAvailable
-                ).startStrict(next: { [weak self] hideStories, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable in
+                ).startStrict(next: { [weak self] hideStoriesAndGhostStatus, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable in
                     guard let self else {
                         return
                     }
+                    self.ayuShowsGhostStatus = hideStoriesAndGhostStatus.1 // MARK: AyuGram
                     
                     self.updateChatList(
-                        hideStories: hideStories, // MARK: Swiftgram
+                        hideStories: hideStoriesAndGhostStatus.0, // MARK: Swiftgram
                         networkState: networkState,
                         proxy: proxy,
                         passcode: passcode,
@@ -7603,7 +7605,8 @@ private final class ChatListLocationContext {
             case .updating:
                 titleContent = NetworkStatusTitle(text: presentationData.strings.State_Updating, activity: true, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
             case .online:
-                titleContent = NetworkStatusTitle(text: defaultTitle, activity: false, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
+                let ayuTitle = isRoot && self.ayuShowsGhostStatus ? "👻 \(defaultTitle)" : defaultTitle // MARK: AyuGram
+                titleContent = NetworkStatusTitle(text: ayuTitle, activity: false, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
             }
             
             if titleContent.hasProxy {

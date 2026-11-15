@@ -165,6 +165,16 @@ func ayuMarkReadAfterAction(account: Account, peerId: PeerId) {
     if !ayuSuppressesReadState(peerId: peerId) || !AyuGhostSettings.shared.markReadAfterAction {
         return
     }
+    ayuReadHistoryOnServer(account: account, peerId: peerId, maxId: Int32.max - 1)
+}
+
+// Whether a chat's read state is kept from the server, so "Read Message" is offered for it.
+public func ayuIsReadStateHidden(peerId: PeerId) -> Bool {
+    return ayuSuppressesReadState(peerId: peerId)
+}
+
+// Marks the chat as read on the server up to maxId, past ghost mode ("Read Message" in AyuGram).
+public func ayuReadHistoryOnServer(account: Account, peerId: PeerId, maxId: Int32) {
     let network = account.network
     let stateManager = account.stateManager
     let _ = (account.postbox.transaction { transaction -> Peer? in
@@ -178,7 +188,7 @@ func ayuMarkReadAfterAction(account: Account, peerId: PeerId) {
             guard let inputChannel = apiInputChannel(peer) else {
                 return .complete()
             }
-            return network.request(Api.functions.channels.readHistory(channel: inputChannel, maxId: Int32.max - 1), ayuBypassGhost: true)
+            return network.request(Api.functions.channels.readHistory(channel: inputChannel, maxId: maxId), ayuBypassGhost: true)
             |> `catch` { _ -> Signal<Api.Bool, NoError> in
                 return .single(.boolFalse)
             }
@@ -189,7 +199,7 @@ func ayuMarkReadAfterAction(account: Account, peerId: PeerId) {
             guard let inputPeer = apiInputPeer(peer) else {
                 return .complete()
             }
-            return network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: Int32.max - 1), ayuBypassGhost: true)
+            return network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxId), ayuBypassGhost: true)
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in
                 return .single(nil)

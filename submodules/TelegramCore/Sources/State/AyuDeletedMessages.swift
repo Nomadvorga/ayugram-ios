@@ -1,5 +1,6 @@
 import Foundation
 import Postbox
+import SwiftSignalKit
 import SGSimpleSettings
 
 // MARK: AyuGram
@@ -35,6 +36,24 @@ func ayuKeepDeletedMessage(transaction: Transaction, id: MessageId) -> Bool {
         return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
     })
     return true
+}
+
+// "Clear Deleted": removes the kept deleted messages of a chat from this device.
+public func ayuClearDeletedMessages(account: Account, peerId: PeerId) -> Signal<Int, NoError> {
+    let mediaBox = account.postbox.mediaBox
+    return account.postbox.transaction { transaction -> Int in
+        var ids: [MessageId] = []
+        transaction.withAllMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, { message in
+            if message.ayuDeletedDate != nil {
+                ids.append(message.id)
+            }
+            return true
+        })
+        if !ids.isEmpty {
+            _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids)
+        }
+        return ids.count
+    }
 }
 
 func ayuSavingExclusion(peerId: PeerId) -> AyuExclusions.Mode {

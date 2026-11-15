@@ -31,6 +31,8 @@ private enum AyuBoolSetting: String {
     case onlinePulseOnSend
     case markReadAfterAction
     case useScheduledMessages
+    case suggestGhostModeBeforeViewingStory
+    case displayGhostStatus
     case saveDeletedMessages
     case saveMessagesHistory
     case saveForBots
@@ -123,6 +125,10 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.UseScheduledMessagesDescription", lang)))
     entries.append(.oneFromManySelector(id: id.count, section: .ghostOther, settingName: .sendWithoutSound, text: i18n("Ayu.SendWithoutSoundByDefault", lang), value: sendWithoutSoundTitle(ghost.sendWithoutSound, lang: lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.SendWithoutSoundByDefaultDescription", lang)))
+    entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .suggestGhostModeBeforeViewingStory, value: ghost.suggestGhostModeBeforeViewingStory, text: i18n("Ayu.SuggestGhostModeBeforeViewingStory", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.SuggestGhostModeBeforeViewingStoryDescription", lang)))
+    entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .displayGhostStatus, value: ghost.displayGhostStatus, text: i18n("Ayu.DisplayGhostStatus", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.DisplayGhostStatusDescription", lang)))
 
     entries.append(.header(id: id.count, section: .spyEssentials, text: i18n("Ayu.SpyEssentialsHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveDeletedMessages, value: save.saveDeletedMessages, text: i18n("Ayu.SaveDeletedMessages", lang), enabled: true))
@@ -171,6 +177,10 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 ghost.markReadAfterAction = value
             case .useScheduledMessages:
                 ghost.useScheduledMessages = value
+            case .suggestGhostModeBeforeViewingStory:
+                ghost.suggestGhostModeBeforeViewingStory = value
+            case .displayGhostStatus:
+                ghost.displayGhostStatus = value
             case .saveDeletedMessages:
                 AyuSaveSettings.shared.saveDeletedMessages = value
             case .saveMessagesHistory:

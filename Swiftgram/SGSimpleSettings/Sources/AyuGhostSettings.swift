@@ -17,6 +17,8 @@ public final class AyuGhostSettings: @unchecked Sendable {
         case markReadAfterAction
         case useScheduledMessages
         case sendWithoutSound
+        case suggestGhostModeBeforeViewingStory
+        case displayGhostStatus
     }
 
     public enum SendWithoutSound: Int, CaseIterable {
@@ -41,6 +43,8 @@ public final class AyuGhostSettings: @unchecked Sendable {
             AyuGhostSettings.key(.markReadAfterAction): true,
             AyuGhostSettings.key(.useScheduledMessages): false,
             AyuGhostSettings.key(.sendWithoutSound): SendWithoutSound.never.rawValue,
+            AyuGhostSettings.key(.suggestGhostModeBeforeViewingStory): false,
+            AyuGhostSettings.key(.displayGhostStatus): true,
         ])
     }
 
@@ -100,6 +104,17 @@ public final class AyuGhostSettings: @unchecked Sendable {
     public var useScheduledMessages: Bool {
         get { return self.value(.useScheduledMessages) }
         set { self.set(.useScheduledMessages, newValue) }
+    }
+
+    public var suggestGhostModeBeforeViewingStory: Bool {
+        get { return self.value(.suggestGhostModeBeforeViewingStory) }
+        set { self.set(.suggestGhostModeBeforeViewingStory, newValue) }
+    }
+
+    // The chat list title shows when ghost mode is on.
+    public var displayGhostStatus: Bool {
+        get { return self.value(.displayGhostStatus) }
+        set { self.set(.displayGhostStatus, newValue) }
     }
 
     public var sendWithoutSound: SendWithoutSound {
