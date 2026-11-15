@@ -2,7 +2,6 @@
 import SGLogging
 import SGLoggingComposer
 import SGSimpleSettings
-import SGDebugUI
 //
 
 import Foundation
@@ -709,8 +708,6 @@ private enum DebugControllerSection: Int32 {
 
 private enum DebugControllerEntry: ItemListNodeEntry {
     // MARK: Swiftgram
-    case SGDebug(PresentationTheme)
-    case sendSGLogs(PresentationTheme)
     //
     case testStickerImport(PresentationTheme)
     case logsHeader(PresentationTheme)
@@ -803,10 +800,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        // MARK: Swiftgram
-        case .sendSGLogs, .SGDebug:
-            return DebugControllerSection.swiftgram.rawValue
-        //
         case .testStickerImport:
             return DebugControllerSection.sticker.rawValue
         case .logsHeader, .logsInfo, .sendLogs:
@@ -840,12 +833,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
 
     var stableId: Int {
         switch self {
-        // MARK: Swiftgram
-        case .SGDebug:
-            return -110
-        case .sendSGLogs:
-            return -100
-        //
         case .testStickerImport:
             return 0
         case .logsHeader:
@@ -1066,37 +1053,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! DebugControllerArguments
         switch self {
-        // MARK: Swiftgram
-        case .SGDebug:
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "AyuGram Debug", label: "", sectionId: self.section, style: .blocks, action: {
-                guard let context = arguments.context else {
-                    return
-                }
-                arguments.pushController(sgDebugController(context: context))
-            })
-        case .sendSGLogs:
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Send AyuGram Logs", label: "", sectionId: self.section, style: .blocks, action: {
-                let presentationData = arguments.sharedContext.currentPresentationData.with { $0 }
-                let actionSheet = ActionSheetController(presentationData: presentationData)
-                var items: [ActionSheetButtonItem] = []
-                if let context = arguments.context, context.sharedContext.applicationBindings.isMainApp {
-                    items.append(ActionSheetButtonItem(title: "Via Telegram", color: .accent, action: { [weak actionSheet] in
-                        actionSheet?.dismissAnimated()
-                        DebugLogAction.sgSendLogs.perform(arguments: arguments, destination: .telegram)
-                    }))
-                }
-                items.append(ActionSheetButtonItem(title: "Via Email", color: .accent, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                    DebugLogAction.sgSendLogs.perform(arguments: arguments, destination: .email)
-                }))
-                actionSheet.setItemGroups([ActionSheetItemGroup(items: items), ActionSheetItemGroup(items: [
-                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                        actionSheet?.dismissAnimated()
-                    })
-                ])])
-                arguments.presentController(actionSheet, nil)
-            })
-        //
         case .testStickerImport:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Simulate Stickers Import", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 guard let context = arguments.context else {
@@ -2149,10 +2105,6 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
 
     let isMainApp = sharedContext.applicationBindings.isMainApp
     
-    // MARK: Swiftgram
-    entries.append(.SGDebug(presentationData.theme))
-    entries.append(.sendSGLogs(presentationData.theme))
-    //
     entries.append(.logsHeader(presentationData.theme))
     entries.append(.sendLogs(presentationData.theme))
     if isMainApp {

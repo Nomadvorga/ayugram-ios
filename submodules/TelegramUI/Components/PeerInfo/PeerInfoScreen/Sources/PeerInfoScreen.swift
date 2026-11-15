@@ -1,5 +1,4 @@
 // MARK: Swiftgram
-import SGDebugUI
 import SGSimpleSettings
 import SGSettingsUI
 import SGStrings
@@ -7430,16 +7429,6 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
 
         // MARK: Swiftgram
         #if DEBUG
-        items.append(.action(ContextMenuActionItem(text: "AyuGram Debug", icon: { theme in
-            return generateTintedImage(image: nil, color: theme.contextMenu.primaryColor)
-        }, action: { [weak self] _, f in
-            guard let self = self else {
-                return
-            }
-            self.push(sgDebugController(context: self.context))
-
-            f(.dismissWithoutContent)
-        })))
         #endif
         //
 
@@ -7844,16 +7833,6 @@ extension PeerInfoScreenImpl {
 
         // MARK: Swiftgram
         #if DEBUG
-        items.append(.action(ContextMenuActionItem(text: "AyuGram Debug", icon: { theme in
-            return generateTintedImage(image: nil, color: theme.contextMenu.primaryColor)
-        }, action: { [weak self] _, f in
-            guard let self = self else {
-                return
-            }
-            self.push(sgDebugController(context: self.context))
-            
-            f(.dismissWithoutContent)
-        })))
         #endif
         //
 

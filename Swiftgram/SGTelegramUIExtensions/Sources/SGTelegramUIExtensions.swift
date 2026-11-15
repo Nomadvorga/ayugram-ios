@@ -1,4 +1,3 @@
-import SGDebugUI
 import SGSettingsUI
 import SGStrings
 import UndoUI
@@ -28,9 +27,6 @@ func sgHandleInternalUrlRoute(context: AccountContext, parsedUrl: URL, navigatio
             navigationController?.pushViewController(debugController)
             return true
         }
-    case "sgdebug", "sg_debug":
-        navigationController?.pushViewController(sgDebugController(context: context))
-        return true
     case "settings":
         navigationController?.pushViewController(sgSettingsController(context: context))
         return true
@@ -70,95 +66,6 @@ func sgCanRevealContent(messages: [EngineRawMessage], context: AccountContext, c
         }
     }
     return false
-}
-
-enum SGContextMenuActionFactory {
-    case saveToCloud(interfaceInteraction: ChatPanelInterfaceInteraction, selectAll: Bool, isImage: Bool, messages: [EngineRawMessage])
-    case hideForwardName(interfaceInteraction: ChatPanelInterfaceInteraction, selectAll: Bool, isImage: Bool, messages: [EngineRawMessage])
-}
-
-func sgMakeContextMenuAction(_ action: SGContextMenuActionFactory, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem {
-    switch action {
-    case let .saveToCloud(interfaceInteraction, selectAll, isImage, messages):
-        return .action(ContextMenuActionItem(text: i18n("ContextMenu.SaveToCloud", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
-        }, action: { _, f in
-            interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], "forwardMessagesToCloud")
-            f(.dismissWithoutContent)
-        }))
-    case let .hideForwardName(interfaceInteraction, selectAll, isImage, messages):
-        return .action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.NotificationSettings_Stories_CompactHideName, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
-        }, action: { _, f in
-            interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], "forwardMessagesWithNoNames")
-            f(.dismissWithoutContent)
-        }))
-    }
-}
-
-func sgMakeSelectFromUserContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, controllerInteraction: ChatControllerInteraction, interfaceInteraction: ChatPanelInterfaceInteraction, message: EngineRawMessage) -> ContextMenuItem? {
-    guard let authorId = message.author?.id else {
-        return nil
-    }
-    return .action(ContextMenuActionItem(text: i18n("ContextMenu.SelectFromUser", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
-        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/SelectAll"), color: theme.actionSheet.primaryTextColor)
-    }, action: { _, f in
-        let progressSignal = Signal<Never, NoError> { _ in
-            let overlayController = OverlayStatusController(theme: chatPresentationInterfaceState.theme, type: .loading(cancelled: nil))
-            controllerInteraction.presentGlobalOverlayController(overlayController, nil)
-            return ActionDisposable { [weak overlayController] in
-                Queue.mainQueue().async {
-                    overlayController?.dismiss()
-                }
-            }
-        }
-        |> runOn(Queue.mainQueue())
-        |> delay(0.2, queue: Queue.mainQueue())
-        let progressDisposable = progressSignal.start()
-        let _ = (context.account.postbox.transaction { transaction -> [MessageId] in
-            let limit = 500
-            var result: [MessageId] = []
-            let needThreadIdFilter: Bool
-            let searchThreadId: Int64?
-            switch chatPresentationInterfaceState.chatLocation {
-            case let .replyThread(replyThreadMessage):
-                needThreadIdFilter = true
-                searchThreadId = replyThreadMessage.threadId
-            default:
-                needThreadIdFilter = false
-                searchThreadId = nil
-            }
-            transaction.withAllMessages(peerId: message.id.peerId, reversed: true, { searchMessage in
-                if result.count >= limit {
-                    return false
-                }
-                if searchMessage.author?.id == authorId {
-                    if needThreadIdFilter && searchMessage.threadId != searchThreadId {
-                        return true
-                    }
-                    if searchMessage.media.contains(where: { $0 is TelegramMediaAction }) {
-                        return true
-                    }
-                    result.append(searchMessage.id)
-                }
-                return true
-            })
-            return result
-        }
-        |> deliverOnMainQueue)
-        .start(next: { ids in
-            interfaceInteraction.beginMessageSelection(ids, { transition in
-                f(.custom(transition))
-            })
-            Queue.mainQueue().async {
-                progressDisposable.dispose()
-            }
-        }, completed: {
-            Queue.mainQueue().async {
-                progressDisposable.dispose()
-            }
-        })
-    }))
 }
 
 func sgInsertContextMenu(actions: inout [ContextMenuItem], sgActions: inout [ContextMenuItem], index: Int?, chatPresentationInterfaceState: ChatPresentationInterfaceState) {
