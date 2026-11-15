@@ -46,6 +46,7 @@ private enum AyuBoolSetting: String {
     case hideNotificationBadge
     case hideFolderCounters
     case copyUsernameAsLink
+    case simpleQuotesAndReplies
     case disableCustomBackgrounds
     case disableSimilarChannels
     case confirmSticker
@@ -157,6 +158,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.oneFromManySelector(id: id.count, section: .customization, settingName: .deletedMarkColor, text: i18n("Ayu.DeletedMarkColorText", lang), value: deletedMarkColorTitle(customization.deletedMarkColor, lang: lang), enabled: customization.showDeletedMarker))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .semiTransparentDeletedMessages, value: customization.semiTransparentDeletedMessages, text: i18n("Ayu.SemiTransparentDeletedMessages", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .disableCustomBackgrounds, value: customization.disableCustomBackgrounds, text: i18n("Ayu.DisableCustomBackgrounds", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .customization, settingName: .simpleQuotesAndReplies, value: customization.simpleQuotesAndReplies, text: i18n("Ayu.SimpleQuotesAndReplies", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
@@ -233,6 +235,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.hideFolderCounters = value
             case .copyUsernameAsLink:
                 AyuCustomizationSettings.shared.copyUsernameAsLink = value
+            case .simpleQuotesAndReplies:
+                AyuCustomizationSettings.shared.simpleQuotesAndReplies = value
             case .disableCustomBackgrounds:
                 AyuCustomizationSettings.shared.disableCustomBackgrounds = value
             case .disableSimilarChannels:

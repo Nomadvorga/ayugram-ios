@@ -19,6 +19,7 @@ import MessageInlineBlockBackgroundView
 import CheckNode
 import EmojiTextAttachmentView
 import ShimmerEffect
+import SGSimpleSettings // MARK: AyuGram
 
 public enum ChatMessageReplyInfoType {
     case bubble(incoming: Bool)
@@ -262,6 +263,15 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             if arguments.isSummarized {
                 authorNameColor = nil
             }
+            // MARK: AyuGram
+            let ayuSimpleReplies = AyuCustomizationSettings.shared.simpleQuotesAndReplies
+            if ayuSimpleReplies {
+                authorNameColor = nil
+                dashSecondaryColor = nil
+                dashTertiaryColor = nil
+                giftEmojiFileId = nil
+            }
+            //
             
             switch arguments.type {
             case let .bubble(incoming):
@@ -948,7 +958,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 node.backgroundView.frame = backgroundFrame
                 
                 var pattern: MessageInlineBlockBackgroundView.Pattern?
-                if let backgroundEmojiId = author?.backgroundEmojiId {
+                if !ayuSimpleReplies, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
                     pattern = MessageInlineBlockBackgroundView.Pattern(
                         context: arguments.context,
                         fileId: backgroundEmojiId,

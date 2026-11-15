@@ -17,6 +17,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case copyUsernameAsLink
         case disableSimilarChannels
         case disableCustomBackgrounds
+        case simpleQuotesAndReplies
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -82,6 +83,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.copyUsernameAsLink): true,
             AyuCustomizationSettings.key(.disableSimilarChannels): false,
             AyuCustomizationSettings.key(.disableCustomBackgrounds): false,
+            AyuCustomizationSettings.key(.simpleQuotesAndReplies): false,
         ])
     }
 
@@ -147,6 +149,12 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var disableCustomBackgrounds: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.disableCustomBackgrounds)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableCustomBackgrounds)) }
+    }
+
+    // Replies use the theme accent instead of the author's name color and pattern.
+    public var simpleQuotesAndReplies: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.simpleQuotesAndReplies)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.simpleQuotesAndReplies)) }
     }
 
     // What copying a username puts on the pasteboard.
