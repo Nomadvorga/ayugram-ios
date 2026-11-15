@@ -38,6 +38,7 @@ private enum AyuBoolSetting: String {
     case saveMessagesHistory
     case saveForBots
     case saveReadDate
+    case saveLocalOnline
     case showDeletedMarker
     case semiTransparentDeletedMessages
     case disableAds
@@ -142,6 +143,8 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveForBots, value: save.saveForBots, text: i18n("Ayu.MessageSavingSaveForBots", lang), enabled: save.saveDeletedMessages || save.saveMessagesHistory))
     entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveReadDate, value: save.saveReadDate, text: i18n("Ayu.SpySaveReadMarks", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .spyEssentials, text: i18n("Ayu.SpySaveReadMarksDescription", lang)))
+    entries.append(.toggle(id: id.count, section: .spyEssentials, settingName: .saveLocalOnline, value: save.saveLocalOnline, text: i18n("Ayu.SpySaveLocalOnline", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .spyEssentials, text: i18n("Ayu.SpySaveLocalOnlineDescription", lang)))
 
     entries.append(.header(id: id.count, section: .customization, text: i18n("Ayu.CustomizationHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .customization, settingName: .showDeletedMarker, value: customization.showDeletedMarker, text: i18n("Ayu.ShowDeletedMarker", lang), enabled: true))
@@ -203,6 +206,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuSaveSettings.shared.saveForBots = value
             case .saveReadDate:
                 AyuSaveSettings.shared.saveReadDate = value
+            case .saveLocalOnline:
+                AyuSaveSettings.shared.saveLocalOnline = value
             case .showDeletedMarker:
                 AyuCustomizationSettings.shared.showDeletedMarker = value
             case .semiTransparentDeletedMessages:

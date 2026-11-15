@@ -4,10 +4,17 @@ import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
 import EncryptionProvider
+import SGSimpleSettings // MARK: AyuGram
 
 /// Typing activity and live typing drafts.
 extension ReplayContext {
     func applyAddPeerInputActivity(_ chatPeerId: PeerActivitySpace, _ peerId: PeerId?, _ activity: PeerInputActivity?) {
+        // MARK: AyuGram
+        // Typing is activity too for "Save Last Seen Date".
+        if let peerId, activity != nil, peerId != accountPeerId, peerId.namespace == Namespaces.Peer.CloudUser, AyuSaveSettings.shared.saveLocalOnline {
+            recordPeerActivityTimestamp(peerId: peerId, timestamp: Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970), into: &peerActivityTimestamps)
+        }
+        //
         if let peerId = peerId {
             if updatedTypingActivities[chatPeerId] == nil {
                 updatedTypingActivities[chatPeerId] = [peerId: activity]

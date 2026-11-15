@@ -2,6 +2,7 @@ import Foundation
 import TelegramCore
 import TelegramPresentationData
 import TextFormat
+import SGSimpleSettings // MARK: AyuGram
 
 public func stringForTimestamp(day: Int32, month: Int32, year: Int32, dateTimeFormat: PresentationDateTimeFormat) -> String {
     let separator = dateTimeFormat.dateSeparator
@@ -572,6 +573,19 @@ public func stringForStoryActivityTimestamp(strings: PresentationStrings, dateTi
 }
 
 public func stringAndActivityForUserPresence(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, presence: EnginePeer.Presence, relativeTo timestamp: Int32, expanded: Bool = false) -> (String, Bool) {
+    // MARK: AyuGram
+    // "Save Last Seen Date": a hidden last seen shows the account's last known activity (a message or a read),
+    // marked as approximate.
+    switch presence.status {
+    case .recently, .lastWeek, .lastMonth:
+        if AyuSaveSettings.shared.saveLocalOnline, presence.lastActivity > 0, presence.lastActivity + 30 < timestamp {
+            let (text, _) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(status: .present(until: presence.lastActivity), lastActivity: presence.lastActivity), relativeTo: timestamp, expanded: expanded)
+            return ("≈ \(text)", false)
+        }
+    default:
+        break
+    }
+    //
     switch presence.status {
     case let .present(statusTimestamp):
         if statusTimestamp >= timestamp {

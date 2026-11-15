@@ -380,3 +380,5 @@
 "Ayu.ConfirmationVoice" = "Do you want to send this voice message?";
 "Ayu.ConfirmationRound" = "Do you want to send this round video?";
 "Ayu.DisableOpenLinkWarning" = "Disable Open Link Warning";
+"Ayu.SpySaveLocalOnline" = "Save Last Seen Date";
+"Ayu.SpySaveLocalOnlineDescription" = "Saves the last online date for users with hidden online status based on their actions. You'll be able to see very approximately when they were last online.";

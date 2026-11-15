@@ -9,6 +9,7 @@ public final class AyuSaveSettings: @unchecked Sendable {
         case saveMessagesHistory
         case saveForBots
         case saveReadDate
+        case saveLocalOnline
     }
 
     private static let keyPrefix = "ayu."
@@ -21,6 +22,7 @@ public final class AyuSaveSettings: @unchecked Sendable {
             AyuSaveSettings.key(.saveMessagesHistory): true,
             AyuSaveSettings.key(.saveForBots): false,
             AyuSaveSettings.key(.saveReadDate): true,
+            AyuSaveSettings.key(.saveLocalOnline): true,
         ])
     }
 
@@ -36,6 +38,12 @@ public final class AyuSaveSettings: @unchecked Sendable {
     public var saveMessagesHistory: Bool {
         get { return self.store.bool(AyuSaveSettings.key(.saveMessagesHistory)) }
         set { self.store.setBool(newValue, AyuSaveSettings.key(.saveMessagesHistory)) }
+    }
+
+    // A hidden last seen shows the user's last known activity, approximately.
+    public var saveLocalOnline: Bool {
+        get { return self.store.bool(AyuSaveSettings.key(.saveLocalOnline)) }
+        set { self.store.setBool(newValue, AyuSaveSettings.key(.saveLocalOnline)) }
     }
 
     public var saveForBots: Bool {
