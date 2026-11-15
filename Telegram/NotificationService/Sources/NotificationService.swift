@@ -1,4 +1,5 @@
 import SGAppGroupIdentifier // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import PasscodeCore
 import UserNotifications
@@ -741,7 +742,7 @@ private struct NotificationContent: CustomStringConvertible {
             content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: sound))
         }
         if let badge = self.badge {
-            content.badge = badge as NSNumber
+            content.badge = (AyuCustomizationSettings.shared.hideNotificationBadge ? 0 : badge) as NSNumber // MARK: AyuGram
         }
         if let category = self.category {
             content.categoryIdentifier = category
@@ -1994,7 +1995,7 @@ private final class NotificationServiceHandler {
                                                 }
 
                                                 if isCurrentAccount {
-                                                    content.badge = Int(value.0)
+                                                    content.badge = AyuCustomizationSettings.shared.hideNotificationBadge ? 0 : Int(value.0) /* MARK: AyuGram */
                                                 }
 
                                                 Logger.shared.log("NotificationService \(episode)", "Unread count: \(value.0), isCurrentAccount: \(isCurrentAccount)")
@@ -2595,7 +2596,7 @@ private final class NotificationServiceHandler {
                                         |> deliverOn(strongSelf.queue)).start(next: { value in
                                             var content = NotificationContent(sgStatus: sgStatus, isLockedMessage: nil, isEmpty: true) // MARK: Swiftgram
                                             if isCurrentAccount {
-                                                content.badge = Int(value.0)
+                                                content.badge = AyuCustomizationSettings.shared.hideNotificationBadge ? 0 : Int(value.0) /* MARK: AyuGram */
                                             }
                                             Logger.shared.log("NotificationService \(episode)", "Unread count: \(value.0), isCurrentAccount: \(isCurrentAccount)")
                                             Logger.shared.log("NotificationService \(episode)", "Updating content to \(content)")
@@ -2689,7 +2690,7 @@ private final class NotificationServiceHandler {
                                         |> deliverOn(strongSelf.queue)).start(next: { value in
                                             var content = NotificationContent(sgStatus: sgStatus, isLockedMessage: nil, isEmpty: true) // MARK: Swiftgram
                                             if isCurrentAccount {
-                                                content.badge = Int(value.0)
+                                                content.badge = AyuCustomizationSettings.shared.hideNotificationBadge ? 0 : Int(value.0) /* MARK: AyuGram */
                                             }
 
                                             Logger.shared.log("NotificationService \(episode)", "Unread count: \(value.0), isCurrentAccount: \(isCurrentAccount)")

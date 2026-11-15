@@ -43,6 +43,8 @@ private enum AyuBoolSetting: String {
     case semiTransparentDeletedMessages
     case disableAds
     case disableOpenLinkWarning
+    case hideNotificationBadge
+    case hideFolderCounters
     case confirmSticker
     case confirmGif
     case confirmVoice
@@ -155,6 +157,9 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableOpenLinkWarning, value: customization.disableOpenLinkWarning, text: i18n("Ayu.DisableOpenLinkWarning", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideFolderCounters, value: customization.hideFolderCounters, text: i18n("Ayu.HideNotificationCounters", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideNotificationBadge, value: customization.hideNotificationBadge, text: i18n("Ayu.HideNotificationBadge", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .usefulFeatures, text: i18n("Ayu.HideNotificationBadgeDescription", lang)))
 
     let confirmations = AyuSendConfirmations.shared
     entries.append(.header(id: id.count, section: .confirmations, text: i18n("Ayu.ConfirmationsTitle", lang), badge: nil))
@@ -216,6 +221,10 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.disableAds = value
             case .disableOpenLinkWarning:
                 AyuCustomizationSettings.shared.disableOpenLinkWarning = value
+            case .hideNotificationBadge:
+                AyuCustomizationSettings.shared.hideNotificationBadge = value
+            case .hideFolderCounters:
+                AyuCustomizationSettings.shared.hideFolderCounters = value
             case .confirmSticker:
                 AyuSendConfirmations.shared.setEnabled(.sticker, value)
             case .confirmGif:

@@ -7,8 +7,21 @@ import TelegramPresentationData
 import AccountContext
 import TelegramUIPreferences
 import TelegramCore
+import SGSimpleSettings // MARK: AyuGram
+import SGChatListSimpleSettingsSignal // MARK: AyuGram
 
+// MARK: AyuGram
 public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
+    return combineLatest(chatListFilterItemsWithCounters(context: context), ayuSettingSignal { AyuCustomizationSettings.shared.hideFolderCounters })
+    |> map { countAndItems, hideCounters -> (Int, [(ChatListFilter, Int, Bool)]) in
+        if !hideCounters {
+            return countAndItems
+        }
+        return (countAndItems.0, countAndItems.1.map { ($0.0, 0, false) })
+    }
+}
+
+private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
     // A folder never names a secret chat. ChatListFilterPredicate resolves a secret chat's identity
     // to its associated cloud user, so including or excluding the user silently does the same to the
     // secret chat; and a folder can pin one, which ChatListFilterIncludePeers deliberately keeps out

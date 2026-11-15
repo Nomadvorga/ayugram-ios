@@ -12,6 +12,8 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case semiTransparentDeletedMessages
         case disableAds
         case disableOpenLinkWarning
+        case hideNotificationBadge
+        case hideFolderCounters
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -72,6 +74,8 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.semiTransparentDeletedMessages): true,
             AyuCustomizationSettings.key(.disableAds): true,
             AyuCustomizationSettings.key(.disableOpenLinkWarning): false,
+            AyuCustomizationSettings.key(.hideNotificationBadge): false,
+            AyuCustomizationSettings.key(.hideFolderCounters): false,
         ])
     }
 
@@ -109,6 +113,17 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var disableOpenLinkWarning: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.disableOpenLinkWarning)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableOpenLinkWarning)) }
+    }
+
+    // No unread counter on the app icon, set both by the app and by the notification service extension.
+    public var hideNotificationBadge: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.hideNotificationBadge)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hideNotificationBadge)) }
+    }
+
+    public var hideFolderCounters: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.hideFolderCounters)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hideFolderCounters)) }
     }
 
     // The prefix of a deleted message's time, nil when the mark is hidden.

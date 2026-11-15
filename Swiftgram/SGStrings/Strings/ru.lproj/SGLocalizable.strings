@@ -374,3 +374,6 @@
 "Ayu.DisableOpenLinkWarning" = "Отключить предупреждение при открытии ссылок";
 "Ayu.SpySaveLocalOnline" = "Сохранять последний онлайн";
 "Ayu.SpySaveLocalOnlineDescription" = "Сохраняет последний известный онлайн для людей со скрытым последним посещением. Вы сможете очень приблизительно увидеть, когда они были последний раз онлайн.";
+"Ayu.HideNotificationBadge" = "Скрыть счётчик уведомлений на иконке";
+"Ayu.HideNotificationBadgeDescription" = "Скрывает счётчик непрочитанных на иконке приложения.";
+"Ayu.HideNotificationCounters" = "Скрыть счётчики уведомлений на папках";
