@@ -1865,7 +1865,6 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         if isFirstLayout && !self.frame.isEmpty {
             self.updateScale()
         }
-        /* MARK: Swiftgram */ self.NYNode?.frame = CGRect(origin: CGPoint(), size: size); self.NYNode?.updateLayout(size: size)
     }
 
     private var isAnimating = false
