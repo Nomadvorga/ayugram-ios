@@ -1305,6 +1305,11 @@ extension PeerInfoScreenNode {
                     }
                 }
                 
+                // MARK: AyuGram
+                if let ayuItem = ayuPeerInfoMoreMenuItem(context: strongSelf.context, peer: peer, presentationData: presentationData) {
+                    items.insert(ayuItem, at: 0)
+                }
+                //
                 return .single(items)
             }
             

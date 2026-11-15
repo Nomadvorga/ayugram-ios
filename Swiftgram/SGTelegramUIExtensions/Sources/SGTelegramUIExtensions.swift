@@ -49,7 +49,7 @@ func sgInsertContextMenu(actions: inout [ContextMenuItem], sgActions: inout [Con
     sgActions.insert(.separator, at: 1)
     let sgItems = sgActions
     let swiftgramSubMenu: ContextMenuItem = .action(ContextMenuActionItem(text: "AyuGram", icon: { theme in
-        return generateTintedImage(image: UIImage(bundleImageName: "SwiftgramContextMenu"), color: theme.actionSheet.primaryTextColor)
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AyuGram"), color: theme.actionSheet.primaryTextColor)
     }, action: { c, _ in
         popSGItems = { [weak c] in
             c?.popItems()

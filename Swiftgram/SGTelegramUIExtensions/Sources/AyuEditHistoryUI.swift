@@ -91,20 +91,20 @@ func ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: ChatPre
     let formatter = DateFormatter()
     formatter.dateStyle = .short
     formatter.timeStyle = .short
-    let makeItem: (String, Int32) -> ContextMenuItem = { title, date in
+    let makeItem: (String, Int32, String) -> ContextMenuItem = { title, date, iconName in
         let text = "\(title): \(formatter.string(from: Date(timeIntervalSince1970: TimeInterval(date))))"
-        return .action(ContextMenuActionItem(text: text, textFont: .small, icon: { _ in
-            return nil
+        return .action(ContextMenuActionItem(text: text, textFont: .small, icon: { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: iconName), color: theme.actionSheet.primaryTextColor)
         }, action: { _, f in
             f(.default)
         }))
     }
     var items: [ContextMenuItem] = []
     if let deletedDate = message.ayuDeletedDate {
-        items.append(makeItem(i18n("Ayu.DeleteDateMenuText", lang), deletedDate))
+        items.append(makeItem(i18n("Ayu.DeleteDateMenuText", lang), deletedDate, "Chat/Context Menu/Delete"))
     }
     if !message.flags.contains(.Incoming), message.id.peerId.namespace == Namespaces.Peer.CloudUser, let readDate = AyuReadDates.shared.readDate(messageId: message.id) {
-        items.append(makeItem(i18n("Ayu.ReadDateMenuText", lang), readDate))
+        items.append(makeItem(i18n("Ayu.ReadDateMenuText", lang), readDate, "Chat/Context Menu/Read"))
     }
     return items
 }
