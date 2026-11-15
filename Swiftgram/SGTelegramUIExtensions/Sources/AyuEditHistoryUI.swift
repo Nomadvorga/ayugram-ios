@@ -52,6 +52,23 @@ func ayuMakeReadUntilContextMenuAction(context: AccountContext, chatPresentation
     }))
 }
 
+// "Repeat": sends a copy of the message to the same chat, without the forward header.
+func ayuMakeRepeatMessageContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+    if message.id.namespace != Namespaces.Message.Cloud || message.ayuDeletedDate != nil || !canSendMessagesToChat(chatPresentationInterfaceState) || chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected() {
+        return nil
+    }
+    if message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent }) {
+        return nil
+    }
+    let lang = chatPresentationInterfaceState.strings.baseLanguageCode
+    return .action(ContextMenuActionItem(text: i18n("Ayu.RepeatMessage", lang), icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
+    }, action: { _, f in
+        let _ = enqueueMessages(account: context.account, peerId: message.id.peerId, messages: [.forward(source: message.id, threadId: chatPresentationInterfaceState.chatLocation.threadId, grouping: .auto, attributes: [ForwardOptionsMessageAttribute(hideNames: true, hideCaptions: false)], correlationId: nil)]).start()
+        f(.default)
+    }))
+}
+
 // "Delete Date" for kept deleted messages and "Read Date" saved locally for outgoing ones.
 func ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> [ContextMenuItem] {
     let lang = chatPresentationInterfaceState.strings.baseLanguageCode
