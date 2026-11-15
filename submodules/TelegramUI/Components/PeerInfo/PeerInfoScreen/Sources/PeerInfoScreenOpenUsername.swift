@@ -7,6 +7,7 @@ import TelegramCore
 import AsyncDisplayKit
 import ContextUI
 import UndoUI
+import SGSimpleSettings // MARK: AyuGram
 
 extension PeerInfoScreenNode {
     func openUsernameContextMenu(node: ASDisplayNode, gesture: ContextGesture?) {
@@ -24,7 +25,7 @@ extension PeerInfoScreenNode {
             guard let self else {
                 return
             }
-            UIPasteboard.general.string = "@\(username)"
+            UIPasteboard.general.string = AyuCustomizationSettings.shared.copiedUsername(username) // MARK: AyuGram
             
             self.controller?.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: self.presentationData.strings.Conversation_UsernameCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
         }

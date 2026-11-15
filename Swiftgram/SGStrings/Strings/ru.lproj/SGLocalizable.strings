@@ -377,3 +377,4 @@
 "Ayu.HideNotificationBadge" = "Скрыть счётчик уведомлений на иконке";
 "Ayu.HideNotificationBadgeDescription" = "Скрывает счётчик непрочитанных на иконке приложения.";
 "Ayu.HideNotificationCounters" = "Скрыть счётчики уведомлений на папках";
+"Ayu.CopyUsernameAsLink" = "Копировать юзернейм как ссылку";

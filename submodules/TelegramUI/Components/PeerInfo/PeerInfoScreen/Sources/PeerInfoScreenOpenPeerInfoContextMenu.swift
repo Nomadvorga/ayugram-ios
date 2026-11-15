@@ -6,6 +6,7 @@ import SwiftSignalKit
 import TelegramCore
 import AsyncDisplayKit
 import UndoUI
+import SGSimpleSettings // MARK: AyuGram
 import TranslateUI
 import TextProcessingScreen
 import Pasteboard
@@ -135,8 +136,8 @@ extension PeerInfoScreenNode {
                     text = "https://t.me/\(addressName)"
                     content = .linkCopied(title: nil, text: self.presentationData.strings.Conversation_LinkCopied)
                 } else {
-                    text = "@" + addressName
-                    content = .copy(text: self.presentationData.strings.Conversation_UsernameCopied)
+                    text = AyuCustomizationSettings.shared.copiedUsername(addressName) // MARK: AyuGram
+                    content = AyuCustomizationSettings.shared.copyUsernameAsLink ? .linkCopied(title: nil, text: self.presentationData.strings.Conversation_LinkCopied) : .copy(text: self.presentationData.strings.Conversation_UsernameCopied)
                 }
             } else {
                 text = "https://t.me/@id\(peer.id.id._internalGetInt64Value())"

@@ -14,6 +14,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case disableOpenLinkWarning
         case hideNotificationBadge
         case hideFolderCounters
+        case copyUsernameAsLink
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -76,6 +77,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.disableOpenLinkWarning): false,
             AyuCustomizationSettings.key(.hideNotificationBadge): false,
             AyuCustomizationSettings.key(.hideFolderCounters): false,
+            AyuCustomizationSettings.key(.copyUsernameAsLink): true,
         ])
     }
 
@@ -124,6 +126,16 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var hideFolderCounters: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.hideFolderCounters)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.hideFolderCounters)) }
+    }
+
+    public var copyUsernameAsLink: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.copyUsernameAsLink)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.copyUsernameAsLink)) }
+    }
+
+    // What copying a username puts on the pasteboard.
+    public func copiedUsername(_ username: String) -> String {
+        return self.copyUsernameAsLink ? "https://t.me/\(username)" : "@\(username)"
     }
 
     // The prefix of a deleted message's time, nil when the mark is hidden.

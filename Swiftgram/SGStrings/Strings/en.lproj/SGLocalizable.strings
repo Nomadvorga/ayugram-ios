@@ -385,3 +385,4 @@
 "Ayu.HideNotificationBadge" = "Hide Notification Badge";
 "Ayu.HideNotificationBadgeDescription" = "Hides the unread counter on the app icon.";
 "Ayu.HideNotificationCounters" = "Hide Notification Counters on Folders";
+"Ayu.CopyUsernameAsLink" = "Copy Username as Link";
