@@ -60,11 +60,8 @@ private func ayuPeerInfoMenuItems(context: AccountContext, peer: EnginePeer, pre
             var options: [ContextMenuItem] = [ayuBackItem(presentationData), .separator]
             for mode in AyuExclusions.Mode.allCases {
                 options.append(.action(ContextMenuActionItem(text: titles[mode] ?? "", icon: { theme in
-                    if mode == current {
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
-                    } else {
-                        return nil
-                    }
+                    // Unchecked options keep an invisible check so every title starts after the icon column.
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: mode == current ? theme.contextMenu.primaryColor : .clear)
                 }, action: { _, f in
                     AyuExclusions.shared.setMode(mode, kind: kind, peerId: peerIdValue)
                     f(.default)
