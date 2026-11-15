@@ -194,7 +194,7 @@ extension ChatTheme {
     }
 }
 
-func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network, forceUpdate: Bool = false, onlyCached: Bool = false) -> Signal<[TelegramTheme], NoError> {
+func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network, forceUpdate: Bool = false, onlyCached: Bool = false, ignoreCachedHash: Bool = false) -> Signal<[TelegramTheme], NoError> {
     let fetch: ([TelegramTheme]?, Int64?) -> Signal<[TelegramTheme], NoError> = { current, hash in
         return network.request(Api.functions.account.getChatThemes(hash: hash ?? 0))
         |> retryRequestIfNotFrozen
@@ -239,7 +239,7 @@ func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManag
                 return .single(current)
             } else {
                 return .single(current)
-                |> then(fetch(current, hash))
+                |> then(fetch(current, ignoreCachedHash ? nil : hash))
             }
         }
     }
@@ -299,7 +299,10 @@ func _internal_setChatTheme(account: Account, peerId: PeerId, chatTheme: ChatThe
 }
 
 func managedChatThemesUpdates(accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network) -> Signal<Void, NoError> {
-    let poll = _internal_getChatThemes(accountManager: accountManager, network: network)
+    // MARK: AyuGram
+    // The full list every time, without the cached hash: a list cached before a change of api_id must not stay
+    // "not modified".
+    let poll = _internal_getChatThemes(accountManager: accountManager, network: network, ignoreCachedHash: true)
     |> mapToSignal { _ -> Signal<Void, NoError> in
         return .complete()
     }
