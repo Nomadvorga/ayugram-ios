@@ -113,7 +113,7 @@ func chatMediaSendRenderedImageMedia(image: UIImage, nominalDimensions: PixelDim
     defer {
         EngineTempBox.shared.dispose(tempFile)
     }
-    guard let scaledImageData = compressImageToJPEG(scaledImage, quality: Float(SGSimpleSettings.shared.outgoingPhotoQuality) / 100.0, tempFilePath: tempFile.path) else { // MARK: Swiftgram
+    guard let scaledImageData = compressImageToJPEG(scaledImage, quality: 0.6, tempFilePath: tempFile.path) else {
         return nil
     }
     let _ = try? scaledImageData.write(to: URL(fileURLWithPath: tempFilePath))

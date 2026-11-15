@@ -1589,14 +1589,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
         
-        // MARK: Swiftgram
-        let showJsonAction = sgMakeContextMenuAction(.json(controllerInteraction: controllerInteraction, context: context), chatPresentationInterfaceState: chatPresentationInterfaceState, message: message)
-        if SGSimpleSettings.shared.contextShowJson {
-            actions.append(showJsonAction)
-        } else {
-            sgActions.append(showJsonAction)
-        }
-        //
         // MARK: AyuGram
         if let editHistoryAction = ayuMakeEditHistoryContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(editHistoryAction)

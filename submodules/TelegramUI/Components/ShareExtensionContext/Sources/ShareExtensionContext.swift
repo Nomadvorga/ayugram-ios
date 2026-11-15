@@ -504,7 +504,7 @@ public class ShareRootControllerImpl {
                                 let settings = SGSimpleSettings.shared.sharePhotoSettings
                                 let maxDimension: CGFloat = (sgForceHD || settings.sendLargePhotos) ? 2560.0 : 1280.0
                                 sgForceHD = false
-                                let quality = CGFloat(settings.quality)
+                                let quality: CGFloat = 0.52
                                 let rawSignals = TGItemProviderSignals.sgItemSignals(forInputItems: inputItems, imageMaxDimension: maxDimension, imageQuality: quality)!
                                 return preparedShareItems(postbox: account.stateManager.postbox, network: account.stateManager.network, to: peerIds[0], sgPhotoMaxDimension: maxDimension, sgPhotoQuality: quality, dataItems: rawSignals)
                                 //

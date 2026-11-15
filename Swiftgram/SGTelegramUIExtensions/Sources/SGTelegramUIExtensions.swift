@@ -42,16 +42,6 @@ func sgHandleInternalUrlRoute(context: AccountContext, parsedUrl: URL, navigatio
             lastViewController.present(ContactsController(context: context), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
         }
         return true
-    case "pro", "premium", "buy":
-        if context.sharedContext.immediateSGStatus.status > 1 {
-            navigationController?.pushViewController(context.sharedContext.makeSGProController(context: context))
-        } else if let lastViewController = navigationController?.viewControllers.last as? ViewController {
-            if let payWallController = context.sharedContext.makeSGPayWallController(context: context) {
-                lastViewController.present(payWallController, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-            } else {
-                lastViewController.present(context.sharedContext.makeSGUpdateIOSController(), animated: true)
-            }
-        }
     case "restart":
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let lang = presentationData.strings.baseLanguageCode
@@ -64,19 +54,6 @@ func sgHandleInternalUrlRoute(context: AccountContext, parsedUrl: URL, navigatio
             ),
             nil
         )
-    case "restore_purchases", "pro_restore", "validate", "restore":
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let lang = presentationData.strings.baseLanguageCode
-        context.sharedContext.presentGlobalController(
-            UndoOverlayController(
-                presentationData: presentationData,
-                content: .info(title: nil, text: "PayWall.Button.Restoring".i18n(lang), timeout: nil, customUndoText: nil),
-                elevatedLayout: false,
-                action: { _ in return false }
-            ),
-            nil
-        )
-        context.sharedContext.SGIAP?.restorePurchases {}
     default:
         break
     }
@@ -96,20 +73,12 @@ func sgCanRevealContent(messages: [EngineRawMessage], context: AccountContext, c
 }
 
 enum SGContextMenuActionFactory {
-    case json(controllerInteraction: ChatControllerInteraction, context: AccountContext)
     case saveToCloud(interfaceInteraction: ChatPanelInterfaceInteraction, selectAll: Bool, isImage: Bool, messages: [EngineRawMessage])
     case hideForwardName(interfaceInteraction: ChatPanelInterfaceInteraction, selectAll: Bool, isImage: Bool, messages: [EngineRawMessage])
 }
 
 func sgMakeContextMenuAction(_ action: SGContextMenuActionFactory, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem {
     switch action {
-    case let .json(controllerInteraction, context):
-        return .action(ContextMenuActionItem(text: "JSON", icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.actionSheet.primaryTextColor)
-        }, action: { _, f in
-            showMessageJson(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message, context: context)
-            f(.default)
-        }))
     case let .saveToCloud(interfaceInteraction, selectAll, isImage, messages):
         return .action(ContextMenuActionItem(text: i18n("ContextMenu.SaveToCloud", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)

@@ -193,38 +193,13 @@ func sgPeerInfoSettingsProfileIdItems(data: PeerInfoScreenData, interaction: Pee
 }
 
 func sgPeerInfoSettingsItems(context: AccountContext, paymentsEnabled: Bool, presentationData: PresentationData, interaction: PeerInfoInteraction) -> [PeerInfoScreenItem] {
-    let hasNewFeatures = {
-        return false
-    }
-    let swiftgramLabel: PeerInfoScreenDisclosureItem.Label
-    if hasNewFeatures() {
-        swiftgramLabel = .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor)
-    } else {
-        swiftgramLabel = .none
-    }
-
-    let hasNewProFeatures = {
-        return false
-    }
-    let swiftgramProLabel: PeerInfoScreenDisclosureItem.Label
-    if hasNewProFeatures() {
-        swiftgramProLabel = .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor)
-    } else {
-        swiftgramProLabel = .none
-    }
-
-    var items: [PeerInfoScreenItem] = []
     // MARK: AyuGram
+    // AyuGram's own preferences, then the exteraGram tab with the rest of the client features.
+    var items: [PeerInfoScreenItem] = []
     items.append(PeerInfoScreenDisclosureItem(id: 2, label: .none, text: "AyuGram", icon: PresentationResourcesSettings.swiftgram, action: {
         interaction.openSettings(.ayugram)
     }))
-    //
-    if paymentsEnabled || context.sharedContext.immediateSGStatus.status > 1 {
-        items.append(PeerInfoScreenDisclosureItem(id: 0, label: swiftgramProLabel, text: "Swiftgram Pro", icon: PresentationResourcesSettings.swiftgramPro, action: {
-            interaction.openSettings(.swiftgramPro)
-        }))
-    }
-    items.append(PeerInfoScreenDisclosureItem(id: 1, label: swiftgramLabel, text: "Swiftgram", icon: PresentationResourcesSettings.swiftgram, action: {
+    items.append(PeerInfoScreenDisclosureItem(id: 1, label: .none, text: "exteraGram", icon: PresentationResourcesSettings.swiftgramPro, action: {
         interaction.openSettings(.swiftgram)
     }))
     return items

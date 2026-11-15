@@ -323,23 +323,7 @@ filegroup(
 
 # MARK: Swiftgram alternative icons
 alternate_icon_folders = [
-    "SGDefault",
-    "SGBlack",
-    "SGLegacy",
-    "SGInverted",
-    "SGWhite",
-    "SGNight",
-    "SGSky",
-    "SGTitanium",
-    "SGNeon",
-    "SGNeonBlue",
-    "SGGlass",
-    "SGSparkling",
-    "SGBeta",
-    "SGPro",
-    "SGGold",
-    "SGDucky",
-    "SGDay"
+    "SGDefault", # MARK: AyuGram: the AyuGram icon
 ]
 #
 

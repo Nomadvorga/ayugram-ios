@@ -410,12 +410,10 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
                 node.needsQuickTranslateButton = needsQuickTranslateButton
             }
             if let node = node as? ChatMessageStickerItemNode {
-                node.sizeCoefficient = Float(SGSimpleSettings.shared.stickerSize) / 100.0
                 if !SGSimpleSettings.shared.stickerTimestamp {
                     node.dateAndStatusNode.isHidden = true
                 }
             } else if let node = node as? ChatMessageAnimatedStickerItemNode {
-                node.sizeCoefficient = Float(SGSimpleSettings.shared.stickerSize) / 100.0
                 if !SGSimpleSettings.shared.stickerTimestamp {
                     node.dateAndStatusNode.isHidden = true
                 }

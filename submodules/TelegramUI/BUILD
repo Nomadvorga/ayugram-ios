@@ -30,7 +30,6 @@ sgdeps = [
 
 sgsrcs = [
     "//Swiftgram/SGDBReset:SGDBReset",
-    "//Swiftgram/SGShowMessageJson:SGShowMessageJson",
     "//Swiftgram/ChatControllerImplExtension:ChatControllerImplExtension",
     "//Swiftgram/SGSharedAccountContextMigration:SGSharedAccountContextMigration",
     "//Swiftgram/SGOutgoingTranslationLanguageSelection:SGOutgoingTranslationLanguageSelection",

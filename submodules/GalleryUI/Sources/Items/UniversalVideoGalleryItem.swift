@@ -1,4 +1,3 @@
-import SGSimpleSettings
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -1281,8 +1280,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         if !self.controlsVisibility() || hideControls {
             playbackControlsIsVisible = false
         }
-        playbackControlsIsVisible = playbackControlsIsVisible && !sgVideoControlsInFooterEnabled // MARK: Swiftgram
-        
         let playbackControlsSize = self.playbackControls.update(
             transition: ComponentTransition(transition),
             component: AnyComponent(VideoPlaybackControlsComponent(
@@ -2952,12 +2949,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
     
     override func maybePerformActionForSwipeDismiss() -> Bool {
-        if #available(iOS 15.0, *) {
-            if SGSimpleSettings.shared.videoPIPSwipeDirection != SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue {
-                return false
-            }
-        }
-        
         if let data = self.context.currentAppConfiguration.with({ $0 }).data {
             if let _ = data["ios_killswitch_disable_swipe_pip"] {
                 return false
@@ -3701,26 +3692,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     }
                 }
             } else {
-                // MARK: Swiftgram
-                let sgVideoControlItems = sgVideoControlsInFooterMenuItems(
-                    displayPictureInPicture: strongSelf.hasPictureInPicture,
-                    displaySettings: strongSelf.settingsButtonState != nil && strongSelf.footerContentNode.sgDisplaySettingsButtonInItems,
-                    displayFullscreen: strongSelf.footerContentNode.sgDisplayFullscreenButtonInItems,
-                    isLandscape: strongSelf.bounds.width > strongSelf.bounds.height,
-                    pictureInPicture: { [weak self] in self?.pictureInPictureButtonPressed() },
-                    openSettings: { [weak self] in
-                        guard let self else { return }
-                        self.openMoreMenu(sourceView: self.moreBarButton.referenceNode.view, gesture: nil, adMessage: nil, isSettings: true, actionsOnTop: false)
-                    },
-                    toggleFullscreen: { [weak self] in self?.footerContentNode.fullscreenButtonPressed() }
-                )
-                items.append(contentsOf: sgVideoControlItems)
-                //
-
                 if let (message, maybeFile, _) = strongSelf.contentInfo(), let file = maybeFile, !message.isCopyProtected() && !item.peerIsCopyProtected && message.paidContent == nil {
-                    if !sgVideoControlItems.isEmpty { // MARK: Swiftgram
-                        items.append(.separator)
-                    }
                     items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Gallery_MenuSaveToGallery, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Download"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             c?.dismiss(result: .default, completion: nil)

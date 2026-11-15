@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -335,6 +335,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             
             let isFrontCamera = controller.cameraState.position == .back
             camera.togglePosition()
+            AyuCameraSettings.shared.roundVideoUsesBackCamera = !isFrontCamera // MARK: AyuGram
                                     
             self.hapticFeedback.impact(.veryLight)
             
@@ -1013,7 +1014,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
             let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
-            let isFrontPosition = !SGSimpleSettings.shared.startTelescopeWithRearCam // MARK: Swiftgram
+            let isFrontPosition = !AyuCameraSettings.shared.roundVideoUsesBackCamera // MARK: AyuGram
             
             self.mainPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
             self.additionalPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)

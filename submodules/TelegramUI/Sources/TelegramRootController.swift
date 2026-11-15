@@ -835,7 +835,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         defer {
                             EngineTempBox.shared.dispose(tempFile)
                         }
-                        if let imageData = compressImageToJPEG(image, quality: Float(SGSimpleSettings.shared.outgoingPhotoQuality) / 100.0, tempFilePath: tempFile.path) { // MARK: Swiftgram
+                        if let imageData = compressImageToJPEG(image, quality: 0.7, tempFilePath: tempFile.path) {
                             media = .image(dimensions: dimensions, data: imageData, stickers: result.stickers)
                         }
                     case let .video(content, firstFrameImage, values, duration, dimensions):
@@ -858,7 +858,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             defer {
                                 EngineTempBox.shared.dispose(tempFile)
                             }
-                            let imageData = firstFrameImage.flatMap { compressImageToJPEG($0, quality: Float(SGSimpleSettings.shared.outgoingPhotoQuality) / 100.0, tempFilePath: tempFile.path) } // MARK: Swiftgram
+                            let imageData = firstFrameImage.flatMap { compressImageToJPEG($0, quality: 0.6, tempFilePath: tempFile.path) }
                             let firstFrameFile = imageData.flatMap { data -> EngineTempBoxFile? in
                                 let file = EngineTempBox.shared.tempFile(fileName: "image.jpg")
                                 if let _ = try? data.write(to: URL(fileURLWithPath: file.path)) {

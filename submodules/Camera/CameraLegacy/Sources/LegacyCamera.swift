@@ -394,6 +394,7 @@ private final class CameraContext {
                 self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: true, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
                 self.mainDeviceContext?.device.queue = self.queue
                 self.mainDeviceContext?.configure(position: self.positionValue, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata, preferWide: preferWide, preferLowerFramerate: preferLowerFramerate, captureMode: self.captureMode)
+                self.mainDeviceContext?.output.markPositionChange(position: self.positionValue) // MARK: AyuGram
             }
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let mainDeviceContext = self.mainDeviceContext else {
@@ -699,6 +700,10 @@ private final class CameraContext {
         
         let orientation = self.simplePreviewView?.videoPreviewLayer.connection?.videoOrientation ?? .portrait
         if self.initialConfiguration.isRoundVideo {
+            // MARK: AyuGram
+            // The output assumes the front camera until told otherwise, so a round video started on
+            // the back camera had its first frames processed as front ones.
+            mainDeviceContext.output.markPositionChange(position: self.positionValue)
             return mainDeviceContext.output.startRecording(mode: .roundVideo, orientation: cameraRecordsRoundVideoInPreviewOrientation ? orientation : .portrait, additionalOutput: self.additionalDeviceContext?.output)
         } else {
             if let additionalDeviceContext = self.additionalDeviceContext {

@@ -1,4 +1,3 @@
-import SGSimpleSettings // MARK: Swiftgram
 import Foundation
 import AVFoundation
 import UIKit
@@ -364,11 +363,6 @@ final class CameraOutput: NSObject {
                 AVVideoWidthKey: Int(dimensions.width),
                 AVVideoHeightKey: Int(dimensions.height)
             ]
-            // MARK: Swiftgram
-            if SGSimpleSettings.shared.startTelescopeWithRearCam {
-                self.currentPosition = .back
-            }
-            //
         } else {
             let codecType: AVVideoCodecType = hasHEVCHardwareEncoder ? .hevc : .h264
             guard let settings = self.videoOutput.recommendedVideoSettings(forVideoCodecType: codecType, assetWriterOutputFileType: .mp4) else {
