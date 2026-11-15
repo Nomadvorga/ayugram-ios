@@ -229,18 +229,17 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
 
 // MARK: AyuGram
 /// The theme shown at night with bubbles, and the base it is built on. A chat theme picked in Appearance keeps the night
-/// theme chosen under Auto-Night (Night or Tinted Night) for when another theme is picked; at night the chat theme itself
-/// is shown on its own base, as Telegram does: Night unless the theme was set to Tinted Night or has only that variant.
+/// theme chosen under Auto-Night (Night or Tinted Night) and is drawn on its base at night.
 public func ayuNightTheme(settings: PresentationThemeSettings) -> (theme: PresentationThemeReference, baseTheme: TelegramBaseTheme) {
-    var nightTheme = settings.automaticThemeSwitchSetting.theme
-    if case let .builtin(builtinNightTheme) = nightTheme, builtinNightTheme == .night || builtinNightTheme == .nightAccent, case let .cloud(info) = settings.theme, info.theme.emoticon != nil, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
-        nightTheme = settings.theme
+    let automaticTheme = settings.automaticThemeSwitchSetting.theme
+    if case let .builtin(nightTheme) = automaticTheme, nightTheme == .night || nightTheme == .nightAccent, case let .cloud(info) = settings.theme, info.theme.emoticon != nil, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
+        return (settings.theme, nightTheme.baseTheme)
     }
-    if let baseTheme = settings.themePreferredBaseTheme[nightTheme.index], [.night, .tinted].contains(baseTheme) {
-        return (nightTheme, baseTheme)
+    if let baseTheme = settings.themePreferredBaseTheme[automaticTheme.index], [.night, .tinted].contains(baseTheme) {
+        return (automaticTheme, baseTheme)
     }
-    if case let .cloud(info) = nightTheme, let themeSettings = info.theme.settings, !themeSettings.contains(where: { $0.baseTheme == .night }), themeSettings.contains(where: { $0.baseTheme == .tinted }) {
-        return (nightTheme, .tinted)
+    if case let .cloud(info) = automaticTheme, let themeSettings = info.theme.settings, !themeSettings.contains(where: { $0.baseTheme == .night }), themeSettings.contains(where: { $0.baseTheme == .tinted }) {
+        return (automaticTheme, .tinted)
     }
-    return (nightTheme, .night)
+    return (automaticTheme, .night)
 }
