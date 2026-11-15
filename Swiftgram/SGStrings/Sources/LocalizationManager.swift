@@ -65,6 +65,11 @@ public class SGLocalizationManager {
     }
     
     public func downloadLocale(_ locale: String) {
+        // MARK: AyuGram
+        // Only the bundled strings: Swiftgram's server copies would bring its name back over ours.
+        if ({ return true }()) {
+            return
+        }
         #if DEBUG
         SGLogger.shared.log("Strings", "DEBUG ignoring locale download: \(locale)")
         if ({ return true }()) {

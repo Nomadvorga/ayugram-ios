@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Skrýt \"%@\"";
 "Settings.Folders.RememberLast" = "Otevřít poslední složku";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram otevře poslední použitou složku po restartu nebo přepnutí účtu.";
+"Settings.Folders.RememberLast.Notice" = "AyuGram otevře poslední použitou složku po restartu nebo přepnutí účtu.";
 
 "Settings.Folders.CompactNames" = "Menší vzdálenost";
 "Settings.Folders.AllChatsTitle" = "Název \"Všechny chaty\"";
@@ -97,7 +97,7 @@
 "ContextMenu.SelectFromUser" = "Vybrat od autora";
 
 "Settings.ContextMenu" = "KONTEXTOVÉ MENU";
-"Settings.ContextMenu.Notice" = "Zakázané položky budou dostupné v podmenu \"Swiftgram\".";
+"Settings.ContextMenu.Notice" = "Zakázané položky budou dostupné v podmenu \"AyuGram\".";
 
 
 "Settings.ChatSwipeOptions" = "Možnosti potáhnutí v seznamu chatu";
@@ -144,7 +144,7 @@
 "Settings.hideChannelBottomButton" = "Skrýt panel dolního kanálu";
 
 "Settings.CallConfirmation" = "Potvrzení hovoru";
-"Settings.CallConfirmation.Notice" = "Swiftgram požádá o vaši potvrzení před uskutečněním hovoru.";
+"Settings.CallConfirmation.Notice" = "AyuGram požádá o vaši potvrzení před uskutečněním hovoru.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Uskutečnit hovor?";
