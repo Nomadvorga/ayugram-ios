@@ -46,6 +46,7 @@ private enum AyuBoolSetting: String {
     case hideNotificationBadge
     case hideFolderCounters
     case copyUsernameAsLink
+    case disableSimilarChannels
     case confirmSticker
     case confirmGif
     case confirmVoice
@@ -159,6 +160,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableOpenLinkWarning, value: customization.disableOpenLinkWarning, text: i18n("Ayu.DisableOpenLinkWarning", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .copyUsernameAsLink, value: customization.copyUsernameAsLink, text: i18n("Ayu.CopyUsernameAsLink", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableSimilarChannels, value: customization.disableSimilarChannels, text: i18n("Ayu.DisableSimilarChannels", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideFolderCounters, value: customization.hideFolderCounters, text: i18n("Ayu.HideNotificationCounters", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideNotificationBadge, value: customization.hideNotificationBadge, text: i18n("Ayu.HideNotificationBadge", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .usefulFeatures, text: i18n("Ayu.HideNotificationBadgeDescription", lang)))
@@ -229,6 +231,8 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.hideFolderCounters = value
             case .copyUsernameAsLink:
                 AyuCustomizationSettings.shared.copyUsernameAsLink = value
+            case .disableSimilarChannels:
+                AyuCustomizationSettings.shared.disableSimilarChannels = value
             case .confirmSticker:
                 AyuSendConfirmations.shared.setEnabled(.sticker, value)
             case .confirmGif:

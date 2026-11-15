@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
+import SGSimpleSettings // MARK: AyuGram
 
 final class CachedRecommendedChannels: Codable {
     public let peerIds: [EnginePeer.Id]
@@ -53,6 +54,11 @@ private func appsEntryId() -> ItemCacheEntryId {
 }
 
 func _internal_requestRecommendedChannels(account: Account, peerId: EnginePeer.Id?, forceUpdate: Bool) -> Signal<Never, NoError> {
+    // MARK: AyuGram
+    if peerId != nil, AyuCustomizationSettings.shared.disableSimilarChannels {
+        return .complete()
+    }
+    //
     return account.postbox.transaction { transaction -> (Peer?, Bool) in
         if let peerId {
             guard let channel = transaction.getPeer(peerId) as? TelegramChannel, case .broadcast = channel.info else {
@@ -215,6 +221,11 @@ public struct RecommendedChannels: Equatable {
 }
 
 func _internal_recommendedChannelPeerIds(account: Account, peerId: EnginePeer.Id?) -> Signal<[EnginePeer.Id]?, NoError> {
+    // MARK: AyuGram
+    if peerId != nil, AyuCustomizationSettings.shared.disableSimilarChannels {
+        return .single(nil)
+    }
+    //
     let key = PostboxViewKey.cachedItem(entryId(peerId: peerId))
     return account.postbox.combinedView(keys: [key])
     |> mapToSignal { views -> Signal<[EnginePeer.Id]?, NoError> in
@@ -237,6 +248,11 @@ func _internal_recommendedAppPeerIds(account: Account) -> Signal<[EnginePeer.Id]
 }
 
 func _internal_recommendedChannels(account: Account, peerId: EnginePeer.Id?) -> Signal<RecommendedChannels?, NoError> {
+    // MARK: AyuGram
+    if peerId != nil, AyuCustomizationSettings.shared.disableSimilarChannels {
+        return .single(nil)
+    }
+    //
     let key = PostboxViewKey.cachedItem(entryId(peerId: peerId))
     return account.postbox.combinedView(keys: [key])
     |> mapToSignal { views -> Signal<RecommendedChannels?, NoError> in

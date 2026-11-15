@@ -15,6 +15,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case hideNotificationBadge
         case hideFolderCounters
         case copyUsernameAsLink
+        case disableSimilarChannels
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -78,6 +79,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.hideNotificationBadge): false,
             AyuCustomizationSettings.key(.hideFolderCounters): false,
             AyuCustomizationSettings.key(.copyUsernameAsLink): true,
+            AyuCustomizationSettings.key(.disableSimilarChannels): false,
         ])
     }
 
@@ -131,6 +133,12 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var copyUsernameAsLink: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.copyUsernameAsLink)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.copyUsernameAsLink)) }
+    }
+
+    // No similar channels for a channel: neither the panel after joining nor the profile tab.
+    public var disableSimilarChannels: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.disableSimilarChannels)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableSimilarChannels)) }
     }
 
     // What copying a username puts on the pasteboard.
