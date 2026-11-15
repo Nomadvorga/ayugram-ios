@@ -383,3 +383,5 @@
 "Ayu.DeleteOwnMessagesConfirmation" = "Вы точно хотите удалить все свои сообщения из этой группы?";
 "Ayu.DisableCustomBackgrounds" = "Отключить кастомные фоны";
 "Ayu.SimpleQuotesAndReplies" = "Отключить цветные ответы";
+"Ayu.HideChannelReactions" = "Скрыть реакции в каналах";
+"Ayu.HideGroupReactions" = "Скрыть реакции в группах";

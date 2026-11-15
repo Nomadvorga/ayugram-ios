@@ -12,6 +12,7 @@ import TextFormat
 import Markdown
 import Display
 import TelegramStringFormatting
+import SGSimpleSettings // MARK: AyuGram
 
 struct ChatHistoryEntriesForViewState {
     private var messageStableIdToLocalId: [UInt32: Int64] = [:]
@@ -168,9 +169,26 @@ func chatHistoryEntriesForView(
         }
     }
     
+    // MARK: AyuGram
+    var ayuHidesReactions = false
+    if let channel = chatPeer as? TelegramChannel {
+        if case .broadcast = channel.info {
+            ayuHidesReactions = AyuCustomizationSettings.shared.hideChannelReactions
+        } else {
+            ayuHidesReactions = AyuCustomizationSettings.shared.hideGroupReactions
+        }
+    } else if chatPeer is TelegramGroup {
+        ayuHidesReactions = AyuCustomizationSettings.shared.hideGroupReactions
+    }
+    //
     var count = 0
     loop: for entry in view.entries {
         var message = entry.message.withAppliedEphemeralReplacementMessage()
+        // MARK: AyuGram
+        if ayuHidesReactions, message.attributes.contains(where: { $0 is ReactionsMessageAttribute }) {
+            message = message.withUpdatedAttributes(message.attributes.filter { !($0 is ReactionsMessageAttribute) })
+        }
+        //
         var isRead = entry.isRead
         
         var pinToTop = false
