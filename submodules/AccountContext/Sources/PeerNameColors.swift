@@ -36,7 +36,7 @@ public class PeerNameColors: Equatable {
         // MARK: Swiftgram
         public var main: UIColor {
             let currentSaturation = SGSimpleSettings.shared.accountColorsSaturation
-            if currentSaturation == 0 {
+            if currentSaturation == 0 || currentSaturation == 100 { // MARK: AyuGram: 100% is the color as is
                 return _main
             } else {
                 return _main.withReducedSaturation(CGFloat(currentSaturation) / 100.0)
@@ -45,7 +45,7 @@ public class PeerNameColors: Equatable {
         
         public var secondary: UIColor? {
             let currentSaturation = SGSimpleSettings.shared.accountColorsSaturation
-            if currentSaturation == 0 {
+            if currentSaturation == 0 || currentSaturation == 100 { // MARK: AyuGram: 100% is the color as is
                 return _secondary
             } else {
                 return _secondary?.withReducedSaturation(CGFloat(currentSaturation) / 100.0)
@@ -54,7 +54,7 @@ public class PeerNameColors: Equatable {
         
         public var tertiary: UIColor? {
             let currentSaturation = SGSimpleSettings.shared.accountColorsSaturation
-            if currentSaturation == 0 {
+            if currentSaturation == 0 || currentSaturation == 100 { // MARK: AyuGram: 100% is the color as is
                 return _tertiary
             } else {
                 return _tertiary?.withReducedSaturation(CGFloat(currentSaturation) / 100.0)
