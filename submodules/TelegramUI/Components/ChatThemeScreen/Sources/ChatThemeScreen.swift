@@ -537,11 +537,16 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                             
                             var bubbleColor: UIColor?
                             if let theme = item.chatTheme, case let .gift(_, themeSettings) = theme {
-                                // MARK: AyuGram: the variant the chat shows
-                                let appBaseTheme = item.context.sharedContext.currentPresentationData.with { $0 }.theme.referenceTheme.baseTheme
-                                if let theme = ayuChatThemeSettings(themeSettings, dark: item.nightMode, preferredBaseTheme: appBaseTheme) {
-                                    let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
-                                    bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
+                                if item.nightMode {
+                                    if let theme = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) {
+                                        let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
+                                    }
+                                } else {
+                                    if let theme = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) {
+                                        let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
+                                    }
                                 }
                             }
                             if let bubbleColor {
@@ -1267,11 +1272,12 @@ private final class ChatThemeSheetContentComponent: Component {
                     }
                 }
                 let themeReference: PresentationThemeReference
-                // MARK: AyuGram: the variant the chat shows
-                let wallpaper = ayuChatThemeSettings(themeSettings, dark: isDarkAppearance, preferredBaseTheme: component.context.sharedContext.currentPresentationData.with { $0 }.theme.referenceTheme.baseTheme)?.wallpaper
+                let wallpaper: TelegramWallpaper?
                 if isDarkAppearance {
+                    wallpaper = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted })?.wallpaper
                     themeReference = .builtin(.night)
                 } else {
+                    wallpaper = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })?.wallpaper
                     themeReference = .builtin(.dayClassic)
                 }
                 entries.append(ThemeSettingsThemeEntry(

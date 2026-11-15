@@ -70,9 +70,9 @@ public func makePresentationTheme(settings: TelegramThemeSettings, title: String
     return customizePresentationTheme(defaultTheme, editing: true, title: title, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false, preferredBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
+public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false) -> PresentationTheme? {
     let settings: TelegramThemeSettings?
-    if let exactSettings = ayuChatThemeSettings(cloudTheme.settings ?? [], dark: dark, preferredBaseTheme: preferredBaseTheme) { // MARK: AyuGram
+    if let exactSettings = cloudTheme.settings?.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
         settings = exactSettings
     } else if let firstSettings = cloudTheme.settings?.first {
         settings = firstSettings
@@ -86,12 +86,12 @@ public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false,
     return customizePresentationTheme(defaultTheme, editing: true, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false, preferredBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
+public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false) -> PresentationTheme? {
     guard case let .gift(_, themeSettings) = chatTheme else {
         return nil
     }
     let settings: TelegramThemeSettings?
-    if let exactSettings = ayuChatThemeSettings(themeSettings, dark: dark, preferredBaseTheme: preferredBaseTheme) { // MARK: AyuGram
+    if let exactSettings = themeSettings.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
         settings = exactSettings
     } else if let firstSettings = themeSettings.first {
         settings = firstSettings
@@ -228,29 +228,19 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
 }
 
 // MARK: AyuGram
-/// A chat theme's variant for the appearance: the one built on the app theme's own base (Night or Tinted Night, Classic or
-/// Day) when the chat theme has it, as Telegram from the App Store shows them; otherwise the first variant of that
-/// appearance.
-public func ayuChatThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool, preferredBaseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {
-    let isDarkBaseTheme: (TelegramBaseTheme) -> Bool = { $0 == .night || $0 == .tinted }
-    if let preferredBaseTheme, isDarkBaseTheme(preferredBaseTheme) == dark, let preferredSettings = settings.first(where: { $0.baseTheme == preferredBaseTheme }) {
-        return preferredSettings
-    }
-    return settings.first(where: { isDarkBaseTheme($0.baseTheme) == dark })
-}
-
 /// The theme shown at night with bubbles, and the base it is built on. A chat theme picked in Appearance keeps the night
-/// theme chosen under Auto-Night (Night or Tinted Night) and is drawn on its base at night.
+/// theme chosen under Auto-Night (Night or Tinted Night) for when another theme is picked; at night the chat theme itself
+/// is shown on its own base, as Telegram does: Night unless the theme was set to Tinted Night or has only that variant.
 public func ayuNightTheme(settings: PresentationThemeSettings) -> (theme: PresentationThemeReference, baseTheme: TelegramBaseTheme) {
-    let automaticTheme = settings.automaticThemeSwitchSetting.theme
-    if case let .builtin(nightTheme) = automaticTheme, nightTheme == .night || nightTheme == .nightAccent, case let .cloud(info) = settings.theme, info.theme.emoticon != nil, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
-        return (settings.theme, nightTheme.baseTheme)
+    var nightTheme = settings.automaticThemeSwitchSetting.theme
+    if case let .builtin(builtinNightTheme) = nightTheme, builtinNightTheme == .night || builtinNightTheme == .nightAccent, case let .cloud(info) = settings.theme, info.theme.emoticon != nil, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {
+        nightTheme = settings.theme
     }
-    if let baseTheme = settings.themePreferredBaseTheme[automaticTheme.index], [.night, .tinted].contains(baseTheme) {
-        return (automaticTheme, baseTheme)
+    if let baseTheme = settings.themePreferredBaseTheme[nightTheme.index], [.night, .tinted].contains(baseTheme) {
+        return (nightTheme, baseTheme)
     }
-    if case let .cloud(info) = automaticTheme, let themeSettings = info.theme.settings, !themeSettings.contains(where: { $0.baseTheme == .night }), themeSettings.contains(where: { $0.baseTheme == .tinted }) {
-        return (automaticTheme, .tinted)
+    if case let .cloud(info) = nightTheme, let themeSettings = info.theme.settings, !themeSettings.contains(where: { $0.baseTheme == .night }), themeSettings.contains(where: { $0.baseTheme == .tinted }) {
+        return (nightTheme, .tinted)
     }
-    return (automaticTheme, .night)
+    return (nightTheme, .night)
 }
