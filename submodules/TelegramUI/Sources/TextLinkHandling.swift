@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import TelegramCore
+import SGSimpleSettings // MARK: AyuGram
 import Display
 import SwiftSignalKit
 import TelegramUIPreferences
@@ -149,6 +150,10 @@ func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, n
                     let loginPartUrl = externalUrlWithLoginPart(url)
                     if parsedConcealed || loginPartUrl != nil {
                         concealed = true
+                    }
+                    // MARK: AyuGram
+                    if AyuCustomizationSettings.shared.disableOpenLinkWarning && loginPartUrl == nil {
+                        concealed = false
                     }
                     
                     if concealed {

@@ -370,3 +370,13 @@
 "Ayu.SuggestGhostModeStoryActionTextNo" = "No";
 "Ayu.DisplayGhostStatus" = "Display Ghost Mode Status";
 "Ayu.DisplayGhostStatusDescription" = "Ghost Mode status will be visible in the chat list title.";
+"Ayu.ConfirmationsTitle" = "SEND CONFIRMATIONS";
+"Ayu.StickerConfirmation" = "Stickers";
+"Ayu.GIFConfirmation" = "GIFs";
+"Ayu.VoiceConfirmation" = "Voice Messages";
+"Ayu.RoundConfirmation" = "Round Videos";
+"Ayu.ConfirmationSticker" = "Do you want to send this sticker?";
+"Ayu.ConfirmationGIF" = "Do you want to send this GIF?";
+"Ayu.ConfirmationVoice" = "Do you want to send this voice message?";
+"Ayu.ConfirmationRound" = "Do you want to send this round video?";
+"Ayu.DisableOpenLinkWarning" = "Disable Open Link Warning";

@@ -19,6 +19,7 @@ private enum AyuControllerSection: Int32, SGItemListSection {
     case spyEssentials
     case customization
     case usefulFeatures
+    case confirmations
 }
 
 private enum AyuBoolSetting: String {
@@ -40,6 +41,11 @@ private enum AyuBoolSetting: String {
     case showDeletedMarker
     case semiTransparentDeletedMessages
     case disableAds
+    case disableOpenLinkWarning
+    case confirmSticker
+    case confirmGif
+    case confirmVoice
+    case confirmRound
 }
 
 private enum AyuOneFromManySetting: String {
@@ -145,6 +151,14 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
 
     entries.append(.header(id: id.count, section: .usefulFeatures, text: i18n("Ayu.QoLTogglesHeader", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableAds, value: customization.disableAds, text: i18n("Ayu.DisableAds", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .disableOpenLinkWarning, value: customization.disableOpenLinkWarning, text: i18n("Ayu.DisableOpenLinkWarning", lang), enabled: true))
+
+    let confirmations = AyuSendConfirmations.shared
+    entries.append(.header(id: id.count, section: .confirmations, text: i18n("Ayu.ConfirmationsTitle", lang), badge: nil))
+    entries.append(.toggle(id: id.count, section: .confirmations, settingName: .confirmSticker, value: confirmations.isEnabled(.sticker), text: i18n("Ayu.StickerConfirmation", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .confirmations, settingName: .confirmGif, value: confirmations.isEnabled(.gif), text: i18n("Ayu.GIFConfirmation", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .confirmations, settingName: .confirmVoice, value: confirmations.isEnabled(.voice), text: i18n("Ayu.VoiceConfirmation", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .confirmations, settingName: .confirmRound, value: confirmations.isEnabled(.round), text: i18n("Ayu.RoundConfirmation", lang), enabled: true))
 
     return entries
 }
@@ -195,6 +209,16 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 AyuCustomizationSettings.shared.semiTransparentDeletedMessages = value
             case .disableAds:
                 AyuCustomizationSettings.shared.disableAds = value
+            case .disableOpenLinkWarning:
+                AyuCustomizationSettings.shared.disableOpenLinkWarning = value
+            case .confirmSticker:
+                AyuSendConfirmations.shared.setEnabled(.sticker, value)
+            case .confirmGif:
+                AyuSendConfirmations.shared.setEnabled(.gif, value)
+            case .confirmVoice:
+                AyuSendConfirmations.shared.setEnabled(.voice, value)
+            case .confirmRound:
+                AyuSendConfirmations.shared.setEnabled(.round, value)
             }
             if !wasHidingOnline && ghost.suppressOnlineStatus {
                 AyuGhostLastSeen.shared.recordNow()

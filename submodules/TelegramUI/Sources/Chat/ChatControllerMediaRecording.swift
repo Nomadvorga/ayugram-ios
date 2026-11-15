@@ -264,6 +264,25 @@ extension ChatControllerImpl {
             sendImmediately = true
         }
         
+        // MARK: AyuGram
+        // With a send confirmation the recording stops into its preview, which is sent once confirmed.
+        let ayuConfirmationKind: AyuSendConfirmations.Kind = self.videoRecorderValue != nil ? .round : .voice
+        var ayuConfirmViewOnceValue: Bool?
+        if !sendImmediately, case let .send(viewOnce) = updatedAction, !self.ayuSendIsConfirmed, AyuSendConfirmations.shared.isEnabled(ayuConfirmationKind) {
+            updatedAction = .preview
+            ayuConfirmViewOnceValue = viewOnce
+        }
+        let ayuConfirmViewOnce = ayuConfirmViewOnceValue
+        let ayuAskToSendPreview: () -> Void = { [weak self] in
+            guard let self, let viewOnce = ayuConfirmViewOnce else {
+                return
+            }
+            let _ = self.ayuConfirmSending(ayuConfirmationKind, send: { [weak self] in
+                self?.interfaceInteraction?.sendRecordedMedia(false, viewOnce)
+            })
+        }
+        //
+        
         if let audioRecorderValue = self.audioRecorderValue {
             switch action {
             case .pause:
@@ -337,6 +356,7 @@ extension ChatControllerImpl {
                                     if sendImmediately {
                                         strongSelf.interfaceInteraction?.sendRecordedMedia(false, false)
                                     }
+                                    ayuAskToSendPreview() // MARK: AyuGram
                                 }
                             }
                         })
@@ -447,6 +467,7 @@ extension ChatControllerImpl {
                                     })
                                     strongSelf.recorderFeedback = nil
                                     strongSelf.updateDownButtonVisibility()
+                                    ayuAskToSendPreview() // MARK: AyuGram
                                 }
                             }
                         }))

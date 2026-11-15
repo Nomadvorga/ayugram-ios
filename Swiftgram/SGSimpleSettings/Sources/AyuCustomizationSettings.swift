@@ -11,6 +11,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
         case deletedMarkColor
         case semiTransparentDeletedMessages
         case disableAds
+        case disableOpenLinkWarning
     }
 
     public enum DeletedMark: Int, CaseIterable {
@@ -70,6 +71,7 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
             AyuCustomizationSettings.key(.deletedMarkColor): DeletedMarkColor.red.rawValue,
             AyuCustomizationSettings.key(.semiTransparentDeletedMessages): true,
             AyuCustomizationSettings.key(.disableAds): true,
+            AyuCustomizationSettings.key(.disableOpenLinkWarning): false,
         ])
     }
 
@@ -101,6 +103,12 @@ public final class AyuCustomizationSettings: @unchecked Sendable {
     public var disableAds: Bool {
         get { return self.store.bool(AyuCustomizationSettings.key(.disableAds)) }
         set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableAds)) }
+    }
+
+    // Hidden links open without the "Open this link?" prompt.
+    public var disableOpenLinkWarning: Bool {
+        get { return self.store.bool(AyuCustomizationSettings.key(.disableOpenLinkWarning)) }
+        set { self.store.setBool(newValue, AyuCustomizationSettings.key(.disableOpenLinkWarning)) }
     }
 
     // The prefix of a deleted message's time, nil when the mark is hidden.

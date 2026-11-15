@@ -12,6 +12,7 @@ import AlertComponent
 import AlertCheckComponent
 import AlertWebpagePreviewComponent
 import UrlHandling
+import SGSimpleSettings // MARK: AyuGram
 
 public func openUserGeneratedUrl(
     context: AccountContext,
@@ -115,7 +116,10 @@ public func openUserGeneratedUrl(
         }
     }
 
-    if concealed && !skipConcealedAlert {
+    // MARK: AyuGram
+    // "Disable Open Link Warning"; a link whose login part hides the real host still asks.
+    let ayuSkipsWarning = AyuCustomizationSettings.shared.disableOpenLinkWarning && !forceConcealed && loginPartUrl == nil
+    if concealed && !skipConcealedAlert && !ayuSkipsWarning {
         // For a login part the prompt shows the host the link really opens. The external-URL opener asks about such
         // a link as well, so accepting it here tells the opener it has been confirmed.
         let displayUrl = loginPartUrl.map { urlRemovingLoginPart($0).absoluteString } ?? parsedString

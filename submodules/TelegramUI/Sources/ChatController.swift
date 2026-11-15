@@ -338,6 +338,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     let chatBackgroundNode: WallpaperBackgroundNode
     public private(set) var controllerInteraction: ChatControllerInteraction?
     var interfaceInteraction: ChatPanelInterfaceInteraction?
+    var ayuSendIsConfirmed = false // MARK: AyuGram
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -2503,6 +2504,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return false
             }
+            // MARK: AyuGram
+            if strongSelf.ayuConfirmSending(.sticker, send: { [weak self] in
+                let _ = self?.controllerInteraction?.sendSticker(fileReference, silentPosting, schedule, query, clearInput, sourceView, sourceRect, sourceLayer, bubbleUpEmojiOrStickersets)
+            }) {
+                return false
+            }
+            //
             
             if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                 if let sourceView, let sourceRect {
@@ -2779,6 +2787,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         }, sendGif: { [weak self] fileReference, sourceView, sourceRect, silentPosting, schedule in
             if let strongSelf = self {
+                // MARK: AyuGram
+                if strongSelf.ayuConfirmSending(.gif, send: { [weak self] in
+                    let _ = self?.controllerInteraction?.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
+                }) {
+                    return false
+                }
+                //
                 if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                     strongSelf.interfaceInteraction?.displaySlowmodeTooltip(sourceView, sourceRect)
                     return false
