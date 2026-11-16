@@ -70,9 +70,11 @@ public func makePresentationTheme(settings: TelegramThemeSettings, title: String
     return customizePresentationTheme(defaultTheme, editing: true, title: title, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false) -> PresentationTheme? {
+public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false, nightBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
     let settings: TelegramThemeSettings?
-    if let exactSettings = cloudTheme.settings?.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
+    if let nightSettings = ayuNightThemeSettings(cloudTheme.settings ?? [], dark: dark, nightBaseTheme: nightBaseTheme) { // MARK: AyuGram
+        settings = nightSettings
+    } else if let exactSettings = cloudTheme.settings?.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
         settings = exactSettings
     } else if let firstSettings = cloudTheme.settings?.first {
         settings = firstSettings
@@ -86,12 +88,14 @@ public func makePresentationTheme(cloudTheme: TelegramTheme, dark: Bool = false)
     return customizePresentationTheme(defaultTheme, editing: true, accentColor: UIColor(argb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(argb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
-public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false) -> PresentationTheme? {
+public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false, nightBaseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {
     guard case let .gift(_, themeSettings) = chatTheme else {
         return nil
     }
     let settings: TelegramThemeSettings?
-    if let exactSettings = themeSettings.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
+    if let nightSettings = ayuNightThemeSettings(themeSettings, dark: dark, nightBaseTheme: nightBaseTheme) { // MARK: AyuGram
+        settings = nightSettings
+    } else if let exactSettings = themeSettings.first(where: { dark ? ($0.baseTheme == .night || $0.baseTheme == .tinted) : ($0.baseTheme == .classic || $0.baseTheme == .day) }) {
         settings = exactSettings
     } else if let firstSettings = themeSettings.first {
         settings = firstSettings
@@ -157,7 +161,11 @@ public func makePresentationTheme(mediaBox: MediaBox, themeReference: Presentati
             if let exactSettings = info.theme.settings?.first(where: { $0.baseTheme == baseTheme }) {
                 settings = exactSettings
             } else if let baseTheme, let similarSettings = info.theme.settings?.first(where: { isDarkBaseTheme($0.baseTheme) == isDarkBaseTheme(baseTheme) }) {
-                settings = similarSettings
+                if baseTheme == .night && similarSettings.baseTheme == .tinted {
+                    settings = ayuNightSettings(fromTinted: similarSettings)
+                } else {
+                    settings = similarSettings
+                }
                 builtinBaseTheme = isDarkBaseTheme(baseTheme) ? baseTheme : nil
             } else if let firstSettings = info.theme.settings?.first {
                 settings = firstSettings
@@ -228,6 +236,55 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
 }
 
 // MARK: AyuGram
+/// With Night as the night theme, a chat or emoji theme that has no Night variant is shown as Telegram from the App Store
+/// shows it: on Night, with its Tinted Night variant's colours brightened and its outgoing gradient animated. The published
+/// source draws the Tinted Night variant as is (muted bubbles on a tinted page); these values are measured from the App
+/// Store app's screens. Bubble colours: brightness b becomes b + (1 - b) * 0.4 at the same hue and saturation, and the
+/// gradient gains the first colour moved 14° along the hue circle. Accent: b + (1 - b) * 0.3 and saturation * 1.23.
+public func ayuNightThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool, nightBaseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {
+    guard dark, nightBaseTheme == .night else {
+        return nil
+    }
+    if let nightSettings = settings.first(where: { $0.baseTheme == .night }) {
+        return nightSettings
+    }
+    if let tintedSettings = settings.first(where: { $0.baseTheme == .tinted }) {
+        return ayuNightSettings(fromTinted: tintedSettings)
+    }
+    return nil
+}
+
+func ayuNightSettings(fromTinted settings: TelegramThemeSettings) -> TelegramThemeSettings {
+    func components(_ value: UInt32) -> (h: CGFloat, s: CGFloat, b: CGFloat) {
+        var h: CGFloat = 0.0, s: CGFloat = 0.0, b: CGFloat = 0.0, a: CGFloat = 0.0
+        UIColor(red: CGFloat((value >> 16) & 0xff) / 255.0, green: CGFloat((value >> 8) & 0xff) / 255.0, blue: CGFloat(value & 0xff) / 255.0, alpha: 1.0).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return (h, s, b)
+    }
+    func rgb(h: CGFloat, s: CGFloat, b: CGFloat) -> UInt32 {
+        var red: CGFloat = 0.0, green: CGFloat = 0.0, blue: CGFloat = 0.0, alpha: CGFloat = 0.0
+        UIColor(hue: h, saturation: s, brightness: b, alpha: 1.0).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let channel: (CGFloat) -> UInt32 = { UInt32(max(0.0, min(255.0, ($0 * 255.0).rounded()))) }
+        return (channel(red) << 16) | (channel(green) << 8) | channel(blue)
+    }
+    // Keeps the alpha byte: cloud themes store their accent as ARGB, gift themes as RGB.
+    func brightened(_ value: UInt32, hueShift: CGFloat = 0.0, brightness: CGFloat = 0.4, saturation: CGFloat = 1.0) -> UInt32 {
+        let (h, s, b) = components(value)
+        var shiftedHue = h + hueShift
+        shiftedHue -= floor(shiftedHue)
+        return (value & 0xff000000) | rgb(h: shiftedHue, s: min(1.0, s * saturation), b: b + (1.0 - b) * brightness)
+    }
+
+    var messageColors = settings.messageColors.map { brightened($0) & 0xffffff }
+    var animateMessageColors = settings.animateMessageColors
+    if settings.messageColors.count == 2 {
+        messageColors = [messageColors[0], brightened(settings.messageColors[0], hueShift: 14.0 / 360.0) & 0xffffff, messageColors[1]]
+        animateMessageColors = true
+    } else if messageColors.count >= 3 {
+        animateMessageColors = true
+    }
+    return TelegramThemeSettings(baseTheme: .night, accentColor: brightened(settings.accentColor, brightness: 0.3, saturation: 1.23), outgoingAccentColor: settings.outgoingAccentColor.flatMap { brightened($0, brightness: 0.3, saturation: 1.23) }, messageColors: messageColors, animateMessageColors: animateMessageColors, wallpaper: settings.wallpaper)
+}
+
 /// The theme shown at night with bubbles, and the base it is built on. A chat theme picked in Appearance keeps the night
 /// theme chosen under Auto-Night (Night or Tinted Night) and is drawn on its base at night.
 public func ayuNightTheme(settings: PresentationThemeSettings) -> (theme: PresentationThemeReference, baseTheme: TelegramBaseTheme) {

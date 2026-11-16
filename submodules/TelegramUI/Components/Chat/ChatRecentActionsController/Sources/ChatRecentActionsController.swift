@@ -232,7 +232,7 @@ public final class ChatRecentActionsController: TelegramBaseController {
                 if let chatTheme {
                     switch chatTheme {
                     case let .emoticon(emoticon):
-                        if let theme = chatThemes.first(where: { $0.emoticon == emoticon }), let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
+                        if let theme = chatThemes.first(where: { $0.emoticon == emoticon }), let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance, nightBaseTheme: presentationData.theme.referenceTheme.baseTheme) { // MARK: AyuGram
                             presentationData = presentationData.withUpdated(theme: theme)
                             presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
                         }
