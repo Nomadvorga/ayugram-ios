@@ -237,10 +237,10 @@ public func makeBubblelessPresentationTheme(mediaBox: MediaBox, themeSettings: P
 
 // MARK: AyuGram
 /// With Night as the night theme, a chat or emoji theme that has no Night variant is shown as Telegram from the App Store
-/// shows it: on Night, with its Tinted Night variant's colours brightened and its outgoing gradient animated. The published
-/// source draws the Tinted Night variant as is (muted bubbles on a tinted page); these values are measured from the App
-/// Store app's screens. Bubble colours: brightness b becomes b + (1 - b) * 0.4 at the same hue and saturation, and the
-/// gradient gains the first colour moved 14° along the hue circle. Accent: b + (1 - b) * 0.3 and saturation * 1.23.
+/// shows it: on Night, with its Tinted Night variant's colours brightened. The published source draws the Tinted Night
+/// variant as is (muted bubbles on a tinted page). Measured from the App Store app's screens of 🌷 and 🎮: each bubble
+/// colour's brightness b becomes b + (1 - b) * 0.4 at the same hue and saturation, in the variant's own gradient; the
+/// accent's saturation is multiplied by 1.23 and its brightness by 1.107.
 public func ayuNightThemeSettings(_ settings: [TelegramThemeSettings], dark: Bool, nightBaseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {
     guard dark, nightBaseTheme == .night else {
         return nil
@@ -266,23 +266,17 @@ func ayuNightSettings(fromTinted settings: TelegramThemeSettings) -> TelegramThe
         let channel: (CGFloat) -> UInt32 = { UInt32(max(0.0, min(255.0, ($0 * 255.0).rounded()))) }
         return (channel(red) << 16) | (channel(green) << 8) | channel(blue)
     }
-    // Keeps the alpha byte: cloud themes store their accent as ARGB, gift themes as RGB.
-    func brightened(_ value: UInt32, hueShift: CGFloat = 0.0, brightness: CGFloat = 0.4, saturation: CGFloat = 1.0) -> UInt32 {
+    func bubbleColor(_ value: UInt32) -> UInt32 {
         let (h, s, b) = components(value)
-        var shiftedHue = h + hueShift
-        shiftedHue -= floor(shiftedHue)
-        return (value & 0xff000000) | rgb(h: shiftedHue, s: min(1.0, s * saturation), b: b + (1.0 - b) * brightness)
+        return rgb(h: h, s: s, b: b + (1.0 - b) * 0.4)
+    }
+    // Keeps the alpha byte: cloud themes store their accent as ARGB, gift themes as RGB.
+    func accentColor(_ value: UInt32) -> UInt32 {
+        let (h, s, b) = components(value)
+        return (value & 0xff000000) | rgb(h: h, s: min(1.0, s * 1.23), b: min(1.0, b * 1.107))
     }
 
-    var messageColors = settings.messageColors.map { brightened($0) & 0xffffff }
-    var animateMessageColors = settings.animateMessageColors
-    if settings.messageColors.count == 2 {
-        messageColors = [messageColors[0], brightened(settings.messageColors[0], hueShift: 14.0 / 360.0) & 0xffffff, messageColors[1]]
-        animateMessageColors = true
-    } else if messageColors.count >= 3 {
-        animateMessageColors = true
-    }
-    return TelegramThemeSettings(baseTheme: .night, accentColor: brightened(settings.accentColor, brightness: 0.3, saturation: 1.23), outgoingAccentColor: settings.outgoingAccentColor.flatMap { brightened($0, brightness: 0.3, saturation: 1.23) }, messageColors: messageColors, animateMessageColors: animateMessageColors, wallpaper: settings.wallpaper)
+    return TelegramThemeSettings(baseTheme: .night, accentColor: accentColor(settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap(accentColor), messageColors: settings.messageColors.map(bubbleColor), animateMessageColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
 }
 
 /// The theme shown at night with bubbles, and the base it is built on. A chat theme picked in Appearance keeps the night
