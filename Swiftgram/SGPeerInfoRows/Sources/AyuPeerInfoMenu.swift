@@ -105,6 +105,21 @@ private func ayuPeerInfoMenuItems(context: AccountContext, peer: EnginePeer, pre
     }, action: { c, _ in
         c?.pushItems(items: ayuChatThemeDiagnosticsItems(context: context, peer: peer, presentationData: presentationData))
     })))
+    items.append(.action(ContextMenuActionItem(text: "Все темы: скопировать данные", icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
+    }, action: { _, f in
+        let _ = (context.engine.themes.getChatThemes(accountManager: context.sharedContext.accountManager, onlyCached: true)
+        |> take(1)
+        |> deliverOnMainQueue).startStandalone(next: { themes in
+            var lines: [String] = []
+            for theme in themes {
+                lines.append("\(theme.emoticon ?? theme.title):")
+                lines.append(contentsOf: ayuThemeSettingsLines(theme.settings))
+            }
+            UIPasteboard.general.string = lines.joined(separator: "\n")
+        })
+        f(.default)
+    })))
 
     return items
 }
