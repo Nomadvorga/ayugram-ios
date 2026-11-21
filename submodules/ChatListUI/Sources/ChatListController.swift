@@ -1,4 +1,3 @@
-import AyuSnowEffect
 import SGSimpleSettings // MARK: Swiftgram
 
 import Foundation
@@ -98,7 +97,6 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
 }
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
-    private let ayuHeaderSnowView = AyuSnowView(style: .header)
 
     /// iPhone Duo: this screen lays out its own side column, back button included.
     override public var placesNavigationButtonInSideColumn: Bool {
@@ -1039,7 +1037,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.ayuHeaderSnowView.color = self.presentationData.theme.rootController.navigationBar.primaryTextColor
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
         if self.isNodeLoaded {
@@ -2500,13 +2497,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if let bar = self.navigationBar {
-            self.ayuHeaderSnowView.color = self.presentationData.theme.rootController.navigationBar.primaryTextColor
-            self.ayuHeaderSnowView.frame = bar.view.bounds
-            self.ayuHeaderSnowView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            bar.view.addSubview(self.ayuHeaderSnowView)
-            self.ayuHeaderSnowView.isActive = true
-        }
+        self.chatListDisplayNode.ayuSnowIsActive = true
                 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings
@@ -2999,7 +2990,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        self.ayuHeaderSnowView.isActive = false
+        self.chatListDisplayNode.ayuSnowIsActive = false
         
         if self.dismissSearchOnDisappear {
             self.dismissSearchOnDisappear = false
@@ -3026,6 +3017,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 title: self.plainTitle,
                 titleComponent: primaryContext.chatTitleComponent.flatMap { AnyComponent<Empty>($0) },
                 chatListTitle: primaryContext.chatListTitle,
+                usesAccountTitle: primaryContext.location == .chatList(groupId: .root),
                 leftButton: primaryContext.leftButton,
                 rightButtons: primaryContext.rightButtons,
                 backPressed: displayBackButton ? { [weak self] in
@@ -3043,6 +3035,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 title: self.plainTitle,
                 titleComponent: secondaryContext.chatTitleComponent.flatMap { AnyComponent<Empty>($0) },
                 chatListTitle: secondaryContext.chatListTitle,
+                usesAccountTitle: secondaryContext.location == .chatList(groupId: .root),
                 leftButton: secondaryContext.leftButton,
                 rightButtons: secondaryContext.rightButtons,
                 backPressed: { [weak self] in
@@ -7069,25 +7062,43 @@ private final class ChatListLocationContext {
             return (data.isLockable, false)
         }
         
-        let peerStatus: Signal<NetworkStatusTitle.Status?, NoError>
+        // Only the root's normal title uses the account name. Keep status and name in one peer
+        // subscription so profile edits refresh the rendered header without timers or polling.
+        let peerTitle: Signal<(status: NetworkStatusTitle.Status?, nameTitle: String), NoError>
         switch self.location {
         case .chatList(.root):
-            peerStatus = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
-            |> map { peer -> NetworkStatusTitle.Status? in
-                guard case let .user(user) = peer else {
-                    return nil
+            let titleSettings = Signal<ExteraSettings.ChatListTitle, NoError> { subscriber in
+                let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+                    subscriber.putNext(ExteraSettings.shared.chatListTitle)
                 }
-                if let emojiStatus = user.emojiStatus {
-                    return .emoji(emojiStatus)
-                } else if user.isPremium {
-                    return .premium
-                } else {
-                    return nil
+                subscriber.putNext(ExteraSettings.shared.chatListTitle)
+                return ActionDisposable {
+                    NotificationCenter.default.removeObserver(observer)
                 }
-            }
-            |> distinctUntilChanged
+            } |> distinctUntilChanged
+            peerTitle = combineLatest(
+                context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
+                titleSettings,
+                parentController.updatedPresentationData.1
+            ) |> map { peer, _, presentationData -> (status: NetworkStatusTitle.Status?, nameTitle: String) in
+                var status: NetworkStatusTitle.Status?
+                var firstName = ""
+                var lastName = ""
+                if case let .user(user) = peer {
+                    firstName = user.firstName ?? ""
+                    lastName = user.lastName ?? ""
+                    if let emojiStatus = user.emojiStatus {
+                        status = .emoji(emojiStatus)
+                    } else if user.isPremium {
+                        status = .premium
+                    }
+                }
+                return (status, ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title))
+            } |> distinctUntilChanged(isEqual: { lhs, rhs in
+                return lhs.status == rhs.status && lhs.nameTitle == rhs.nameTitle
+            })
         default:
-            peerStatus = .single(nil)
+            peerTitle = .single((nil, ""))
         }
         
         let networkState: Signal<AccountNetworkState, NoError>
@@ -7137,10 +7148,10 @@ private final class ChatListLocationContext {
                     passcode,
                     containerNode.currentItemState,
                     isReorderingTabs,
-                    peerStatus,
+                    peerTitle,
                     parentController.updatedPresentationData.1,
                     storyPostingAvailable
-                ).startStrict(next: { [weak self] hideStoriesAndGhostStatus, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable in
+                ).startStrict(next: { [weak self] hideStoriesAndGhostStatus, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerTitle, presentationData, storyPostingAvailable in
                     guard let self else {
                         return
                     }
@@ -7153,7 +7164,8 @@ private final class ChatListLocationContext {
                         passcode: passcode,
                         stateAndFilterId: stateAndFilterId,
                         isReorderingTabs: isReorderingTabs,
-                        peerStatus: peerStatus,
+                        peerStatus: peerTitle.status,
+                        nameTitle: peerTitle.nameTitle,
                         presentationData: presentationData,
                         storyPostingAvailable: storyPostingAvailable
                     )
@@ -7426,6 +7438,7 @@ private final class ChatListLocationContext {
         stateAndFilterId: (state: ChatListNodeState, filterId: Int32?),
         isReorderingTabs: Bool,
         peerStatus: NetworkStatusTitle.Status?,
+        nameTitle: String,
         presentationData: PresentationData,
         storyPostingAvailable: Bool
     ) {
@@ -7433,7 +7446,7 @@ private final class ChatListLocationContext {
         switch location {
         case let .chatList(groupId):
             if groupId == .root {
-                defaultTitle = presentationData.strings.DialogList_Title
+                defaultTitle = nameTitle // MARK: AyuGram — root only; archives keep their title.
             } else {
                 defaultTitle = presentationData.strings.ChatList_ArchivedChatsTitle
             }
@@ -7656,8 +7669,6 @@ private final class ChatListLocationContext {
                 self.proxyButton = nil
             }
             
-            self.chatListTitle = titleContent
-            
             if case .chatList(.root) = self.location, checkProxy {
                 if self.proxyUnavailableTooltipController == nil, !self.didShowProxyUnavailableTooltipController, let parentController = self.parentController, parentController.isNodeLoaded, parentController.displayNode.view.window != nil, parentController.navigationController?.topViewController == nil {
                     self.didShowProxyUnavailableTooltipController = true
@@ -7684,6 +7695,8 @@ private final class ChatListLocationContext {
             }
         }
         
+        self.chatListTitle = titleContent
+
         // The header takes this content before ready lets a push start: a push lifts the header as it is then and holds
         // it until the push ends. Content for a screen not shown yet is laid out at once.
         let isFirstUpdate = !self.didSetReady

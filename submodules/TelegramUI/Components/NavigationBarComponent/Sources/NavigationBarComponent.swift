@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -38,6 +39,7 @@ public let navigationBarTapMovement: CGFloat = 10.0
 
 public final class NavigationBarComponent: Component {
     public let theme: NavigationBarTheme
+    private let centerTitle: Bool
     public let strings: NavigationBarStrings
     public let leftInset: CGFloat
     public let rightInset: CGFloat
@@ -70,6 +72,7 @@ public final class NavigationBarComponent: Component {
         openSideColumnOverflow: ((UIView, [OverflowItem]) -> Void)? = nil
     ) {
         self.theme = theme
+        self.centerTitle = ExteraSettings.shared.centerTitle
         self.strings = strings
         self.leftInset = leftInset
         self.rightInset = rightInset
@@ -83,6 +86,9 @@ public final class NavigationBarComponent: Component {
     }
 
     public static func ==(lhs: NavigationBarComponent, rhs: NavigationBarComponent) -> Bool {
+        if lhs.centerTitle != rhs.centerTitle {
+            return false
+        }
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -118,6 +124,9 @@ public final class NavigationBarComponent: Component {
 
     public final class View: UIView, InteractiveTransitionGestureRecognizerTapTarget {
         private var component: NavigationBarComponent?
+        private weak var state: EmptyComponentState?
+        private var ayuTitleSettingsObserver: NSObjectProtocol?
+        private var ayuCenterTitle = ExteraSettings.shared.centerTitle
 
         public var interactiveTransitionMinimumMovement: CGFloat {
             return navigationBarTapMovement
@@ -525,6 +534,22 @@ public final class NavigationBarComponent: Component {
             super.init(frame: frame)
 
             self.addSubview(self.underButtonsView)
+            self.ayuTitleSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                let centerTitle = ExteraSettings.shared.centerTitle
+                if self.ayuCenterTitle != centerTitle {
+                    self.ayuCenterTitle = centerTitle
+                    self.state?.updated(transition: .immediate)
+                }
+            }
+        }
+
+        deinit {
+            if let observer = self.ayuTitleSettingsObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
 
         required public init?(coder: NSCoder) {
@@ -595,6 +620,7 @@ public final class NavigationBarComponent: Component {
         func update(component: NavigationBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component
             self.component = component
+            self.state = state
 
             // Content centered on the bar (the titles) is laid out in the band between the two insets, so it
             // stays centered in the visible area when the sides differ (iPhone Duo reserves one side for its

@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -16,6 +17,8 @@ public final class ChatListHeaderComponent: Component {
         public let title: String
         public let titleComponent: AnyComponent<Empty>?
         public let chatListTitle: NetworkStatusTitle?
+        /// The root title can use a long account name; only it gets the off-mode overflow fallback.
+        public let usesAccountTitle: Bool
         public let leftButton: NavigationBarComponent.Button?
         public let rightButtons: [NavigationBarComponent.Button]
         public let backPressed: (() -> Void)?
@@ -26,6 +29,7 @@ public final class ChatListHeaderComponent: Component {
             title: String,
             titleComponent: AnyComponent<Empty>?,
             chatListTitle: NetworkStatusTitle?,
+            usesAccountTitle: Bool = false,
             leftButton: NavigationBarComponent.Button?,
             rightButtons: [NavigationBarComponent.Button],
             backPressed: (() -> Void)?,
@@ -34,6 +38,7 @@ public final class ChatListHeaderComponent: Component {
             self.title = title
             self.titleComponent = titleComponent
             self.chatListTitle = chatListTitle
+            self.usesAccountTitle = usesAccountTitle
             self.leftButton = leftButton
             self.rightButtons = rightButtons
             self.backPressed = backPressed
@@ -45,6 +50,9 @@ public final class ChatListHeaderComponent: Component {
                 return false
             }
             if lhs.titleComponent != rhs.titleComponent {
+                return false
+            }
+            if lhs.usesAccountTitle != rhs.usesAccountTitle {
                 return false
             }
             if lhs.chatListTitle != rhs.chatListTitle {
@@ -183,6 +191,8 @@ public final class ChatListHeaderComponent: Component {
     public final class View: UIView {
         private var component: ChatListHeaderComponent?
         private weak var state: EmptyComponentState?
+        private var ayuTitleSettingsObserver: NSObjectProtocol?
+        private var ayuCenterTitle = ExteraSettings.shared.centerTitle
 
         private let navigationBar = ComponentView<Empty>()
         private var navigationBarTheme: (source: PresentationTheme, value: NavigationBarTheme)?
@@ -224,6 +234,22 @@ public final class ChatListHeaderComponent: Component {
 
         override init(frame: CGRect) {
             super.init(frame: frame)
+            self.ayuTitleSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                let centerTitle = ExteraSettings.shared.centerTitle
+                if self.ayuCenterTitle != centerTitle {
+                    self.ayuCenterTitle = centerTitle
+                    self.state?.updated(transition: .immediate)
+                }
+            }
+        }
+
+        deinit {
+            if let observer = self.ayuTitleSettingsObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
 
         required public init?(coder: NSCoder) {
@@ -317,6 +343,7 @@ public final class ChatListHeaderComponent: Component {
                     theme: component.theme,
                     strings: component.strings,
                     title: chatListTitle,
+                    usesAccountTitle: content.usesAccountTitle,
                     sideContentFraction: isSecondary ? 0.0 : (1.0 - component.storiesFraction),
                     openStatusSetup: component.openStatusSetup,
                     toggleIsLocked: component.toggleIsLocked

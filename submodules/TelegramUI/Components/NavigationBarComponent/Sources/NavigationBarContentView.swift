@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -465,7 +466,8 @@ final class NavigationBarContentView: UIView {
 
         let leftExtent = leftInset + nextLeftButtonX
         let rightExtent = rightInset + navigationBarRightButtonsExtent(navigationBarRightPillMetrics(widths: rightPillWidths))
-        let remainingWidth = navigationBarTitleAvailableWidth(rowWidth: size.width, leftExtent: leftExtent, rightExtent: rightExtent)
+        let availableTitleWidth = navigationBarTitleAvailableWidth(rowWidth: size.width, leftExtent: leftExtent, rightExtent: rightExtent)
+        let remainingWidth = ExteraSettings.shared.centerTitle ? max(0.0, availableTitleWidth) : availableTitleWidth
 
         let titleTextSize = self.titleTextView.updateLayout(CGSize(width: remainingWidth, height: size.height))
         let titleFrame = navigationBarCenteredFrame(size: titleTextSize, rowSize: size)
@@ -534,7 +536,13 @@ final class NavigationBarContentView: UIView {
             customTitleView.view?.removeFromSuperview()
         }
 
-        let centerContentInsets = navigationBarCenterContentInsets(leftExtent: leftExtent, rightExtent: rightExtent)
+        let centerContentInsets: (left: CGFloat, right: CGFloat)
+        if ExteraSettings.shared.centerTitle {
+            let inset = max(leftExtent, rightExtent) + 4.0
+            centerContentInsets = (inset, inset)
+        } else {
+            centerContentInsets = navigationBarCenterContentInsets(leftExtent: leftExtent, rightExtent: rightExtent)
+        }
         self.centerContentLeftInset = centerContentInsets.left
         self.centerContentRightInset = centerContentInsets.right
 

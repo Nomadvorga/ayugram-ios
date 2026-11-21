@@ -2243,6 +2243,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             displayMode = .aspectFit
         }
         self.backgroundNode.updateLayout(size: wallpaperBounds.size, displayMode: displayMode, transition: transition)
+        // Cover the complete wallpaper surface (not the message list's visible inset).
+        // Wallpaper implementations may replace child views when their theme changes.
+        self.ayuSnowView.frame = CGRect(origin: .zero, size: wallpaperBounds.size)
+        self.backgroundNode.view.bringSubviewToFront(self.ayuSnowView)
 
         transition.updateBounds(node: self.historyNodeContainer, bounds: contentBounds)
         transition.updatePosition(node: self.historyNodeContainer, position: contentBounds.center)

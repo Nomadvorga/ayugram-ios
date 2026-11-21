@@ -22,6 +22,7 @@ private enum SGControllerSection: Int32, SGItemListSection {
     case general
     case speedBoost
     case sending
+    case avatarCorners
     case appearance
     case tabs
     case folders
@@ -48,6 +49,8 @@ private enum SGBoolSetting: String {
     case sendWithReturnKey
     case hideAccountInNotifications
     case forceSnow
+    case centerTitle
+    case singleCornerRadius
     case hideStories
     case showNavigationBar
     case hideNavigationBarLabels
@@ -83,11 +86,13 @@ private enum SGBoolSetting: String {
 }
 
 private enum SGOneFromManySetting: String {
+    case chatListTitle
     case downloadSpeedBoost
     case allChatsTitle
 }
 
 private enum SGSliderSetting: String {
+    case avatarCorners
     case accountColorsSaturation
 }
 
@@ -109,7 +114,7 @@ public enum SGSettingsCategory {
         case .general:
             return [.general, .speedBoost, .sending]
         case .appearance:
-            return [.appearance, .tabs, .folders, .chatList, .accountColors]
+            return [.avatarCorners, .appearance, .tabs, .folders, .chatList, .accountColors]
         case .chats:
             return [.chats, .gestures, .stickers]
         case .other:
@@ -131,14 +136,23 @@ public enum SGSettingsCategory {
     }
 }
 
+private func chatListTitleOption(_ value: ExteraSettings.ChatListTitle, lang: String) -> String {
+    switch value {
+    case .ayuGram: return "AyuGram"
+    case .fullName: return i18n("Extera.ActionBarTitleFullName", lang)
+    case .firstName: return i18n("Extera.ActionBarTitleName", lang)
+    case .chats: return i18n("Extera.ActionBarTitleChats", lang)
+    }
+}
+
 private struct SGSettingsControllerState: Equatable {
     var searchQuery: String?
 }
 
 private typealias SGControllerEntry = SGItemListUIEntry<SGControllerSection, SGBoolSetting, SGSliderSetting, SGOneFromManySetting, SGDisclosureLink, AnyHashable>
 
-private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, nameColors: PeerNameColors, state: SGSettingsControllerState, category: SGSettingsCategory?) -> [SGControllerEntry] {
-    let allEntries = SGControllerAllEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, nameColors: nameColors, state: state)
+private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String, category: SGSettingsCategory?) -> [SGControllerEntry] {
+    let allEntries = SGControllerAllEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, nameColors: nameColors, state: state, previewTitle: previewTitle)
     if let category {
         return allEntries.filter { entry in
             return category.sections.contains(where: { $0.rawValue == entry.section })
@@ -159,7 +173,7 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     return entries
 }
 
-private func SGControllerAllEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, nameColors: PeerNameColors, state: SGSettingsControllerState) -> [SGControllerEntry] {
+private func SGControllerAllEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String) -> [SGControllerEntry] {
     let lang = presentationData.strings.baseLanguageCode
     let strings = presentationData.strings
     let settings = SGSimpleSettings.shared
@@ -184,10 +198,21 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.notice(id: id.count, section: .sending, text: i18n("Settings.Photo.SendLarge.Notice", lang)))
     entries.append(.toggle(id: id.count, section: .sending, settingName: .sendWithReturnKey, value: settings.sendWithReturnKey, text: i18n("Settings.SendWithReturnKey", lang), enabled: true))
 
-    // Appearance: exteraGram first, then the navigation bar, folders, chat list and name colors.
-    entries.append(.header(id: id.count, section: .appearance, text: i18n("Extera.Appearance", lang).uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .appearance, settingName: .hideStories, value: settings.hideStories, text: i18n("Extera.HideStories", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .appearance, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
+    // Appearance: exteraGram's avatar shape comes before the Chat List section.
+    entries.append(.appearancePreview(id: id.count, section: .avatarCorners, kind: .avatar(value: Int32(ExteraSettings.shared.avatarCorners), title: i18n("Extera.AvatarCorners", lang), square: i18n("Extera.AvatarSquare", lang), circle: i18n("Extera.AvatarCircle", lang)), settingName: .avatarCorners))
+    entries.append(.toggle(id: id.count, section: .avatarCorners, settingName: .singleCornerRadius, value: ExteraSettings.shared.singleCornerRadius, text: i18n("Extera.SingleCornerRadius", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .avatarCorners, text: i18n("Extera.SingleCornerRadiusInfo", lang)))
+
+    // Appearance: Chat List settings follow the avatar preview, as in AyuGram.
+    entries.append(.header(id: id.count, section: .chatList, text: i18n("Extera.ListOfChats", lang).uppercased(), badge: nil))
+    entries.append(.appearancePreview(id: id.count, section: .chatList, kind: .chatList(title: previewTitle, centered: ExteraSettings.shared.centerTitle, snow: ExteraSettings.shared.forceSnow), settingName: nil))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .forceSnow, value: ExteraSettings.shared.forceSnow, text: i18n("Extera.ForceSnow", lang, "Force Snow"), enabled: true))
+    entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.ForceSnowInfo", lang)))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .centerTitle, value: ExteraSettings.shared.centerTitle, text: i18n("Extera.CenterTitle", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideStories, value: settings.hideStories, text: i18n("Extera.HideStories", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .chatList, settingName: .chatListTitle, text: i18n("Extera.ActionBarTitle", lang), value: chatListTitleOption(ExteraSettings.shared.chatListTitle, lang: lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .tabs, text: i18n("Extera.BottomNavigationBarMode", lang).uppercased(), badge: nil))
     entries.append(.toggle(id: id.count, section: .tabs, settingName: .showNavigationBar, value: !settings.hideTabBar, text: i18n("Extera.BottomNavigationBarMode", lang), enabled: true))
@@ -205,10 +230,6 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .folders, settingName: .rememberLastFolder, value: settings.rememberLastFolder, text: i18n("Settings.Folders.RememberLast", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .folders, text: i18n("Settings.Folders.RememberLast.Notice", lang)))
 
-    entries.append(.header(id: id.count, section: .chatList, text: i18n("Extera.ListOfChats", lang).uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .chatList, settingName: .forceSnow, value: ExteraSettings.shared.forceSnow, text: i18n("Extera.ForceSnow", lang, "Force Snow"), enabled: true))
-    entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.ForceSnowInfo", lang, "Show snow in chats and their headers all year round.")))
-    entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .accountColors, text: i18n("Settings.CustomColors.Header", lang), badge: nil))
     entries.append(.header(id: id.count, section: .accountColors, text: i18n("Settings.CustomColors.Saturation", lang), badge: nil))
@@ -305,6 +326,13 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         switch setting {
         case .forceSnow:
             ExteraSettings.shared.set(.forceSnow, value)
+            simplePromise.set(true)
+        case .centerTitle:
+            ExteraSettings.shared.set(.centerTitle, value)
+            simplePromise.set(true)
+        case .singleCornerRadius:
+            ExteraSettings.shared.set(.singleCornerRadius, value)
+            simplePromise.set(true)
         case .inAppVibration:
             ExteraSettings.shared.set(.inAppVibration, value)
         case .disableNumberRounding:
@@ -411,6 +439,11 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         }
     }, updateSliderValue: { setting, value in
         switch setting {
+        case .avatarCorners:
+            if ExteraSettings.shared.avatarCorners != Int(value) {
+                ExteraSettings.shared.avatarCorners = Int(value)
+                simplePromise.set(true)
+            }
         case .accountColorsSaturation:
             if SGSimpleSettings.shared.accountColorsSaturation != value {
                 SGSimpleSettings.shared.accountColorsSaturation = value
@@ -422,6 +455,13 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         let lang = presentationData.strings.baseLanguageCode
         var options: [SGOneFromManyOption] = []
         switch setting {
+        case .chatListTitle:
+            for value in ExteraSettings.ChatListTitle.allCases {
+                options.append(SGOneFromManyOption(title: chatListTitleOption(value, lang: lang), isSelected: ExteraSettings.shared.chatListTitle == value, action: {
+                    ExteraSettings.shared.chatListTitle = value
+                    simplePromise.set(true)
+                }))
+            }
         case .downloadSpeedBoost:
             for value in SGSimpleSettings.DownloadSpeedBoostValues.allCases {
                 options.append(SGOneFromManyOption(title: downloadSpeedBoostTitle(value.rawValue, lang: lang), isSelected: SGSimpleSettings.shared.downloadSpeedBoost == value.rawValue, action: {
@@ -482,13 +522,24 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         context.sharedContext.presentationData,
         sharedData,
         context.engine.accountData.observeAvailableColorOptions(scope: .replies),
-        context.engine.accountData.observeAvailableColorOptions(scope: .profile)
+        context.engine.accountData.observeAvailableColorOptions(scope: .profile),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
     )
-    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors, accountPeer -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let callListSettings: CallListSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.callListSettings]?.get(CallListSettings.self) ?? CallListSettings.defaultSettings
         let experimentalUISettings: ExperimentalUISettings = sharedData.entries[ApplicationSpecificSharedDataKeys.experimentalUISettings]?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
         let nameColors = PeerNameColors.with(availableReplyColors: availableReplyColors, availableProfileColors: availableProfileColors)
-        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, nameColors: nameColors, state: state, category: category)
+        let firstName: String
+        let lastName: String
+        if let accountPeer, case let .user(user) = accountPeer {
+            firstName = user.firstName ?? ""
+            lastName = user.lastName ?? ""
+        } else {
+            firstName = ""
+            lastName = ""
+        }
+        let previewTitle = ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title)
+        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, nameColors: nameColors, state: state, previewTitle: previewTitle, category: category)
         let title = category.flatMap { i18n($0.titleKey, presentationData.strings.baseLanguageCode) } ?? "exteraGram"
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)

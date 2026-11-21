@@ -1,3 +1,4 @@
+import AyuSnowEffect
 import SGSimpleSettings // MARK: Swiftgram
 import Foundation
 import UIKit
@@ -1179,6 +1180,10 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
 }
 
 final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
+    private let ayuHeaderSnowView = AyuSnowView(style: .header)
+    var ayuSnowIsActive = false {
+        didSet { self.ayuHeaderSnowView.isActive = self.ayuSnowIsActive }
+    }
     private let context: AccountContext
     private let location: ChatListControllerLocation
     private var presentationData: PresentationData
@@ -1828,6 +1833,14 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 self.view.addSubview(navigationBarComponentView)
             }
             transition.setFrame(view: navigationBarComponentView, frame: CGRect(origin: CGPoint(), size: navigationBarSize))
+            // The list uses a component header, not the legacy controller navigationBar.
+            // Keep snow over the title row, never over the search field or stories.
+            if self.ayuHeaderSnowView.superview !== navigationBarComponentView {
+                navigationBarComponentView.addSubview(self.ayuHeaderSnowView)
+            }
+            self.ayuHeaderSnowView.color = self.presentationData.theme.rootController.navigationBar.primaryTextColor
+            self.ayuHeaderSnowView.frame = CGRect(x: layout.safeInsets.left, y: 0.0, width: max(0.0, navigationBarSize.width - layout.safeInsets.left - layout.safeInsets.right), height: min(navigationBarSize.height, (layout.navigationBarStatusBarHeight ?? 0.0) + 56.0))
+            self.ayuHeaderSnowView.isActive = self.ayuSnowIsActive && self.isSearchDisplayControllerActive == nil
             
             return (tabs, navigationBarSize.height, 0.0) // MARK: Swiftgram
         } else {

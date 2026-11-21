@@ -13,6 +13,17 @@ public final class ExteraSettings {
         case disableGreetingSticker
         case filterZalgo
         case forceSnow
+        case centerTitle
+        case singleCornerRadius
+        case avatarCorners
+        case chatListTitle
+    }
+
+    public enum ChatListTitle: Int, CaseIterable {
+        case ayuGram = 0
+        case fullName = 1
+        case firstName = 2
+        case chats = 3
     }
 
     private let store = AyuSettingsStore.shared
@@ -30,6 +41,10 @@ public final class ExteraSettings {
             ExteraSettings.key(.disableGreetingSticker): false,
             ExteraSettings.key(.filterZalgo): false,
             ExteraSettings.key(.forceSnow): false,
+            ExteraSettings.key(.centerTitle): false,
+            ExteraSettings.key(.singleCornerRadius): false,
+            ExteraSettings.key(.avatarCorners): 28,
+            ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
         ])
     }
 
@@ -59,6 +74,55 @@ public final class ExteraSettings {
 
     public var disableGreetingSticker: Bool {
         return self.value(.disableGreetingSticker)
+    }
+
+    public var centerTitle: Bool {
+        return self.value(.centerTitle)
+    }
+
+    public var singleCornerRadius: Bool {
+        return self.value(.singleCornerRadius)
+    }
+
+    public var avatarCorners: Int {
+        get { return min(28, max(0, self.store.int(ExteraSettings.key(.avatarCorners)))) }
+        set {
+            let value = min(28, max(0, newValue))
+            if value != self.avatarCorners {
+                self.store.setInt(value, ExteraSettings.key(.avatarCorners))
+            }
+        }
+    }
+
+    // Stateless geometry: caller applies it only when settings, scope or size change.
+    public func avatarCornerRadius(forDiameter diameter: Double, isForum: Bool = false) -> Double {
+        if isForum && !self.singleCornerRadius {
+            return floor(max(0.0, diameter) * 0.25)
+        }
+        return floor(max(0.0, diameter) * 0.5 * Double(self.avatarCorners) / 28.0)
+    }
+
+    public var chatListTitle: ChatListTitle {
+        get { return ChatListTitle(rawValue: self.store.int(ExteraSettings.key(.chatListTitle))) ?? .ayuGram }
+        set {
+            if newValue != self.chatListTitle {
+                self.store.setInt(newValue.rawValue, ExteraSettings.key(.chatListTitle))
+            }
+        }
+    }
+
+    public func chatListTitleText(firstName: String, lastName: String, chatsTitle: String) -> String {
+        switch self.chatListTitle {
+        case .ayuGram:
+            return "AyuGram"
+        case .chats:
+            return chatsTitle
+        case .fullName:
+            let name = [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+            return name.isEmpty ? "AyuGram" : name
+        case .firstName:
+            return firstName.isEmpty ? "AyuGram" : firstName
+        }
     }
 
     public var forceSnow: Bool {

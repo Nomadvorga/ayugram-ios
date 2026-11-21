@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 
 // Navigation bar titles are centered in the band between the side safe insets (`leftInset` to
@@ -10,6 +11,11 @@ import UIKit
 /// 16pt; a left side without buttons mirrors the right buttons' margin beyond the right inset (not the
 /// inset itself, which belongs to the right side only).
 public func navigationBarTitleInsets(leftInset: CGFloat, rightInset: CGFloat, leftTitleInset: CGFloat, rightTitleInset: CGFloat) -> (left: CGFloat, right: CGFloat) {
+    if ExteraSettings.shared.centerTitle {
+        // Narrow symmetrically around the safe-area band's axis rather than shifting a long title.
+        let margin = max(0.0, max(leftTitleInset - leftInset, rightTitleInset - rightInset))
+        return (leftInset + margin, rightInset + margin)
+    }
     var left = leftTitleInset
     var right = rightTitleInset
     if (left == leftInset) != (right == rightInset) {

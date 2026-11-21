@@ -1188,7 +1188,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     public func setCustomLetters(context: AccountContext, theme: PresentationTheme, synchronousLoad: Bool, letters: [String], emptyColor: UIColor) {
         self.containerNode.isGestureEnabled = false
 
-        self.avatarNode.setCustomLetters(letters, icon: !letters.isEmpty ? nil : .phone)
+        self.avatarNode.setCustomLetters(letters, icon: !letters.isEmpty ? nil : .phone, roundingScope: .chatMessage)
     }
     
     public func updatePeer(peer enginePeer: EnginePeer) {
@@ -1196,9 +1196,9 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         if let previousPeer = self.peer?._asPeer(), previousPeer.nameColor != peer.nameColor || previousPeer.smallProfileImage != peer.smallProfileImage || previousPeer.displayLetters != peer.displayLetters {
             self.peer = enginePeer
             if peer.smallProfileImage != nil {
-                self.avatarNode.setPeerV2(context: self.context, theme: self.presentationData.theme.theme, peer: enginePeer, authorOfMessage: self.messageReference, overrideImage: nil, emptyColor: .black, synchronousLoad: false, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
+                self.avatarNode.setPeerV2(context: self.context, theme: self.presentationData.theme.theme, peer: enginePeer, authorOfMessage: self.messageReference, overrideImage: nil, emptyColor: .black, synchronousLoad: false, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()), roundingScope: .chatMessage)
             } else {
-                self.avatarNode.setPeer(context: self.context, theme: self.presentationData.theme.theme, peer: enginePeer, authorOfMessage: self.messageReference, overrideImage: nil, emptyColor: .black, synchronousLoad: false, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
+                self.avatarNode.setPeer(context: self.context, theme: self.presentationData.theme.theme, peer: enginePeer, authorOfMessage: self.messageReference, overrideImage: nil, emptyColor: .black, synchronousLoad: false, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()), roundingScope: .chatMessage)
             }
         }
     }
@@ -1216,9 +1216,9 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
             overrideImage = .deletedIcon
         }
         if peer.smallProfileImage != nil {
-            self.avatarNode.setPeerV2(context: context, theme: theme, peer: enginePeer, authorOfMessage: authorOfMessage, overrideImage: overrideImage, emptyColor: emptyColor, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
+            self.avatarNode.setPeerV2(context: context, theme: theme, peer: enginePeer, authorOfMessage: authorOfMessage, overrideImage: overrideImage, emptyColor: emptyColor, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()), roundingScope: .chatMessage)
         } else {
-            self.avatarNode.setPeer(context: context, theme: theme, peer: enginePeer, authorOfMessage: authorOfMessage, overrideImage: overrideImage, emptyColor: emptyColor, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
+            self.avatarNode.setPeer(context: context, theme: theme, peer: enginePeer, authorOfMessage: authorOfMessage, overrideImage: overrideImage, emptyColor: emptyColor, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()), roundingScope: .chatMessage)
         }
         
         if peer.isPremium && context.sharedContext.energyUsageSettings.autoplayVideo {
@@ -1460,7 +1460,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         self.avatarVideoNode?.updateVisibility(isVisible)
       
         if let videoNode = self.avatarVideoNode {
-            videoNode.updateLayout(size: self.avatarNode.bounds.size, cornerRadius: self.avatarNode.bounds.size.width / 2.0, transition: .immediate)
+            videoNode.updateLayout(size: self.avatarNode.bounds.size, cornerRadius: self.avatarNode.ayuVideoCornerRadius(size: self.avatarNode.bounds.size), transition: .immediate)
             videoNode.frame = self.avatarNode.bounds
         }
     }

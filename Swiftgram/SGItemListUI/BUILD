@@ -24,6 +24,7 @@ swift_library(
         "//submodules/AppBundle:AppBundle",
         "//submodules/TelegramUI/Components/Settings/PeerNameColorScreen",
         "//submodules/ComponentFlow",
+        "//submodules/AyuSnowEffect:AyuSnowEffect",
         "//submodules/TelegramUI/Components/SliderComponent",
     ],
     visibility = [

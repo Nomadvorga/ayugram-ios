@@ -82,6 +82,7 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
     case toggle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, enabled: Bool)
     case notice(id: Int, section: Section, text: String)
     case percentageSlider(id: Int, section: Section, settingName: SliderSetting, value: Int32)
+    case appearancePreview(id: Int, section: Section, kind: AyuAppearancePreviewKind, settingName: SliderSetting?)
     case oneFromManySelector(id: Int, section: Section, settingName: OneFromManySetting, text: String, value: String, enabled: Bool)
     case disclosure(id: Int, section: Section, link: DisclosureLink, text: String)
     case peerColorDisclosurePreview(id: Int, section: Section, name: String, color: UIColor)
@@ -100,6 +101,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         case let .disclosure(_, sectionId, _, _):
             return sectionId.rawValue
 
+        case let .appearancePreview(_, sectionId, _, _):
+            return sectionId.rawValue
         case let .percentageSlider(_, sectionId, _, _):
             return sectionId.rawValue
             
@@ -125,6 +128,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         case let .notice(stableIdValue, _, _):
             return stableIdValue
         case let .disclosure(stableIdValue, _, _, _):
+            return stableIdValue
+        case let .appearancePreview(stableIdValue, _, _, _):
             return stableIdValue
         case let .percentageSlider(stableIdValue, _, _, _):
             return stableIdValue
@@ -154,6 +159,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         case let (.notice(id1, section1, text1), .notice(id2, section2, text2)):
             return id1 == id2 && section1 == section2 && text1 == text2
         
+        case let (.appearancePreview(id1, section1, kind1, setting1), .appearancePreview(id2, section2, kind2, setting2)):
+            return id1 == id2 && section1 == section2 && kind1 == kind2 && setting1 == setting2
         case let (.percentageSlider(id1, section1, settingName1, value1), .percentageSlider(id2, section2, settingName2, value2)):
             return id1 == id2 && section1 == section2 && value1 == value2 && settingName1 == settingName2
             
@@ -193,6 +200,12 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: "", sectionId: self.section, style: .blocks) {
                 arguments.openDisclosureLink(link)
             }
+        case let .appearancePreview(_, _, kind, setting):
+            return AyuAppearancePreviewItem(theme: presentationData.theme, sectionId: self.section, kind: kind, updated: { value in
+                if let setting {
+                    arguments.updateSliderValue(setting, value)
+                }
+            })
         case let .percentageSlider(_, _, setting, value):
             return SliderPercentageItem(
                 theme: presentationData.theme,
@@ -247,6 +260,11 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
             return text.lowercased().contains(query)
         case .notice(_, _, let text):
             return text.lowercased().contains(query)
+        case let .appearancePreview(_, _, kind, _):
+            if case let .avatar(_, title, _, _) = kind {
+                return title.lowercased().contains(query)
+            }
+            return false
         case .percentageSlider:
             return false // Assuming percentage sliders don't have searchable text
         case .oneFromManySelector(_, _, _, let text, let value, _):

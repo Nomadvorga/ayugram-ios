@@ -2186,12 +2186,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 avatarClipStyle = .round
             }
 
+            let avatarRoundingScope: AyuAvatarRoundingScope? = peerIsMonoforum ? nil : .chatList(isForum: isForumAvatar)
             if item.useCommunityViewLayout {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: nil)
+                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: nil, roundingScope: avatarRoundingScope)
             } else if avatarPeer.smallProfileImage != nil && overrideImage == nil {
-                self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
+                self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), roundingScope: avatarRoundingScope)
             } else {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: 60.0, height: 60.0))
+                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), roundingScope: avatarRoundingScope)
             }
             
             if peer.isPremium && peer.id != item.context.account.peerId {
@@ -5952,7 +5953,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.avatarVideoNode?.updateVisibility(isVisible)
       
         if let videoNode = self.avatarVideoNode {
-            videoNode.updateLayout(size: self.avatarNode.frame.size, cornerRadius: self.avatarNode.frame.size.width / 2.0, transition: .immediate)
+            videoNode.updateLayout(size: self.avatarNode.frame.size, cornerRadius: self.avatarNode.ayuVideoCornerRadius(size: self.avatarNode.frame.size), transition: .immediate)
             videoNode.frame = self.avatarNode.bounds
         }
     }

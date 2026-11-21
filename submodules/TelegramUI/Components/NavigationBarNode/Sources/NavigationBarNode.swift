@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -41,6 +42,9 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
     private var presentationData: NavigationBarPresentationData
     private var validLayout: Layout?
     private var requestedLayout = false
+    private var ayuTitleSettingsObserver: NSObjectProtocol?
+    private var ayuCenterTitle = ExteraSettings.shared.centerTitle
+    private var ayuHiddenTitleView: (view: UIView, wasHidden: Bool)?
     private var requestedTransition: ContainedViewLayoutTransition = .immediate
     public var requestContainerLayout: ((ContainedViewLayoutTransition) -> Void)?
 
@@ -174,6 +178,23 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
 
         self.backgroundColor = nil
         self.isOpaque = false
+
+        self.ayuTitleSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else {
+                return
+            }
+            let centerTitle = ExteraSettings.shared.centerTitle
+            if self.ayuCenterTitle != centerTitle {
+                self.ayuCenterTitle = centerTitle
+                self.requestLayout()
+            }
+        }
+    }
+
+    deinit {
+        if let observer = self.ayuTitleSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     // MARK: - Item
@@ -521,6 +542,10 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
 
     /// `NavigationBarImpl`'s title-view placement, against the row's button widths.
     private func layoutTitleView(layout: Layout, rowView: NavigationBarComponent.View, contentVerticalOrigin: CGFloat, transition: ContainedViewLayoutTransition) {
+        if let hiddenTitleView = self.ayuHiddenTitleView {
+            hiddenTitleView.view.isHidden = hiddenTitleView.wasHidden
+            self.ayuHiddenTitleView = nil
+        }
         guard let titleView = self.titleView else {
             return
         }
@@ -536,13 +561,18 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
             rightTitleInset = layout.rightInset + self.trailingButtonsInset + 16.0 + rowView.primaryRightButtonsWidth + 10.0
         }
         (leftTitleInset, rightTitleInset) = navigationBarTitleInsets(leftInset: layout.leftInset, rightInset: layout.rightInset, leftTitleInset: leftTitleInset, rightTitleInset: rightTitleInset)
+        let availableTitleWidth = size.width - leftTitleInset - rightTitleInset
+        if ExteraSettings.shared.centerTitle && availableTitleWidth <= 0.0 {
+            self.ayuHiddenTitleView = (titleView, titleView.isHidden)
+            titleView.isHidden = true
+        }
 
         if let titleView = titleView as? NavigationBarTitleView {
             var titleViewTransition = transition
             if titleView.frame.isEmpty {
                 titleViewTransition = .immediate
             }
-            let titleSize = titleView.updateLayout(availableSize: CGSize(width: size.width - leftTitleInset - rightTitleInset, height: nominalHeight), transition: titleViewTransition)
+            let titleSize = titleView.updateLayout(availableSize: CGSize(width: ExteraSettings.shared.centerTitle ? max(0.0, availableTitleWidth) : availableTitleWidth, height: nominalHeight), transition: titleViewTransition)
             let titleX = navigationBarTitleViewOriginX(width: size.width, leftInset: layout.leftInset, rightInset: layout.rightInset, leftTitleInset: leftTitleInset, rightTitleInset: rightTitleInset, titleWidth: titleSize.width)
             let titleFrame = CGRect(origin: CGPoint(x: titleX, y: contentVerticalOrigin + floorToScreenPixels((nominalHeight - titleSize.height) / 2.0)), size: titleSize)
             titleViewTransition.updateFrame(view: titleView, frame: titleFrame)

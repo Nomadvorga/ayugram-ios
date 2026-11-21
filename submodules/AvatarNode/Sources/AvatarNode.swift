@@ -14,6 +14,7 @@ import Accelerate
 import ComponentFlow
 import AvatarStoryIndicatorComponent
 import DirectMediaImageCache
+import SGSimpleSettings
 
 private let deletedIcon = UIImage(bundleImageName: "Avatar/DeletedIcon")?.precomposed()
 private let phoneIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/PhoneIcon"), color: .white)
@@ -44,6 +45,29 @@ public enum AvatarNodeClipStyle {
     case round
     case roundedRect
     case bubble
+}
+
+/// Opt-in presentation geometry; unrelated avatars retain Telegram's geometry.
+public enum AyuAvatarRoundingScope: Equatable {
+    case chatList(isForum: Bool)
+    case chatMessage
+}
+
+// Main-thread-only weak ownership. No per-avatar observer, image regeneration,
+// timer, polling, or per-frame work is needed when settings change.
+private let ayuScopedAvatarNodes = NSHashTable<AvatarNode>.weakObjects()
+private let ayuAvatarRoundingObserver: NSObjectProtocol = NotificationCenter.default.addObserver(
+    forName: ayuSettingsDidChangeNotification,
+    object: nil,
+    queue: .main,
+    using: { _ in ayuRefreshVisibleAvatarRounding() }
+)
+
+public func ayuRefreshVisibleAvatarRounding() {
+    assert(Thread.isMainThread)
+    for node in ayuScopedAvatarNodes.allObjects {
+        node.ayuApplyRoundingScope()
+    }
 }
 
 public final class AvatarNodeParameters: NSObject {
@@ -1154,7 +1178,25 @@ public final class AvatarNode: ASDisplayNode {
             }
         }
         
-        public func setCustomLetters(_ letters: [String], explicitColor: AvatarNodeColorOverride? = nil, icon: AvatarNodeExplicitIcon? = nil, cutoutRect: CGRect? = nil) {
+        fileprivate func ayuPrepareUnroundedSource() {
+            if self.imageNode.clipsToBounds {
+                self.imageNode.clipsToBounds = false
+            }
+            if self.imageNode.cornerRadius != 0.0 {
+                self.imageNode.cornerRadius = 0.0
+            }
+            if self.imageNodeMask != nil {
+                self.imageNodeMask = nil
+                self.imageNode.view.mask = nil
+            }
+            if self.params != nil {
+                self.params = nil
+                self.loadDisposable.set(nil)
+                self.state = .empty
+            }
+        }
+
+        public func setCustomLetters(_ letters: [String], explicitColor: AvatarNodeColorOverride? = nil, icon: AvatarNodeExplicitIcon? = nil, cutoutRect: CGRect? = nil, clipStyle: AvatarNodeClipStyle = .round) {
             var explicitIndex: Int?
             if let explicitColor = explicitColor {
                 switch explicitColor {
@@ -1163,14 +1205,17 @@ public final class AvatarNode: ASDisplayNode {
                 }
             }
             let updatedState: AvatarNodeState = .custom(letter: letters, explicitColorIndex: explicitIndex, explicitIcon: icon)
-            if updatedState != self.state {
+            if updatedState != self.state || self.parameters?.clipStyle != clipStyle {
                 self.state = updatedState
+                if clipStyle == .none {
+                    self.imageNode.contents = nil
+                }
                 
                 let parameters: AvatarNodeParameters
                 if let icon = icon, case .phone = icon {
-                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateAvatarColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .phoneIcon, theme: nil), letters: [], font: self.font, icon: .phoneIcon, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round, cutoutRect: cutoutRect)
+                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateAvatarColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .phoneIcon, theme: nil), letters: [], font: self.font, icon: .phoneIcon, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: clipStyle, cutoutRect: cutoutRect)
                 } else {
-                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateAvatarColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .none, theme: nil), letters: letters, font: self.font, icon: .none, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round, cutoutRect: cutoutRect)
+                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateAvatarColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .none, theme: nil), letters: letters, font: self.font, icon: .none, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: clipStyle, cutoutRect: cutoutRect)
                 }
                 
                 self.displaySuspended = true
@@ -1196,6 +1241,8 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public let contentNode: ContentNode
+    private var ayuRoundingScope: AyuAvatarRoundingScope?
+    private var ayuRoundingSize: CGSize = .zero
     private var storyIndicator: ComponentView<Empty>?
     public private(set) var storyPresentationParams: StoryPresentationParams?
     
@@ -1301,11 +1348,63 @@ public final class AvatarNode: ASDisplayNode {
         super.nodeDidLoad()
     }
     
+    private func ayuSetRoundingScope(_ scope: AyuAvatarRoundingScope?, size: CGSize) {
+        guard scope != nil || self.ayuRoundingScope != nil else {
+            return
+        }
+        assert(Thread.isMainThread)
+        let previousScope = self.ayuRoundingScope
+        self.ayuRoundingScope = scope
+        self.ayuRoundingSize = size
+        if scope != nil {
+            _ = ayuAvatarRoundingObserver
+            ayuScopedAvatarNodes.add(self)
+        } else {
+            ayuScopedAvatarNodes.remove(self)
+        }
+        if scope != nil || previousScope != nil {
+            self.ayuApplyRoundingScope()
+        }
+    }
+
+    fileprivate func ayuApplyRoundingScope() {
+        let radius: CGFloat
+        if let scope = self.ayuRoundingScope {
+            let isForum: Bool
+            switch scope {
+            case let .chatList(forum):
+                isForum = forum
+            case .chatMessage:
+                isForum = false
+            }
+            let diameter = min(self.ayuRoundingSize.width, self.ayuRoundingSize.height)
+            radius = CGFloat(ExteraSettings.shared.avatarCornerRadius(forDiameter: Double(diameter), isForum: isForum))
+        } else {
+            radius = 0.0
+        }
+        let clipsToBounds = self.ayuRoundingScope != nil
+        if self.contentNode.clipsToBounds != clipsToBounds {
+            self.contentNode.clipsToBounds = clipsToBounds
+        }
+        if self.contentNode.cornerRadius != radius {
+            self.contentNode.cornerRadius = radius
+        }
+    }
+
+    /// Video children must stay unrounded when the scoped parent owns clipping.
+    public func ayuVideoCornerRadius(size: CGSize) -> CGFloat {
+        return self.ayuRoundingScope == nil ? size.width * 0.5 : 0.0
+    }
+
     public func updateSize(size: CGSize) {
         self.contentNode.position = CGRect(origin: CGPoint(), size: size).center
         self.contentNode.bounds = CGRect(origin: CGPoint(), size: size)
         
         self.contentNode.updateSize(size: size)
+        if self.ayuRoundingScope != nil && self.ayuRoundingSize != size {
+            self.ayuRoundingSize = size
+            self.ayuApplyRoundingScope()
+        }
         
         self.updateStoryIndicator(transition: .immediate)
     }
@@ -1335,8 +1434,13 @@ public final class AvatarNode: ASDisplayNode {
         clipStyle: AvatarNodeClipStyle = .round,
         synchronousLoad: Bool = false,
         displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
-        storeUnrounded: Bool = false
+        storeUnrounded: Bool = false,
+        roundingScope: AyuAvatarRoundingScope? = nil
     ) {
+        let roundingScope = clipStyle == .bubble ? nil : roundingScope
+        if roundingScope != nil {
+            self.contentNode.ayuPrepareUnroundedSource()
+        }
         self.contentNode.setPeer(
             accountPeerId: accountPeerId,
             postbox: postbox,
@@ -1347,11 +1451,12 @@ public final class AvatarNode: ASDisplayNode {
             authorOfMessage: authorOfMessage,
             overrideImage: overrideImage,
             emptyColor: emptyColor,
-            clipStyle: clipStyle,
+            clipStyle: roundingScope == nil ? clipStyle : .none,
             synchronousLoad: synchronousLoad,
             displayDimensions: displayDimensions,
             storeUnrounded: storeUnrounded
         )
+        self.ayuSetRoundingScope(roundingScope, size: displayDimensions)
     }
     
     public func setPeerV2(
@@ -1364,8 +1469,10 @@ public final class AvatarNode: ASDisplayNode {
         clipStyle: AvatarNodeClipStyle = .round,
         synchronousLoad: Bool = false,
         displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
-        storeUnrounded: Bool = false
+        storeUnrounded: Bool = false,
+        roundingScope: AyuAvatarRoundingScope? = nil
     ) {
+        let roundingScope = clipStyle == .bubble ? nil : roundingScope
         self.contentNode.setPeerV2(
             context: genericContext,
             theme: theme,
@@ -1373,11 +1480,12 @@ public final class AvatarNode: ASDisplayNode {
             authorOfMessage: authorOfMessage,
             overrideImage: overrideImage,
             emptyColor: emptyColor,
-            clipStyle: clipStyle,
+            clipStyle: roundingScope == nil ? clipStyle : .none,
             synchronousLoad: synchronousLoad,
             displayDimensions: displayDimensions,
             storeUnrounded: storeUnrounded
         )
+        self.ayuSetRoundingScope(roundingScope, size: displayDimensions)
     }
     
     public func setPeer(
@@ -1392,8 +1500,13 @@ public final class AvatarNode: ASDisplayNode {
         synchronousLoad: Bool = false,
         displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
         storeUnrounded: Bool = false,
-        cutoutRect: CGRect? = nil
+        cutoutRect: CGRect? = nil,
+        roundingScope: AyuAvatarRoundingScope? = nil
     ) {
+        let roundingScope = clipStyle == .bubble ? nil : roundingScope
+        if roundingScope != nil {
+            self.contentNode.ayuPrepareUnroundedSource()
+        }
         self.contentNode.setPeer(
             context: context,
             account: account,
@@ -1402,16 +1515,21 @@ public final class AvatarNode: ASDisplayNode {
             authorOfMessage: authorOfMessage,
             overrideImage: overrideImage,
             emptyColor: emptyColor,
-            clipStyle: clipStyle,
+            clipStyle: roundingScope == nil ? clipStyle : .none,
             synchronousLoad: synchronousLoad,
             displayDimensions: displayDimensions,
             storeUnrounded: storeUnrounded,
             cutoutRect: cutoutRect
         )
+        self.ayuSetRoundingScope(roundingScope, size: displayDimensions)
     }
     
-    public func setCustomLetters(_ letters: [String], explicitColor: AvatarNodeColorOverride? = nil, icon: AvatarNodeExplicitIcon? = nil) {
-        self.contentNode.setCustomLetters(letters, explicitColor: explicitColor, icon: icon)
+    public func setCustomLetters(_ letters: [String], explicitColor: AvatarNodeColorOverride? = nil, icon: AvatarNodeExplicitIcon? = nil, roundingScope: AyuAvatarRoundingScope? = nil) {
+        if roundingScope != nil {
+            self.contentNode.ayuPrepareUnroundedSource()
+        }
+        self.contentNode.setCustomLetters(letters, explicitColor: explicitColor, icon: icon, clipStyle: roundingScope == nil ? .round : .none)
+        self.ayuSetRoundingScope(roundingScope, size: self.contentNode.bounds.size)
     }
     
     public func setStoryStats(storyStats: StoryStats?, presentationParams: StoryPresentationParams, transition: ComponentTransition) {

@@ -47,7 +47,8 @@ public final class AyuSnowView: UIView {
         let center = NotificationCenter.default
         var notifications = [ayuSettingsDidChangeNotification, UIApplication.didBecomeActiveNotification,
                              UIApplication.willResignActiveNotification, Notification.Name.NSProcessInfoPowerStateDidChange,
-                             UIAccessibility.reduceMotionStatusDidChangeNotification]
+                             UIAccessibility.reduceMotionStatusDidChangeNotification,
+                             ProcessInfo.thermalStateDidChangeNotification]
         if #available(iOS 13.0, *) {
             notifications.append(contentsOf: [UIScene.didActivateNotification, UIScene.didEnterBackgroundNotification])
         }
@@ -99,7 +100,12 @@ public final class AyuSnowView: UIView {
             self.removeEmitter()
             return
         }
-        let lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let thermalState = ProcessInfo.processInfo.thermalState
+        guard thermalState != .critical else {
+            self.removeEmitter()
+            return
+        }
+        let lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled || thermalState == .serious
         if self.emitter != nil && self.lowPowerMode != lowPowerMode {
             self.removeEmitter()
         }
