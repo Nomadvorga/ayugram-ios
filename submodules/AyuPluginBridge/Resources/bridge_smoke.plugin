@@ -1,0 +1,24 @@
+"""Bundled smoke fixture. Contains no Telegram/network actions."""
+from base_plugin import BasePlugin
+from ui.settings import Header, Switch, Text
+
+__id__ = "ayu_bridge_smoke"
+__name__ = "Bridge smoke test"
+__description__ = "Проверка загрузки, настроек и выключения моста"
+__version__ = "0.1.0"
+
+
+class SmokePlugin(BasePlugin):
+    def on_plugin_load(self):
+        self.set_setting("load_count", int(self.get_setting("load_count", 0)) + 1)
+        self.log("Plugin loaded")
+
+    def create_settings(self):
+        return [
+            Header(text="Мост работает"),
+            Switch(key="enabled_example", text="Пример настройки", default=False),
+            Text(text="Загрузок: " + str(self.get_setting("load_count", 0))),
+        ]
+
+    def on_plugin_unload(self):
+        self.log("Plugin unloaded")
