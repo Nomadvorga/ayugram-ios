@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "bridge": {
+    "name": "AyuGram iOS Android compatibility bridge",
+    "version": "unconfigured"
+  },
+  "python": {
+    "version": null,
+    "implementation": null,
+    "stdlib": []
+  },
+  "modules": {},
+  "java_classes": {},
+  "features": {},
+  "dependencies": {}
+}
