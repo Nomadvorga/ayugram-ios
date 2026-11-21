@@ -12,6 +12,7 @@ public final class ExteraSettings {
         case hideShareButton
         case disableGreetingSticker
         case filterZalgo
+        case forceSnow
     }
 
     private let store = AyuSettingsStore.shared
@@ -28,6 +29,7 @@ public final class ExteraSettings {
             ExteraSettings.key(.hideShareButton): false,
             ExteraSettings.key(.disableGreetingSticker): false,
             ExteraSettings.key(.filterZalgo): false,
+            ExteraSettings.key(.forceSnow): false,
         ])
     }
 
@@ -57,6 +59,10 @@ public final class ExteraSettings {
 
     public var disableGreetingSticker: Bool {
         return self.value(.disableGreetingSticker)
+    }
+
+    public var forceSnow: Bool {
+        return self.value(.forceSnow)
     }
 
     public var filterZalgo: Bool {

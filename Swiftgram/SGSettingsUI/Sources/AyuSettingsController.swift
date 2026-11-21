@@ -29,7 +29,6 @@ private enum AyuBoolSetting: String {
     case hideOnline
     case hideTyping
     case automaticOffline
-    case onlinePulseOnSend
     case markReadAfterAction
     case useScheduledMessages
     case suggestGhostModeBeforeViewingStory
@@ -133,12 +132,11 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideOnline, value: ghost.value(.hideOnline), text: i18n("Ayu.DontSendOnlinePackets", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .hideTyping, value: ghost.value(.hideTyping), text: i18n("Ayu.DontSendUploadProgress", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .automaticOffline, value: ghost.value(.automaticOffline), text: i18n("Ayu.SendOfflinePacketAfterOnline", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .ghostEssentials, settingName: .onlinePulseOnSend, value: ghost.value(.onlinePulseOnSend), text: i18n("Ayu.OnlinePulseOnSend", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostEssentials, text: i18n("Ayu.GhostModeDescription", lang)))
 
     entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .markReadAfterAction, value: ghost.markReadAfterAction, text: i18n("Ayu.MarkReadAfterAction", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.MarkReadAfterActionDescription", lang)))
-    entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .useScheduledMessages, value: ghost.useScheduledMessages, text: i18n("Ayu.UseScheduledMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .useScheduledMessages, value: ghost.value(.useScheduledMessages), text: i18n("Ayu.UseScheduledMessages", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.UseScheduledMessagesDescription", lang)))
     entries.append(.oneFromManySelector(id: id.count, section: .ghostOther, settingName: .sendWithoutSound, text: i18n("Ayu.SendWithoutSoundByDefault", lang), value: sendWithoutSoundTitle(ghost.sendWithoutSound, lang: lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.SendWithoutSoundByDefaultDescription", lang)))
@@ -209,8 +207,6 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 ghost.set(.hideTyping, value)
             case .automaticOffline:
                 ghost.set(.automaticOffline, value)
-            case .onlinePulseOnSend:
-                ghost.set(.onlinePulseOnSend, value)
             case .markReadAfterAction:
                 ghost.markReadAfterAction = value
             case .useScheduledMessages:

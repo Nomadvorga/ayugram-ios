@@ -47,6 +47,7 @@ private enum SGBoolSetting: String {
     case sendLargePhotos
     case sendWithReturnKey
     case hideAccountInNotifications
+    case forceSnow
     case hideStories
     case showNavigationBar
     case hideNavigationBarLabels
@@ -205,6 +206,8 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.notice(id: id.count, section: .folders, text: i18n("Settings.Folders.RememberLast.Notice", lang)))
 
     entries.append(.header(id: id.count, section: .chatList, text: i18n("Extera.ListOfChats", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .forceSnow, value: ExteraSettings.shared.forceSnow, text: i18n("Extera.ForceSnow", lang, "Force Snow"), enabled: true))
+    entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.ForceSnowInfo", lang, "Show snow in chats and their headers all year round.")))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .accountColors, text: i18n("Settings.CustomColors.Header", lang), badge: nil))
@@ -300,6 +303,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         setBoolValue: { setting, value in
         let settings = SGSimpleSettings.shared
         switch setting {
+        case .forceSnow:
+            ExteraSettings.shared.set(.forceSnow, value)
         case .inAppVibration:
             ExteraSettings.shared.set(.inAppVibration, value)
         case .disableNumberRounding:

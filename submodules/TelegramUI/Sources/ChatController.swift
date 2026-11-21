@@ -1,3 +1,4 @@
+import AyuSnowEffect
 import SGSimpleSettings
 import Foundation
 import UIKit
@@ -244,7 +245,9 @@ struct ScrolledToMessageId: Equatable {
     var allowedReplacementDirection: AllowedReplacementDirections
 }
 
-public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
+public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {
+    private let ayuHeaderSnowView = AyuSnowView(style: .header)
+    
     var validLayout: ContainerViewLayout?
     
     public weak var parentController: ViewController?
@@ -7513,6 +7516,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             navigationBarTheme = NavigationBarTheme(rootControllerTheme: self.presentationData.theme, hideBadge: false, edgeEffectColor: .clear, glassStyle: self.presentationInterfaceState.preferredGlassType == .clear ? .clear : .default)
         }
         
+        self.ayuHeaderSnowView.color = navigationBarTheme.primaryTextColor
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: navigationBarTheme, strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)), transition: .immediate)
         
         self.moreBarButton.updateColor(color: presentationTheme.chat.inputPanel.panelControlColor)
@@ -8073,6 +8077,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        self.chatDisplayNode.ayuSnowView.isActive = true
+        if let bar = self.navigationBar {
+            self.ayuHeaderSnowView.color = (self.forcedNavigationBarTheme ?? self.presentationData.theme).rootController.navigationBar.primaryTextColor
+            self.ayuHeaderSnowView.frame = bar.view.bounds
+            self.ayuHeaderSnowView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            bar.view.addSubview(self.ayuHeaderSnowView)
+            self.ayuHeaderSnowView.isActive = true
+        }
         self.forwardSideListAppearance(.didAppear, animated: animated)
         
         self.didAppear = true
@@ -8520,6 +8532,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        self.chatDisplayNode.ayuSnowView.isActive = false
+        self.ayuHeaderSnowView.isActive = false
         self.forwardSideListAppearance(.didDisappear, animated: animated)
     }
     

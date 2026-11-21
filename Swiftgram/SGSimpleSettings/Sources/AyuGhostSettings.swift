@@ -89,9 +89,10 @@ public final class AyuGhostSettings: @unchecked Sendable {
         return self.suppressOnlineStatus && self.value(.automaticOffline)
     }
 
-    // Shows the account online for 0.2 s when it sends a message, then offline again.
+    // Shows the account online for 0.2 s after a regular send, then offline again.
+    // The obsolete onlinePulseOnSend preference is intentionally ignored.
     public var pulseOnlineOnSend: Bool {
-        return self.suppressOnlineStatus && self.value(.onlinePulseOnSend)
+        return self.suppressOnlineStatus && !self.useScheduledMessages
     }
 
     // With read receipts hidden, sending a message to a chat still marks it as read there.
@@ -100,9 +101,10 @@ public final class AyuGhostSettings: @unchecked Sendable {
         set { self.set(.markReadAfterAction, newValue) }
     }
 
-    // Outgoing messages are scheduled a few seconds ahead, so sending them does not make the account online.
+    // Outgoing messages are scheduled a few seconds ahead only while ghost mode is active.
+    // Keep the stored preference independent of the master switch.
     public var useScheduledMessages: Bool {
-        get { return self.value(.useScheduledMessages) }
+        get { return self.isGhostModeActive && self.value(.useScheduledMessages) }
         set { self.set(.useScheduledMessages, newValue) }
     }
 

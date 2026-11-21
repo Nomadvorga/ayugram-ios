@@ -1,3 +1,4 @@
+import AyuSnowEffect
 import Foundation
 import SGSimpleSettings
 import UIKit
@@ -182,6 +183,7 @@ private final class PendingSwitchToChatLocation {
 }
 
 class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
+    let ayuSnowView = AyuSnowView(style: .chat)
     let context: AccountContext
     private(set) var chatLocation: ChatLocation
     private var chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
@@ -1103,6 +1105,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     override func didLoad() {
         super.didLoad()
+
+        // Keep particles above the wallpaper and below messages and the composer.
+        self.ayuSnowView.frame = self.backgroundNode.view.bounds
+        self.ayuSnowView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.backgroundNode.view.addSubview(self.ayuSnowView)
         
         let recognizer = WindowPanRecognizer(target: nil, action: nil)
         recognizer.cancelsTouchesInView = false
@@ -5558,7 +5565,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         messages[messages.count - 1] = messages[messages.count - 1].withUpdatedCorrelationId(correlationId)
                         
                         var replyPanel: ChatInputAccessoryPanelView?
-                        if self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
+                        if self.shouldAnimateMessageTransition,
+                           !(AyuGhostSettings.shared.useScheduledMessages
+                             && self.chatLocation.peerId != self.context.account.peerId
+                             && self.chatLocation.peerId?.namespace != Namespaces.Peer.SecretChat),
+                           let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
                             replyPanel = inputPanelNode.accessoryPanelView
                             
                             usedCorrelationId = correlationId

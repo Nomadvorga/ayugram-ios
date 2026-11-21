@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Uudelleenkäynnistys vaaditaan";
 "Common.RestartNow" = "Käynnistä uudelleen nyt";
 "Common.OpenTelegram" = "Avaa Telegram";
-"Common.UseTelegramForPremium" = "Huomioi, että saat Telegram Premiumin käyttämällä virallista Telegram-sovellusta. Kun olet hankkinut Telegram Premiumin, kaikki sen ominaisuudet ovat saatavilla Swiftgramissa.";
+"Common.UseTelegramForPremium" = "Huomioi, että saat Telegram Premiumin käyttämällä virallista Telegram-sovellusta. Kun olet hankkinut Telegram Premiumin, kaikki sen ominaisuudet ovat saatavilla AyuGramissa.";
 "Common.UpdateOS" = "iOS päivitys vaaditaan";
 
 "Message.HoldToShowOrReport" = "Pidä esillä näyttääksesi tai ilmoittaaksesi.";
@@ -171,11 +171,11 @@
 "SessionBackup.LoggedIn" = "Sisäänkirjautuneena";
 "SessionBackup.LoggedOut" = "Uloskirjautuneena";
 "SessionBackup.DeleteAll.Title" = "Poista kaikki istunnot?";
-"SessionBackup.DeleteAll.Text" = "Kaikki istunnot poistetaan Keychainista.\n\nTilejä ei kirjaudu ulos Swiftgramista.";
+"SessionBackup.DeleteAll.Text" = "Kaikki istunnot poistetaan Keychainista.\n\nTilejä ei kirjaudu ulos AyuGramista.";
 "SessionBackup.DeleteSingle.Title" = "Poista 1 (yksi) istunto?";
-"SessionBackup.DeleteSingle.Text" = "%@ istunto poistetaan Keychainista.\n\nTiliä ei kirjaudu ulos Swiftgramista.";
+"SessionBackup.DeleteSingle.Text" = "%@ istunto poistetaan Keychainista.\n\nTiliä ei kirjaudu ulos AyuGramista.";
 "SessionBackup.RemoveFromApp.Title" = "Poista tili sovelluksesta?";
-"SessionBackup.RemoveFromApp.Text" = "%@ istunto POISTETAAN Swiftgramista! Istunto pysyy aktiivisena, joten voit palauttaa sen myöhemmin.";
+"SessionBackup.RemoveFromApp.Text" = "%@ istunto POISTETAAN AyuGramista! Istunto pysyy aktiivisena, joten voit palauttaa sen myöhemmin.";
 "SessionBackup.Notice" = "Istunnot on salattu ja tallennettu laitteen Keychain. Istunnot eivät koskaan jätä laitettasi.\n\nTÄRKEÄÄ: Voit palauttaa istunnot uudelle laitteelle tai käyttöjärjestelmän palautuksen jälkeen sinun TÄYTYY ottaa salatut varmuuskopiot käyttöön, muuten Keychain ei siirretä.\n\nHUOMAUTUS: Istunnot voidaan silti peruuttaa Telegramin tai toisen laitteen kautta.";
 
 "MessageFilter.Title" = "Viestisuoja";
@@ -210,7 +210,7 @@
 "PayWall.InputToolbar.Notice" = "Säästä aikaa valmistellessasi julkaisuja paneelilla juuri näppäimistösi yläpuolella.";
 
 "PayWall.AppIcons.Title" = "Ainutlaatuiset sovelluskuvakkeet";
-"PayWall.AppIcons.Notice" = "Mukauta Swiftgramin ulkoasu aloitusnäytölläsi.";
+"PayWall.AppIcons.Notice" = "Mukauta AyuGramin ulkoasu aloitusnäytölläsi.";
 
 "PayWall.About.Title" = "Tietoja AyuGram Prosta";
 "PayWall.About.Notice" = "Swiftgramin ilmainen versio tarjoaa kymmeniä ominaisuuksia ja parannuksia Telegram-sovellukseen verrattuna. Innovointi ja Swiftgramin synkronointi kuukausittaisiin Telegram-päivityksiin vaatii valtavasti aikaa ja kallista laitteistoa.\n\nAyuGram on avoimen lähdekoodin sovellus, joka kunnioittaa yksityisyyttäsi eikä vaivaa sinua mainoksilla. Tilatessasi AyuGram Prota saat pääsyn eksklusiivisiin ominaisuuksiin ja tuet itsenäistä kehittäjää.\n\n- @Kylmakalle";

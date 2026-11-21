@@ -416,6 +416,8 @@
 "Extera.HideNavigationBarLabels" = "Hide Labels";
 "Extera.ShowContactsTab" = "Show Contacts Tab";
 "Extera.ListOfChats" = "Chat List";
+"Extera.ForceSnow" = "Force Snow";
+"Extera.ForceSnowInfo" = "Show snow in chats and their headers all year round.";
 "Extera.HideAllChats" = "Hide \"%@\" Tab";
 "Extera.WidePosts" = "Wide Posts";
 "Extera.BottomButton" = "Bottom Button";

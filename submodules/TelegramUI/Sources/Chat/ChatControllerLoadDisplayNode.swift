@@ -1052,6 +1052,18 @@ extension ChatControllerImpl {
                     }
                 }
                 
+                // Ghost scheduling inserts outside this history, so its send transition may
+                // never run. Consume the composer reset once, after validation and before enqueue,
+                // and detach both callbacks so a later update cannot erase newly typed text.
+                if AyuGhostSettings.shared.useScheduledMessages,
+                   peerId != strongSelf.context.account.peerId,
+                   peerId.namespace != Namespaces.Peer.SecretChat,
+                   let resetInput = strongSelf.layoutActionOnViewTransitionAction {
+                    strongSelf.layoutActionOnViewTransitionAction = nil
+                    strongSelf.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+                    resetInput()
+                }
+
                 let effectiveSilentPosting = silentPosting ?? strongSelf.presentationInterfaceState.interfaceState.silentPosting
                 let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: effectiveSilentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone)
                 

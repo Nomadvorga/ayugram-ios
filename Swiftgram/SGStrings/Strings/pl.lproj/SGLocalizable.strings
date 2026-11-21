@@ -201,7 +201,7 @@
 
 "PayWall.SessionBackup.Title" = "Kopia zapasowa sesji";
 "PayWall.SessionBackup.Notice" = "Przywróć sesje z zaszyfrowanej lokalnej kopii zapasowej pęku kluczy Apple.";
-"PayWall.SessionBackup.Description" = "Zmiana urządzenia lub usunięcie Swiftgrama nie jest już problemem. Przywróć wszystkie sesje, które są nadal aktywne na serwerach Telegrama.";
+"PayWall.SessionBackup.Description" = "Zmiana urządzenia lub usunięcie AyuGrama nie jest już problemem. Przywróć wszystkie sesje, które są nadal aktywne na serwerach Telegrama.";
 
 "PayWall.MessageFilter.Title" = "Filtr wiadomości";
 "PayWall.MessageFilter.Notice" = "Zmniejsz widoczność SPAM-u, promocji i irytujących wiadomości.";

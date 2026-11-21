@@ -1,3 +1,4 @@
+import AyuSnowEffect
 import SGSimpleSettings // MARK: Swiftgram
 
 import Foundation
@@ -97,6 +98,8 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
 }
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
+    private let ayuHeaderSnowView = AyuSnowView(style: .header)
+
     /// iPhone Duo: this screen lays out its own side column, back button included.
     override public var placesNavigationButtonInSideColumn: Bool {
         return false
@@ -1036,6 +1039,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
+        self.ayuHeaderSnowView.color = self.presentationData.theme.rootController.navigationBar.primaryTextColor
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
         if self.isNodeLoaded {
@@ -2496,6 +2500,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if let bar = self.navigationBar {
+            self.ayuHeaderSnowView.color = self.presentationData.theme.rootController.navigationBar.primaryTextColor
+            self.ayuHeaderSnowView.frame = bar.view.bounds
+            self.ayuHeaderSnowView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            bar.view.addSubview(self.ayuHeaderSnowView)
+            self.ayuHeaderSnowView.isActive = true
+        }
                 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings
@@ -2988,6 +2999,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        self.ayuHeaderSnowView.isActive = false
         
         if self.dismissSearchOnDisappear {
             self.dismissSearchOnDisappear = false

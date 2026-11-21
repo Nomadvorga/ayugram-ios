@@ -1420,7 +1420,7 @@ public final class Network: NSObject {
                             subscriber.putCompletion()
                             // MARK: AyuGram
                             if let self {
-                                ayuGhostRequestSucceeded(data.0.name, network: self)
+                                ayuGhostRequestSucceeded(data.0, network: self)
                             }
                             //
                         }
@@ -1474,7 +1474,7 @@ public final class Network: NSObject {
                             subscriber.putCompletion()
                             // MARK: AyuGram
                             if let self {
-                                ayuGhostRequestSucceeded(data.0.name, network: self)
+                                ayuGhostRequestSucceeded(data.0, network: self)
                             }
                             //
                         }

@@ -163,11 +163,21 @@ func ayuGhostDroppedRequestResult<T>(_ type: T.Type) -> Signal<T, MTRpcError> {
     return .fail(MTRpcError(errorCode: 400, errorDescription: "AYU_GHOST_DROPPED"))
 }
 
-func ayuGhostRequestSucceeded(_ functionName: String, network: Network) {
-    guard ayuMessageSendingFunctions.contains(functionName) else {
+func ayuGhostRequestSucceeded(_ description: FunctionDescription, network: Network) {
+    guard ayuMessageSendingFunctions.contains(description.name) else {
         return
     }
     let settings = AyuGhostSettings.shared
+    guard settings.suppressOnlineStatus else {
+        return
+    }
+    // Scheduling a message does not make the sender online. Never emit a pulse for it,
+    // including when the ghost preferences changed while the request was in flight.
+    for (name, parameter) in description.parameters where name == "scheduleDate" {
+        if let _ = parameter.value as? Int32 {
+            return
+        }
+    }
     // The server shows a sender online anyway; with the pulse it is for 0.2 s only.
     if settings.pulseOnlineOnSend {
         let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true).start()

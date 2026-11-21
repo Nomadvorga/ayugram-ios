@@ -408,6 +408,8 @@
 "Extera.HideNavigationBarLabels" = "Скрыть подписи";
 "Extera.ShowContactsTab" = "Отображать вкладку «Контакты»";
 "Extera.ListOfChats" = "Список чатов";
+"Extera.ForceSnow" = "Принудительный снег";
+"Extera.ForceSnowInfo" = "Показывать снег в чатах и заголовках круглый год.";
 "Extera.HideAllChats" = "Скрыть вкладку \"%@\"";
 "Extera.WidePosts" = "Широкие посты";
 "Extera.BottomButton" = "Нижняя кнопка";

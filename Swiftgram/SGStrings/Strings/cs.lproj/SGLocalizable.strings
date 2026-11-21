@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Vyžadován restart";
 "Common.RestartNow" = "Restartovat nyní";
 "Common.OpenTelegram" = "Otevřít Telegram";
-"Common.UseTelegramForPremium" = "Vezměte prosím na vědomí, že abyste získali Premium, musíte použít oficiální aplikaci Telegram . Jakmile získáte Telegram Premium, všechny jeho funkce budou k dispozici ve Swiftgramu.";
+"Common.UseTelegramForPremium" = "Vezměte prosím na vědomí, že abyste získali Premium, musíte použít oficiální aplikaci Telegram . Jakmile získáte Telegram Premium, všechny jeho funkce budou k dispozici v AyuGramu.";
 
 "Message.HoldToShowOrReport" = "Podržte pro zobrazení nebo nahlášení.";
 
