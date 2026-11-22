@@ -456,6 +456,36 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(scope.callbacks, {})
         self.assertEqual(seen, ["once"])
 
+    def test_lifecycle_events_are_generation_bound_and_in_runtime_context(self):
+        scope = self.load(body='    def on_app_event(self, event):\n        self.set_setting("last_event", event.value)\n')
+        event = {"version": 1, "plugin_id": "sample", "generation": scope.generation, "name": "app", "arguments": ["RESUME"]}
+        self.assertTrue(bridge.runtime.emit_event_json(json.dumps(event)))
+        self.assertEqual(self.host.settings["sample"]["last_event"], "RESUME")
+        bridge.unload_plugin("sample")
+        new = self.load(body='    def on_app_event(self, event):\n        self.set_setting("last_event", event.value)\n')
+        event["arguments"] = ["STOP"]
+        with self.assertRaisesRegex(bridge.BridgeError, "generation"):
+            bridge.runtime.emit_event_json(json.dumps(event))
+        self.assertEqual(self.host.settings["sample"]["last_event"], "RESUME")
+        event["generation"] = new.generation
+        self.assertTrue(bridge.runtime.emit_event_json(json.dumps(event)))
+        self.assertEqual(self.host.settings["sample"]["last_event"], "STOP")
+
+    def test_lifecycle_rejects_missing_malformed_and_unknown_event_identity(self):
+        scope = self.load()
+        valid = {"version": 1, "plugin_id": "sample", "generation": scope.generation, "name": "app", "arguments": ["START"]}
+        for field in ["generation", "plugin_id", "name", "version", "arguments"]:
+            event = dict(valid); event.pop(field)
+            with self.assertRaises(bridge.ProtocolError):
+                bridge.runtime.emit_event_json(json.dumps(event))
+        for field, value in [("generation", 1), ("version", True), ("plugin_id", None)]:
+            event = dict(valid); event[field] = value
+            with self.assertRaises(bridge.ProtocolError):
+                bridge.runtime.emit_event_json(json.dumps(event))
+        event = dict(valid); event["arguments"] = ["UNKNOWN"]
+        with self.assertRaises(ValueError):
+            bridge.runtime.emit_event_json(json.dumps(event))
+
     def test_settings_callbacks_replaced_and_unload_expired(self):
         scope = self.load(body='    def create_settings(self):\n        from ui.settings import Text\n        return [Text(text="Tap", on_click=lambda: self.set_setting("clicked", True))]\n')
         first = json.loads(bridge.serialize_settings("sample"))[0]["on_click"]["$callback"]

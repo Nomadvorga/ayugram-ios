@@ -5,22 +5,25 @@ import Foundation
 public struct AyuBridgeClassAdapter: Sendable {
     public typealias Constructor = @Sendable ([AyuBridgeValue], AyuBridgeAdapterContext) throws -> [String: AyuBridgeValue]
     public typealias StaticMethod = @Sendable ([AyuBridgeValue], AyuBridgeAdapterContext) throws -> AyuBridgeAdapterResult
+    public typealias StaticField = @Sendable (AyuBridgeAdapterContext) throws -> AyuBridgeAdapterResult
     public typealias InstanceMethod = @Sendable (inout [String: AyuBridgeValue], [AyuBridgeValue], AyuBridgeAdapterContext) throws -> AyuBridgeAdapterResult
     public let name: String
     public let constants: [String: AyuBridgeValue]
     public let constructor: Constructor?
     public let staticMethods: [String: StaticMethod]
+    public let staticFields: [String: StaticField]
     public let methods: [String: InstanceMethod]
     public let readableFields: Set<String>
     public let writableFields: Set<String>
     public let validateState: @Sendable ([String: AyuBridgeValue]) throws -> Void
 
     public init(name: String, constants: [String: AyuBridgeValue] = [:], constructor: Constructor? = nil,
-                staticMethods: [String: StaticMethod] = [:], methods: [String: InstanceMethod] = [:],
+                staticMethods: [String: StaticMethod] = [:], staticFields: [String: StaticField] = [:], methods: [String: InstanceMethod] = [:],
                 readableFields: Set<String> = [], writableFields: Set<String> = [],
                 validateState: @escaping @Sendable ([String: AyuBridgeValue]) throws -> Void = { _ in }) {
         self.name = name; self.constants = constants; self.constructor = constructor
         self.staticMethods = staticMethods; self.methods = methods
+        self.staticFields = staticFields
         self.readableFields = readableFields; self.writableFields = writableFields
         self.validateState = validateState
     }
@@ -29,6 +32,9 @@ public struct AyuBridgeClassAdapter: Sendable {
 public enum AyuBridgeAdapterResult: Sendable {
     case value(AyuBridgeValue)
     case instance(className: String, state: [String: AyuBridgeValue])
+    /// Native adapter effects (e.g. dialog dismissal) also commit only after
+    /// the host validates the enclosing mutation/state and returned value.
+    indirect case prepared(AyuBridgeProviderResult)
 }
 
 /// Read-only snapshots of references in the current owner/generation. A context
@@ -36,11 +42,22 @@ public enum AyuBridgeAdapterResult: Sendable {
 public struct AyuBridgeAdapterContext: Sendable {
     public let pluginID: String
     private let resolve: @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot
-    init(pluginID: String, resolve: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot) {
-        self.pluginID = pluginID; self.resolve = resolve
+    private let resolveCallback: @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback
+    init(pluginID: String, resolveCallback: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback,
+         resolve: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot) {
+        self.pluginID = pluginID; self.resolve = resolve; self.resolveCallback = resolveCallback
     }
     public func snapshot(of reference: AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot { try self.resolve(reference) }
     public func state(of reference: AyuBridgeValue) throws -> [String: AyuBridgeValue] { try self.resolve(reference).state }
+    /// Resolve on the host worker, then retain only this revocable native sender,
+    /// never the context itself. It cannot mint Python callback identities.
+    public func callback(_ reference: AyuBridgeValue) throws -> AyuBridgeNativeCallback { try self.resolveCallback(reference) }
+}
+
+public struct AyuBridgeNativeCallback: Sendable {
+    private let sink: @Sendable ([AyuBridgeValue]) -> Void
+    init(_ sink: @escaping @Sendable ([AyuBridgeValue]) -> Void) { self.sink = sink }
+    public func send(_ arguments: [AyuBridgeValue]) { self.sink(arguments) }
 }
 
 public struct AyuBridgeAdapterSnapshot: Sendable {
@@ -59,10 +76,11 @@ public struct AyuBridgeClassRegistry: Sendable {
                   adapter.writableFields.isSubset(of: adapter.readableFields) else {
                 throw AyuBridgeFailure("invalid_adapter", "Duplicate or invalid class adapter")
             }
-            let names = Set(adapter.constants.keys).union(adapter.staticMethods.keys).union(adapter.methods.keys).union(adapter.readableFields)
+            let names = Set(adapter.constants.keys).union(adapter.staticMethods.keys).union(adapter.staticFields.keys).union(adapter.methods.keys).union(adapter.readableFields)
             guard names.allSatisfy({ $0.utf8.count <= 128 && $0.range(of: "^[A-Za-z][A-Za-z0-9_]*$", options: .regularExpression) != nil }),
                   names.isDisjoint(with: ["getClass", "getName", "getDeclaredMethod", "getDeclaredMethods"]),
-                  Set(adapter.constants.keys).isDisjoint(with: adapter.staticMethods.keys),
+                   Set(adapter.constants.keys).isDisjoint(with: adapter.staticMethods.keys),
+                   Set(adapter.staticFields.keys).isDisjoint(with: Set(adapter.constants.keys).union(adapter.staticMethods.keys)),
                   adapter.readableFields.isDisjoint(with: adapter.methods.keys) else {
                 throw AyuBridgeFailure("invalid_adapter", "Ambiguous or invalid adapter member")
             }

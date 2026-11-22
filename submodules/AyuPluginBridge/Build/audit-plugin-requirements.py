@@ -28,7 +28,9 @@ VALUE_CLASSES = {"java.lang.Integer", "java.lang.Long", "java.lang.Boolean", "ja
 HOST_CLASSES = {"android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout",
                 "android.widget.TextView", "android.widget.ImageView", "android.widget.FrameLayout$LayoutParams",
                 "android.widget.LinearLayout$LayoutParams", "java.lang.reflect.Method", "[B", "[S", "[C", "[I", "[J", "[F", "[D", "[Z",
-                "java.lang.Runnable", "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
+                 "java.lang.Runnable", "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
+APPLICATION_CLASSES = {"org.telegram.messenger.UserConfig", "org.telegram.tgnet.TLRPC$User",
+                       "org.telegram.ui.ActionBar.BaseFragment", "android.content.Context", "org.telegram.ui.ActionBar.AlertDialog"}
 NATIVE_PREFIXES = ("android.", "androidx.", "java.", "javax.", "org.telegram.", "com.")
 HOOKS = {"hook_method", "hook_all_methods", "hook_all_constructors", "add_hook", "add_on_send_message_hook",
          "add_on_request_hook", "add_on_response_hook", "hook_request", "hook_response"}
@@ -82,14 +84,23 @@ def audit(path, record):
                       and name.split(".")[0] not in getattr(sys, "stdlib_module_names", ())
                       and not name.startswith(NATIVE_PREFIXES))
     native = record["path"] == "atmospheric_snow.plugin" and record["sha256"] == SNOW_SHA256
+    partial_features = {"account_identity_and_own_profile"} if classes & APPLICATION_CLASSES else set()
+    if "client_fragment_adapter" in features:
+        partial_features.add("visible_screen_context")
+    if "native_alert_or_bulletin_presentation" in features:
+        partial_features.add("basic_alerts_and_bulletins")
+    if "on_app_event" in events:
+        partial_features.add("generation_bound_app_lifecycle")
     return {"file": record["path"], "blob": record["blob"], "sha256": record["sha256"], "bytes": len(data),
             "lines": len(data.decode("utf-8").splitlines()),
             "status": "source_pinned_native_adapter_device_unverified" if native else "blocked_not_runtime_compatible",
             "python_path": "blocked" if classes - (VALUE_CLASSES | HOST_CLASSES) or features or external or inventory["unsupported_sdk_symbols"] else "requires_runtime_validation",
             "native_adapter": "Integration/AyuAtmosphericPluginAdapter.swift" if native else None,
             "implemented_value_subsets": sorted(classes & VALUE_CLASSES),
-            "declared_ui_or_reference_subsets": sorted(classes & HOST_CLASSES),
-            "unadapted_classes": sorted(classes - (VALUE_CLASSES | HOST_CLASSES)),
+             "declared_ui_or_reference_subsets": sorted(classes & HOST_CLASSES),
+             "declared_application_subsets": sorted(classes & APPLICATION_CLASSES),
+             "partially_wired_features": sorted(partial_features),
+             "unadapted_classes": sorted(classes - (VALUE_CLASSES | HOST_CLASSES | APPLICATION_CLASSES)),
             "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
             "external_imports_not_default_enabled": external, "required_unwired_features": sorted(features),
             "hook_forms": sorted(hooks), "event_forms": sorted(events),
@@ -102,6 +113,7 @@ def main():
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--plugin-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--replace-generated", action="store_true", help="Regenerate the two audit outputs for exactly the same pinned sources")
     args = parser.parse_args()
     manifest = json.loads(args.source_manifest.read_text())
     assert manifest["repo"] == "Nomadvorga/ayugram-src" and manifest["commit"] == SOURCE_COMMIT
@@ -112,30 +124,39 @@ def main():
     plugins = [audit(args.plugin_dir / item["path"], item) for item in sorted(manifest["files"], key=lambda item: item["path"])]
     assert sum(item["lines"] for item in plugins) == 40_950
     files = ["Sources/AyuBridgeClassRegistry.swift", "Sources/AyuBridgeJavaValues.swift", "Sources/AyuBridgeProtocol.swift", "Sources/AyuPluginNativeHost.swift",
-             "Python/_ayu_inspection.py", "Python/ayu_bridge.py", "Python/android_utils.py", "Python/client_utils.py", "Python/hook_utils.py"]
+              "Integration/AyuPluginApplicationBridge.swift", "Integration/AyuPluginService.swift",
+              "Python/_ayu_inspection.py", "Python/ayu_bridge.py", "Python/android_utils.py", "Python/client_utils.py", "Python/hook_utils.py"]
     result = {"schema_version": 1, "source_repo": manifest["repo"], "source_commit": SOURCE_COMMIT,
               "inspection": "AST-only; supplied plugin code was not imported, compiled or executed",
               "device_launch_verified": False, "native_tests_executed": False, "plugins_runtime_verified": [],
               "source_total_lines": 40_950, "sdk_sha256": {name: hashlib.sha256((BRIDGE / name).read_bytes()).hexdigest() for name in files},
               "limitations": ["Declared classes are subsets, not Android runtime parity", "Dynamic names and members require further runtime/API audit",
-                              "Default provider does not supply Telegram client, hooks, menus, events or UI presentation",
+                               "Application provider supplies only narrow account, visible-context, alert/bulletin and app-lifecycle subsets",
+                               "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
+                               "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
                               "AST alias inspection is conservative, not a scope-aware Python resolver"], "plugins": plugins}
     args.output_dir.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
     rows = ["# Common bridge: pinned 19-plugin compatibility audit", "",
             f"Source: `Nomadvorga/ayugram-src@{SOURCE_COMMIT}`. **Not a claim that all 19 work.**", "",
             "40,950 lines inspected as AST only. No supplied plugin execution; no device/native-test verification.", "",
-            "| Plugin | Path status | Value subsets | Unadapted classes | Missing SDK symbols |", "|---|---|---:|---:|---:|"]
+             "| Plugin | Path status | Value subsets | Application subsets | Unadapted classes | Missing SDK symbols |", "|---|---|---:|---:|---:|---:|"]
     for item in plugins:
         status = "Pinned native adapter; device unverified" if item["native_adapter"] else "Blocked (Python path)"
-        rows.append(f"| `{item['file']}` | {status} | {len(item['implemented_value_subsets'])} | {len(item['unadapted_classes'])} | {sum(len(v) for v in item['unsupported_sdk_symbols'].values())} |")
+        rows.append(f"| `{item['file']}` | {status} | {len(item['implemented_value_subsets'])} | {len(item['declared_application_subsets'])} | {len(item['unadapted_classes'])} | {sum(len(v) for v in item['unsupported_sdk_symbols'].values())} |")
     rows += ["", "See `compatibility.json` for each source hash, required API, hook/event form and missing class/symbol.", "",
              "Atmospheric Snow bypasses Python only for the exact pinned SHA-256; its Android/Python path remains blocked.",
-             "The other 18 remain blocked. Registry extensibility is infrastructure, not a substitute for real Telegram/iOS adapters.", ""]
+              "The other 18 remain blocked. Narrow app adapters are not a substitute for their remaining Telegram/iOS services.",
+              "See `APPLICATION-BRIDGES.md` for exact implemented members, per-plugin work packages and device checks.", ""]
     for name, text in [("compatibility.json", json_text), ("README.md", "\n".join(rows))]:
         target = args.output_dir / name
         if target.exists():
-            assert target.read_text() == text, "Output already exists with different contents; choose a new directory"
+            if target.read_text() != text:
+                assert args.replace_generated, "Output already exists with different contents; choose a new directory"
+                previous = json.loads((args.output_dir / "compatibility.json").read_text())
+                assert previous["source_commit"] == SOURCE_COMMIT
+                assert {(p["file"], p["sha256"]) for p in previous["plugins"]} == {(p["file"], p["sha256"]) for p in plugins}
+                target.write_text(text)
         else:
             with target.open("x") as output:
                 output.write(text)

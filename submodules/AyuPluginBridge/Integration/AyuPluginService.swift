@@ -7,16 +7,25 @@ private final class AyuPluginResourceAnchor: NSObject {}
 private final class AyuRuntimeRelay: @unchecked Sendable {
     private let lock = NSLock()
     private var runtime: APBPythonRuntime?
-    private var errorSink: (@Sendable (String) -> Void)?
-    func attach(_ runtime: APBPythonRuntime, errorSink: @escaping @Sendable (String) -> Void) { self.lock.lock(); self.runtime = runtime; self.errorSink = errorSink; self.lock.unlock() }
+    private var errorSink: (@Sendable (String, String?) -> Void)?
+    func attach(_ runtime: APBPythonRuntime, errorSink: @escaping @Sendable (String, String?) -> Void) { self.lock.lock(); self.runtime = runtime; self.errorSink = errorSink; self.lock.unlock() }
     func deliver(_ owner: String, _ callback: String, _ arguments: [AyuBridgeValue]) {
         struct Event: Encodable { let version = 1; let plugin_id: String; let callback_id: String; let arguments: [AyuBridgeValue] }
         guard let data = try? JSONEncoder().encode(Event(plugin_id: owner, callback_id: callback, arguments: arguments)), let json = String(data: data, encoding: .utf8) else { return }
         self.lock.lock(); let runtime = self.runtime; self.lock.unlock()
         runtime?.invokeCallback(json: json, pluginID: owner) { [weak self] _, error in
             guard error != nil, let self else { return }
-            self.lock.lock(); let sink = self.errorSink; self.lock.unlock(); sink?(owner)
+            self.lock.lock(); let sink = self.errorSink; self.lock.unlock(); sink?(owner, callback.split(separator: ":").first.map(String.init))
         } // Expired callbacks never revive a plugin.
+    }
+    func event(_ owner: String, generation: String, name: String) {
+        struct Event: Encodable { let version = 1; let plugin_id: String; let generation: String; let name = "app"; let arguments: [String] }
+        guard let data = try? JSONEncoder().encode(Event(plugin_id: owner, generation: generation, arguments: [name])), let json = String(data: data, encoding: .utf8) else { return }
+        self.lock.lock(); let runtime = self.runtime; self.lock.unlock()
+        runtime?.emitEvent(json: json, pluginID: owner) { [weak self] _, error in
+            guard error != nil, let self else { return }
+            self.lock.lock(); let sink = self.errorSink; self.lock.unlock(); sink?(owner, generation)
+        }
     }
 }
 
@@ -48,7 +57,11 @@ public struct AyuPluginSetting: Sendable {
 }
 
 @MainActor public final class AyuPluginService {
-    public static let shared = AyuPluginService()
+    public static let shared: AyuPluginService = {
+        let application = AyuPluginApplicationBridge.shared
+        do { return AyuPluginService(provider: application, classRegistry: try application.classRegistry()) }
+        catch { preconditionFailure("Invalid compiled application adapters") }
+    }()
     public static let didChange = Notification.Name("AyuPluginServiceDidChange")
     public private(set) var plugins: [AyuInstalledPlugin] = []
     public private(set) var startupError: String?
@@ -64,6 +77,9 @@ public struct AyuPluginSetting: Sendable {
     private var pendingImportSlots = 0
     private var classes: Set<String> = []
     private var modules: Set<String> = []
+    private var pythonGenerations: [String: String] = [:]
+    private var appInForeground = false
+    private var appIsActive = false
     nonisolated private static let maximumBytes = 1_048_576
 
     public init(defaults: UserDefaults = .standard, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), classRegistry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits()) {
@@ -71,8 +87,9 @@ public struct AyuPluginSetting: Sendable {
         self.relay = relay; self.defaults = defaults
         self.host = AyuPluginNativeHost(defaults: defaults, provider: provider, classRegistry: classRegistry, limits: limits, trustedOwner: { nil }, callback: { owner, callback, arguments in relay.deliver(owner, callback, arguments) })
         self.root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AyuPlugins", isDirectory: true)
-        relay.attach(self.runtime) { [weak self] owner in Task { @MainActor in
-            guard let self, self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return }
+        relay.attach(self.runtime) { [weak self] owner, generation in Task { @MainActor in
+            guard let self, let generation, self.pythonGenerations[owner] == generation,
+                  self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return }
             self.update(owner) { $0.error = "Ошибка обработчика Python. Плагин остаётся включённым; его можно выключить." }
         } }
     }
@@ -207,9 +224,15 @@ public struct AyuPluginSetting: Sendable {
                 return
             }
             let json = try await self.complete { self.runtime.load(source: source, filename: id + ".plugin", completion: $0) }
-            guard try self.decode(json)["plugin_id"].string == id else { throw Failure.protocolError }
+            let loaded = try self.decode(json)
+            guard loaded["plugin_id"].string == id, let generation = loaded["generation"].string,
+                  generation.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { throw Failure.protocolError }
+            self.pythonGenerations[id] = generation
             self.update(id) { $0.isEnabled = true }
+            self.relay.event(id, generation: generation, name: "START")
+            if self.appIsActive { self.relay.event(id, generation: generation, name: "RESUME") }
         } catch {
+            self.pythonGenerations.removeValue(forKey: id)
             // Also handle a successful load followed by a malformed result: revoke both layers.
             if id == AyuAtmosphericPluginAdapter.pluginID {
                 self.atmosphericAdapter?.disable(); self.atmosphericAdapter = nil
@@ -221,6 +244,7 @@ public struct AyuPluginSetting: Sendable {
 
     public func disable(_ id: String) async throws {
         try self.begin(id); defer { self.finish(id) }
+        self.pythonGenerations.removeValue(forKey: id)
         if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
             adapter.disable(); self.atmosphericAdapter = nil
             self.update(id) { $0.isEnabled = false; $0.error = nil }
@@ -278,6 +302,21 @@ public struct AyuPluginSetting: Sendable {
         if let callback = row.descriptor["on_click"]["$callback"].string { self.relay.deliver(pluginID, callback, [.null]) }
     }
     public func mount(_ view: UIView?, pluginID: String) { self.host.setMountContainer(view, pluginID: pluginID) }
+
+    /// Fed by Telegram's application bindings. Never starts Python and never
+    /// synchronously waits for it. Queued events carry the exact load generation.
+    public func applicationDidChange(inForeground: Bool, isActive: Bool) {
+        if self.appIsActive && !isActive { self.emitApplicationEvent("PAUSE") }
+        if self.appInForeground && !inForeground { self.emitApplicationEvent("STOP") }
+        if !self.appIsActive && isActive { self.emitApplicationEvent("RESUME") }
+        self.appInForeground = inForeground; self.appIsActive = isActive
+    }
+    private func emitApplicationEvent(_ name: String) {
+        for (id, generation) in self.pythonGenerations {
+            guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { continue }
+            self.relay.event(id, generation: generation, name: name)
+        }
+    }
 
     private func inspect(_ source: String) async throws -> (AyuInstalledPlugin, AyuBridgeValue) {
         if let record = AyuAtmosphericPluginAdapter.record(for: Data(source.utf8)) { return (record, .object([:])) }

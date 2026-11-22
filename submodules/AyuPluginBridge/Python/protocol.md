@@ -9,7 +9,8 @@ reflection names, invalid constants and undeclared writable fields are rejected
 when constructing the registry. No Java/JVM, private selector resolution, Java
 subclassing or automatic Android API emulation is introduced.
 
-Adapters declare constructors, static/instance methods, constants, readable and
+Adapters declare constructors, static/instance methods, explicit read-only dynamic
+`staticFields`, constants, readable and
 writable fields, and `validateState`. Only declared members are exposed. Hidden
 JSON state is not accessible through the private-field helpers. Constructors,
 mutations, field writes and factory-created instances all run schema validation,
@@ -24,6 +25,15 @@ references. It is host-worker-only and generation-scoped; do not retain it or
 start threads. Handles/callback tokens remain host-owned. Adapters cannot invent
 callback tokens. Atomic classes below provide serial value operations, not plugin
 thread support or a Java memory-model guarantee.
+
+`context.callback(reference)` resolves an already registered Python callback on
+the host worker and yields a revocable native sender that may be retained by a
+native UI action. Sender delivery is asynchronous, generation/ownership checked,
+and payload/reference quota validated before reaching the runtime. Never retain
+the context itself. `provider.prepareCall` returns `AyuBridgeProviderResult` with
+typed value/instance state, `commit(hostOwnedResult)` and `rollback()`: the host
+validates and allocates the result before commit, and cancels prepared effects
+when validation fails. Providers may not construct wire handles/callback tags.
 
 Implemented **subsets**, not complete Java classes:
 
@@ -49,15 +59,17 @@ symbols, missing SDK symbols and computed class-lookup locations before source
 activation. This is conservative AST inventory, not full Python name/scope or
 runtime compatibility analysis. `android_utils.OnClickListener` forwards through
 the declared generation-owned click proxy; `get_static_private_field` exposes
-only declared constants; `get_client` forwards to an owned AccountClient and
+only declared constants/static readers; `get_client` forwards to an owned AccountClient and
 does not manufacture a Telegram provider.
 
 The hash-pinned 19-plugin requirements table lives in
 `Resources/CommonBridge/compatibility.json` and its README. It records zero
 runtime-verified plugins. Atmospheric Snow retains its exact-hash native route;
-the other 18 remain blocked. The default provider still lacks actual Telegram
-objects/requests, application/message events, method hooks, menus and alert/
-bulletin presentation. Camera, passcode, screen-capture and destructive-message
+the other 18 remain blocked. The shared service now has narrow native account,
+visible-screen, basic alert/bulletin and generation-bound app-lifecycle adapters.
+See `Resources/CommonBridge/APPLICATION-BRIDGES.md` for exact supported members.
+Account notifications, requests/messages, method hooks, menus, graphics and media
+remain unsupported. Camera, passcode, screen-capture and destructive-message
 features require real iOS adapters respecting platform and account invariants.
 
 Regenerate the static table with `Build/audit-plugin-requirements.py`, supplying
@@ -91,7 +103,7 @@ Wire values: null/bool/string/signed-int64/finite-double, arrays, string-keyed o
 - `unload_plugin(plugin_id) -> bool`: calls on_plugin_unload then always atomically deactivates native scope and drops callbacks/module. on_plugin_unload may call native APIs, but cannot schedule/register new work. Old callbacks are invalid before unload code starts.
 - `serialize_settings(plugin_id) -> str`: JSON array of component descriptors. Callback tags in the current generation remain live until unload (or component callbacks are replaced by a later settings serialization).
 - `invoke_callback_json(text) -> str`: accepts `{"version":1,"plugin_id":"example","callback_id":"...","arguments":[...]}`. Returns JSON-encoded callback result (not an RPC response envelope). Host must authenticate owner and callback registration before entry. Inactive/unknown callbacks raise CALLBACK_EXPIRED.
-- `emit_event_json(text) -> bool`: accepts `{"version":1,"plugin_id":"example","name":"app","arguments":["RESUME"]}`. Only app events START/RESUME/PAUSE/STOP are accepted. Hooks use registered callback IDs instead.
+- `emit_event_json(text) -> bool`: accepts `{"version":1,"plugin_id":"example","generation":"<exact load generation>","name":"app","arguments":["RESUME"]}`. Missing/stale generations reject rather than target a newer load. Only app events START/RESUME/PAUSE/STOP are accepted. START is emitted after each successful Python activation; STOP is a background transition, not guaranteed OS termination. Hooks use registered callback IDs instead.
 
 All entry points run on the same queue/thread. WRONG_QUEUE is raised on another thread. Main interpreter execution is not a security isolation boundary; this layer only scopes bridge state, references and callbacks.
 
@@ -169,4 +181,4 @@ Python bounds: source 2 MB UTF-8, JSON input 4 million characters, nesting 64, 3
 
 No upstream requests/pip installation, Android emulator, arbitrary Java class/member, arbitrary Swift selector, Python native extension loader, unrestricted method hooking, Canvas/layout renderer, or background-thread compatibility is supplied in these Python files. The optional requests facade above is only its documented subset. Host capabilities must advertise only adapters really implemented. A plugin may pass static inspection and later request a dynamically computed unsupported API: it must then receive an explicit failure. Static inspection is a preflight, not proof of full compatibility or a security sandbox.
 
-Tests in Tests/Python use a fake injected host and synthetic source strings only. They cover owner isolation, response validation, remote reference round trips, callback lifetime, unload cleanup, enums, undeclared classes and pre-execution rejection. The latest explicitly authorized short synthetic run, `python3 -B -m unittest discover -s submodules/AyuPluginBridge/Tests/Python -v`, passed all 33 tests in 0.094 seconds: 21 SDK/runtime tests and 12 offline HTTPS tests. The runtime regressions include annotated display metadata and two same-title plugins using dataclass with forward annotations, unique module identity and independent unload cleanup. HTTPS fixtures use a fake urllib opener and fake clock; no live service is contacted. No supplied plugin was executed. Native integration still requires a cool development machine and real iOS verification.
+Tests in Tests/Python use a fake injected host, test-authored synthetic source and offline source/hash fixtures only. They cover owner isolation, response validation, generation-bound lifecycle events, remote reference round trips, callback lifetime, unload cleanup, enums, undeclared classes and pre-execution rejection. HTTPS fixtures use a fake urllib opener and fake clock; no live service is contacted. No supplied plugin is executed. Offline source wiring and hash checks do not execute Swift, establish native UI behavior or verify device startup. Native integration still requires the authorized iOS test environment and real device/recorded-frame verification.

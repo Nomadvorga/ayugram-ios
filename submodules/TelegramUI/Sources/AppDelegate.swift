@@ -268,6 +268,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private var accountManagerState: AccountManagerState?
     
     private var contextValue: AuthorizedApplicationContext?
+    private var pluginApplicationBinding: AyuTelegramPluginApplicationBinding?
     private let context = Promise<AuthorizedApplicationContext?>()
     private let contextDisposable = MetaDisposable()
     
@@ -1228,6 +1229,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
             
             presentationDataPromise.set(sharedContext.presentationData)
+            self.pluginApplicationBinding = AyuTelegramPluginApplicationBinding(sharedContext: sharedContext, root: { [weak self] in
+                guard let context = self?.contextValue else { return nil }
+                return (context.context.account.id, context.rootController)
+            })
             #if targetEnvironment(simulator)
             if CommandLine.arguments.contains("--context-menu-morph-gallery") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
@@ -3667,5 +3672,4 @@ private final class NavigationBarOverflowMenuReferenceSource: ContextReferenceCo
         return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: mainWindowScreenBounds)
     }
 }
-
 

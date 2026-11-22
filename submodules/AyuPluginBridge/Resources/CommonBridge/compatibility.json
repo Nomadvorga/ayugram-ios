@@ -8,12 +8,14 @@
   "plugins_runtime_verified": [],
   "source_total_lines": 40950,
   "sdk_sha256": {
-    "Sources/AyuBridgeClassRegistry.swift": "b4ee3f9ac9ea81be7e9177b9db2948c8820a2fb79dd348d842a8e90dde78ee98",
+    "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
-    "Sources/AyuBridgeProtocol.swift": "644c63f1e72694d878642df62ea361a497e8ae85a97fee961d7c0bfb9cd020fb",
-    "Sources/AyuPluginNativeHost.swift": "9ddb8dbf45cc60f954cd841fa23636831a636347af97262d987362e02232b63e",
+    "Sources/AyuBridgeProtocol.swift": "4d2b2a6c6fd750c35e90d136c8c8e7c60b1447717ac806658ba27c4088cd2c77",
+    "Sources/AyuPluginNativeHost.swift": "86221ab528e93c2db13e2fc441e7d9c4094ded1fbd6424e39f2ff756a0a90c8d",
+    "Integration/AyuPluginApplicationBridge.swift": "9105137f273980fdafa97db8c86c6a529c1959a4088fc690c482679a2fe43311",
+    "Integration/AyuPluginService.swift": "0052fc8a044611e87738315a89749a9a2adc54de26ce1b5593e63932d983a746",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
-    "Python/ayu_bridge.py": "69a91fb242d7fbe164ade00e93ad36d435333e30ff0d6163ea8c9fb2ece8d4af",
+    "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
     "Python/android_utils.py": "d7102bf87e814fd09c479d1539511d99d9a510c5f63bdfce150bd7b126e327ca",
     "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
     "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91"
@@ -21,7 +23,9 @@
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",
     "Dynamic names and members require further runtime/API audit",
-    "Default provider does not supply Telegram client, hooks, menus, events or UI presentation",
+    "Application provider supplies only narrow account, visible-context, alert/bulletin and app-lifecycle subsets",
+    "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
+    "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
     "AST alias inspection is conservative, not a scope-aware Python resolver"
   ],
   "plugins": [
@@ -40,6 +44,11 @@
       ],
       "declared_ui_or_reference_subsets": [
         "android.view.View"
+      ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
       ],
       "unadapted_classes": [
         "android.content.res.Resources",
@@ -143,6 +152,11 @@
         "android.widget.FrameLayout$LayoutParams",
         "android.widget.TextView"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.graphics.Color",
         "android.graphics.Rect",
@@ -214,6 +228,14 @@
         "android.widget.FrameLayout",
         "java.lang.Runnable"
       ],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.text.InputType",
         "android.view.Gravity",
@@ -223,7 +245,6 @@
         "org.telegram.messenger.LocaleController",
         "org.telegram.messenger.MediaController",
         "org.telegram.messenger.R$raw",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.tgnet.ConnectionsManager",
         "org.telegram.tgnet.TLRPC",
         "org.telegram.ui.ActionBar.Theme",
@@ -320,6 +341,11 @@
       "declared_ui_or_reference_subsets": [
         "android.widget.LinearLayout"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.util.TypedValue",
         "android.view.ViewGroup",
@@ -398,10 +424,19 @@
         "android.widget.LinearLayout",
         "android.widget.TextView"
       ],
+      "declared_application_subsets": [
+        "android.content.Context",
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "generation_bound_app_lifecycle",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.app.Activity",
         "android.app.Dialog",
-        "android.content.Context",
         "android.content.DialogInterface",
         "android.content.Intent",
         "android.database.DataSetObservable",
@@ -454,7 +489,6 @@
         "org.telegram.messenger.MessagesController",
         "org.telegram.messenger.NotificationCenter",
         "org.telegram.messenger.SharedConfig",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.tgnet.ConnectionsManager",
         "org.telegram.tgnet.SerializedData",
         "org.telegram.tgnet.TLRPC",
@@ -635,6 +669,8 @@
         "java.lang.System"
       ],
       "declared_ui_or_reference_subsets": [],
+      "declared_application_subsets": [],
+      "partially_wired_features": [],
       "unadapted_classes": [
         "android.graphics.Matrix",
         "android.graphics.Paint",
@@ -711,6 +747,14 @@
         "android.widget.TextView",
         "java.lang.Runnable"
       ],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.content.DialogInterface$OnDismissListener",
         "android.content.res.ColorStateList",
@@ -742,7 +786,6 @@
         "org.telegram.messenger.MessagesController",
         "org.telegram.messenger.MessagesStorage",
         "org.telegram.messenger.R$drawable",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.messenger.UserObject",
         "org.telegram.tgnet.ConnectionsManager",
         "org.telegram.tgnet.TLRPC",
@@ -863,6 +906,11 @@
         "android.widget.LinearLayout",
         "android.widget.TextView"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.content.Intent",
         "android.graphics.Typeface",
@@ -948,13 +996,19 @@
       "declared_ui_or_reference_subsets": [
         "android.widget.ImageView"
       ],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins"
+      ],
       "unadapted_classes": [
         "android.view.ViewGroup",
         "org.telegram.messenger.ApplicationLoader",
         "org.telegram.messenger.MediaController",
         "org.telegram.messenger.MessageObject",
         "org.telegram.messenger.MessagesController$SavedMusicList",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.tgnet.TLRPC",
         "org.telegram.ui.LaunchActivity",
         "org.telegram.ui.MainTabsActivity"
@@ -1021,6 +1075,11 @@
         "android.view.View",
         "android.widget.LinearLayout",
         "java.lang.Runnable"
+      ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
       ],
       "unadapted_classes": [
         "android.graphics.ImageFormat",
@@ -1161,6 +1220,10 @@
         "android.widget.LinearLayout",
         "android.widget.TextView"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.graphics.Bitmap",
         "android.graphics.BitmapFactory",
@@ -1280,6 +1343,11 @@
       ],
       "declared_ui_or_reference_subsets": [
         "android.widget.LinearLayout"
+      ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
       ],
       "unadapted_classes": [
         "android.graphics.Paint",
@@ -1424,6 +1492,14 @@
         "java.lang.System"
       ],
       "declared_ui_or_reference_subsets": [],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.os.Bundle",
         "android.text.Layout$Alignment",
@@ -1437,7 +1513,6 @@
         "org.telegram.messenger.DialogObject",
         "org.telegram.messenger.ImageLocation",
         "org.telegram.messenger.MessagesController",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.messenger.UserObject",
         "org.telegram.tgnet.TLRPC$TL_chat",
         "org.telegram.ui.ChatActivity",
@@ -1506,6 +1581,10 @@
         "android.view.View",
         "android.widget.FrameLayout",
         "java.lang.Runnable"
+      ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "visible_screen_context"
       ],
       "unadapted_classes": [
         "android.animation.ValueAnimator",
@@ -1595,6 +1674,11 @@
       "declared_ui_or_reference_subsets": [
         "android.widget.FrameLayout"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.app.Dialog",
         "android.content.DialogInterface",
@@ -1673,6 +1757,16 @@
       "declared_ui_or_reference_subsets": [
         "android.view.View"
       ],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig",
+        "org.telegram.tgnet.TLRPC$User"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "generation_bound_app_lifecycle",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.app.Activity",
         "android.app.Activity$ScreenCaptureCallback",
@@ -1716,12 +1810,10 @@
         "org.telegram.messenger.MediaController",
         "org.telegram.messenger.MessagesController",
         "org.telegram.messenger.NotificationCenter",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.messenger.UserObject",
         "org.telegram.tgnet.TLRPC$TL_inputMessageEntityMentionName",
         "org.telegram.tgnet.TLRPC$TL_messageEntityMention",
         "org.telegram.tgnet.TLRPC$TL_messageEntityMentionName",
-        "org.telegram.tgnet.TLRPC$User",
         "org.telegram.ui.ActionBar.Theme",
         "org.telegram.ui.Cells.UserInfoCell",
         "org.telegram.ui.ChatActivity",
@@ -1876,10 +1968,17 @@
         "android.widget.TextView",
         "java.lang.Runnable"
       ],
+      "declared_application_subsets": [
+        "android.content.Context",
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.animation.TimeInterpolator",
         "android.app.AlertDialog$Builder",
-        "android.content.Context",
         "android.content.DialogInterface$OnClickListener",
         "android.content.res.ColorStateList",
         "android.graphics.Bitmap",
@@ -1920,7 +2019,6 @@
         "org.telegram.messenger.MessagesController",
         "org.telegram.messenger.NotificationsController",
         "org.telegram.messenger.SendMessagesHelper",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.messenger.UserObject",
         "org.telegram.messenger.Utilities",
         "org.telegram.tgnet.ConnectionsManager",
@@ -2082,6 +2180,12 @@
         "android.widget.LinearLayout$LayoutParams",
         "android.widget.TextView"
       ],
+      "declared_application_subsets": [],
+      "partially_wired_features": [
+        "basic_alerts_and_bulletins",
+        "generation_bound_app_lifecycle",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "android.animation.ValueAnimator",
         "android.content.DialogInterface$OnDismissListener",
@@ -2242,9 +2346,17 @@
       "native_adapter": null,
       "implemented_value_subsets": [],
       "declared_ui_or_reference_subsets": [],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "generation_bound_app_lifecycle",
+        "visible_screen_context"
+      ],
       "unadapted_classes": [
         "org.telegram.messenger.NotificationCenter",
-        "org.telegram.messenger.UserConfig",
         "org.telegram.ui.ActionBar.Theme",
         "org.telegram.ui.LaunchActivity"
       ],

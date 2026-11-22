@@ -183,6 +183,15 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 let nested = remote.className + "$" + name
                 if self.knownClass(nested) { return .object(["kind": .string("class"), "class_name": .string(nested)]) }
                 if let constant = self.constants(for: remote.className)[name] { return .object(["kind": .string("field"), "value": constant]) }
+                if self.classRegistry.adapters[remote.className]?.staticFields[name] != nil {
+                    let snapshot = self.objects
+                    do {
+                        let value = try self.getField(owner: owner, arguments: arguments)
+                        let member: AyuBridgeValue = .object(["kind": .string("field"), "value": value])
+                        try self.validateAdapterResponse(member)
+                        return member
+                    } catch { self.objects = snapshot; throw error }
+                }
             }
             if remote.kind == "layout", Self.layoutFields.contains(name) {
                 return .object(["kind": .string("field"), "value": remote.fields[name] ?? .integer(0)])
@@ -300,7 +309,12 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         case "client.call", "hooks.register", "hooks.unregister", "menus.register", "menus.unregister", "ui.present":
             guard self.provider.capabilities.contains(operation) else { throw AyuBridgeFailure.unsupported(operation) }
             try self.validateReferences(.object(arguments), owner: owner)
-            return try self.provider.call(pluginID: owner, operation: operation, arguments: arguments)
+            let prepared = try self.provider.prepareCall(pluginID: owner, operation: operation, arguments: arguments, context: self.adapterContext(owner: owner, generation: session.generation))
+            do {
+                let result = try self.adapterResult(prepared.result, owner: owner)
+                prepared.commit(result)
+                return result
+            } catch { prepared.rollback(); throw error }
         default: throw AyuBridgeFailure.unsupported(operation)
         }
     }
@@ -440,6 +454,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let remote = try self.targetRemote(arguments, owner: owner)
         let name = try self.text(arguments, "name")
         if remote.kind == "class", let value = self.constants(for: remote.className)[name] { return value }
+        if remote.kind == "class", let reader = self.classRegistry.adapters[remote.className]?.staticFields[name], let session = self.sessions[owner] {
+            return try self.adapterResult(reader(self.adapterContext(owner: owner, generation: session.generation)), owner: owner)
+        }
         if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.readableFields.contains(name) == true { return remote.fields[name] ?? .null }
         if remote.kind == "layout", Self.layoutFields.contains(name) { return remote.fields[name] ?? .number(0) }
         throw AyuBridgeFailure.unsupported(remote.className + "." + name)
@@ -451,6 +468,10 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard let session = self.sessions[owner], session.active, session.generation == generation, session.callbackIDs.contains(callbackID) else {
                 self.callbackGate.finish(owner: owner); return
             }
+            do {
+                try self.validateReferences(.array(arguments), owner: owner, registerCallbacks: false)
+                guard try JSONEncoder().encode(arguments).count <= self.limits.responseBytes else { throw AyuBridgeFailure("resource_limit", "Callback payload exceeds quota") }
+            } catch { self.callbackGate.finish(owner: owner); return }
             let sink = self.callback
             self.delivery.async {
                 defer { self.callbackGate.finish(owner: owner) }
@@ -563,7 +584,15 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return Self.methods(for: name)
     }
     private func adapterContext(owner: String, generation: UUID) -> AyuBridgeAdapterContext {
-        AyuBridgeAdapterContext(pluginID: owner) { [weak self] reference in
+        AyuBridgeAdapterContext(pluginID: owner, resolveCallback: { [weak self] reference in
+            guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Callback resolution is worker-only") }
+            guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("callback_expired", "Callback context generation expired") }
+            try self.validateReferences(reference, owner: owner, registerCallbacks: false)
+            guard let id = reference["$callback"].string else { throw AyuBridgeFailure("invalid_arguments", "Expected a declared callback reference") }
+            return AyuBridgeNativeCallback { [weak self] arguments in
+                self?.enqueueCallback(owner: owner, generation: generation, callbackID: id, arguments: arguments)
+            }
+        }) { [weak self] reference in
             guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Adapter context is worker-only") }
             guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("invalid_handle", "Adapter context generation expired") }
             try self.validateReferences(reference, owner: owner, registerCallbacks: false)
@@ -587,6 +616,11 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
     private func adapterResult(_ result: AyuBridgeAdapterResult, owner: String) throws -> AyuBridgeValue {
         switch result {
+        case let .prepared(prepared):
+            do {
+                let value = try self.adapterResult(prepared.result, owner: owner)
+                prepared.commit(value); return value
+            } catch { prepared.rollback(); throw error }
         case let .value(value):
             try self.validateReferences(value, owner: owner, registerCallbacks: false)
             try self.validateAdapterResponse(value); return value
@@ -671,6 +705,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 members[constant] = .object(["status": .string("supported"), "implementation": .string(classImplementation)])
             }
             for field in self.classRegistry.adapters[name]?.readableFields ?? [] {
+                members[field] = .object(["status": .string("partial"), "implementation": .string(classImplementation)])
+            }
+            for field in self.classRegistry.adapters[name]?.staticFields.keys.map({ $0 }) ?? [] {
                 members[field] = .object(["status": .string("partial"), "implementation": .string(classImplementation)])
             }
             classes[name] = .object(["status": .string("partial"), "implementation": .string(classImplementation), "members": .object(members)])

@@ -1,11 +1,11 @@
-"""Bundled smoke fixture. Contains no Telegram/network actions."""
+"""Bundled synthetic fixture. Read-only account context; no network/messages."""
 from base_plugin import BasePlugin
 from ui.settings import Header, Switch, Text
 
 __id__ = "ayu_bridge_smoke"
 __name__ = "Bridge smoke test"
-__description__ = "Проверка загрузки, настроек и выключения моста"
-__version__ = "0.1.0"
+__description__ = "Проверка загрузки, контекста аккаунта, диалога и событий"
+__version__ = "0.2.0"
 
 
 class SmokePlugin(BasePlugin):
@@ -18,7 +18,30 @@ class SmokePlugin(BasePlugin):
             Header(text="Мост работает"),
             Switch(key="enabled_example", text="Пример настройки", default=False),
             Text(text="Загрузок: " + str(self.get_setting("load_count", 0))),
+            Text(text="Событие: " + str(self.get_setting("last_app_event", "ещё не получено"))),
+            Text(text="Проверить аккаунт и нативный диалог", on_click=self._show_context),
         ]
+
+    def on_app_event(self, event):
+        self.set_setting("last_app_event", event.value)
+
+    def _show_context(self, _=None):
+        from client_utils import get_last_fragment, get_selected_account, get_user_config
+        from ui.alert import AlertDialogBuilder
+        fragment = get_last_fragment()
+        if fragment is None:
+            raise RuntimeError("No visible native screen")
+        account = get_selected_account()
+        config = get_user_config(account=account)
+        AlertDialogBuilder(fragment.getParentActivity()).set_title("Контекст моста").set_message(
+            "Аккаунт: " + str(account) + "\nID пользователя: " + str(config.getClientUserId())
+        ).set_positive_button("Проверить callback", self._dialog_clicked).show()
+
+    def _dialog_clicked(self, dialog, which):
+        from ui.bulletin import BulletinHelper
+        dialog.dismiss()
+        self.set_setting("dialog_callback", which)
+        BulletinHelper.show_success("Нативный callback получен")
 
     def on_plugin_unload(self):
         self.log("Plugin unloaded")

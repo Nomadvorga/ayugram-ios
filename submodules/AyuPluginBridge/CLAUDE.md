@@ -27,6 +27,26 @@ Native compilation and app-side visibility/z-order/touch/animation parity must b
 
 ## Verification
 
+### Application adapters
+
+`AyuPluginService.shared` installs `AyuPluginApplicationBridge` with its compiled
+class registry. `TelegramUI/Sources/AyuPluginApplicationBinding.swift` feeds real
+account/profile/application signals and the explicitly authorized root controller;
+unbound, locked, inactive or stale contexts fail closed. Consult
+`Resources/CommonBridge/APPLICATION-BRIDGES.md` for exact members and remaining work
+for all 19 plugins. Do not equate a declared class or shared feature subset with
+full plugin support. Notification observers, hooks, requests, menus and media are
+not provided by this phase.
+
+Provider `prepareCall` returns typed results and deferred native effects. Validate
+state/references/response quotas and allocate the host-owned result before commit;
+on failure, invoke rollback to cancel the native reservation. Never let providers
+manufacture handles. `staticFields` are explicit read-only readers, not reflection.
+Resolve callbacks on the host worker and retain only their revocable native sender,
+never an adapter context. Main never waits for Python. Lifecycle events include
+the exact SDK generation, and stale event/callback errors cannot mark a newer
+plugin load as failing. Lock/background/account transitions remove bridge-owned UI.
+
 ### Lazy Python resource discovery
 
 `Integration/AyuPluginResourceLocator.swift` searches only the main app and the

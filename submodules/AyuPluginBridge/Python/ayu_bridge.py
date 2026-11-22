@@ -701,15 +701,15 @@ class Runtime:
     def emit_event_json(self, text):
         self.check_queue()
         event = parse_json(text)
-        if not isinstance(event, dict) or set(event) != {"version", "plugin_id", "name", "arguments"} or event["version"] != VERSION:
+        if not isinstance(event, dict) or set(event) != {"version", "plugin_id", "generation", "name", "arguments"} or event["version"] != VERSION:
             raise ProtocolError("Malformed lifecycle event")
-        if type(event["version"]) is not int or not isinstance(event["plugin_id"], str):
+        if type(event["version"]) is not int or not isinstance(event["plugin_id"], str) or not isinstance(event["generation"], str):
             raise ProtocolError("Invalid lifecycle identity")
         if event["name"] != "app" or not isinstance(event["arguments"], list) or len(event["arguments"]) != 1:
             raise UnsupportedAPI("Only explicit app lifecycle events are supported")
         scope = self.scopes.get(event["plugin_id"])
-        if scope is None or scope.state != "active":
-            raise BridgeError("NOT_LOADED", "Plugin is not active")
+        if scope is None or scope.state != "active" or event["generation"] != scope.generation:
+            raise BridgeError("NOT_LOADED", "Plugin event generation is not active")
         from base_plugin import AppEvent
         with self.context(scope), self.budget(scope, "event"):
             scope.instance.on_app_event(AppEvent(event["arguments"][0]))

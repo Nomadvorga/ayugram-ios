@@ -61,7 +61,25 @@ public struct AyuBridgeFailure: Error, Codable, Sendable {
 public protocol AyuPluginHostProvider: AnyObject, Sendable {
     var capabilities: [String] { get }
     func call(pluginID: String, operation: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue
+    /// Object-producing calls return typed state, not wire handles. The host
+    /// validates/stores the result before committing asynchronous native effects.
+    func prepareCall(pluginID: String, operation: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult
     func detach(pluginID: String)
+}
+
+public struct AyuBridgeProviderResult: Sendable {
+    public let result: AyuBridgeAdapterResult
+    public let rollback: @Sendable () -> Void
+    public let commit: @Sendable (AyuBridgeValue) -> Void
+    public init(_ result: AyuBridgeAdapterResult, rollback: @escaping @Sendable () -> Void = {}, commit: @escaping @Sendable (AyuBridgeValue) -> Void = { _ in }) {
+        self.result = result; self.rollback = rollback; self.commit = commit
+    }
+}
+
+public extension AyuPluginHostProvider {
+    func prepareCall(pluginID: String, operation: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
+        AyuBridgeProviderResult(.value(try self.call(pluginID: pluginID, operation: operation, arguments: arguments)))
+    }
 }
 
 public final class AyuUnsupportedPluginHostProvider: AyuPluginHostProvider, Sendable {
