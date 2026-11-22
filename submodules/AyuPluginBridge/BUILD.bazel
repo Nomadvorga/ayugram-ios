@@ -29,12 +29,12 @@ swift_library(
     module_name = "AyuPluginBridge",
     srcs = glob(["Sources/**/*.swift", "Integration/**/*.swift"]),
     copts = ["-warnings-as-errors"],
+    # Resource bundles propagate through data, not compilation/link inputs.
+    data = [":AyuPluginSDK", "@ayu_python//:PythonResources"],
     deps = [
         ":AyuPluginPython",
-        ":AyuPluginSDK",
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
-        "@ayu_python//:PythonResources",
     ],
     visibility = ["//visibility:public"],
 )

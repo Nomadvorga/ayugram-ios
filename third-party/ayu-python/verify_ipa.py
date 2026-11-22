@@ -2,6 +2,7 @@
 """Read-only Python dyld/marker checks on the final IPA, without loading its code."""
 from __future__ import annotations
 
+import hashlib
 import json
 import plistlib
 import posixpath
@@ -18,6 +19,42 @@ class VerificationError(RuntimeError):
 
 
 LOAD_COMMANDS = {0xC, 0x80000018, 0x8000001F, 0x80000023, 0x20}
+
+SDK_FILES = (
+    "_ayu_inspection.py", "android_utils.py", "ayu_bridge.py", "base_plugin.py",
+    "client_utils.py", "hook_utils.py", "java.py", "plugin_settings.py",
+    "requests.py", "ui/__init__.py", "ui/alert.py", "ui/bulletin.py", "ui/settings.py",
+)
+
+
+def verify_resources(ipa: zipfile.ZipFile, app: str, sdk_sources: Path | None) -> dict:
+    """Match the exact paths used by Swift/CPython; bundle Info.plist is optional."""
+    prefix = f"{app}/AyuPluginSDK.bundle/Python/"
+    required = [prefix + name for name in SDK_FILES] + [
+        f"{app}/AyuPluginSDK.bundle/Resources/bridge_smoke.plugin",
+        f"{app}/AyuPythonResources.bundle/python/lib/python3.15/encodings/__init__.py",
+    ]
+    for name in required:
+        try:
+            info = ipa.getinfo(name)
+        except KeyError as error:
+            raise VerificationError(f"missing plugin runtime resource: {name}") from error
+        mode = (info.external_attr >> 16) & 0o170000
+        if info.is_dir() or mode not in (0, 0o100000) or not 0 < info.file_size <= 1_048_576:
+            raise VerificationError(f"invalid plugin runtime resource: {name}")
+    if sdk_sources is not None:
+        expected_files = {file.relative_to(sdk_sources).as_posix(): file for file in sdk_sources.rglob("*.py")
+                          if "__pycache__" not in file.parts}
+        if not set(SDK_FILES).issubset(expected_files):
+            raise VerificationError("checked-out SDK source inventory is incomplete")
+        packaged = {name[len(prefix):] for name in ipa.namelist() if name.startswith(prefix) and name.endswith(".py")}
+        if packaged != set(expected_files):
+            raise VerificationError("packaged SDK source inventory differs from the checkout")
+        for name, file in expected_files.items():
+            if file.is_symlink() or hashlib.sha256(ipa.read(prefix + name)).digest() != hashlib.sha256(file.read_bytes()).digest():
+                raise VerificationError(f"packaged SDK source hash differs from checkout: {name}")
+    return {"plugin_sdk_files": len(SDK_FILES), "plugin_runtime_resources": "verified",
+            "plugin_sdk_source_hashes": "verified" if sdk_sources is not None else "not checked"}
 
 
 def _read_thin_macho(stream: BinaryIO, start: int, slice_size: int | None) -> dict:
@@ -153,7 +190,7 @@ def _expand_rpath(path: str, loader: str, executable: str) -> str | None:
     return None
 
 
-def verify_ipa(path: Path) -> dict:
+def verify_ipa(path: Path, *, sdk_sources: Path | None = None) -> dict:
     with zipfile.ZipFile(path) as ipa:
         entries = ipa.namelist()
         names = set(entries)
@@ -262,9 +299,10 @@ def verify_ipa(path: Path) -> dict:
         extensions = {binary for framework, (binary, _) in python_frameworks.items() if framework != "Python"}
         if marker_targets != extensions:
             raise VerificationError("Python .fwork inventory does not match embedded extension frameworks")
+        resources = verify_resources(ipa, app, sdk_sources)
         return {"python_frameworks": len(python_frameworks), "extension_markers": marker_count,
-                "python_dyld_edges": "verified", "python_extensions": "embedded, not startup-linked",
-                "device_launch": "not tested"}
+                 "python_dyld_edges": "verified", "python_extensions": "embedded, not startup-linked",
+                 "device_launch": "not tested", **resources}
 
 
 def main() -> int:
@@ -272,7 +310,8 @@ def main() -> int:
         print("usage: verify_ipa.py <debug_arm64.ipa>", file=sys.stderr)
         return 2
     try:
-        result = verify_ipa(Path(sys.argv[1]))
+        sdk_sources = Path(__file__).resolve().parents[2] / "submodules/AyuPluginBridge/Python"
+        result = verify_ipa(Path(sys.argv[1]), sdk_sources=sdk_sources)
     except (VerificationError, OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
         print(f"Python IPA verification failed: {error}", file=sys.stderr)
         return 1

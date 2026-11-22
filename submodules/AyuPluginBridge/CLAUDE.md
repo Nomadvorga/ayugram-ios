@@ -27,6 +27,29 @@ Native compilation and app-side visibility/z-order/touch/animation parity must b
 
 ## Verification
 
+### Lazy Python resource discovery
+
+`Integration/AyuPluginResourceLocator.swift` searches only the main app and the
+compiled bridge/runtime code-owner resource roots. The `.bundle` directories
+contain data and may have no `Info.plist`; do not gate their use on
+`Bundle(url:)`. Verify the exact Python home/SDK paths and bootstrap files,
+reject symlink escapes, and do not fall back to imported plugin storage or an
+unbounded recursive search. Declare resource bundle targets in `swift_library`
+`data`, not its compile/link `deps`.
+
+Resolve resources before caching `runtimePreparation`. A lookup failure has not
+started Python and may be retried. After a native startup attempt, a failed task
+stays cached until process exit: CPython may already own the process even if SDK
+import failed. Never create another interpreter to retry this condition. Native
+failures are reported with fixed messages based on native domain/codes, without
+tracebacks, source, exception text, or `NSError.userInfo`.
+
+The final IPA verifier checks both resource payloads, every bundled SDK Python
+source against the checked-out inventory/SHA-256, and the existing FAT-aware
+dyld/`.fwork` graph. A green packaging check still is not a device Python startup
+or compatibility result. Keep the exact-hash Atmospheric path Python-free and
+all extensions lazily embedded/signed with `bundle_only = True`.
+
 Run synthetic Python SDK and inspector tests with Python 3.11+; run packaging tests without downloading/compiling a runtime. Native tests require macOS/Xcode and the repository's `Make.py test --target` convention. The full app uses `Make.py build`, not standalone `swift build`. All visual work requires recorded simulator frames as described by the root AGENTS.md. Native bridge packaging and FPS must be checked on a cool device in an optimized build.
 
 A future adapter for account deletion/logout, camera, passcodes, screen capture, message deletion or archive/export must preserve the app's current invariants and platform permissions. Python source support does not create an iOS equivalent of Android OS-only APIs.

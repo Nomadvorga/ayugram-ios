@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 import AyuPluginPython
 
+private final class AyuPluginResourceAnchor: NSObject {}
+
 private final class AyuRuntimeRelay: @unchecked Sendable {
     private let lock = NSLock()
     private var runtime: APBPythonRuntime?
@@ -76,10 +78,16 @@ public struct AyuPluginSetting: Sendable {
     }
 
     public enum Failure: LocalizedError, Sendable {
-        case resources, source, identity, duplicate, storage, inactive, busy, runtime, protocolError, operation(String)
+        case resources, pythonResources, sdkResources, runtimeStartup, sdkStartup, runtimeQueue
+        case source, identity, duplicate, storage, inactive, busy, runtime, protocolError, operation(String)
         public var errorDescription: String? {
             switch self {
-            case .resources: return "В сборке отсутствуют Python runtime или SDK плагинов."
+            case .resources: return "Не удалось найти встроенный тестовый плагин."
+            case .pythonResources: return "Не найдена стандартная библиотека Python: AyuPythonResources.bundle/python."
+            case .sdkResources: return "Не найден SDK плагинов: AyuPluginSDK.bundle/Python."
+            case .runtimeStartup: return "Не удалось запустить встроенный Python. Перезапустите приложение; если ошибка повторится, сообщите номер сборки."
+            case .sdkStartup: return "Встроенный Python не смог загрузить SDK плагинов. Сообщите номер сборки."
+            case .runtimeQueue: return "Очередь Python заполнена. Дождитесь завершения текущих операций."
             case .source: return "Нужен обычный UTF-8 файл .plugin размером до 1 МиБ."
             case .identity: return "Неверный идентификатор плагина или метаданные."
             case .duplicate: return "Плагин с таким идентификатором уже установлен. Сначала удалите его."
@@ -128,14 +136,19 @@ public struct AyuPluginSetting: Sendable {
     /// Python remains lazy: the pinned Atmospheric Snow adapter never starts an interpreter.
     private func prepareRuntime() async throws {
         if let task = self.runtimePreparation { return try await task.value }
+        // Resolve before caching a task: a resource lookup failure did not start
+        // Python and must not become a permanently cached interpreter failure.
+        guard let home = Self.resource(.pythonHome) else { throw Failure.pythonResources }
+        guard let sdk = Self.resource(.sdk) else { throw Failure.sdkResources }
         let task = Task { @MainActor in
-            guard let home = Self.resource("AyuPythonResources", "python"), let sdk = Self.resource("AyuPluginSDK", "Python") else { throw Failure.resources }
-            _ = try await self.complete { done in self.runtime.start(pythonHome: home.path, sdkPath: sdk.path, dispatchHandler: { [host = self.host] owner, request in host.dispatch(request, owner: owner) }, completion: done) }
+            _ = try await self.complete(starting: true) { done in self.runtime.start(pythonHome: home.path, sdkPath: sdk.path, dispatchHandler: { [host = self.host] owner, request in host.dispatch(request, owner: owner) }, completion: done) }
             let caps = try await self.command("runtime.capabilities", owner: "inspector", arguments: [:], bootstrap: true)
             self.classes = Set(caps["classes"].array?.compactMap(\.string) ?? caps["classes"].object?.keys.map { $0 } ?? [])
             self.modules = Set(caps["modules"].array?.compactMap(\.string) ?? [])
         }
         self.runtimePreparation = task
+        // Once native startup was attempted, retain failures until process exit.
+        // CPython may already own the process even when importing the SDK failed.
         try await task.value
     }
 
@@ -167,7 +180,7 @@ public struct AyuPluginSetting: Sendable {
     }
 
     public func importBundledTest() async throws {
-        guard let url = Self.resource("AyuPluginSDK", "Resources/bridge_smoke.plugin") else { throw Failure.resources }
+        guard let url = Self.resource(.smoke) else { throw Failure.resources }
         try await self.importPlugin(from: url)
     }
 
@@ -303,8 +316,18 @@ public struct AyuPluginSetting: Sendable {
         if let code = response["error"]["code"].string { throw Failure.operation(Self.apiLabel(code)) }
         guard response["version"].number == 1 else { throw Failure.protocolError }; return response["result"]
     }
-    private func complete(_ work: (@escaping @Sendable (String?, Error?) -> Void) -> Void) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in work { json, error in if let json, error == nil { continuation.resume(returning: json) } else { continuation.resume(throwing: Failure.runtime) } } }
+    private func complete(starting: Bool = false, _ work: (@escaping @Sendable (String?, Error?) -> Void) -> Void) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in work { json, error in if let json, error == nil { continuation.resume(returning: json) } else { continuation.resume(throwing: Self.runtimeFailure(error, starting: starting)) } } }
+    }
+    // Never forward localizedDescription/userInfo/tracebacks from Python. Only
+    // native-owned domain and numeric codes affect these fixed diagnostics.
+    nonisolated static func runtimeFailure(_ error: Error?, starting: Bool) -> Failure {
+        if let error = error as NSError?, error.domain == "AyuPluginPython" {
+            if error.code == 4 { return .runtimeQueue }
+            if error.code == 3 { return .source }
+            if starting && error.code == 2 { return .sdkStartup }
+        }
+        return starting ? .runtimeStartup : .runtime
     }
     private func detach(_ id: String) async { await withCheckedContinuation { continuation in self.host.detach(pluginID: id) { continuation.resume() } } }
     private func decode(_ json: String) throws -> AyuBridgeValue { guard json.utf8.count <= Self.maximumBytes else { throw Failure.protocolError }; do { return try JSONDecoder().decode(AyuBridgeValue.self, from: Data(json.utf8)) } catch { throw Failure.protocolError } }
@@ -320,10 +343,8 @@ public struct AyuPluginSetting: Sendable {
         let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
         let data = try handle.read(upToCount: limit + 1) ?? Data(); guard data.count <= limit else { throw Failure.source }; return data
     }
-    private static func resource(_ bundle: String, _ directory: String) -> URL? {
-        for parent in [Bundle.main, Bundle(for: APBPythonRuntime.self)] {
-            if let url = parent.url(forResource: bundle, withExtension: "bundle"), let resources = Bundle(url: url)?.resourceURL?.appendingPathComponent(directory), FileManager.default.fileExists(atPath: resources.path) { return resources }
-        }
-        return nil
+    private static func resource(_ payload: AyuPluginResourceLocator.Payload) -> URL? {
+        let roots = [Bundle.main, Bundle(for: AyuPluginResourceAnchor.self), Bundle(for: APBPythonRuntime.self)].compactMap(\.resourceURL)
+        return AyuPluginResourceLocator.locate(payload, roots: roots)
     }
 }

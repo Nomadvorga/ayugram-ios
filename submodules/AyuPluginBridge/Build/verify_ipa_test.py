@@ -22,6 +22,9 @@ PYTHON_ID = "@rpath/Python.framework/Python"
 EXT_ID = f"@rpath/{EXT}.framework/{EXT}"
 APP = "Payload/Swiftgram.app"
 MARKER = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/lib-dynload/_bisect.cpython-315-iphoneos.fwork"
+SDK_PREFIX = f"{APP}/AyuPluginSDK.bundle/Python/"
+ENCODINGS = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/encodings/__init__.py"
+SMOKE = f"{APP}/AyuPluginSDK.bundle/Resources/bridge_smoke.plugin"
 
 
 def macho(*, install_id=None, loads=(), rpaths=(), platform=2, subtype=0, load_kind=0xC):
@@ -65,7 +68,10 @@ def fixture():
         f"{APP}/Info.plist": plistlib.dumps({"CFBundleExecutable": "Swiftgram"}),
         f"{APP}/Swiftgram": macho(loads=(PYTHON_ID,), rpaths=("@executable_path/Frameworks",)),
         MARKER: f"Frameworks/{EXT}.framework/{EXT}\n".encode(),
+        ENCODINGS: b"# synthetic encodings fixture\n",
+        SMOKE: b"# synthetic smoke source\n",
     }
+    entries.update({SDK_PREFIX + name: b"# synthetic SDK source\n" for name in verify.SDK_FILES})
     for framework, install_id in (("Python", PYTHON_ID), (EXT, EXT_ID)):
         base = f"{APP}/Frameworks/{framework}.framework"
         entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": framework})
@@ -86,13 +92,13 @@ def add_extension(entries, module, *, loads=(PYTHON_ID,), subtype=0):
 
 
 class VerifyIPAHelperTests(unittest.TestCase):
-    def verify_entries(self, entries):
+    def verify_entries(self, entries, *, sdk_sources=None):
         with tempfile.TemporaryDirectory() as temporary:
             ipa = Path(temporary) / "fixture.ipa"
             with zipfile.ZipFile(ipa, "w") as archive:
                 for name, data in entries.items():
                     archive.writestr(name, data)
-            return verify.verify_ipa(ipa)
+            return verify.verify_ipa(ipa, sdk_sources=sdk_sources)
 
     def test_complete_python_graph_and_fwork_inventory(self):
         result = self.verify_entries(fixture())
@@ -100,6 +106,63 @@ class VerifyIPAHelperTests(unittest.TestCase):
         self.assertEqual(result["extension_markers"], 1)
         self.assertEqual(result["python_extensions"], "embedded, not startup-linked")
         self.assertEqual(result["device_launch"], "not tested")
+        self.assertEqual(result["plugin_runtime_resources"], "verified")
+        self.assertEqual(result["plugin_sdk_files"], 13)
+
+    def test_resource_bundles_can_be_data_only_without_info_plist(self):
+        entries = fixture()
+        self.assertFalse(any(".bundle/Info.plist" in name for name in entries))
+        self.verify_entries(entries)
+
+    def test_missing_bootstrap_stdlib_smoke_or_sdk_file_is_rejected(self):
+        for missing in [ENCODINGS, SMOKE] + [SDK_PREFIX + name for name in verify.SDK_FILES]:
+            with self.subTest(missing=missing):
+                entries = fixture()
+                del entries[missing]
+                with self.assertRaisesRegex(verify.VerificationError, "missing plugin runtime resource"):
+                    self.verify_entries(entries)
+
+    def test_wrong_sdk_directory_does_not_count_as_runtime_support(self):
+        for wrong in ["ayu_bridge.py", "python/ayu_bridge.py", "Python/Python/ayu_bridge.py"]:
+            entries = fixture()
+            data = entries.pop(SDK_PREFIX + "ayu_bridge.py")
+            entries[f"{APP}/AyuPluginSDK.bundle/" + wrong] = data
+            with self.subTest(wrong=wrong), self.assertRaisesRegex(verify.VerificationError, "missing plugin runtime resource"):
+                self.verify_entries(entries)
+
+    def test_empty_directory_or_symlink_cannot_replace_a_runtime_file(self):
+        entries = fixture()
+        entries[ENCODINGS] = b""
+        with self.assertRaisesRegex(verify.VerificationError, "invalid plugin runtime resource"):
+            self.verify_entries(entries)
+        for mode in [0o040755, 0o120777]:
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "fixture.ipa"
+                with zipfile.ZipFile(path, "w") as archive:
+                    for name, data in fixture().items():
+                        info = zipfile.ZipInfo(name)
+                        info.external_attr = ((mode if name == ENCODINGS else 0o100644) << 16)
+                        archive.writestr(info, data)
+                with self.subTest(mode=mode), self.assertRaisesRegex(verify.VerificationError, "invalid plugin runtime resource"):
+                    verify.verify_ipa(path)
+
+    def test_packaged_sdk_inventory_and_hashes_match_the_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            entries = fixture()
+            for name in verify.SDK_FILES:
+                file = source / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(entries[SDK_PREFIX + name])
+            result = self.verify_entries(entries, sdk_sources=source)
+            self.assertEqual(result["plugin_sdk_source_hashes"], "verified")
+            entries[SDK_PREFIX + "ayu_bridge.py"] = b"# stale SDK\n"
+            with self.assertRaisesRegex(verify.VerificationError, "source hash differs"):
+                self.verify_entries(entries, sdk_sources=source)
+            entries = fixture()
+            entries[SDK_PREFIX + "obsolete.py"] = b"# untracked SDK\n"
+            with self.assertRaisesRegex(verify.VerificationError, "inventory differs"):
+                self.verify_entries(entries, sdk_sources=source)
 
     def test_crypto_extensions_can_be_embedded_without_startup_loads(self):
         entries = fixture()

@@ -29,6 +29,6 @@ jobs:
       - name: Test SDK contract
         run: python3 -B -m unittest discover -s submodules/AyuPluginBridge/Tests/Python -v
       - name: Test runtime packaging
-        run: python3 -B -m unittest submodules.AyuPluginBridge.Build.prepare_test -v
+        run: python3 -B -m unittest submodules.AyuPluginBridge.Build.prepare_test submodules.AyuPluginBridge.Build.verify_ipa_test -v
       - name: Inspect bundled smoke fixture without execution
         run: python3 -B -m tools.plugin_inspector submodules/AyuPluginBridge/Resources/bridge_smoke.plugin --format json
