@@ -116,6 +116,12 @@ jobs:
           EOF
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
+      - name: Test Python packaging helpers (offline fixtures)
+        run: |
+          python3 -m unittest \
+            submodules.AyuPluginBridge.Build.prepare_test \
+            submodules.AyuPluginBridge.Build.verify_ipa_test -v
+
       - name: Build
         timeout-minutes: 320
         run: |
@@ -138,6 +144,9 @@ jobs:
           for ipa in build/artifacts/*.ipa; do
             [ "$ipa" = build/artifacts/AyuGram.ipa ] || mv "$ipa" build/artifacts/AyuGram.ipa
           done
+
+      - name: Verify packaged Python dylibs before upload
+        run: python3 third-party/ayu-python/verify_ipa.py build/artifacts/AyuGram.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

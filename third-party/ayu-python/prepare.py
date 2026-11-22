@@ -195,6 +195,109 @@ def _architectures(binary: Path) -> set[str]:
     return arches
 
 
+DYLIB_LOAD_COMMANDS = frozenset({
+    "LC_LOAD_DYLIB", "LC_LOAD_WEAK_DYLIB", "LC_REEXPORT_DYLIB",
+    "LC_LOAD_UPWARD_DYLIB", "LC_LAZY_LOAD_DYLIB",
+})
+
+
+def _run_macho_tool(tool: str, args: list[str]) -> str:
+    command = ["xcrun", tool, *args]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", None) or str(error)
+        raise PrepareError(f"{tool} failed while relocating Python frameworks: {detail}") from error
+    return result.stdout
+
+
+def _parse_dylib_commands(output: str) -> list[tuple[str, str]]:
+    """Read install IDs and dependencies for every architecture in otool -l."""
+    commands = []
+    current = None
+    for line in output.splitlines():
+        match = re.fullmatch(r"\s*cmd (LC_[A-Z_]+)\s*", line)
+        if match:
+            current = match[1]
+        elif current == "LC_ID_DYLIB" or current in DYLIB_LOAD_COMMANDS:
+            name = re.fullmatch(r"\s*name (.+) \(offset [0-9]+\)\s*", line)
+            if name:
+                commands.append((current, name[1]))
+                current = None
+    return commands
+
+
+def _is_system_dylib(name: str) -> bool:
+    return name.startswith(("/usr/lib/", "/System/Library/"))
+
+
+def _relocate_python_frameworks(
+    repository_root: Path,
+    extension_targets: dict[str, dict[str, str]],
+    module_maps: tuple[dict[str, tuple[Path, str]], ...],
+) -> None:
+    """Rewrite copied Mach-O IDs/edges before Bazel links or signs the frameworks.
+
+    Renaming a .so file does not change LC_ID_DYLIB. Without this step, the app
+    links against BeeWare's Modules/foo.so ID and dyld aborts before main runs.
+    Never mutate the checksum-verified source archive or ship loose .so files.
+    """
+    for slice_name, maps in (
+        (DEVICE_SLICE, module_maps[:1]),
+        (SIMULATOR_SLICE, module_maps[1:]),
+    ):
+        binaries = {"Python": repository_root / "PythonRuntime.xcframework" / slice_name / "Python.framework" / "Python"}
+        for entry in extension_targets.values():
+            framework = entry["framework"]
+            binaries[framework] = repository_root / "PythonExtensions" / f"{framework}.xcframework" / slice_name / f"{framework}.framework" / framework
+        expected_ids = {framework: f"@rpath/{framework}.framework/{framework}" for framework in binaries}
+        allowed_ids = set(expected_ids.values())
+        aliases: dict[str, str] = {}
+
+        def register(alias: str, expected: str) -> None:
+            previous = aliases.get(alias)
+            if previous is not None and previous != expected:
+                raise PrepareError(f"ambiguous Python library install name: {alias}")
+            aliases[alias] = expected
+
+        commands_by_framework = {}
+        for framework, binary in binaries.items():
+            commands = _parse_dylib_commands(_run_macho_tool("otool", ["-l", str(binary)]))
+            ids = [name for kind, name in commands if kind == "LC_ID_DYLIB"]
+            if not ids:
+                raise PrepareError(f"Python framework has no LC_ID_DYLIB: {binary}")
+            commands_by_framework[framework] = commands
+            for name in ids:
+                register(name, expected_ids[framework])
+        register("Python", expected_ids["Python"])
+        for module_map in maps:
+            for module, (source, _) in module_map.items():
+                register(source.name, expected_ids[extension_targets[module]["framework"]])
+
+        for framework, binary in binaries.items():
+            expected = expected_ids[framework]
+            changes = {}
+            for kind, name in commands_by_framework[framework]:
+                if kind == "LC_ID_DYLIB" or _is_system_dylib(name) or name in allowed_ids:
+                    continue
+                replacement = aliases.get(name) or aliases.get(PurePosixPath(name).name)
+                if replacement is None:
+                    raise PrepareError(f"unbundled Python framework dependency in {framework}: {name}")
+                changes[name] = replacement
+            args = ["-id", expected]
+            for old, new in sorted(changes.items()):
+                args.extend(["-change", old, new])
+            _run_macho_tool("install_name_tool", [*args, str(binary)])
+            verified = _parse_dylib_commands(_run_macho_tool("otool", ["-l", str(binary)]))
+            ids = [name for kind, name in verified if kind == "LC_ID_DYLIB"]
+            original_id_count = sum(kind == "LC_ID_DYLIB" for kind, _ in commands_by_framework[framework])
+            if len(ids) != original_id_count or any(name != expected for name in ids):
+                raise PrepareError(f"failed to relocate every architecture of {framework}")
+            for kind, name in verified:
+                if kind in DYLIB_LOAD_COMMANDS and not (_is_system_dylib(name) or name in allowed_ids):
+                    raise PrepareError(f"unresolved dependency after relocation in {framework}: {name}")
+
+
 def _extension_map(root: Path, relative_dynload: str) -> dict[str, tuple[Path, str]]:
     dynload = root / validate_relative_path(relative_dynload)
     dynload = contained_path(root, dynload)
@@ -564,6 +667,9 @@ def prepare(archive_root: Path, repository_root: Path, certifi_root: Path) -> di
             fw_path = extension_root / f"{framework}.xcframework" / slice_name / f"{framework}.framework"
             (fw_path / f"{framework}.origin").write_text(origin + "\n")
 
+    _relocate_python_frameworks(
+        repository_root, extension_targets, (device_modules, sim_arm_modules, sim_x86_modules),
+    )
     _copy_sysconfig(archive_root, resource_stdlib)
     _copy_certifi(certifi_root, repository_root / "PythonResources")
     (repository_root / "PythonResources" / "PYTHON_VERSION.txt").write_text(PYTHON_RELEASE + "\n")

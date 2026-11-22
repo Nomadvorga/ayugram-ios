@@ -21,6 +21,35 @@ prepare = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(prepare)
 
 
+def fake_macho_tools(records=None):
+    """Stateful otool/install_name_tool fixture; never runs a native tool."""
+    records = {} if records is None else records
+    calls = []
+
+    def run(tool, arguments):
+        path = arguments[-1]
+        if path not in records:
+            legacy = "@rpath/Python.framework/Python" if Path(path).name == "Python" else "Modules/_ssl.cpython-315-ios.so"
+            records[path] = {"ids": [legacy], "loads": ["@rpath/Python.framework/Python", "/usr/lib/libSystem.B.dylib"]}
+        record = records[path]
+        if tool == "otool":
+            commands = [("LC_ID_DYLIB", name) for name in record["ids"]]
+            commands += [("LC_LOAD_DYLIB", name) for name in record["loads"]]
+            return "\n".join(f"Load command {index}\n          cmd {kind}\n      cmdsize 104\n         name {name} (offset 24)" for index, (kind, name) in enumerate(commands))
+        if tool != "install_name_tool":
+            raise AssertionError(tool)
+        calls.append(arguments)
+        record["ids"] = [arguments[1]] * len(record["ids"])
+        offset = 2
+        while arguments[offset] == "-change":
+            old, new = arguments[offset + 1:offset + 3]
+            record["loads"] = [new if name == old else name for name in record["loads"]]
+            offset += 3
+        return ""
+
+    return run, calls
+
+
 class PrepareHelperTests(unittest.TestCase):
     def test_relative_path_rejects_traversal(self) -> None:
         for unsafe in ("../escape", "/absolute", "a/../../escape", "a\\..\\escape"):
@@ -83,6 +112,44 @@ class PrepareHelperTests(unittest.TestCase):
         self.assertIn('"@ayu_python//:PythonResources"', helper)
         self.assertIn("python_resource_deps", helper)
 
+    def test_relocation_updates_bisect_ids_and_cross_module_edges_in_both_slices(self) -> None:
+        root = Path("/fixture/generated")
+        targets = {module: {"framework": prepare.framework_name_for_module(module)} for module in ("_bisect", "_ssl")}
+        maps = tuple({module: (Path("/fixture/archive") / f"{module}.cpython-315-{platform}.so", "unused.fwork") for module in targets}
+                     for platform in ("iphoneos", "iphonesimulator", "iphonesimulator"))
+        records = {}
+        for slice_name in (prepare.DEVICE_SLICE, prepare.SIMULATOR_SLICE):
+            for module, entry in targets.items():
+                framework = entry["framework"]
+                binary = root / "PythonExtensions" / f"{framework}.xcframework" / slice_name / f"{framework}.framework" / framework
+                platform = "iphoneos" if slice_name == prepare.DEVICE_SLICE else "iphonesimulator"
+                records[str(binary)] = {
+                    "ids": [f"Modules/{module}.cpython-315-{platform}.so"] * (1 if platform == "iphoneos" else 2),
+                    "loads": ["Python", "Modules/_bisect.cpython-315-" + platform + ".so"],
+                }
+        run, calls = fake_macho_tools(records)
+        with patch.object(prepare, "_run_macho_tool", side_effect=run):
+            prepare._relocate_python_frameworks(root, targets, maps)
+        self.assertEqual(len(calls), 6)  # Python + both modules, device + simulator.
+        for binary, metadata in records.items():
+            framework = Path(binary).name
+            self.assertEqual(set(metadata["ids"]), {f"@rpath/{framework}.framework/{framework}"})
+            self.assertFalse(any(name.startswith("Modules/") for name in metadata["loads"]))
+        self.assertTrue(any("-change" in call for call in calls))
+
+    def test_relocation_rejects_unbundled_dylib(self) -> None:
+        root = Path("/fixture/generated")
+        runtime = root / "PythonRuntime.xcframework" / prepare.DEVICE_SLICE / "Python.framework" / "Python"
+        run, _ = fake_macho_tools({str(runtime): {"ids": ["Python"], "loads": ["/build/missing/libffi.dylib"]}})
+        with patch.object(prepare, "_run_macho_tool", side_effect=run), self.assertRaisesRegex(prepare.PrepareError, "unbundled"):
+            prepare._relocate_python_frameworks(root, {}, ({}, {}, {}))
+
+    def test_relocation_detects_tool_that_did_not_update_ids(self) -> None:
+        def unchanged(tool, args):
+            return "cmd LC_ID_DYLIB\nname Modules/_bisect.so (offset 24)\n" if tool == "otool" else ""
+        with patch.object(prepare, "_run_macho_tool", side_effect=unchanged), self.assertRaisesRegex(prepare.PrepareError, "failed to relocate"):
+            prepare._relocate_python_frameworks(Path("/fixture/generated"), {}, ({}, {}, {}))
+
     def test_complete_archive_preparation_without_native_tools(self) -> None:
         """Exercise the actual preparation path, not only isolated formatting helpers."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -128,9 +195,13 @@ class PrepareHelperTests(unittest.TestCase):
                 Path(arguments[-1]).write_bytes(b"\xca\xfe\xba\xbe" + b"universal")
                 return ""
 
+            macho_tool, relocation_calls = fake_macho_tools()
             with patch.object(prepare, "_architectures", side_effect=[{"arm64"}, {"arm64"}, {"x86_64"}, {"arm64", "x86_64"}]), \
-                 patch.object(prepare, "_run_lipo", side_effect=fake_lipo):
+                 patch.object(prepare, "_run_lipo", side_effect=fake_lipo), \
+                 patch.object(prepare, "_run_macho_tool", side_effect=macho_tool):
                 metadata = prepare.prepare(archive, output, certifi)
+            self.assertEqual(len(relocation_calls), 4)
+            self.assertEqual((xcf / prepare.DEVICE_SLICE / "lib-arm64/python3.15/lib-dynload/_ssl.cpython-315-ios.so").read_bytes(), b"\xcf\xfa\xed\xfearm64")
             self.assertEqual(set(metadata["extension_modules"]), {"_ssl"})
             resource = output / "PythonResources" / "python" / "lib" / "python3.15"
             self.assertTrue((resource / "encodings" / "__init__.py").is_file())
