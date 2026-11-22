@@ -31,6 +31,8 @@ swift_library(
     deps = [
         ":AyuPluginPython",
         ":AyuPluginSDK",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
         "@ayu_python//:PythonResources",
     ],
     visibility = ["//visibility:public"],
@@ -40,7 +42,11 @@ swift_library(
     name = "AyuPluginBridgeTestsLib",
     testonly = True,
     srcs = glob(["Tests/Swift/*.swift"]),
-    deps = [":AyuPluginBridge"],
+    deps = [
+        ":AyuPluginBridge",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
+    ],
 )
 
 ios_test_runner(

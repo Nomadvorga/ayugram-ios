@@ -91,6 +91,9 @@ swift_library(
         "//conditions:default": [],
     }),
     deps = sgdeps + [ # MARK: Swiftgram
+        "//submodules/AyuPluginBridge:AyuPluginBridge",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/CrashReporting:CrashReporting",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

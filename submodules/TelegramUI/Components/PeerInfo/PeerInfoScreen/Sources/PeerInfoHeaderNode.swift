@@ -163,6 +163,25 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let usernameNodeRawContainer: ASDisplayNode
     let usernameNode: MultiScaleTextNode
     var actionButtonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderActionButtonNode] = [:]
+    private var atmosphericVisible = false
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.refreshAtmosphericSurfaces()
+    }
+
+    private func refreshAtmosphericSurfaces() {
+        self.avatarListNode.avatarContainerNode.updateAtmosphericForegroundAlpha(self.avatarOverlayNode.atmosphericForegroundAlpha)
+        self.avatarListNode.avatarContainerNode.updateAtmosphericVisibility(self.atmosphericVisible)
+        let backgroundVisible = !self.buttonsBackgroundNode.isHidden && self.buttonsBackgroundNode.alpha > 0.05
+            && !self.buttonsMaskView.isHidden && self.buttonsMaskView.alpha > 0.05
+        for button in self.buttonNodes.values {
+            button.updateAtmosphericVisibility(self.atmosphericVisible, backgroundVisible: backgroundVisible)
+        }
+        for button in self.actionButtonNodes.values {
+            button.updateAtmosphericVisibility(self.atmosphericVisible)
+        }
+    }
     var buttonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderButtonNode] = [:]
     /// The action buttons in their on-screen order.
     var orderedButtonNodes: [PeerInfoHeaderButtonNode] {
@@ -384,6 +403,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.animationRenderer = context.animationRenderer
         
         super.init()
+
+        self.avatarOverlayNode.atmosphericForegroundUpdated = { [weak self] in
+            guard let self else { return }
+            self.avatarListNode.avatarContainerNode.updateAtmosphericForegroundAlpha(self.avatarOverlayNode.atmosphericForegroundAlpha)
+        }
                 
         requestUpdateLayoutImpl = { [weak self] in
             self?.requestUpdateLayout?(false)
@@ -2301,6 +2325,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if !actionButtonKeys.contains(key) {
                 if let buttonNode = self.actionButtonNodes[key] {
                     self.actionButtonNodes.removeValue(forKey: key)
+                    buttonNode.removeAtmosphericSurface()
                     transition.updateAlpha(node: buttonNode, alpha: 0.0) { [weak buttonNode] _ in
                         buttonNode?.removeFromSupernode()
                     }
@@ -2428,6 +2453,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if !buttonKeys.contains(key) {
                 if let buttonNode = self.buttonNodes[key] {
                     self.buttonNodes.removeValue(forKey: key)
+                    buttonNode.removeAtmosphericSurface()
                     transition.updateAlpha(layer: buttonNode.backgroundContainerView.layer, alpha: 0.0)
                     transition.updateAlpha(node: buttonNode, alpha: 0.0) { [weak buttonNode] _ in
                         buttonNode?.backgroundContainerView.removeFromSuperview()
@@ -2857,6 +2883,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.updateAvatarMask(transition: .immediate)
         }
         
+        self.refreshAtmosphericSurfaces()
         return resolvedHeight
     }
     

@@ -19,6 +19,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = sgdeps + [
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
     	"//submodules/SSignalKit/SwiftSignalKit",

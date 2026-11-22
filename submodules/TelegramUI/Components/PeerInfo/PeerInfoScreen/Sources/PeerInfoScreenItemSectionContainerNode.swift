@@ -4,6 +4,8 @@ import Display
 import AsyncDisplayKit
 import AccountContext
 import TelegramPresentationData
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     private let backgroundNode: ASDisplayNode
@@ -13,6 +15,43 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     
     private var currentItems: [PeerInfoScreenItem] = []
     var itemNodes: [AnyHashable: PeerInfoScreenItemNode] = [:]
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+    private var atmosphericRect: CGRect = .zero
+    private var atmosphericHasCorners = false
+    private var atmosphericIsDark = false
+
+    func updateAtmosphericVisibility(_ visible: Bool, viewport: CGRect) {
+        MainActor.assumeIsolated { self.updateAtmosphericVisibilityOnMainActor(visible, viewport: viewport) }
+    }
+
+    @MainActor private func updateAtmosphericVisibilityOnMainActor(_ visible: Bool, viewport: CGRect) {
+        // The controller supplies its scroll viewport in this section's coordinates.
+        // Header/comment rows are outside atmosphericRect, never standalone cards.
+        let rect = self.atmosphericRect
+        let clipped = rect.intersection(viewport).intersection(AtmosphericSurfaceLayout.clippedRect(rect, in: self.view))
+        let eligible = self.atmosphericHasCorners && rect.width >= 24.0 && rect.width <= 1200.0
+            && rect.height >= 28.0 && rect.height <= 1800.0
+        let isVisible = visible && eligible && !clipped.isEmpty
+            && AtmosphericSurfaceLayout.hierarchyAllowsDecoration(in: self.view)
+        if self.atmosphericHost == nil && isVisible {
+            let host = AtmosphericSurfaceHostView(container: self.view, role: .sectionCard)
+            self.atmosphericHost = host
+            self.view.addSubview(host)
+        }
+        self.atmosphericHost?.update(geometry: AtmosphericHostGeometry(
+            rect: rect, cornerRadius: 26.0, visible: isVisible,
+            drawTopEdge: !clipped.isEmpty && clipped.minY <= rect.minY + 0.5,
+            drawBottomEdge: !clipped.isEmpty && clipped.maxY >= rect.maxY - 0.5,
+            isDarkTheme: self.atmosphericIsDark
+        ))
+    }
+
+    func removeAtmosphericSurface() {
+        MainActor.assumeIsolated {
+            self.atmosphericHost?.removeFromSuperview()
+            self.atmosphericHost = nil
+        }
+    }
     
     override init() {
         self.backgroundNode = ASDisplayNode()
@@ -36,6 +75,8 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     }
     
     func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, hasCorners: Bool, presentationData: PresentationData, items: [PeerInfoScreenItem], transition: ContainedViewLayoutTransition) -> CGFloat {
+        self.atmosphericHasCorners = hasCorners
+        self.atmosphericIsDark = presentationData.theme.overallDarkAppearance
         self.backgroundNode.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
         self.topSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
@@ -135,6 +176,8 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
             transition.updateAlpha(node: self.bottomSeparatorNode, alpha: 1.0)
         }
         
+        self.atmosphericRect = CGRect(x: 0.0, y: contentWithBackgroundOffset, width: width,
+            height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))
         return contentHeight
     }
     

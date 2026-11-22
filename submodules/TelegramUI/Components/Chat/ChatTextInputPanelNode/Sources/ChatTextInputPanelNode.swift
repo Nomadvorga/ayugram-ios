@@ -733,7 +733,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.glassBackgroundContainer = GlassBackgroundContainerView()
         
-        self.textInputContainerBackgroundView = GlassBackgroundView(frame: CGRect())
+        self.textInputContainerBackgroundView = MainActor.assumeIsolated {
+            let view = GlassBackgroundView(frame: CGRect())
+            view.atmosphericRole = .chatInput
+            return view
+        }
         
         self.accessoryPanelContainer = UIView()
         self.accessoryPanelContainer.clipsToBounds = true
@@ -766,7 +770,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.menuButton.clipsToBounds = true
         self.menuButton.cornerRadius = 16.0
         self.menuButton.accessibilityLabel = presentationInterfaceState.strings.Conversation_InputMenu
-        self.menuButtonBackgroundView = GlassBackgroundView()
+        self.menuButtonBackgroundView = MainActor.assumeIsolated {
+            let view = GlassBackgroundView()
+            view.atmosphericRole = .actionBar
+            return view
+        }
         self.menuButtonBackgroundView.isUserInteractionEnabled = false
         self.menuButtonClippingNode = ASDisplayNode()
         self.menuButtonClippingNode.clipsToBounds = true
@@ -793,7 +801,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButton.accessibilityTraits = [.button]
         self.attachmentButton.isAccessibilityElement = true
         
-        self.attachmentButtonBackground = GlassBackgroundView(frame: CGRect())
+        self.attachmentButtonBackground = MainActor.assumeIsolated {
+            let view = GlassBackgroundView(frame: CGRect())
+            view.atmosphericRole = .actionBar
+            return view
+        }
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButton)
         
         self.attachmentButtonIcon = UIImageView()

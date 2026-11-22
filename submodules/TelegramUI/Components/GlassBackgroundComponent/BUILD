@@ -10,6 +10,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI",
         "//submodules/Display",
         "//submodules/ComponentFlow",
         "//submodules/Components/ComponentDisplayAdapters",

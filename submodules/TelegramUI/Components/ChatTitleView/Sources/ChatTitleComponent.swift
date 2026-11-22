@@ -1604,6 +1604,7 @@ public final class ChatTitleComponent: Component {
                     backgroundView = current
                 } else {
                     backgroundView = GlassBackgroundView()
+                    backgroundView.atmosphericRole = .actionBar
                     self.backgroundView = backgroundView
                     self.addSubview(backgroundView)
                     if self.lentContentWrapper == nil && self.lentExpansionLabels == nil {

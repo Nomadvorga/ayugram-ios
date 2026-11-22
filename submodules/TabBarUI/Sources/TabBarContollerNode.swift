@@ -87,6 +87,14 @@ final class TabBarControllerNode: ASDisplayNode {
     private var appliedPlacement: TabBarAppliedPlacement?
     private var isUpdateRequested: Bool = false
     private var isChangingSelectedIndex: Bool = false
+    private var atmosphericVisible = false
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        MainActor.assumeIsolated {
+            (self.tabBarView.view as? TabBarComponent.View)?.updateAtmosphericVisibility(visible && !self.tabBarHidden && self.layoutResult?.params.toolbar == nil)
+        }
+    }
     
     func setCurrentController(_ controller: ViewController?) -> () -> Void {
         guard controller !== self.currentController else {
@@ -404,6 +412,9 @@ final class TabBarControllerNode: ASDisplayNode {
             transition.updateAlpha(layer: tabBarComponentView.layer, alpha: tabBarAlpha)
             // A hidden bar is moved below the screen, not removed: VoiceOver must not reach it there.
             tabBarComponentView.accessibilityElementsHidden = self.tabBarHidden
+            MainActor.assumeIsolated {
+                (tabBarComponentView as? TabBarComponent.View)?.updateAtmosphericVisibility(self.atmosphericVisible && !self.tabBarHidden && params.toolbar == nil)
+            }
         }
         
         tabBarFrameTransition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)

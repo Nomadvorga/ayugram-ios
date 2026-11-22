@@ -553,7 +553,11 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.context = context
         
         self.backgroundContainerView = GlassBackgroundContainerView()
-        self.backgroundView = GlassBackgroundView()
+        self.backgroundView = MainActor.assumeIsolated {
+            let view = GlassBackgroundView()
+            view.atmosphericRole = .folders
+            return view
+        }
         self.backgroundContainerView.contentView.addSubview(self.backgroundView)
         
         self.scrollNode = ASScrollNode()

@@ -801,6 +801,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         self.contentContainer = ASDisplayNode()
         
         self.backgroundView = GlassBackgroundView()
+        self.backgroundView.atmosphericRole = .actionBar
         
         self.titleContainerView = PortalSourceView()
         self.titleTextNode = ImmediateAnimatedCountLabelNode()

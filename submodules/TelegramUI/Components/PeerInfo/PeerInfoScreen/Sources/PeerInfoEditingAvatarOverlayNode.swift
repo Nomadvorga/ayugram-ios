@@ -19,6 +19,11 @@ final class PeerInfoEditingAvatarOverlayNode: ASDisplayNode {
     private var statusNode: RadialStatusNode
     
     private var currentRepresentation: TelegramMediaImageRepresentation?
+    var atmosphericForegroundUpdated: (() -> Void)?
+
+    var atmosphericForegroundAlpha: CGFloat {
+        return self.isHidden ? 0.0 : self.updatingAvatarOverlay.alpha * self.alpha
+    }
     
     init(context: AccountContext) {
         self.context = context
@@ -57,9 +62,13 @@ final class PeerInfoEditingAvatarOverlayNode: ASDisplayNode {
     
     func updateTransitionFraction(_ fraction: CGFloat, transition: ContainedViewLayoutTransition) {
         transition.updateAlpha(node: self, alpha: 1.0 - fraction)
+        self.atmosphericForegroundUpdated?()
     }
     
     func update(peer: EnginePeer?, threadData: MessageHistoryThreadData?, chatLocation: ChatLocation, item: PeerInfoAvatarListItem?, updatingAvatar: PeerInfoUpdatingAvatar?, uploadProgress: AvatarUploadProgress?, theme: PresentationTheme, avatarSize: CGFloat, isEditing: Bool) {
+        defer {
+            self.atmosphericForegroundUpdated?()
+        }
         guard let peer = peer else {
             return
         }
@@ -122,6 +131,7 @@ final class PeerInfoEditingAvatarOverlayNode: ASDisplayNode {
                         self.currentRepresentation = nil
                         self.imageNode.setSignal(.single(nil))
                         transition.updateAlpha(node: self.updatingAvatarOverlay, alpha: overlayHidden ? 0.0 : 1.0)
+                        self.atmosphericForegroundUpdated?()
                     }
                     Queue.mainQueue().after(0.3) {
                         update()

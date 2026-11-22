@@ -384,6 +384,8 @@ swift_library(
         "//submodules/DrawingUI:DrawingUIResources",
         "//submodules/TelegramUI:TelegramUIResources",
         "//submodules/TelegramUI:TelegramUIAssets",
+        "//submodules/AyuPluginBridge:AyuPluginSDK",
+        "@ayu_python//:PythonResources",
         "//submodules/TelegramUI/Components/Calls/CallScreen:Assets",
         ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
     ],
@@ -979,6 +981,10 @@ framework_exported_symbols(
     name = "TelegramUIFrameworkExportedSymbols",
     framework_deps = [
         "//submodules/TelegramUI:TelegramUI",
+        "//submodules/AyuPluginBridge:AyuPluginBridge",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
+        "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
     ],
     provided_by_frameworks = [
         "//submodules/MtProtoKit:MtProtoKit",
@@ -1033,6 +1039,10 @@ ios_framework(
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
+        "//submodules/AyuPluginBridge:AyuPluginBridge",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
+        "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
     ] + debug_deps,
 )
 

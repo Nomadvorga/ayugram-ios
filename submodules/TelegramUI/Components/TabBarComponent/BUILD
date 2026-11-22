@@ -16,6 +16,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = sgdeps + [
+        "//submodules/AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI",
         "//submodules/Display",
         "//submodules/TelegramPresentationData",
         "//submodules/ComponentFlow",

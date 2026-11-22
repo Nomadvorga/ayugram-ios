@@ -608,6 +608,11 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private let tabsBackgroundContainer: GlassBackgroundContainerView
     private let tabsBackgroundView: GlassBackgroundView
     private let tabsContainer = ComponentView<Empty>()
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        MainActor.assumeIsolated {
+            self.tabsBackgroundView.atmosphericOwnerVisible = visible
+        }
+    }
     private var didJustReorderTabs = false
     
     private var actionPanel: ComponentView<Empty>?
@@ -684,7 +689,12 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.switchToMediaTarget = switchToMediaTarget
         
         self.tabsBackgroundContainer = GlassBackgroundContainerView()
-        self.tabsBackgroundView = GlassBackgroundView()
+        self.tabsBackgroundView = MainActor.assumeIsolated {
+            let view = GlassBackgroundView()
+            view.atmosphericRole = .profileTabs
+            view.atmosphericOwnerVisible = false
+            return view
+        }
         
         self.headerContainer = SparseContainerView()
         

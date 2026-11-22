@@ -6,6 +6,7 @@ import CountrySelectionUI
 //
 import Foundation
 import UIKit
+import AyuAtmosphericUI
 import Display
 import AsyncDisplayKit
 import TelegramCore
@@ -311,6 +312,31 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private let openSavedMusicDisposable = MetaDisposable()
     
     private(set) var validLayout: (ContainerViewLayout, CGFloat)?
+    private var atmosphericVisible = false
+
+    func updateAtmosphericSurfaceVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.refreshAtmosphericSurfaces()
+    }
+
+    private func refreshAtmosphericSurfaces() {
+        let visible = self.atmosphericVisible && !self.isLentToExpansion && self.searchDisplayController == nil
+        self.headerNode.updateAtmosphericVisibility(visible)
+        self.paneContainerNode.updateAtmosphericVisibility(visible && !self.state.isEditing)
+        let scrollView = self.scrollNode.view
+        var viewport = scrollView.bounds
+        let topInset = min(viewport.height, self.validLayout?.1 ?? 0.0)
+        viewport.origin.y += topInset
+        viewport.size.height -= topInset
+        for section in self.regularSections.values {
+            section.updateAtmosphericVisibility(visible && !self.state.isEditing,
+                viewport: section.view.convert(viewport, from: scrollView))
+        }
+        for section in self.editingSections.values {
+            section.updateAtmosphericVisibility(visible && self.state.isEditing,
+                viewport: section.view.convert(viewport, from: scrollView))
+        }
+    }
     /// While an expansion has the profile's views they are held still: layouts wait, and the last one is applied when
     /// the views come back (`applyLayoutHeldDuringExpansion`).
     var isLentToExpansion = false {
@@ -318,6 +344,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             if self.isLentToExpansion && !oldValue {
                 self.contentOffsetWhenLent = self.scrollNode.view.contentOffset.y
             }
+            self.refreshAtmosphericSurfaces()
         }
     }
     /// The list's offset when the expansion took the header's views: the header cannot follow the list while they are
@@ -5159,6 +5186,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     func activateSearch() {
+        defer { self.refreshAtmosphericSurfaces() }
         guard let (layout, navigationBarHeight) = self.validLayout, self.searchDisplayController == nil else {
             return
         }
@@ -5389,6 +5417,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     func deactivateSearch() {
+        defer { self.refreshAtmosphericSurfaces() }
         guard let controller = self.controller, let searchDisplayController = self.searchDisplayController else {
             return
         }
@@ -5832,6 +5861,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             for sectionId in removeRegularSections {
                 if let sectionNode = self.regularSections.removeValue(forKey: sectionId) {
+                    sectionNode.removeAtmosphericSurface()
                     var alphaTransition = transition
                     if let sectionId = sectionId as? SettingsSection, case .edit = sectionId {
                         sectionNode.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -layout.size.width * 0.7), duration: 0.4, delay: 0.0, timingFunction: kCAMediaTimingFunctionSpring, mediaTimingFunction: nil, removeOnCompletion: false, additive: true, completion: nil)
@@ -5895,6 +5925,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             for sectionId in removeEditingSections {
                 if let sectionNode = self.editingSections.removeValue(forKey: sectionId) {
+                    sectionNode.removeAtmosphericSurface()
                     sectionNode.removeFromSupernode()
                 }
             }
@@ -6133,6 +6164,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         
     private var hasQrButton = false
     fileprivate func updateNavigation(transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) {
+        defer { self.refreshAtmosphericSurfaces() }
         // Held with the layout while an expansion has the header's views; the held layout's application runs it.
         if self.isLentToExpansion {
             return
@@ -6631,7 +6663,12 @@ public struct PeerInfoSwitchToMediaTarget {
     }
 }
 
-public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortcutResponder {
+public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortcutResponder, AtmosphericSurfaceVisibility {
+    public func updateAtmosphericSurfaceVisibility(_ visible: Bool) {
+        if self.isNodeLoaded {
+            self.controllerNode.updateAtmosphericSurfaceVisibility(visible)
+        }
+    }
     let context: AccountContext
     let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     public let peerId: EnginePeer.Id
@@ -7176,8 +7213,19 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         super.present(controller, in: context, with: arguments, blockInteraction: blockInteraction, completion: completion)
     }
     
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.updateAtmosphericSurfaceVisibility(true)
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        self.updateAtmosphericSurfaceVisibility(false)
+    }
+
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.updateAtmosphericSurfaceVisibility(false)
 
         self.controllerNode.logoutConfirmationDisposable.set(nil)
         
@@ -7341,6 +7389,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        self.updateAtmosphericSurfaceVisibility(true)
         
         DispatchQueue.main.async { [weak self] in
             self?.didAppear = true

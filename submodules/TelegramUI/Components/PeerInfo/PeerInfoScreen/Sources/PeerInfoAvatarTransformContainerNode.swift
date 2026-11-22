@@ -17,6 +17,8 @@ import TelegramCore
 import EmojiStatusComponent
 import GalleryUI
 import HierarchyTrackingLayer
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
     let context: AccountContext
@@ -50,6 +52,70 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
     var item: PeerInfoAvatarListItem?
     /// The avatar's corner radius over its side, as last laid out: 0.5 round, 0.25 a forum's rounded square.
     private(set) var cornerFraction: CGFloat = 0.5
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+    private var atmosphericVisible = false
+    private var atmosphericTransitionFraction: CGFloat = 0.0
+    private var atmosphericForegroundAlpha: CGFloat = 0.0
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.refreshAtmosphericSurface()
+    }
+
+    func updateAtmosphericForegroundAlpha(_ alpha: CGFloat) {
+        self.atmosphericForegroundAlpha = max(0.0, min(1.0, alpha))
+        self.refreshAtmosphericSurface()
+    }
+
+    func refreshAtmosphericSurface() {
+        MainActor.assumeIsolated { self.refreshAtmosphericSurfaceOnMainActor() }
+    }
+
+    @MainActor private func refreshAtmosphericSurfaceOnMainActor() {
+        guard let params = self.params else {
+            return
+        }
+        let container = self.containerNode.view
+        let rect = self.avatarNode.view.convert(self.avatarNode.bounds, to: container)
+        let expansion = max(params.isExpanded ? 1.0 : 0.0, self.atmosphericTransitionFraction)
+        let hasStories = self.avatarNode.storyStats != nil
+        let contentRect = self.avatarNode.contentNode.view.convert(self.avatarNode.contentNode.bounds, to: self.avatarNode.view)
+        // The known story presentation uses a 3 pt ring and a 6 pt image inset. Derive progress from that live image scale.
+        let insetsProgress = max(0.0, min(1.0, (self.avatarNode.bounds.width - contentRect.width) / 12.0))
+        // The avatar renderer has a circular ABI: forum squares and topic icons must not acquire an invented circle.
+        let eligible = self.cornerFraction == 0.5 && params.threadInfo == nil
+            && rect.width >= 38.0 && rect.height >= 38.0 && abs(rect.width - rect.height) <= 12.0
+        let visible = self.atmosphericVisible && expansion < 0.55 && !self.avatarNode.isHidden
+            && AtmosphericSurfaceLayout.hierarchyAllowsDecoration(in: container)
+            && !AtmosphericSurfaceLayout.clippedRect(rect, in: container).isEmpty
+        if self.atmosphericHost == nil && eligible && visible {
+            let host = AtmosphericSurfaceHostView(container: container, role: .profileAvatar)
+            self.atmosphericHost = host
+            container.addSubview(host)
+        }
+        self.atmosphericHost?.update(geometry: AtmosphericHostGeometry(
+            rect: rect,
+            cornerRadius: min(rect.width, rect.height) * 0.5,
+            visible: eligible && visible,
+            avatarExpansion: expansion,
+            avatarHasStories: hasStories,
+            avatarInsetsProgress: insetsProgress,
+            avatarForegroundAlpha: self.atmosphericForegroundAlpha,
+            isDarkTheme: params.theme.overallDarkAppearance
+        ))
+    }
+
+    override var alpha: CGFloat {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
     
     private let playbackStartDisposable = MetaDisposable()
     
@@ -193,6 +259,7 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
             inactiveLineWidth: 1.5,
             forceRoundedRect: isForum
         ), transition: ComponentTransition(transition))
+        self.refreshAtmosphericSurface()
     }
     
     override var accessibilityElements: [Any]? {
@@ -264,6 +331,8 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
     }
         
     func updateTransitionFraction(_ fraction: CGFloat, transition: ContainedViewLayoutTransition) {
+        self.atmosphericTransitionFraction = max(0.0, min(1.0, fraction))
+        self.refreshAtmosphericSurface()
         if let videoNode = self.videoNode {
             if case .immediate = transition, fraction == 1.0 {
                 return
@@ -596,5 +665,6 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
         }
         
         self.updateStoryView(transition: .immediate, theme: theme, peer: peer)
+        self.refreshAtmosphericSurface()
     }
 }

@@ -15,6 +15,8 @@ import AppBundle
 import SearchBarNode
 import TabSelectionRecognizer
 import TabBarLayout
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 /// The items VoiceOver may reach: while search is active every item but the selected one is faded out.
 func tabBarAccessibleItemIds<Id: Hashable>(ids: [Id], selectedId: Id?, isSearchActive: Bool) -> [Id] {
@@ -74,12 +76,20 @@ public final class NavigationSearchView: UIView {
     private var close: (background: GlassBackgroundView, icon: UIImageView)?
 
     private var params: Params?
+    private var atmosphericVisible = true
+
+    public func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.backgroundView.atmosphericOwnerVisible = visible
+        self.close?.background.atmosphericOwnerVisible = visible
+    }
     
     public init(action: @escaping () -> Void, closeAction: @escaping () -> Void) {
         self.action = action
         self.closeAction = closeAction
 
         self.backgroundView = GlassBackgroundView()
+        self.backgroundView.atmosphericRole = .search
         self.backgroundView.contentView.clipsToBounds = true
         self.iconView = UIImageView()
 
@@ -247,6 +257,8 @@ public final class NavigationSearchView: UIView {
             } else {
                 closeTransition = closeTransition.withAnimation(.none)
                 close = (GlassBackgroundView(), UIImageView())
+                close.background.atmosphericRole = .actionBar
+                close.background.atmosphericOwnerVisible = self.atmosphericVisible
                 self.close = close
                 
                 close.icon.image = generateImage(CGSize(width: 40.0, height: 40.0), contextGenerator: { size, context in
@@ -566,6 +578,15 @@ public final class TabBarComponent: Component {
         private let backgroundContainer: GlassBackgroundContainerView
         private let liquidLensView: LiquidLensView
         private let contextGestureContainerView: ContextControllerSourceView
+        private var atmosphericHost: AtmosphericSurfaceHostView?
+        private weak var atmosphericContainer: UIView?
+        private var atmosphericVisible = false
+
+        public func updateAtmosphericVisibility(_ visible: Bool) {
+            self.atmosphericVisible = visible
+            self.atmosphericHost?.setOwnerVisible(visible)
+            self.searchView?.updateAtmosphericVisibility(visible)
+        }
         
         private var measureItemViews: [AnyHashable: ComponentView<Empty>] = [:]
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
@@ -592,6 +613,7 @@ public final class TabBarComponent: Component {
         public override init(frame: CGRect) {
             self.backgroundContainer = GlassBackgroundContainerView()
             self.liquidLensView = LiquidLensView(kind: .externalContainer, backgroundTintColor: GlassBackgroundView.TintColor(kind: .untinted))
+            self.liquidLensView.suppressAtmosphericGlassDecoration()
             
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
@@ -1138,6 +1160,27 @@ public final class TabBarComponent: Component {
             
             self.liquidLensView.update(size: lensSize, cornerRadius: component.axis == .vertical ? lensSize.width * 0.5 : nil, selectionOrigin: lensSelectionFrame.origin, selectionSize: lensSelectionFrame.size, inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil && component.isLiftedStateEnabled, isCollapsed: isLensCollapsed, transition: transition)
 
+            self.liquidLensView.suppressAtmosphericGlassDecoration()
+            let atmosphericContainer = self.liquidLensView.atmosphericContainerView
+            let atmosphericHost: AtmosphericSurfaceHostView
+            if let current = self.atmosphericHost, self.atmosphericContainer === atmosphericContainer {
+                atmosphericHost = current
+            } else {
+                self.atmosphericHost?.removeFromSuperview()
+                atmosphericHost = AtmosphericSurfaceHostView(container: atmosphericContainer, role: .navbar)
+                self.atmosphericHost = atmosphericHost
+                self.atmosphericContainer = atmosphericContainer
+                atmosphericContainer.addSubview(atmosphericHost)
+            }
+            atmosphericHost.setOwnerVisible(self.atmosphericVisible)
+            atmosphericHost.update(geometry: AtmosphericHostGeometry(
+                rect: CGRect(origin: .zero, size: lensSize),
+                cornerRadius: min(lensSize.width, lensSize.height) * 0.5,
+                selectedTabRect: selectedItemFrame != nil || self.selectionGestureState != nil ? lensSelectionFrame.insetBy(dx: 4.0, dy: 4.0) : nil,
+                backgroundInsertionIndex: self.liquidLensView.atmosphericBackgroundInsertionIndex,
+                isDarkTheme: component.theme.overallDarkAppearance
+            ))
+
             var size = tabsSize
 
             if let search {
@@ -1178,6 +1221,7 @@ public final class TabBarComponent: Component {
                     searchView.frame = CGRect(origin: CGPoint(x: availableSize.width + 50.0, y: 0.0), size: searchSize)
                 }
                 searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, transition: searchViewTransition)
+                searchView.updateAtmosphericVisibility(self.atmosphericVisible)
                 transition.setFrame(view: searchView, frame: searchFrame)
             } else {
                 if let searchView = self.searchView {

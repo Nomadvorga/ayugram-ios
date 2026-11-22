@@ -41,7 +41,9 @@ import UniformTypeIdentifiers
         if plugin.isEnabled {
             sheet.addAction(UIAlertAction(title: "Выключить", style: .default) { [weak self] _ in self?.run { try await self?.service.disable(plugin.id) } })
             sheet.addAction(UIAlertAction(title: "Настройки", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginSettingsViewController(service: self.service, plugin: plugin)) })
-            sheet.addAction(UIAlertAction(title: "Предпросмотр интерфейса", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginPreviewViewController(service: self.service, plugin: plugin)) })
+            if plugin.nativeAdapter == nil {
+                sheet.addAction(UIAlertAction(title: "Предпросмотр интерфейса", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginPreviewViewController(service: self.service, plugin: plugin)) })
+            }
         } else if plugin.blockers.isEmpty {
             sheet.addAction(UIAlertAction(title: "Включить…", style: .default) { [weak self] _ in self?.confirmEnable(plugin) })
         }
@@ -58,9 +60,13 @@ import UniformTypeIdentifiers
         guard let url = urls.first else { return }; self.run { try await self.service.importPlugin(from: url) }
     }
     private func confirmEnable(_ plugin: AyuInstalledPlugin) {
-        let alert = UIAlertController(title: "Доверять этому плагину?", message: "Python-код плагина получает доступ к контейнеру приложения и предоставленным API аккаунта. SDK не является песочницей Python. Включайте только проверенный код. Плагин будет запущен сейчас и выключен после перезапуска приложения.", preferredStyle: .alert)
+        let isNative = plugin.nativeAdapter == AyuAtmosphericPluginAdapter.adapterID
+        let message = isNative
+            ? "Исходник Atmospheric Snow 1.0.1 проверяется по SHA-256. Эффекты и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Эффекты включатся в интерфейсе приложения и выключатся после его перезапуска."
+            : "Python-код плагина получает доступ к контейнеру приложения и предоставленным API аккаунта. SDK не является песочницей Python. Включайте только проверенный код. Плагин будет запущен сейчас и выключен после перезапуска приложения."
+        let alert = UIAlertController(title: isNative ? "Включить Atmospheric Snow?" : "Доверять этому плагину?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Доверяю и включаю", style: .destructive) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
+        alert.addAction(UIAlertAction(title: isNative ? "Включить эффекты" : "Доверяю и включаю", style: isNative ? .default : .destructive) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
         self.presentManaged(alert)
     }
     private func confirmDelete(_ plugin: AyuInstalledPlugin) {
@@ -122,7 +128,7 @@ import UniformTypeIdentifiers
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let row = self.rows[indexPath.row]; guard row.descriptor["enabled"] != .bool(false), !(row.type == "Input" && row.descriptor["multiline"] == .bool(true)) else { return }
-        if row.type == "Text" { self.service.activate(row, pluginID: self.plugin.id); return }
+        if row.type == "Text" { self.service.activate(row, pluginID: self.plugin.id); self.reload(); return }
         if row.type == "Input" {
             let alert = UIAlertController(title: row.text, message: nil, preferredStyle: .alert)
             alert.addTextField { field in field.isSecureTextEntry = row.isSecret; field.text = row.value.string; field.placeholder = String((row.descriptor["hint"].string ?? "").prefix(128)); field.autocorrectionType = .no; field.autocapitalizationType = .none }

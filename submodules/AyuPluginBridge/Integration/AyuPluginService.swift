@@ -26,9 +26,11 @@ public struct AyuInstalledPlugin: Codable, Sendable {
     public var isEnabled = false
     public var isBusy = false
     public var error: String?
+    /// A source-verified native adapter, not an assertion that Android APIs executed.
+    public var nativeAdapter: String?
     public var status: String {
         if self.isBusy { return "Выполняется операция…" }
-        if self.isEnabled { return self.error == nil ? "Включён" : "Включён · ошибка" }
+        if self.isEnabled { return self.error == nil ? (self.nativeAdapter == nil ? "Включён" : "Включён · нативный адаптер") : "Включён · ошибка" }
         if !self.blockers.isEmpty { return "Не поддерживается этой сборкой" }
         return self.error == nil ? "Выключен" : "Ошибка · выключен"
     }
@@ -54,6 +56,8 @@ public struct AyuPluginSetting: Sendable {
     private let defaults: UserDefaults
     private let root: URL
     private var preparation: Task<Void, Error>?
+    private var runtimePreparation: Task<Void, Error>?
+    private var atmosphericAdapter: AyuAtmosphericPluginAdapter?
     private var pending: Set<String> = []
     private var pendingImportSlots = 0
     private var classes: Set<String> = []
@@ -92,11 +96,6 @@ public struct AyuPluginSetting: Sendable {
     public func prepare() async throws {
         if let preparation = self.preparation { return try await preparation.value }
         let task = Task { @MainActor in
-            guard let home = Self.resource("AyuPythonResources", "python"), let sdk = Self.resource("AyuPluginSDK", "Python") else { throw Failure.resources }
-            _ = try await self.complete { done in self.runtime.start(pythonHome: home.path, sdkPath: sdk.path, dispatchHandler: { [host = self.host] owner, request in host.dispatch(request, owner: owner) }, completion: done) }
-            let caps = try await self.command("runtime.capabilities", owner: "inspector", arguments: [:], bootstrap: true)
-            self.classes = Set(caps["classes"].array?.compactMap(\.string) ?? caps["classes"].object?.keys.map { $0 } ?? [])
-            self.modules = Set(caps["modules"].array?.compactMap(\.string) ?? [])
             let root = self.root
             self.plugins = try await Task.detached(priority: .utility) {
                 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -105,6 +104,18 @@ public struct AyuPluginSetting: Sendable {
                 return files.filter { $0.pathExtension == "json" }.prefix(64).compactMap { url -> AyuInstalledPlugin? in
                     guard let data = try? Self.read(url, limit: 65_536), var record = try? JSONDecoder().decode(AyuInstalledPlugin.self, from: data), Self.validID(record.id), url.deletingPathExtension().lastPathComponent == record.id else { return nil }
                     record.isEnabled = false; record.isBusy = false; record.error = nil
+                    record.nativeAdapter = nil
+                    // Recheck bytes instead of trusting saved native-adapter metadata.
+                    if record.id == AyuAtmosphericPluginAdapter.pluginID {
+                        let sourceURL = root.appendingPathComponent(record.id + ".plugin")
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                           let verified = AyuAtmosphericPluginAdapter.record(for: source) {
+                            record = verified
+                        } else {
+                            record.nativeAdapter = nil
+                            record.blockers = ["Нативный адаптер требует исходный Atmospheric Snow 1.0.1 с проверенной контрольной суммой."]
+                        }
+                    }
                     return record
                 }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             }.value
@@ -112,6 +123,20 @@ public struct AyuPluginSetting: Sendable {
         }
         self.preparation = task
         do { try await task.value } catch { self.startupError = (error as? Failure)?.localizedDescription ?? Failure.storage.localizedDescription; self.changed(); throw error }
+    }
+
+    /// Python remains lazy: the pinned Atmospheric Snow adapter never starts an interpreter.
+    private func prepareRuntime() async throws {
+        if let task = self.runtimePreparation { return try await task.value }
+        let task = Task { @MainActor in
+            guard let home = Self.resource("AyuPythonResources", "python"), let sdk = Self.resource("AyuPluginSDK", "Python") else { throw Failure.resources }
+            _ = try await self.complete { done in self.runtime.start(pythonHome: home.path, sdkPath: sdk.path, dispatchHandler: { [host = self.host] owner, request in host.dispatch(request, owner: owner) }, completion: done) }
+            let caps = try await self.command("runtime.capabilities", owner: "inspector", arguments: [:], bootstrap: true)
+            self.classes = Set(caps["classes"].array?.compactMap(\.string) ?? caps["classes"].object?.keys.map { $0 } ?? [])
+            self.modules = Set(caps["modules"].array?.compactMap(\.string) ?? [])
+        }
+        self.runtimePreparation = task
+        try await task.value
     }
 
     public func importPlugin(from url: URL) async throws {
@@ -157,20 +182,37 @@ public struct AyuPluginSetting: Sendable {
             let source = try await Task.detached(priority: .utility) { guard let text = String(data: try Self.read(url, limit: Self.maximumBytes), encoding: .utf8) else { throw Failure.source }; return text }.value
             let (inspection, _) = try await self.inspect(source)
             guard inspection.id == id else { throw Failure.identity }
-            self.update(id) { $0.blockers = inspection.blockers; $0.error = nil }
+            self.update(id) { $0.blockers = inspection.blockers; $0.error = nil; $0.nativeAdapter = inspection.nativeAdapter }
             guard inspection.blockers.isEmpty else { throw Failure.operation("UNSUPPORTED_API") }
+            if inspection.nativeAdapter == AyuAtmosphericPluginAdapter.adapterID {
+                let adapter = AyuAtmosphericPluginAdapter(defaults: self.defaults, reportError: { [weak self] message in
+                    self?.update(id) { $0.error = message }
+                })
+                try adapter.enable()
+                self.atmosphericAdapter = adapter
+                self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
+                return
+            }
             let json = try await self.complete { self.runtime.load(source: source, filename: id + ".plugin", completion: $0) }
             guard try self.decode(json)["plugin_id"].string == id else { throw Failure.protocolError }
             self.update(id) { $0.isEnabled = true }
         } catch {
             // Also handle a successful load followed by a malformed result: revoke both layers.
-            _ = try? await self.complete { self.runtime.unload(pluginID: id, completion: $0) }
+            if id == AyuAtmosphericPluginAdapter.pluginID {
+                self.atmosphericAdapter?.disable(); self.atmosphericAdapter = nil
+            }
+            if self.runtimePreparation != nil { _ = try? await self.complete { self.runtime.unload(pluginID: id, completion: $0) } }
             await self.detach(id); self.update(id) { $0.isEnabled = false; $0.error = self.message(error) }; throw error
         }
     }
 
     public func disable(_ id: String) async throws {
         try self.begin(id); defer { self.finish(id) }
+        if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
+            adapter.disable(); self.atmosphericAdapter = nil
+            self.update(id) { $0.isEnabled = false; $0.error = nil }
+            return
+        }
         var failure: Error?
         if self.plugins.first(where: { $0.id == id })?.isEnabled == true {
             do { _ = try await self.complete { self.runtime.unload(pluginID: id, completion: $0) } } catch { failure = error }
@@ -193,6 +235,7 @@ public struct AyuPluginSetting: Sendable {
 
     public func settings(_ id: String) async throws -> [AyuPluginSetting] {
         guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
+        if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter { return try adapter.settings() }
         let json = try await self.complete { self.runtime.settings(pluginID: id, completion: $0) }
         guard let rows = try self.decode(json).array, rows.count <= 256 else { throw Failure.protocolError }
         let values = try await self.command("settings.all", owner: id, arguments: [:])
@@ -206,18 +249,32 @@ public struct AyuPluginSetting: Sendable {
     public func set(_ row: AyuPluginSetting, value: AyuBridgeValue, pluginID: String) async throws {
         guard let key = row.key, key.utf8.count <= 256, (value.string?.utf8.count ?? 0) <= 8192 else { throw Failure.protocolError }
         guard self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
+        if pluginID == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
+            try adapter.set(row, value: value); self.changed(); return
+        }
         _ = try await self.command("settings.set", owner: pluginID, arguments: ["key": .string(key), "value": value, "reload_settings": .bool(true)])
         if let callback = row.descriptor["on_change"]["$callback"].string { self.relay.deliver(pluginID, callback, [value]) }
     }
     public func activate(_ row: AyuPluginSetting, pluginID: String) {
+        if pluginID == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
+            guard self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy }) else { return }
+            do { try adapter.activate(row); self.changed() }
+            catch { self.update(pluginID) { $0.error = self.message(error) } }
+            return
+        }
         if let callback = row.descriptor["on_click"]["$callback"].string { self.relay.deliver(pluginID, callback, [.null]) }
     }
     public func mount(_ view: UIView?, pluginID: String) { self.host.setMountContainer(view, pluginID: pluginID) }
 
     private func inspect(_ source: String) async throws -> (AyuInstalledPlugin, AyuBridgeValue) {
+        if let record = AyuAtmosphericPluginAdapter.record(for: Data(source.utf8)) { return (record, .object([:])) }
+        try await self.prepareRuntime()
         let json = try await self.complete { self.runtime.inspect(source: source, filename: "import.plugin", completion: $0) }
         let report = try self.decode(json), metadata = report["metadata"]
         guard let id = metadata["__id__"].string, Self.validID(id), let name = metadata["__name__"].string, !name.isEmpty, name.utf8.count <= 256 else { throw Failure.identity }
+        if id == AyuAtmosphericPluginAdapter.pluginID {
+            return (AyuInstalledPlugin(id: id, name: "NewYear Interface", version: "1.0.1", blockers: ["Исходник не совпадает с проверенным Atmospheric Snow 1.0.1 (SHA-256). Нативный адаптер не может его выполнить."]), report)
+        }
         var blockers = (report["classes"].array ?? []).compactMap(\.string).filter { !self.classes.contains($0) }.map { "Класс не поддерживается: " + Self.apiLabel($0) }
         if let sdk = report["sdk_modules"].array, let candidates = report["python_stdlib_candidates"].array {
             // Candidate modules are not a promise that every CPython API works on iOS.

@@ -98,7 +98,11 @@ public final class SearchBarPlaceholderContentView: UIView {
             self.glassBackgroundView = nil
         case .inlineNavigation, .glass:
             self.glassBackgroundContainerView = hasOwnGlassContainer ? GlassBackgroundContainerView() : nil
-            self.glassBackgroundView = GlassBackgroundView()
+            self.glassBackgroundView = MainActor.assumeIsolated {
+                let view = GlassBackgroundView()
+                view.atmosphericRole = .search
+                return view
+            }
         }
         
         self.iconNode = ASImageNode()
@@ -367,7 +371,11 @@ public final class SearchBarPlaceholderContentView: UIView {
                     close = current
                 } else {
                     closeTransition = closeTransition.withAnimation(.none)
-                    close = (GlassBackgroundView(), UIImageView())
+                    close = MainActor.assumeIsolated {
+                        let background = GlassBackgroundView()
+                        background.atmosphericRole = .search
+                        return (background, UIImageView())
+                    }
                     self.close = close
                     
                     close.icon.image = generateImage(CGSize(width: 40.0, height: 40.0), contextGenerator: { size, context in

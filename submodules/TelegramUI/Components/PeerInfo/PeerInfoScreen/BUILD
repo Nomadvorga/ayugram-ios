@@ -25,6 +25,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = sgdeps + [ # MARK: Swiftgram
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/UrlWhitelist",
         "//submodules/TelegramUI/Components/NavigationBarNode",
         "//submodules/TelegramUI/Components/NavigationBarComponent",

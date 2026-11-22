@@ -4,6 +4,7 @@ import AsyncDisplayKit
 import SwiftSignalKit
 import Display
 import TelegramPresentationData
+import AyuAtmosphericUI
 
 public final class TabBarItemInfo: NSObject {
     public let previewing: Bool
@@ -85,6 +86,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     public var currentController: ViewController?
+    /// Emitted after the selected controller is mounted, including programmatic selection and tab-list changes.
+    public var currentControllerUpdated: ((ViewController?) -> Void)?
+    private var atmosphericVisible = false
     
     override public var transitionNavigationBar: NavigationBar? {
         return self.currentController?.navigationBar
@@ -310,6 +314,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             transitionScale = (currentView.frame.height - 3.0) / currentView.frame.height
         }
         if let currentController = self.currentController {
+            (currentController as? AtmosphericSurfaceVisibility)?.updateAtmosphericSurfaceVisibility(false)
             currentController.willMove(toParent: nil)
             currentController.tabBarSearchStateUpdated = nil
             currentController.currentTabBarSearchNode = nil
@@ -373,6 +378,8 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         if let layout = self.validLayout {
             self.containerLayoutUpdated(layout, transition: .immediate)
         }
+        (self.currentController as? AtmosphericSurfaceVisibility)?.updateAtmosphericSurfaceVisibility(self.atmosphericVisible)
+        self.currentControllerUpdated?(self.currentController)
     }
     
     public func updateLayout(transition: ContainedViewLayoutTransition = .immediate) {
@@ -446,12 +453,14 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     override open func viewWillDisappear(_ animated: Bool) {
+        self.updateAtmosphericVisibility(false)
         if let currentController = self.currentController {
             currentController.viewWillDisappear(animated)
         }
     }
     
     override open func viewWillAppear(_ animated: Bool) {
+        self.updateAtmosphericVisibility(true)
         if let currentController = self.currentController {
             currentController.viewWillAppear(animated)
         }
@@ -461,12 +470,22 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         if let currentController = self.currentController {
             currentController.viewDidAppear(animated)
         }
+        self.updateAtmosphericVisibility(true)
     }
     
     override open func viewDidDisappear(_ animated: Bool) {
+        self.updateAtmosphericVisibility(false)
         if let currentController = self.currentController {
             currentController.viewDidDisappear(animated)
         }
+    }
+
+    private func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        if self.isNodeLoaded {
+            self.tabBarControllerNode.updateAtmosphericVisibility(visible)
+        }
+        (self.currentController as? AtmosphericSurfaceVisibility)?.updateAtmosphericSurfaceVisibility(visible)
     }
         
     public func setControllers(_ controllers: [ViewController], selectedIndex: Int?) {

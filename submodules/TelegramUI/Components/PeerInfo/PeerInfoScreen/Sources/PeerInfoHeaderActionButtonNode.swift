@@ -4,6 +4,8 @@ import AsyncDisplayKit
 import ContextUI
 import TelegramPresentationData
 import Display
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 final class PeerInfoHeaderActionButtonNode: HighlightableButtonNode {
     let key: PeerInfoHeaderButtonKey
@@ -14,6 +16,70 @@ final class PeerInfoHeaderActionButtonNode: HighlightableButtonNode {
     private let textNode: ImmediateTextNode
     
     private var theme: PresentationTheme?
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+    private var atmosphericVisible = false
+    private var atmosphericExpandedSize: CGSize?
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.refreshAtmosphericSurface()
+    }
+
+    func removeAtmosphericSurface() {
+        MainActor.assumeIsolated {
+            self.atmosphericVisible = false
+            self.atmosphericHost?.removeFromSuperview()
+            self.atmosphericHost = nil
+        }
+    }
+
+    private func refreshAtmosphericSurface() {
+        MainActor.assumeIsolated { self.refreshAtmosphericSurfaceOnMainActor() }
+    }
+
+    @MainActor private func refreshAtmosphericSurfaceOnMainActor() {
+        guard let theme = self.theme else {
+            return
+        }
+        let container = self.view
+        let rect = self.backgroundNode.view.convert(self.backgroundNode.bounds, to: container)
+        let backgroundAlpha = self.backgroundNode.alpha * self.referenceNode.alpha * self.containerNode.alpha
+        let eligible = rect.width >= 24.0 && rect.height >= 32.0 && rect.height <= 120.0
+        let visible = self.atmosphericVisible && !self.backgroundNode.isHidden && backgroundAlpha > 0.05
+            && (self.backgroundNode.backgroundColor?.cgColor.alpha ?? 0.0) > 0.05
+            && !self.textNode.isHidden && self.textNode.alpha > 0.05
+            && AtmosphericSurfaceLayout.hierarchyAllowsDecoration(in: container)
+            && AtmosphericSurfaceLayout.actionHasVisibleArea(rect, in: container)
+        if self.atmosphericHost == nil && eligible && visible {
+            let host = AtmosphericSurfaceHostView(container: container, role: .profileAction)
+            self.atmosphericHost = host
+            container.addSubview(host)
+        }
+        var geometry = AtmosphericHostGeometry(
+            rect: rect,
+            cornerRadius: self.backgroundNode.cornerRadius,
+            visible: eligible && visible,
+            alpha: backgroundAlpha,
+            profileExpansionFraction: 1.0,
+            isDarkTheme: theme.overallDarkAppearance
+        )
+        // convert(_:to:) already includes the container transform in rect.
+        geometry.profileActionScale = 1.0
+        geometry.expandedActionReferenceSize = self.atmosphericExpandedSize
+        self.atmosphericHost?.update(geometry: geometry)
+    }
+
+    override var alpha: CGFloat {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
     
     init(key: PeerInfoHeaderButtonKey, action: @escaping (PeerInfoHeaderActionButtonNode, ContextGesture?) -> Void) {
         self.key = key
@@ -84,5 +150,13 @@ final class PeerInfoHeaderActionButtonNode: HighlightableButtonNode {
         transition.updateFrameAdditiveToCenter(node: self.textNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - titleSize.width) / 2.0), y: floorToScreenPixels((size.height - titleSize.height) / 2.0)), size: titleSize))
         
         self.referenceNode.frame = self.containerNode.bounds
+        if let reference = self.atmosphericExpandedSize {
+            if abs(reference.width - size.width) > 6.0 || abs(reference.height - size.height) > 6.0 {
+                self.atmosphericExpandedSize = size
+            }
+        } else {
+            self.atmosphericExpandedSize = size
+        }
+        self.refreshAtmosphericSurface()
     }
 }

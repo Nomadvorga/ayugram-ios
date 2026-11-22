@@ -198,6 +198,21 @@ public final class LiquidLensView: UIView {
         return self.liftedContainerView
     }
 
+    /// The known plane above the native glass and below the icon container. Its existing ancestor clipping is kept.
+    public var atmosphericContainerView: UIView {
+        return self.backgroundView?.contentView ?? self.containerView
+    }
+
+    public var atmosphericBackgroundInsertionIndex: Int {
+        // The legacy resting-selection image is below the prepass; the icons remain above it.
+        return self.legacySelectionView == nil ? 0 : 1
+    }
+
+    /// Navbar ownership suppresses generic glass even when the navbar feature itself is disabled.
+    public func suppressAtmosphericGlassDecoration() {
+        self.backgroundView?.atmosphericRole = .disabled
+    }
+
     /// `_UILiquidLensViewLargeVariantSpec` (the lens's style 1): how long a lens stays lifted at least, and the response
     /// of its lift and unlift springs (damping ratio 1).
     private static let lensHangTime: Double = 0.22
