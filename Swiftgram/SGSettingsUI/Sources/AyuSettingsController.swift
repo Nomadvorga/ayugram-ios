@@ -70,7 +70,7 @@ private enum AyuSliderSetting: String {
 }
 
 private enum AyuDisclosureLink: String {
-    case none
+    case plugins
 }
 
 private typealias AyuControllerEntry = SGItemListUIEntry<AyuControllerSection, AyuBoolSetting, AyuSliderSetting, AyuOneFromManySetting, AyuDisclosureLink, AnyHashable>
@@ -177,6 +177,9 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     entries.append(.toggle(id: id.count, section: .usefulFeatures, settingName: .hideFromBlocked, value: customization.hideFromBlocked, text: i18n("Ayu.FiltersHideFromBlocked", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .usefulFeatures, text: i18n("Ayu.HideNotificationBadgeDescription", lang)))
 
+    entries.append(.disclosure(id: id.count, section: .usefulFeatures, link: .plugins, text: "Плагины"))
+    entries.append(.notice(id: id.count, section: .usefulFeatures, text: "Экспериментальный мост Android → iOS. Поддержка зависит от API, которые использует плагин."))
+
     let confirmations = AyuSendConfirmations.shared
     entries.append(.header(id: id.count, section: .confirmations, text: i18n("Ayu.ConfirmationsTitle", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .confirmations, settingName: .confirmSticker, value: confirmations.isEnabled(.sticker), text: i18n("Ayu.StickerConfirmation", lang), enabled: true))
@@ -189,6 +192,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
 
 public func ayuSettingsController(context: AccountContext) -> ViewController {
     var presentOneFromManyImpl: ((AyuOneFromManySetting, [SGOneFromManyOption]) -> Void)?
+    var openPluginsImpl: (() -> Void)?
     let updatePromise = ValuePromise(true, ignoreRepeated: false)
 
     let arguments = SGItemListArguments<AyuBoolSetting, AyuSliderSetting, AyuOneFromManySetting, AyuDisclosureLink, AnyHashable>(
@@ -299,6 +303,12 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
                 }
             }
             presentOneFromManyImpl?(setting, options)
+        },
+        openDisclosureLink: { link in
+            switch link {
+            case .plugins:
+                openPluginsImpl?()
+            }
         }
     )
 
@@ -310,6 +320,14 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
     }
 
     let controller = ItemListController(context: context, state: signal)
+    openPluginsImpl = { [weak controller] in
+        Task { @MainActor in
+            guard let navigationController = controller?.navigationController as? NavigationController else {
+                return
+            }
+            navigationController.pushViewController(ayuPluginManagerController(context: context))
+        }
+    }
     presentOneFromManyImpl = { [weak controller] setting, options in
         guard let controller else {
             return

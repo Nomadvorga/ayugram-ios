@@ -2,7 +2,7 @@ name: Build IPA
 
 on:
   push:
-    branches: [master]
+    branches: [master, plugins-test]
     paths-ignore:
       - '**.md'
       - '.github/ISSUE_TEMPLATE/**'

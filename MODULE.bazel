@@ -3,6 +3,11 @@ new_git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl"
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+# Experimental Python plugin bridge. The repository rule pins the iOS runtime archive
+# by SHA-256 and packages extension modules as signed frameworks, not loose .so files.
+ayu_python_repository = use_repo_rule("//third-party/ayu-python:repository.bzl", "ayu_python_repository")
+ayu_python_repository(name = "ayu_python")
+
 _WASI_SDK_BUILD = """
 exports_files(["bin/clang++"])
 filegroup(
