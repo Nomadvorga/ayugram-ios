@@ -24,6 +24,12 @@ Neither successful imports nor an IPA build establish functional compatibility.
 - `AppEvent`: START after plugin activation, RESUME/PAUSE on native active changes,
   STOP on background transition. Every event carries the exact Python load
   generation. No main-thread wait and no Python startup just to observe lifecycle.
+- Narrow `NotificationCenter` global account-change observer: only
+  `activeAccountChanged`, only an owned `NotificationCenterDelegate` proxy, eight
+  observers per plugin. Delivery is asynchronous on the Python queue and carries
+  the event id, process-stable account slot and an empty argument array. No other
+  notification ids, Android account objects or arbitrary listener subclassing are
+  exposed.
 - Native `TelegramUI` binding reads real account/context/profile signals and the
   authorized root controller, rejects locked/inactive/stale screens, and revokes
   bridge UI on lock/background/account changes. Slots are process-stable and never
@@ -33,8 +39,9 @@ Neither successful imports nor an IPA build establish functional compatibility.
   Failed result validation cancels the native reservation. Four concurrent
   presentations per plugin, sixteen globally. Unload revokes queued native senders.
 
-`NotificationCenter` observers, theme control, message/request interception, menus,
-Android view subclasses, graphics and background plugin threads are **not implemented**.
+`NotificationCenter` beyond the global `activeAccountChanged` observer, theme control,
+message/request interception, menus, Android view subclasses, graphics and
+background plugin threads are **not implemented**.
 START is per Python activation, not a fabricated replay of process launch. STOP is
 not guaranteed at OS termination. Basic UIKit dialogs/bulletins are iOS equivalents,
 not pixel-identical Android widgets. Screen handles refer to the sampled visible

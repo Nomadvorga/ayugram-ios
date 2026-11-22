@@ -40,6 +40,8 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, @unchecked
     private var ownerGenerations: [String: UUID] = [:]
     private struct Reservation { let owner: String; let generation: UUID }
     private var reservations: [String: Reservation] = [:]
+    private struct Observation { let event: Int64; let sink: AyuBridgeNativeCallback }
+    private var observations: [String: [String: Observation]] = [:]
     @MainActor private var screenSource: (() -> AyuPluginScreenSnapshot?)?
     @MainActor private var presenterSource: (() -> UIViewController?)?
     @MainActor private var alertPresenter: ((UIAlertController) -> Void)?
@@ -58,8 +60,12 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, @unchecked
         self.accounts = Dictionary(uniqueKeysWithValues: accounts.map { ($0.index, $0) })
         self.selected = selected.flatMap { self.accounts[$0] == nil ? nil : $0 }
         let changedAccount = previousIdentity != self.selected.flatMap { self.accounts[$0]?.identity }
+        let selectedIndex = self.selected
         self.lock.unlock()
-        if changedAccount { self.invalidatePresentations() }
+        if changedAccount {
+            self.invalidatePresentations()
+            if let selectedIndex { self.accountChanged(selectedIndex) }
+        }
     }
 
     /// Explicit app-owned root only. No key-window discovery or private APIs.
@@ -98,6 +104,9 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, @unchecked
             guard let screen = self.currentScreen() else { return AyuBridgeProviderResult(.value(.null)) }
             _ = try self.account(.integer(screen.accountIndex))
             return AyuBridgeProviderResult(.instance(className: Self.fragment, state: screen.state))
+        case "get_notification_center":
+            guard kwargs.isEmpty else { throw Self.invalid() }
+            return AyuBridgeProviderResult(.instance(className: Self.notificationCenter, state: Self.notificationCenterState))
         default: throw AyuBridgeFailure.unsupported("client_utils." + name)
         }
     }
@@ -105,6 +114,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, @unchecked
     public func detach(pluginID: String) {
         self.lock.lock()
         self.ownerGenerations.removeValue(forKey: pluginID)
+        self.observations.removeValue(forKey: pluginID)
         let tokens = self.reservations.filter { $0.value.owner == pluginID }.map(\.key)
         for token in tokens { self.reservations.removeValue(forKey: token) }
         self.lock.unlock()
@@ -180,7 +190,66 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, @unchecked
                 return .value(.bool(self.isShowing(token, owner: context.pluginID)))
             }
         ], validateState: { state in guard Set(state.keys) == ["token"], UUID(uuidString: state["token"]?.string ?? "") != nil else { throw Self.invalid() } })
-        return try .standard.adding([accountAdapter, userAdapter, fragmentAdapter, contextAdapter, dialogAdapter])
+        let notificationCenter = AyuBridgeClassAdapter(name: Self.notificationCenter,
+            constants: ["activeAccountChanged": .integer(Self.activeAccountChanged)],
+            staticMethods: ["getGlobalInstance": { args, _ in
+                guard args.isEmpty else { throw Self.invalid() }
+                return .instance(className: Self.notificationCenter, state: Self.notificationCenterState)
+            }], methods: [
+                "addObserver": { state, args, context in
+                    let (callbackID, event, sink) = try Self.notificationObserver(state: state, args: args, context: context)
+                    try self.checkObservationQuota(owner: context.pluginID)
+                    return .prepared(AyuBridgeProviderResult(.value(.null), commit: { _ in
+                        self.commitObservation(owner: context.pluginID, callbackID: callbackID, event: event, sink: sink)
+                    }))
+                },
+                "removeObserver": { state, args, context in
+                    let (callbackID, _, _) = try Self.notificationObserver(state: state, args: args, context: context)
+                    return .prepared(AyuBridgeProviderResult(.value(.null), commit: { _ in
+                        self.removeObservation(owner: context.pluginID, callbackID: callbackID)
+                    }))
+                }
+            ], validateState: { state in guard state == Self.notificationCenterState else { throw Self.invalid() } })
+        let notificationDelegate = AyuBridgeClassAdapter(name: Self.notificationDelegate,
+            validateState: { state in guard state.isEmpty else { throw Self.invalid() } })
+        return try .standard.adding([accountAdapter, userAdapter, fragmentAdapter, contextAdapter, dialogAdapter, notificationCenter, notificationDelegate])
+    }
+
+    private static let notificationCenter = "org.telegram.messenger.NotificationCenter"
+    private static let notificationDelegate = "org.telegram.messenger.NotificationCenter$NotificationCenterDelegate"
+    private static let activeAccountChanged: Int64 = 1
+    private static let notificationCenterState: [String: AyuBridgeValue] = ["token": .string("global")]
+    private static func notificationObserver(state: [String: AyuBridgeValue], args: [AyuBridgeValue],
+                                              context: AyuBridgeAdapterContext) throws -> (String, Int64, AyuBridgeNativeCallback) {
+        guard state == notificationCenterState, args.count == 2, let event = args[1].integer,
+              event == activeAccountChanged else { throw invalid() }
+        let snapshot = try context.snapshot(of: args[0])
+        guard snapshot.className == notificationDelegate,
+              let callback = snapshot.state["didReceivedNotification"],
+              let callbackID = callback.object?["$callback"]?.string, !callbackID.isEmpty,
+              callbackID.utf8.count <= 128 else { throw invalid() }
+        return (callbackID, event, try context.callback(callback))
+    }
+    private func checkObservationQuota(owner: String) throws {
+        self.lock.lock(); defer { self.lock.unlock() }
+        guard self.observations[owner]?.count ?? 0 < 8 else { throw AyuBridgeFailure("resource_limit", "Notification observer quota exceeded") }
+    }
+    private func commitObservation(owner: String, callbackID: String, event: Int64, sink: AyuBridgeNativeCallback) {
+        self.lock.lock()
+        var values = self.observations[owner] ?? [:]
+        guard values.count < 8 || values[callbackID] != nil else { self.lock.unlock(); return }
+        values[callbackID] = Observation(event: event, sink: sink)
+        self.observations[owner] = values
+        self.lock.unlock()
+    }
+    private func removeObservation(owner: String, callbackID: String) {
+        self.lock.lock(); self.observations[owner]?.removeValue(forKey: callbackID); self.lock.unlock()
+    }
+    private func accountChanged(_ index: Int64) {
+        self.lock.lock(); let values = self.observations.values.flatMap { $0.values }; self.lock.unlock()
+        for observation in values {
+            observation.sink.send([.integer(observation.event), .integer(index), .array([])])
+        }
     }
 
     private static let userConfig = "org.telegram.messenger.UserConfig"

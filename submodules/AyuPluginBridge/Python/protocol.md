@@ -66,10 +66,13 @@ The hash-pinned 19-plugin requirements table lives in
 `Resources/CommonBridge/compatibility.json` and its README. It records zero
 runtime-verified plugins. Atmospheric Snow retains its exact-hash native route;
 the other 18 remain blocked. The shared service now has narrow native account,
-visible-screen, basic alert/bulletin and generation-bound app-lifecycle adapters.
-See `Resources/CommonBridge/APPLICATION-BRIDGES.md` for exact supported members.
-Account notifications, requests/messages, method hooks, menus, graphics and media
-remain unsupported. Camera, passcode, screen-capture and destructive-message
+visible-screen, basic alert/bulletin, generation-bound app-lifecycle and global
+account-change notification adapters. See `Resources/CommonBridge/APPLICATION-BRIDGES.md`
+for exact supported members. The only notification id is `activeAccountChanged`;
+observer proxies must be declared `NotificationCenter$NotificationCenterDelegate`
+values and delivery is asynchronous, owner/generation checked and quota-bounded.
+Theme control, requests/messages, method hooks, menus, graphics and media remain
+unsupported. Camera, passcode, screen-capture and destructive-message
 features require real iOS adapters respecting platform and account invariants.
 
 Regenerate the static table with `Build/audit-plugin-requirements.py`, supplying

@@ -40,13 +40,16 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         self.assertIn("public let staticFields", registry)
         self.assertIn("Set(adapter.staticFields.keys).isDisjoint", registry)
         self.assertIn("public struct AyuBridgeNativeCallback: Sendable", registry)
+        self.assertIn('"org.telegram.messenger.NotificationCenter$NotificationCenterDelegate": ["didReceivedNotification"]', host)
+        self.assertIn('remote.kind == "adapter" || remote.kind == "array" || remote.kind == "proxy"', host)
 
     def test_application_scope_is_partial_and_has_real_cleanup(self):
         app = (BRIDGE / "Integration/AyuPluginApplicationBridge.swift").read_text()
         for text in ["Requested account is not active", "Account identity expired", "Screen context expired", "context.snapshot(of: reference)",
                      "self.reservations.count < 16", ".count < 4", "rollback: { self.cancelReservation(token) }",
                      "self.ownerGenerations.removeValue(forKey: pluginID)", "public func invalidatePresentations()",
-                     'throw AyuBridgeFailure.unsupported("client_utils." + name)']:
+                     'throw AyuBridgeFailure.unsupported("client_utils." + name)',
+                     "NotificationCenter$NotificationCenterDelegate", "commitObservation", "accountChanged(selectedIndex)"]:
             self.assertIn(text, app)
         self.assertNotIn('"get_messages_controller":', app)
         self.assertNotIn('"access_hash":', app)
