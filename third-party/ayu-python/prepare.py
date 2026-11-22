@@ -563,6 +563,10 @@ def _write_build_file(modules: Iterable[str]) -> tuple[str, str]:
             "apple_dynamic_xcframework_import(",
             f'    name = "{target}",',
             f'    xcframework_imports = glob(["PythonExtensions/{framework}.xcframework/**"], allow_empty = False),',
+            # Keep extensions embedded/signed through AppleFrameworkImportInfo,
+            # but omit link inputs: CPython loads their .fwork targets on import.
+            # Eager OpenSSL extensions can interpose the app's crypto at launch.
+            '    bundle_only = True,',
             ")",
             "",
         ])

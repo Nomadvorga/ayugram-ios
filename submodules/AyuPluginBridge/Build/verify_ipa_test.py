@@ -24,10 +24,10 @@ APP = "Payload/Swiftgram.app"
 MARKER = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/lib-dynload/_bisect.cpython-315-iphoneos.fwork"
 
 
-def macho(*, install_id=None, loads=(), rpaths=(), platform=2, subtype=0):
+def macho(*, install_id=None, loads=(), rpaths=(), platform=2, subtype=0, load_kind=0xC):
     """Construct just synthetic headers/load commands, with no executable code."""
     commands = []
-    for kind, name in ([(0xD, install_id)] if install_id is not None else []) + [(0xC, name) for name in loads] + [(0x8000001C, name) for name in rpaths]:
+    for kind, name in ([(0xD, install_id)] if install_id is not None else []) + [(load_kind, name) for name in loads] + [(0x8000001C, name) for name in rpaths]:
         start = 12 if kind == 0x8000001C else 24
         text = name.encode() + b"\0"
         length = (start + len(text) + 7) // 8 * 8
@@ -63,7 +63,7 @@ def with_subtype(binary, subtype):
 def fixture():
     entries = {
         f"{APP}/Info.plist": plistlib.dumps({"CFBundleExecutable": "Swiftgram"}),
-        f"{APP}/Swiftgram": macho(loads=(PYTHON_ID, EXT_ID), rpaths=("@executable_path/Frameworks",)),
+        f"{APP}/Swiftgram": macho(loads=(PYTHON_ID,), rpaths=("@executable_path/Frameworks",)),
         MARKER: f"Frameworks/{EXT}.framework/{EXT}\n".encode(),
     }
     for framework, install_id in (("Python", PYTHON_ID), (EXT, EXT_ID)):
@@ -71,6 +71,18 @@ def fixture():
         entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": framework})
         entries[base + "/" + framework] = macho(install_id=install_id, loads=("/usr/lib/libSystem.B.dylib",) + ((PYTHON_ID,) if framework == EXT else ()))
     return entries
+
+
+def add_extension(entries, module, *, loads=(PYTHON_ID,), subtype=0):
+    framework = "AyuPyExt_" + hashlib.sha256(module.encode()).hexdigest()[:16]
+    install_id = f"@rpath/{framework}.framework/{framework}"
+    base = f"{APP}/Frameworks/{framework}.framework"
+    binary = base + "/" + framework
+    entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": framework})
+    entries[binary] = macho(install_id=install_id, loads=loads, subtype=subtype)
+    marker = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/lib-dynload/{module}.cpython-315-iphoneos.fwork"
+    entries[marker] = f"Frameworks/{framework}.framework/{framework}\n".encode()
+    return binary, install_id
 
 
 class VerifyIPAHelperTests(unittest.TestCase):
@@ -86,7 +98,77 @@ class VerifyIPAHelperTests(unittest.TestCase):
         result = self.verify_entries(fixture())
         self.assertEqual(result["python_frameworks"], 2)
         self.assertEqual(result["extension_markers"], 1)
+        self.assertEqual(result["python_extensions"], "embedded, not startup-linked")
         self.assertEqual(result["device_launch"], "not tested")
+
+    def test_crypto_extensions_can_be_embedded_without_startup_loads(self):
+        entries = fixture()
+        for module in ("_hashlib", "_ssl"):
+            add_extension(entries, module)
+        result = self.verify_entries(entries)
+        self.assertEqual(result["python_frameworks"], 4)
+        self.assertEqual(result["extension_markers"], 3)
+
+    def test_startup_crypto_extension_edges_are_rejected_from_all_importers(self):
+        for module in ("_hashlib", "_ssl"):
+            for importer in ("executable", "app_framework", "python_runtime"):
+                for kind in sorted(verify.LOAD_COMMANDS):
+                    for wrapper in ("thin", "fat32", "fat64", "fat64_little"):
+                        with self.subTest(module=module, importer=importer, kind=hex(kind), wrapper=wrapper):
+                            entries = fixture()
+                            _, install_id = add_extension(entries, module)
+                            if importer == "executable":
+                                binary, own_id = f"{APP}/Swiftgram", None
+                            elif importer == "python_runtime":
+                                binary, own_id = f"{APP}/Frameworks/Python.framework/Python", PYTHON_ID
+                            else:
+                                base = f"{APP}/Frameworks/TelegramUIFramework.framework"
+                                binary = base + "/TelegramUIFramework"
+                                own_id = "@rpath/TelegramUIFramework.framework/TelegramUIFramework"
+                                entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": "TelegramUIFramework"})
+                                entries[binary] = macho(install_id=own_id)
+                            bad = macho(install_id=own_id, loads=(install_id,), load_kind=kind,
+                                        rpaths=("@executable_path/Frameworks",), subtype=0 if wrapper == "thin" else 2)
+                            entries[binary] = bad if wrapper == "thin" else fat_macho(
+                                [entries[binary], bad], wide=wrapper.startswith("fat64"),
+                                endian="<" if wrapper.endswith("little") else ">")
+                            with self.assertRaisesRegex(verify.VerificationError, "startup-linked Python extension in " + binary):
+                                self.verify_entries(entries)
+
+    def test_non_crypto_extension_startup_edge_is_also_rejected(self):
+        entries = fixture()
+        entries[f"{APP}/Swiftgram"] = macho(loads=(PYTHON_ID, EXT_ID), rpaths=("@executable_path/Frameworks",))
+        with self.assertRaisesRegex(verify.VerificationError, "startup-linked Python extension"):
+            self.verify_entries(entries)
+
+    def test_lazy_cross_extension_dependencies_are_still_validated(self):
+        entries = fixture()
+        _, crypto_id = add_extension(entries, "_hashlib")
+        binary, ssl_id = add_extension(entries, "_ssl", loads=(PYTHON_ID, crypto_id))
+        self.verify_entries(entries)
+        entries[binary] = macho(install_id=ssl_id, loads=("Modules/_hashlib.cpython-315-iphoneos.so",))
+        with self.assertRaisesRegex(verify.VerificationError, "unresolved Python dylib"):
+            self.verify_entries(entries)
+
+    def test_lazy_cross_extension_rpaths_cannot_hide_in_another_slice(self):
+        entries = fixture()
+        entries[f"{APP}/Swiftgram"] = fat_macho([entries[f"{APP}/Swiftgram"], macho(subtype=2)])
+        _, crypto_id = add_extension(entries, "_hashlib")
+        binary, ssl_id = add_extension(entries, "_ssl", loads=(PYTHON_ID, crypto_id))
+        entries[binary] = fat_macho([
+            entries[binary],
+            macho(install_id=ssl_id, loads=(crypto_id,), subtype=2),
+        ])
+        # The exact arm64e main slice has no rpaths; do not borrow the other slice's.
+        with self.assertRaisesRegex(verify.VerificationError, "LC_RPATH"):
+            self.verify_entries(entries)
+
+    def test_lazy_cross_extension_requires_compatible_slice(self):
+        entries = fixture()
+        _, crypto_id = add_extension(entries, "_hashlib", subtype=2)
+        add_extension(entries, "_ssl", loads=(PYTHON_ID, crypto_id))
+        with self.assertRaisesRegex(verify.VerificationError, "compatible arm64 slice"):
+            self.verify_entries(entries)
 
     def test_single_arm64_slice_fat_wrappers_are_valid(self):
         for wide in (False, True):
@@ -118,13 +200,13 @@ class VerifyIPAHelperTests(unittest.TestCase):
     def test_rpaths_are_not_combined_across_fat_slices(self):
         entries = fixture()
         name = f"{APP}/Swiftgram"
-        entries[name] = fat_macho([entries[name], macho(loads=(PYTHON_ID, EXT_ID), subtype=2)])
+        entries[name] = fat_macho([entries[name], macho(loads=(PYTHON_ID,), subtype=2)])
         with self.assertRaisesRegex(verify.VerificationError, "LC_RPATH"):
             self.verify_entries(entries)
 
     def test_incompatible_dependency_subtype_is_rejected(self):
         entries = fixture()
-        name = f"{APP}/Frameworks/{EXT}.framework/{EXT}"
+        name = f"{APP}/Frameworks/Python.framework/Python"
         entries[name] = fat_macho([with_subtype(entries[name], 2)])
         with self.assertRaisesRegex(verify.VerificationError, "compatible arm64 slice"):
             self.verify_entries(entries)
@@ -189,7 +271,7 @@ class VerifyIPAHelperTests(unittest.TestCase):
 
     def test_missing_executable_rpath_is_rejected(self):
         entries = fixture()
-        entries[f"{APP}/Swiftgram"] = macho(loads=(PYTHON_ID, EXT_ID))
+        entries[f"{APP}/Swiftgram"] = macho(loads=(PYTHON_ID,))
         with self.assertRaisesRegex(verify.VerificationError, "LC_RPATH"):
             self.verify_entries(entries)
 
@@ -197,7 +279,7 @@ class VerifyIPAHelperTests(unittest.TestCase):
         entries = fixture()
         base = f"{APP}/Frameworks/TelegramUIFramework.framework"
         entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": "TelegramUIFramework"})
-        entries[base + "/TelegramUIFramework"] = macho(install_id="@rpath/TelegramUIFramework.framework/TelegramUIFramework", loads=(EXT_ID,))
+        entries[base + "/TelegramUIFramework"] = macho(install_id="@rpath/TelegramUIFramework.framework/TelegramUIFramework", loads=(PYTHON_ID,))
         self.verify_entries(entries)
         entries[base + "/TelegramUIFramework"] = macho(loads=("Modules/_bisect.cpython-315-iphoneos.so",))
         with self.assertRaisesRegex(verify.VerificationError, "unresolved Python dylib"):

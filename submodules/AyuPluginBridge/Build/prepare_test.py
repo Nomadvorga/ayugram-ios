@@ -6,6 +6,7 @@ Run from the repository root on any Python 3.11+ host:
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import plistlib
 import tempfile
@@ -48,6 +49,17 @@ def fake_macho_tools(records=None):
         return ""
 
     return run, calls
+
+
+def build_targets(build, rule):
+    """Inspect generated declarations without executing Starlark or Bazel."""
+    result = {}
+    for statement in ast.parse(build).body:
+        call = statement.value if isinstance(statement, ast.Expr) else None
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == rule:
+            attributes = {keyword.arg: keyword.value for keyword in call.keywords}
+            result[ast.literal_eval(attributes["name"])] = attributes
+    return result
 
 
 class PrepareHelperTests(unittest.TestCase):
@@ -111,6 +123,20 @@ class PrepareHelperTests(unittest.TestCase):
         self.assertIn('"@ayu_python//:Python"', helper)
         self.assertIn('"@ayu_python//:PythonResources"', helper)
         self.assertIn("python_resource_deps", helper)
+
+    def test_all_extensions_are_bundle_only_but_core_runtime_stays_linked(self) -> None:
+        modules = ["_bisect", "_hashlib", "_ssl", "encodings.foo"]
+        build, _ = prepare._write_build_file(modules)
+        imports = build_targets(build, "apple_dynamic_xcframework_import")
+        self.assertNotIn("bundle_only", imports["python_runtime"])
+        extension_targets = {prepare.bazel_name_for_module(module) for module in modules}
+        self.assertEqual(set(imports), {"python_runtime"} | extension_targets)
+        for target in extension_targets:
+            self.assertIs(ast.literal_eval(imports[target]["bundle_only"]), True)
+        library = build_targets(build, "objc_library")["Python"]
+        # Keep the dependencies: their bundling providers carry the frameworks.
+        self.assertEqual(set(ast.literal_eval(library["deps"])), {":python_runtime"} | {":" + target for target in extension_targets})
+        self.assertEqual(ast.literal_eval(library["data"]), [":PythonResources"])
 
     def test_relocation_updates_bisect_ids_and_cross_module_edges_in_both_slices(self) -> None:
         root = Path("/fixture/generated")
@@ -213,6 +239,9 @@ class PrepareHelperTests(unittest.TestCase):
             self.assertIn('load("@rules_cc//cc:objc_library.bzl", "objc_library")', build)
             self.assertIn("@build_bazel_rules_apple", build)
             self.assertIn('name = "PythonResources"', build)
+            imports = build_targets(build, "apple_dynamic_xcframework_import")
+            self.assertIs(ast.literal_eval(imports[prepare.bazel_name_for_module("_ssl")]["bundle_only"]), True)
+            self.assertNotIn("bundle_only", imports["python_runtime"])
             with self.assertRaises(prepare.PrepareError):
                 prepare.prepare(archive, output, certifi)
 

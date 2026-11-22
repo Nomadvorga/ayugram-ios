@@ -206,8 +206,13 @@ def verify_ipa(path: Path) -> dict:
                     raise VerificationError(f"incorrect Python framework install ID: {framework}: {metadata['ids']}")
             expected[install_id] = binary
 
-        # Validate Python edges from the executable and other app frameworks too:
-        # Bazel may place the bridge's imports in TelegramUIFramework instead.
+        # Extensions must be embedded for lazy .fwork imports, not startup-linked.
+        # Reject edges from every ordinary app framework and the core runtime,
+        # not just the executable: Bazel can move imports into TelegramUIFramework.
+        # Extension-to-extension edges remain valid and are fully checked below.
+        extension_ids = {install_id for install_id, binary in expected.items()
+                         if binary != python_frameworks["Python"][0]}
+        extension_binaries = {expected[install_id] for install_id in extension_ids}
         importers = [(executable, main, False)] + [
             (binary, metadata, framework in python_frameworks)
             for framework, (binary, metadata) in frameworks.items()
@@ -223,6 +228,8 @@ def verify_ipa(path: Path) -> dict:
                     target = expected.get(dependency)
                     if target is None:
                         raise VerificationError(f"unresolved Python dylib in {binary}: {dependency}")
+                    if dependency in extension_ids and binary not in extension_binaries:
+                        raise VerificationError(f"startup-linked Python extension in {binary}: {dependency}; embed for lazy import only")
                     if not _matching_slices(target_slices[target], metadata):
                         raise VerificationError(f"Python dylib lacks a compatible arm64 slice in {binary}: {dependency}")
                     inherited_paths = [path for item in _matching_slices(main, metadata) for path in item["rpaths"]]
@@ -256,7 +263,8 @@ def verify_ipa(path: Path) -> dict:
         if marker_targets != extensions:
             raise VerificationError("Python .fwork inventory does not match embedded extension frameworks")
         return {"python_frameworks": len(python_frameworks), "extension_markers": marker_count,
-                "python_dyld_edges": "verified", "device_launch": "not tested"}
+                "python_dyld_edges": "verified", "python_extensions": "embedded, not startup-linked",
+                "device_launch": "not tested"}
 
 
 def main() -> int:
