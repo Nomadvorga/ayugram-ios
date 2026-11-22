@@ -26,6 +26,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     private let workerKey = DispatchSpecificKey<Bool>()
     private let delivery = DispatchQueue(label: "AyuPluginBridge.callbacks")
     private let provider: AyuPluginHostProvider
+    private let classRegistry: AyuBridgeClassRegistry
     private let defaults: UserDefaults
     private let limits: AyuPluginBridgeLimits
     private let callback: CallbackSink
@@ -39,7 +40,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         self?.enqueueCallback(owner: owner, generation: generation, callbackID: callbackID, arguments: args)
     })
 
-    public init(defaults: UserDefaults, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits(), trustedOwner: @escaping OwnerResolver, callback: @escaping CallbackSink) {
+    public init(defaults: UserDefaults, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), classRegistry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits(), trustedOwner: @escaping OwnerResolver, callback: @escaping CallbackSink) {
+        self.classRegistry = classRegistry
         self.defaults = defaults; self.provider = provider; self.limits = limits
         self.trustedOwner = trustedOwner; self.callback = callback
         self.worker.setSpecific(key: self.workerKey, value: true)
@@ -114,7 +116,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 throw AyuBridgeFailure("unsupported_api", "External Python dependencies are not available in this host")
             }
             if let classes = arguments["classes"]?.array {
-                guard classes.allSatisfy({ $0.string.map { Self.classes[$0] != nil } ?? false }) else { throw AyuBridgeFailure("unsupported_api", "Plugin requires an unsupported class") }
+                guard classes.allSatisfy({ $0.string.map(self.knownClass) ?? false }) else { throw AyuBridgeFailure("unsupported_api", "Plugin requires an unsupported class") }
             }
             if self.provider.capabilities.contains("plugin.authorize") {
                 guard try self.provider.call(pluginID: owner, operation: "plugin.authorize", arguments: arguments) == .bool(true) else {
@@ -171,7 +173,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             self.defaults.set(data, forKey: self.settingsKey(owner)); return .null
         case "java.class":
             let name = try self.className(arguments)
-            guard Self.classes[name] != nil else { throw AyuBridgeFailure.unsupported(name) }
+            guard self.knownClass(name) else { throw AyuBridgeFailure.unsupported(name) }
             return try self.store(owner: owner, className: name, kind: "class")
         case "java.construct": return try self.construct(owner: owner, arguments: arguments, generation: session.generation)
         case "java.member":
@@ -179,20 +181,28 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             let name = try self.text(arguments, "name")
             if remote.kind == "class" {
                 let nested = remote.className + "$" + name
-                if Self.classes[nested] != nil { return .object(["kind": .string("class"), "class_name": .string(nested)]) }
-                if let constant = Self.classes[remote.className]?[name] { return .object(["kind": .string("field"), "value": constant]) }
+                if self.knownClass(nested) { return .object(["kind": .string("class"), "class_name": .string(nested)]) }
+                if let constant = self.constants(for: remote.className)[name] { return .object(["kind": .string("field"), "value": constant]) }
             }
             if remote.kind == "layout", Self.layoutFields.contains(name) {
                 return .object(["kind": .string("field"), "value": remote.fields[name] ?? .integer(0)])
             }
-            let methods = remote.kind == "class" ? Self.reflectionMethods : remote.kind == "method" ? Set(["getName"]) : Self.methods(for: remote.className)
+            if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.readableFields.contains(name) == true {
+                return .object(["kind": .string("field"), "value": remote.fields[name] ?? .null])
+            }
+            let methods = remote.kind == "class" ? Self.reflectionMethods.union(self.classRegistry.adapters[remote.className]?.staticMethods.keys.map { $0 } ?? []) : remote.kind == "method" ? Set(["getName"]) : self.methods(for: remote.className)
             guard methods.contains(name) else { throw AyuBridgeFailure.unsupported(remote.className + "." + name) }
             return .object(["kind": .string("method")])
         case "java.invoke": return try self.invoke(owner: owner, arguments: arguments, generation: session.generation)
-        case "java.get_field": return try self.getField(owner: owner, arguments: arguments)
-        case "java.set_field":
+        case "java.get_field", "java.get_private_field": return try self.getField(owner: owner, arguments: arguments)
+        case "java.set_field", "java.set_private_field":
             let target = try self.target(arguments); let remote = try self.remote(target, owner: owner)
             let name = try self.text(arguments, "name")
+            if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.writableFields.contains(name) == true {
+                var fields = remote.fields; fields[name] = arguments["value"] ?? .null
+                try self.validateAdapterState(fields, className: remote.className, owner: owner, replacing: target)
+                self.objects[target]?.fields = fields; return .null
+            }
             guard remote.kind == "layout", Self.layoutFields.contains(name) else { throw AyuBridgeFailure.unsupported(remote.className + "." + name) }
             let number = try self.number(arguments["value"] ?? .null)
             guard number >= 0 || ((name == "width" || name == "height") && (number == -1 || number == -2)) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout dimension") }
@@ -216,10 +226,18 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             return try self.store(owner: owner, className: arrayClass, kind: "array", fields: ["component": .string(component), "values": .array(values)])
         case "java.length":
             let remote = try self.targetRemote(arguments, owner: owner)
+            if remote.kind == "adapter", remote.className == "java.util.ArrayList" {
+                return try self.invoke(owner: owner, arguments: ["target": arguments["target"] ?? .null, "name": .string("size"), "args": .array([])], generation: session.generation)
+            }
             guard remote.kind == "array", let values = remote.fields["values"]?.array else { throw AyuBridgeFailure.unsupported("length") }
             return .integer(Int64(values.count))
         case "java.get_item", "java.set_item":
             let handle = try self.target(arguments); let remote = try self.remote(handle, owner: owner)
+            if remote.kind == "adapter", remote.className == "java.util.ArrayList" {
+                let args = [arguments["index"] ?? .null] + (operation == "java.set_item" ? [arguments["value"] ?? .null] : [])
+                let result = try self.invoke(owner: owner, arguments: ["target": arguments["target"] ?? .null, "name": .string(operation == "java.get_item" ? "get" : "set"), "args": .array(args)], generation: session.generation)
+                return operation == "java.set_item" ? .null : result
+            }
             guard remote.kind == "array", var values = remote.fields["values"]?.array, let index = arguments["index"]?.integer, index >= 0, index < Int64(values.count) else { throw AyuBridgeFailure("invalid_arguments", "Array index out of range") }
             if operation == "java.get_item" { return values[Int(index)] }
             let value = arguments["value"] ?? .null
@@ -288,10 +306,17 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func construct(owner: String, arguments: [String: AyuBridgeValue], generation: UUID) throws -> AyuBridgeValue {
-        guard (arguments["kwargs"]?.object ?? [:]).isEmpty else { throw AyuBridgeFailure.unsupported("constructor keyword arguments") }
+        try self.validateJavaArguments(arguments)
         let name = try self.className(arguments)
-        guard Self.classes[name] != nil else { throw AyuBridgeFailure.unsupported(name) }
+        guard self.knownClass(name) else { throw AyuBridgeFailure.unsupported(name) }
         let args = arguments["args"]?.array ?? []
+        if let adapter = self.classRegistry.adapters[name] {
+            guard let constructor = adapter.constructor else { throw AyuBridgeFailure.unsupported("constructor " + name) }
+            let fields = try constructor(args, self.adapterContext(owner: owner, generation: generation))
+            try self.validateAdapterState(fields, className: name, owner: owner)
+            try self.validateAdapterResponse(self.reference(String(repeating: "0", count: 36), className: name))
+            return try self.store(owner: owner, className: name, kind: "adapter", fields: fields)
+        }
         if name.hasSuffix("$LayoutParams") {
             guard args.count == 2 else { throw AyuBridgeFailure("invalid_arguments", "LayoutParams requires width and height") }
             let width = try self.number(args[0]); let height = try self.number(args[1])
@@ -306,20 +331,35 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func invoke(owner: String, arguments: [String: AyuBridgeValue], generation: UUID) throws -> AyuBridgeValue {
-        guard (arguments["kwargs"]?.object ?? [:]).isEmpty else { throw AyuBridgeFailure.unsupported("method keyword arguments") }
+        try self.validateJavaArguments(arguments)
         let remote = try self.targetRemote(arguments, owner: owner)
         let method = arguments["name"]?.string ?? arguments["method"]?.string ?? ""
         if method == "getClass", remote.kind != "class" { return try self.store(owner: owner, className: remote.className, kind: "class") }
         if remote.kind == "class" {
+            if let handler = self.classRegistry.adapters[remote.className]?.staticMethods[method] {
+                return try self.adapterResult(handler(arguments["args"]?.array ?? [], self.adapterContext(owner: owner, generation: generation)), owner: owner)
+            }
             if method == "getName" { return .string(remote.className) }
             if method == "getDeclaredMethod" {
-                guard let name = arguments["args"]?.array?.first?.string, Self.methods(for: remote.className).contains(name) else { throw AyuBridgeFailure.unsupported("reflection target") }
+                guard let name = arguments["args"]?.array?.first?.string, self.methods(for: remote.className).union(self.classRegistry.adapters[remote.className]?.staticMethods.keys.map { $0 } ?? []).contains(name) else { throw AyuBridgeFailure.unsupported("reflection target") }
                 return try self.store(owner: owner, className: "java.lang.reflect.Method", kind: "method", fields: ["name": .string(name), "declaring_class": .string(remote.className)])
             }
-            if method == "getDeclaredMethods" { return .array(try Self.methods(for: remote.className).sorted().map { try self.store(owner: owner, className: "java.lang.reflect.Method", kind: "method", fields: ["name": .string($0), "declaring_class": .string(remote.className)]) }) }
+            if method == "getDeclaredMethods" { return .array(try self.methods(for: remote.className).union(self.classRegistry.adapters[remote.className]?.staticMethods.keys.map { $0 } ?? []).sorted().map { try self.store(owner: owner, className: "java.lang.reflect.Method", kind: "method", fields: ["name": .string($0), "declaring_class": .string(remote.className)]) }) }
             throw AyuBridgeFailure.unsupported(remote.className + "." + method)
         }
         if remote.kind == "method", method == "getName" { return remote.fields["name"] ?? .null }
+        if remote.kind == "adapter" {
+            guard let handler = self.classRegistry.adapters[remote.className]?.methods[method] else { throw AyuBridgeFailure.unsupported(remote.className + "." + method) }
+            let handle = try self.target(arguments)
+            var fields = remote.fields
+            let snapshot = self.objects
+            do {
+                let result = try handler(&fields, arguments["args"]?.array ?? [], self.adapterContext(owner: owner, generation: generation))
+                try self.validateAdapterState(fields, className: remote.className, owner: owner, replacing: handle)
+                self.objects[handle]?.fields = fields
+                return try self.adapterResult(result, owner: owner)
+            } catch { self.objects = snapshot; throw error }
+        }
         guard remote.kind == "view", Self.methods(for: remote.className).contains(method) else { throw AyuBridgeFailure.unsupported(remote.className + "." + method) }
         let handle = try self.target(arguments)
         if Self.readMethods.contains(method) {
@@ -399,7 +439,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     private func getField(owner: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue {
         let remote = try self.targetRemote(arguments, owner: owner)
         let name = try self.text(arguments, "name")
-        if remote.kind == "class", let value = Self.classes[remote.className]?[name] { return value }
+        if remote.kind == "class", let value = self.constants(for: remote.className)[name] { return value }
+        if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.readableFields.contains(name) == true { return remote.fields[name] ?? .null }
         if remote.kind == "layout", Self.layoutFields.contains(name) { return remote.fields[name] ?? .number(0) }
         throw AyuBridgeFailure.unsupported(remote.className + "." + name)
     }
@@ -453,7 +494,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     private func target(_ arguments: [String: AyuBridgeValue]) throws -> String { return try self.handle(arguments["target"] ?? .null) }
     private func targetRemote(_ arguments: [String: AyuBridgeValue], owner: String) throws -> Remote {
         if let name = arguments["target"]?["class_name"].string {
-            guard Self.classes[name] != nil else { throw AyuBridgeFailure.unsupported(name) }
+            guard self.knownClass(name) else { throw AyuBridgeFailure.unsupported(name) }
             return Remote(owner: owner, className: name, kind: "class", fields: [:])
         }
         return try self.remote(self.target(arguments), owner: owner)
@@ -478,6 +519,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
     private func validateArrayValue(_ value: AyuBridgeValue, component: String, owner: String) throws {
         switch component {
+        case "byte": guard let value = value.integer, (Int64(Int8.min)...Int64(Int8.max)).contains(value) else { throw AyuBridgeFailure("invalid_arguments", "Expected int8 array item") }
+        case "short": guard let value = value.integer, (Int64(Int16.min)...Int64(Int16.max)).contains(value) else { throw AyuBridgeFailure("invalid_arguments", "Expected int16 array item") }
+        case "char": guard let value = value.string, value.utf16.count == 1 else { throw AyuBridgeFailure("invalid_arguments", "Expected one UTF-16 array item") }
         case "int": guard let value = value.integer, value >= Int64(Int32.min), value <= Int64(Int32.max) else { throw AyuBridgeFailure("invalid_arguments", "Expected int32 array item") }
         case "long": guard value.integer != nil else { throw AyuBridgeFailure("invalid_arguments", "Expected int64 array item") }
         case "boolean": guard case .bool = value else { throw AyuBridgeFailure("invalid_arguments", "Expected bool array item") }
@@ -485,20 +529,26 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         default: throw AyuBridgeFailure.unsupported("array component " + component)
         }
     }
-    private func validateReferences(_ value: AyuBridgeValue, owner: String, depth: Int = 0) throws {
+    private func validateReferences(_ value: AyuBridgeValue, owner: String, depth: Int = 0, registerCallbacks: Bool = true) throws {
         guard depth < 32 else { throw AyuBridgeFailure("resource_limit", "JSON nesting limit exceeded") }
+        if case let .number(number) = value, !number.isFinite { throw AyuBridgeFailure("invalid_arguments", "Non-finite bridge value") }
         if let values = value.object {
             if let handle = values["$handle"]?.string {
                 let remote = try self.remote(handle, owner: owner)
                 guard values.count == 2, values["$class"]?.string == remote.className else { throw AyuBridgeFailure("invalid_arguments", "Malformed remote reference") }
             } else if values["$callback"] != nil {
                 guard values.count == 1 else { throw AyuBridgeFailure("invalid_arguments", "Malformed callback reference") }
-                _ = try self.callbackID(value, owner: owner, method: "")
+                if registerCallbacks { _ = try self.callbackID(value, owner: owner, method: "") }
+                else {
+                    guard let id = values["$callback"]?.string, self.sessions[owner]?.callbackIDs.contains(id) == true else {
+                        throw AyuBridgeFailure("invalid_arguments", "Adapter cannot create callback tokens")
+                    }
+                }
             } else if let name = values["$java_class"]?.string {
-                guard values.count == 1, Self.classes[name] != nil else { throw AyuBridgeFailure.unsupported("class reference") }
+                guard values.count == 1, self.knownClass(name) else { throw AyuBridgeFailure.unsupported("class reference") }
             } else if values.keys.contains(where: { $0.hasPrefix("$") }) { throw AyuBridgeFailure("invalid_arguments", "Unknown reserved wire tag") }
-            for item in values.values { try self.validateReferences(item, owner: owner, depth: depth + 1) }
-        } else if let values = value.array { for item in values { try self.validateReferences(item, owner: owner, depth: depth + 1) } }
+            for item in values.values { try self.validateReferences(item, owner: owner, depth: depth + 1, registerCallbacks: registerCallbacks) }
+        } else if let values = value.array { for item in values { try self.validateReferences(item, owner: owner, depth: depth + 1, registerCallbacks: registerCallbacks) } }
     }
     private func validatePersistentValue(_ value: AyuBridgeValue) throws {
         if let object = value.object {
@@ -506,6 +556,63 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             for child in object.values { try self.validatePersistentValue(child) }
         } else if let values = value.array { for child in values { try self.validatePersistentValue(child) } }
     }
+    private func knownClass(_ name: String) -> Bool { Self.classes[name] != nil || self.classRegistry.adapters[name] != nil }
+    private func constants(for name: String) -> [String: AyuBridgeValue] { self.classRegistry.adapters[name]?.constants ?? Self.classes[name] ?? [:] }
+    private func methods(for name: String) -> Set<String> {
+        if let adapter = self.classRegistry.adapters[name] { return Set(adapter.methods.keys).union(["getClass"]) }
+        return Self.methods(for: name)
+    }
+    private func adapterContext(owner: String, generation: UUID) -> AyuBridgeAdapterContext {
+        AyuBridgeAdapterContext(pluginID: owner) { [weak self] reference in
+            guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Adapter context is worker-only") }
+            guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("invalid_handle", "Adapter context generation expired") }
+            try self.validateReferences(reference, owner: owner, registerCallbacks: false)
+            guard reference.object?["$handle"]?.string != nil else { throw AyuBridgeFailure("invalid_arguments", "Snapshot requires a typed owned reference") }
+            let remote = try self.remote(self.handle(reference), owner: owner)
+            guard remote.kind == "adapter" || remote.kind == "array" else { throw AyuBridgeFailure.unsupported("adapter state for " + remote.className) }
+            return AyuBridgeAdapterSnapshot(className: remote.className, state: remote.fields)
+        }
+    }
+    private func validateAdapterState(_ fields: [String: AyuBridgeValue], className: String, owner: String, replacing: String? = nil) throws {
+        guard let adapter = self.classRegistry.adapters[className] else { throw AyuBridgeFailure.unsupported("adapter state class") }
+        try self.validateReferences(.object(fields), owner: owner, registerCallbacks: false)
+        try adapter.validateState(fields)
+        let size = try JSONEncoder().encode(fields).count
+        let other = try self.objects.filter { $0.key != replacing && $0.value.owner == owner && $0.value.kind == "adapter" }.values.reduce(0) { size, remote in
+            size + (try JSONEncoder().encode(remote.fields).count)
+        }
+        guard size <= self.limits.adapterStateBytesPerPlugin, other <= self.limits.adapterStateBytesPerPlugin - size else {
+            throw AyuBridgeFailure("resource_limit", "Owned adapter state quota exceeded")
+        }
+    }
+    private func adapterResult(_ result: AyuBridgeAdapterResult, owner: String) throws -> AyuBridgeValue {
+        switch result {
+        case let .value(value):
+            try self.validateReferences(value, owner: owner, registerCallbacks: false)
+            try self.validateAdapterResponse(value); return value
+        case let .instance(className, fields):
+            guard self.classRegistry.adapters[className] != nil else { throw AyuBridgeFailure.unsupported("adapter result class") }
+            try self.validateAdapterState(fields, className: className, owner: owner)
+            try self.validateAdapterResponse(self.reference(String(repeating: "0", count: 36), className: className))
+            return try self.store(owner: owner, className: className, kind: "adapter", fields: fields)
+        }
+    }
+
+    private func validateAdapterResponse(_ value: AyuBridgeValue) throws {
+        // Reserve the largest request id; never commit an unencodable mutation.
+        let response = AyuBridgeResponse(id: .string(String(repeating: "9", count: 128)), result: value, error: nil)
+        guard try JSONEncoder().encode(response).count <= self.limits.responseBytes else {
+            throw AyuBridgeFailure("resource_limit", "Adapter response exceeds quota")
+        }
+    }
+    private func validateJavaArguments(_ arguments: [String: AyuBridgeValue]) throws {
+        if let args = arguments["args"], args.array == nil { throw AyuBridgeFailure("invalid_arguments", "Java arguments must be an array") }
+        if let kwargs = arguments["kwargs"] {
+            guard let values = kwargs.object else { throw AyuBridgeFailure("invalid_arguments", "Java keyword arguments must be an object") }
+            guard values.isEmpty else { throw AyuBridgeFailure.unsupported("Java keyword arguments") }
+        }
+    }
+
     private func settingsKey(_ owner: String) -> String { return "AyuPluginBridge.v1." + owner }
     private func settings(_ owner: String) throws -> [String: AyuBridgeValue] {
         guard let data = self.defaults.data(forKey: self.settingsKey(owner)) else { return [:] }
@@ -532,16 +639,18 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return width.intValue * height.intValue * 4
     }
 
-    private let operations = ["runtime.capabilities", "plugin.authorize", "plugin.activate", "plugin.deactivate", "settings.get", "settings.set", "settings.all", "state.get", "state.set", "log.write", "java.member", "java.construct", "java.invoke", "java.get_field", "java.set_field", "java.array", "java.length", "java.get_item", "java.set_item", "java.cast", "java.proxy", "java.release", "scheduler.schedule", "scheduler.cancel", "ui.mount", "ui.transaction", "ui.animate", "host.metrics"]
+    private let operations = ["runtime.capabilities", "plugin.authorize", "plugin.activate", "plugin.deactivate", "settings.get", "settings.set", "settings.all", "state.get", "state.set", "log.write", "java.member", "java.construct", "java.invoke", "java.get_field", "java.set_field", "java.get_private_field", "java.set_private_field", "java.array", "java.length", "java.get_item", "java.set_item", "java.cast", "java.proxy", "java.release", "scheduler.schedule", "scheduler.cancel", "ui.mount", "ui.transaction", "ui.animate", "host.metrics"]
     private static let modules = ["base_plugin", "client_utils", "android_utils", "hook_utils", "java", "ui.settings", "ui.alert", "ui.bulletin", "plugin_settings"]
     private static let proxyInterfaces: [String: [String]] = ["java.lang.Runnable": ["run"], "android.view.View$OnClickListener": ["onClick"], "android.view.View$OnTouchListener": ["onTouch"]]
-    private static let arrayClasses = ["int": "[I", "long": "[J", "float": "[F", "double": "[D", "boolean": "[Z"]
+    private static let arrayClasses = ["byte": "[B", "short": "[S", "char": "[C", "int": "[I", "long": "[J", "float": "[F", "double": "[D", "boolean": "[Z"]
+    static var primitiveArrayClassNames: Set<String> { Set(self.arrayClasses.values) }
     private static let schedulerQueues: Set<String> = ["main", "pluginsQueue", "globalQueue", "stageQueue", "cacheClearQueue", "searchQueue", "phoneBookQueue", "themeQueue", "externalNetworkQueue"]
+    static var reservedClassNames: Set<String> { Set(self.classes.keys) }
     private static let reflectionMethods: Set<String> = ["getName", "getDeclaredMethod", "getDeclaredMethods"]
     private func capabilities() -> AyuBridgeValue {
         return .object([
             "operations": .array(Array(Set(self.operations + self.provider.capabilities)).sorted().map(AyuBridgeValue.string)),
-            "classes": .array(Self.classes.keys.sorted().map(AyuBridgeValue.string)),
+            "classes": .array((Array(Self.classes.keys) + Array(self.classRegistry.adapters.keys)).sorted().map(AyuBridgeValue.string)),
             "modules": .array(Self.modules.map(AyuBridgeValue.string)),
             "proxy_interfaces": .object(Self.proxyInterfaces.mapValues { .array($0.map(AyuBridgeValue.string)) })
         ])
@@ -552,15 +661,19 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     public func compatibilityManifestJSON() -> String {
         let implementation = "submodules/AyuPluginBridge/Sources/AyuPluginNativeHost.swift"
         var classes: [String: AyuBridgeValue] = [:]
-        for name in Self.classes.keys.sorted() {
+        for name in (Array(Self.classes.keys) + Array(self.classRegistry.adapters.keys)).sorted() {
+            let classImplementation = self.classRegistry.adapters[name] != nil ? "submodules/AyuPluginBridge/Sources/AyuBridgeClassRegistry.swift" : implementation
             var members: [String: AyuBridgeValue] = [:]
-            for method in Self.methods(for: name).sorted() {
-                members[method] = .object(["status": .string("partial"), "implementation": .string(implementation)])
+            for method in self.methods(for: name).union(self.classRegistry.adapters[name]?.staticMethods.keys.map { $0 } ?? []).sorted() {
+                members[method] = .object(["status": .string("partial"), "implementation": .string(classImplementation)])
             }
-            for constant in Self.classes[name]?.keys ?? Dictionary<String, AyuBridgeValue>().keys {
-                members[constant] = .object(["status": .string("supported"), "implementation": .string(implementation)])
+            for constant in self.constants(for: name).keys {
+                members[constant] = .object(["status": .string("supported"), "implementation": .string(classImplementation)])
             }
-            classes[name] = .object(["status": .string("partial"), "implementation": .string(implementation), "members": .object(members)])
+            for field in self.classRegistry.adapters[name]?.readableFields ?? [] {
+                members[field] = .object(["status": .string("partial"), "implementation": .string(classImplementation)])
+            }
+            classes[name] = .object(["status": .string("partial"), "implementation": .string(classImplementation), "members": .object(members)])
         }
         let manifest: AyuBridgeValue = .object([
             "schema_version": .integer(1),
@@ -585,7 +698,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "android.widget.TextView": [:], "android.widget.ImageView": [:],
         "android.widget.FrameLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "android.widget.LinearLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
-        "java.lang.reflect.Method": [:], "[I": [:], "[J": [:], "[F": [:], "[D": [:], "[Z": [:],
+        "java.lang.reflect.Method": [:], "[B": [:], "[S": [:], "[C": [:], "[I": [:], "[J": [:], "[F": [:], "[D": [:], "[Z": [:],
         "java.lang.Runnable": [:], "android.view.View$OnClickListener": [:], "android.view.View$OnTouchListener": [:]
     ]
     private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getAlpha", "getTranslationX", "getTranslationY", "getVisibility", "getText", "getChildCount"]

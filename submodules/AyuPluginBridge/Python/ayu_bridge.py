@@ -24,6 +24,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from _ayu_inspection import import_inventory
+
 VERSION = 1
 SDK_MODULES = frozenset({"ayu_bridge", "base_plugin", "client_utils", "android_utils",
                          "hook_utils", "plugin_settings", "java", "ui", "ui.settings",
@@ -524,22 +526,21 @@ class Runtime:
                     raise BridgeError("LOAD_REJECTED", "Relative plugin imports are not supported")
                 if node.module:
                     imports.add(node.module)
-                    if node.module.startswith(("android", "org.telegram", "java.")):
+                    if node.module.startswith(("android.", "androidx.", "org.telegram.", "java.", "javax.", "com.")):
                         for alias in node.names:
                             if alias.name == "*":
                                 raise BridgeError("LOAD_REJECTED", "Wildcard native imports are unsupported")
                             classes.add(node.module + "." + alias.name)
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("jclass", "find_class"):
-                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                    classes.add(node.args[0].value)
         try:
             json.dumps(metadata, allow_nan=False)
         except (TypeError, ValueError, RecursionError) as error:
             raise BridgeError("LOAD_REJECTED", "Metadata must contain finite JSON-compatible literals") from error
+        classes.update(import_inventory(tree, SDK_MODULES)["classes"])
         return tree, metadata, sorted(imports), sorted(classes)
 
     def inspect_plugin_json(self, source, filename="plugin.plugin"):
-        _, metadata, imports, classes = self.inspect(source, filename)
+        tree, metadata, imports, classes = self.inspect(source, filename)
+        inventory = import_inventory(tree, SDK_MODULES)
         requirements = metadata.get("__requirements__", [])
         if not isinstance(requirements, list) or not all(isinstance(v, str) for v in requirements):
             raise BridgeError("LOAD_REJECTED", "__requirements__ must be a literal string list")
@@ -552,14 +553,22 @@ class Runtime:
                            "requirements": requirements, "warnings": warnings,
                            "sdk_modules": sorted(SDK_MODULES),
                            "python_stdlib_candidates": sorted(getattr(sys, "stdlib_module_names", ())),
-                           "unsupported_imports": unsupported}, allow_nan=False)
+                            "unsupported_imports": unsupported,
+                            "imported_symbols": inventory["imported_symbols"],
+                            "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
+                            "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
     def load_plugin(self, source, filename="plugin.plugin", expected_id=None):
         self.check_queue()
         tree, metadata, imports, classes = self.inspect(source, filename)
+        inventory = import_inventory(tree, SDK_MODULES)
         plugin_id = metadata["__id__"]
         if expected_id is not None and expected_id != plugin_id:
             raise BridgeError("LOAD_REJECTED", "Plugin ID does not match trusted expected ID")
+        if inventory["unsupported_sdk_symbols"]:
+            module = sorted(inventory["unsupported_sdk_symbols"])[0]
+            symbol = inventory["unsupported_sdk_symbols"][module][0]
+            raise BridgeError("LOAD_REJECTED", f"SDK member is not implemented: {module}.{symbol}")
         for name in imports:
             reason = UNSUPPORTED_IMPORTS.get(name.split(".")[0])
             if reason:

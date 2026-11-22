@@ -112,3 +112,7 @@ class AccountClient:
 
     def get_account_instance(self):
         return self._call("get_account_instance")
+
+
+def get_client(account=None):
+    return AccountClient(account=account)

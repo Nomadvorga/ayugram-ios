@@ -170,6 +170,100 @@ class BridgeTests(unittest.TestCase):
             self.assertTrue(left.instance.get_setting("enabled"))
             self.assertIsNone(left.instance.get_state("pending"))
 
+    def test_aliased_qualified_and_starred_class_inspection_without_execution(self):
+        imports = ('from java import jclass as lookup, jint, dynamic_proxy\n'
+                   'import java as j\nimport hook_utils as hooks\n'
+                   'from hook_utils import find_class as find\n'
+                   'lookup("example.A")\nj.jclass(name="example.B")\n'
+                   'hooks.find_class("example.C")\nfind("example.D")\n'
+                   'lookup(computed_name)\nraise AssertionError("must not execute")\n')
+        report = json.loads(bridge.inspect_plugin_json(source(imports=imports)))
+        self.assertEqual(report["classes"], ["example.A", "example.B", "example.C", "example.D"])
+        self.assertEqual(len(report["dynamic_class_lookup_lines"]), 1)
+        self.assertEqual(report["unsupported_sdk_symbols"], {})
+        self.assertEqual(self.host.requests, [])
+        starred = json.loads(bridge.inspect_plugin_json(source(imports='from java import *\njclass("example.Native")\n')))
+        self.assertEqual(starred["classes"], ["example.Native"])
+
+    def test_missing_sdk_import_and_qualified_member_reject_before_execution(self):
+        for imports in ('from android_utils import absent_helper as helper\n',
+                        'import client_utils as client\nclient.absent_helper()\n'):
+            text = source(imports=imports + 'raise AssertionError("must not execute")\n')
+            report = json.loads(bridge.inspect_plugin_json(text))
+            self.assertTrue(report["unsupported_sdk_symbols"])
+            with self.assertRaisesRegex(bridge.BridgeError, "SDK member is not implemented"):
+                bridge.load_plugin(text)
+            self.assertEqual(self.host.requests, [])
+
+    def test_local_find_class_function_is_not_misreported_as_java_lookup(self):
+        report = json.loads(bridge.inspect_plugin_json(source(imports='def find_class(name): return name\nfind_class("local.value")\n')))
+        self.assertEqual(report["classes"], [])
+
+    def test_sdk_export_inspection_confined_to_bundled_paths(self):
+        from _ayu_inspection import sdk_symbols
+        for name in ("../secret", "java/other", "", ".java"):
+            with self.assertRaises(ValueError):
+                sdk_symbols(name)
+        self.assertIn("settings", sdk_symbols("ui"))
+        self.assertIn("OnClickListener", sdk_symbols("android_utils"))
+        self.assertIn("get_client", sdk_symbols("client_utils"))
+
+    def test_click_listener_is_declared_owned_and_revoked(self):
+        from android_utils import OnClickListener
+        self.host.capabilities["classes"].append("android.view.View$OnClickListener")
+        self.host.capabilities["proxy_interfaces"]["android.view.View$OnClickListener"] = ["onClick"]
+        left, right = self.load("left"), self.load("right")
+        seen = []
+        with bridge.runtime.context(left):
+            with self.assertRaises(TypeError):
+                OnClickListener(None)
+            listener = OnClickListener(lambda view: seen.append(view))
+            payload = bridge.runtime.encode(listener)
+            request = self.host.requests[-1]
+            self.assertEqual(request["arguments"]["interfaces"], ["android.view.View$OnClickListener"])
+            callback_id = request["arguments"]["callbacks"]["onClick"]["$callback"]
+        event = json.dumps({"version": 1, "plugin_id": "left", "callback_id": callback_id, "arguments": [None]})
+        bridge.invoke_callback_json(event)
+        self.assertEqual(seen, [None])
+        with bridge.runtime.context(right):
+            with self.assertRaisesRegex(bridge.BridgeError, "OWNERSHIP"):
+                bridge.runtime.encode(listener)
+        self.assertIn("$handle", payload)
+        bridge.unload_plugin("left")
+        with self.assertRaises(bridge.BridgeError):
+            bridge.invoke_callback_json(event)
+
+    def test_static_field_helper_uses_class_target_and_preserves_scope(self):
+        from hook_utils import get_static_private_field
+        left, right = self.load("left"), self.load("right")
+        with bridge.runtime.context(left):
+            clazz = jclass("example.Native")
+            with patch.object(bridge.runtime, "call", return_value=42) as dispatch:
+                self.assertEqual(get_static_private_field(clazz, "answer"), 42)
+                operation, arguments = dispatch.call_args.args
+                self.assertEqual(operation, "java.get_private_field")
+                self.assertEqual(bridge.runtime.encode(arguments["target"]), {"class_name": "example.Native"})
+            with self.assertRaises(TypeError):
+                get_static_private_field("example.Native", "answer")
+        with bridge.runtime.context(right):
+            with self.assertRaisesRegex(bridge.BridgeError, "OWNERSHIP"):
+                get_static_private_field(clazz, "answer")
+
+    def test_account_client_forwards_account_without_faking_native_support(self):
+        from client_utils import get_client
+        left, right = self.load("left"), self.load("right")
+        with bridge.runtime.context(left):
+            client = get_client(account=2)
+            with patch.object(bridge.runtime, "call", return_value=None) as dispatch:
+                client.send_message(text="synthetic")
+                self.assertEqual(dispatch.call_args.args, ("client.call", {
+                    "name": "send_message", "args": [], "kwargs": {"text": "synthetic", "account": 2}}))
+            with self.assertRaisesRegex(bridge.BridgeError, "UNSUPPORTED_API"):
+                client.get_user_config()
+        with bridge.runtime.context(right):
+            with self.assertRaisesRegex(bridge.BridgeError, "OWNERSHIP"):
+                client.get_user_config()
+
     def test_expected_id_rejects_before_host_or_source_execution(self):
         text = source("sample", imports='raise AssertionError("must not execute")\n')
         with self.assertRaisesRegex(bridge.BridgeError, "expected ID"):

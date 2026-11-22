@@ -1,5 +1,71 @@
 # AyuPluginBridge Python ↔ native protocol v1
 
+## Extensible class adapters (common bridge, first stage)
+
+`AyuBridgeClassRegistry.standard.adding(...)` supplies explicit compiled native
+classes to `AyuPluginService`/`AyuPluginNativeHost`. It cannot replace built-in
+view, layout, array or proxy classes. Duplicate names, ambiguous members, reserved
+reflection names, invalid constants and undeclared writable fields are rejected
+when constructing the registry. No Java/JVM, private selector resolution, Java
+subclassing or automatic Android API emulation is introduced.
+
+Adapters declare constructors, static/instance methods, constants, readable and
+writable fields, and `validateState`. Only declared members are exposed. Hidden
+JSON state is not accessible through the private-field helpers. Constructors,
+mutations, field writes and factory-created instances all run schema validation,
+owned-reference checks and the aggregate `adapterStateBytesPerPlugin` quota
+(default 1 MiB). Results additionally obey the response quota. Failed instance
+calls roll back state and newly allocated handles. Adapters must be bounded,
+side-effect-free synchronous transformations; irreversible app/UI effects belong
+in a real application provider, not these closures.
+
+`AyuBridgeAdapterContext` gives typed, read-only snapshots of current-owner
+references. It is host-worker-only and generation-scoped; do not retain it or
+start threads. Handles/callback tokens remain host-owned. Adapters cannot invent
+callback tokens. Atomic classes below provide serial value operations, not plugin
+thread support or a Java memory-model guarantee.
+
+Implemented **subsets**, not complete Java classes:
+
+| Class | Implemented surface |
+|---|---|
+| Integer / Long | bounded constructor/valueOf, decimal parseInt/parseLong, toString, intValue, longValue, MIN_VALUE, MAX_VALUE, TYPE |
+| Boolean | bool/string constructor/valueOf, parseBoolean, booleanValue, TYPE |
+| ArrayList | empty/capacity/array/list constructor, size, isEmpty, clear, get, set, add, addAll, remove, contains, indexOf, toArray; Python length/indexing |
+| HashMap | empty constructor, size, isEmpty, clear, containsKey, get, put, remove; typed JSON key/value pairs |
+| AtomicLong | empty/value constructor, get, set, getAndSet, incrementAndGet, compareAndSet |
+| AtomicBoolean | empty/value constructor, get, set, compareAndSet |
+| System | currentTimeMillis, monotonic nanoTime |
+
+Primitive descriptors: byte, short, int, long, char, boolean, float, double, void.
+Arrays support the eight non-void primitives, bounded by the existing transaction
+element limit; object arrays remain unsupported. ArrayList `toArray` returns a
+JSON/Python list, not a Java Object[] instance. Collection equality is typed JSON
+value/reference equality, not arbitrary Java `equals`/`hashCode`; `remove(integer)`
+is the index overload. Non-listed methods/overloads must fail explicitly.
+
+Static SDK inspection now records aliased/qualified class lookups, imported SDK
+symbols, missing SDK symbols and computed class-lookup locations before source
+activation. This is conservative AST inventory, not full Python name/scope or
+runtime compatibility analysis. `android_utils.OnClickListener` forwards through
+the declared generation-owned click proxy; `get_static_private_field` exposes
+only declared constants; `get_client` forwards to an owned AccountClient and
+does not manufacture a Telegram provider.
+
+The hash-pinned 19-plugin requirements table lives in
+`Resources/CommonBridge/compatibility.json` and its README. It records zero
+runtime-verified plugins. Atmospheric Snow retains its exact-hash native route;
+the other 18 remain blocked. The default provider still lacks actual Telegram
+objects/requests, application/message events, method hooks, menus and alert/
+bulletin presentation. Camera, passcode, screen-capture and destructive-message
+features require real iOS adapters respecting platform and account invariants.
+
+Regenerate the static table with `Build/audit-plugin-requirements.py`, supplying
+the pinned source manifest and read-only source directory. Never commit the
+reference `.plugin` files. Synthetic SDK tests may execute only test-authored
+fixtures, never these supplied plugins. Swift test sources are independent of
+Python/offline checks and require the authorized native test environment.
+
 This file describes the implemented Python API contract. An adapter not explicitly implemented by the host must fail with `UNSUPPORTED_API`; registration or member lookup must never pretend success. This SDK is not a sandbox for untrusted Python. One interpreter and one native-owned serial Python queue are required; no plugin Python threads may call bridge APIs. UI effects are enqueued on main; main must never synchronously wait for Python. Native callbacks must return to the Python queue after dispatch returns, never re-enter Python inside `_ayu_host.dispatch`.
 
 ## Transport and ownership

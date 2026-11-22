@@ -64,10 +64,10 @@ public struct AyuPluginSetting: Sendable {
     private var modules: Set<String> = []
     nonisolated private static let maximumBytes = 1_048_576
 
-    public init(defaults: UserDefaults = .standard, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits()) {
+    public init(defaults: UserDefaults = .standard, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), classRegistry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits()) {
         let relay = AyuRuntimeRelay()
         self.relay = relay; self.defaults = defaults
-        self.host = AyuPluginNativeHost(defaults: defaults, provider: provider, limits: limits, trustedOwner: { nil }, callback: { owner, callback, arguments in relay.deliver(owner, callback, arguments) })
+        self.host = AyuPluginNativeHost(defaults: defaults, provider: provider, classRegistry: classRegistry, limits: limits, trustedOwner: { nil }, callback: { owner, callback, arguments in relay.deliver(owner, callback, arguments) })
         self.root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AyuPlugins", isDirectory: true)
         relay.attach(self.runtime) { [weak self] owner in Task { @MainActor in
             guard let self, self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return }
@@ -276,6 +276,11 @@ public struct AyuPluginSetting: Sendable {
             return (AyuInstalledPlugin(id: id, name: "NewYear Interface", version: "1.0.1", blockers: ["Исходник не совпадает с проверенным Atmospheric Snow 1.0.1 (SHA-256). Нативный адаптер не может его выполнить."]), report)
         }
         var blockers = (report["classes"].array ?? []).compactMap(\.string).filter { !self.classes.contains($0) }.map { "Класс не поддерживается: " + Self.apiLabel($0) }
+        for (module, symbols) in (report["unsupported_sdk_symbols"].object ?? [:]).sorted(by: { $0.key < $1.key }) {
+            for symbol in symbols.array ?? [] {
+                blockers.append("Функция SDK не реализована: " + Self.apiLabel(module + "." + (symbol.string ?? "")))
+            }
+        }
         if let sdk = report["sdk_modules"].array, let candidates = report["python_stdlib_candidates"].array {
             // Candidate modules are not a promise that every CPython API works on iOS.
             let allowed = Set((sdk + candidates).compactMap(\.string)).union(self.modules)

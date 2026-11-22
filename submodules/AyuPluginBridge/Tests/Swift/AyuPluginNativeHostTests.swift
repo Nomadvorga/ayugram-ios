@@ -7,9 +7,9 @@ import UIKit
 /// Async transport keeps main free while the host marshals UIKit work to main.
 @MainActor
 final class AyuPluginNativeHostTests: XCTestCase {
-    private func host(limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits(), callback: @escaping AyuPluginNativeHost.CallbackSink = { _, _, _ in }) -> AyuPluginNativeHost {
+    private func host(limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits(), registry: AyuBridgeClassRegistry = .standard, callback: @escaping AyuPluginNativeHost.CallbackSink = { _, _, _ in }) -> AyuPluginNativeHost {
         let defaults = UserDefaults(suiteName: "AyuPluginBridgeTests." + UUID().uuidString)!
-        return AyuPluginNativeHost(defaults: defaults, limits: limits, trustedOwner: { "alpha" }, callback: callback)
+        return AyuPluginNativeHost(defaults: defaults, classRegistry: registry, limits: limits, trustedOwner: { "alpha" }, callback: callback)
     }
 
     private func call(_ host: AyuPluginNativeHost, _ operation: String, owner: String = "alpha", claimedOwner: String? = nil, arguments: [String: AyuBridgeValue] = [:]) async throws -> AyuBridgeValue {
@@ -33,6 +33,181 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let encoded = try JSONEncoder().encode(original)
         XCTAssertEqual(try JSONDecoder().decode(AyuBridgeValue.self, from: encoded), original)
         XCTAssertEqual(String(data: encoded, encoding: .utf8), "9223372036854775800")
+    }
+
+    private func construct(_ host: AyuPluginNativeHost, _ name: String, _ args: [AyuBridgeValue] = []) async throws -> AyuBridgeValue {
+        try await self.call(host, "java.construct", arguments: ["class_name": .string(name), "args": .array(args)])
+    }
+    private func invoke(_ host: AyuPluginNativeHost, _ target: AyuBridgeValue, _ name: String, _ args: [AyuBridgeValue] = [], owner: String = "alpha") async throws -> AyuBridgeValue {
+        try await self.call(host, "java.invoke", owner: owner, arguments: ["target": target, "name": .string(name), "args": .array(args)])
+    }
+    private func classTarget(_ name: String) -> AyuBridgeValue { .object(["class_name": .string(name)]) }
+
+    func testRegistryRejectsCollisionsReservedClassesAndUnsafeConstants() throws {
+        let adapter = AyuBridgeClassAdapter(name: "example.Value")
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([adapter, adapter]))
+        XCTAssertThrowsError(try AyuBridgeClassRegistry.standard.adding([AyuBridgeClassAdapter(name: "java.lang.Long")]))
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "android.view.View")]))
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "example.Value", readableFields: [], writableFields: ["value"])]))
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "example.Value", methods: ["getClass": { _, _, _ in .value(.null) }])]))
+        for value in [AyuBridgeValue.number(.infinity), .object(["$callback": .string("invented")]), .object(["$java_class": .string("unknown.Class")])] {
+            XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "example.Value", constants: ["BAD": value])]))
+        }
+    }
+
+    func testJavaWrapperFactoriesPreserveInt64AndRejectOverflow() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let target = self.classTarget("java.lang.Long")
+        let parsed = try await self.invoke(host, target, "parseLong", [.string(String(Int64.max))])
+        XCTAssertEqual(parsed["result"], .integer(Int64.max))
+        let boxed = try await self.invoke(host, target, "valueOf", [.integer(Int64.min)])
+        let unboxed = try await self.invoke(host, boxed["result"], "longValue")
+        XCTAssertEqual(unboxed["result"], .integer(Int64.min))
+        let truncated = try await self.invoke(host, boxed["result"], "intValue")
+        XCTAssertEqual(truncated["result"], .integer(0))
+        let overflow = try await self.invoke(host, target, "parseLong", [.string("9223372036854775808")])
+        XCTAssertEqual(overflow["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let intOverflow = try await self.construct(host, "java.lang.Integer", [.integer(Int64.max)])
+        XCTAssertEqual(intOverflow["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let constant = try await self.call(host, "java.get_private_field", arguments: ["target": target, "name": .string("TYPE")])
+        XCTAssertEqual(constant["result"], .object(["$java_class": .string("long")]))
+        let unsupported = try await self.invoke(host, target, "parseLong", [.string("ff"), .integer(16)])
+        XCTAssertEqual(unsupported["error"]["code"], .string("INVALID_ARGUMENTS"))
+    }
+
+    func testArrayListIndexedAccessCopyAndSelfAppend() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let list = try await self.construct(host, "java.util.ArrayList", [.array([.integer(Int64.max), .string("two")])])
+        let target = list["result"]
+        let first = try await self.call(host, "java.get_item", arguments: ["target": target, "index": .integer(0)])
+        XCTAssertEqual(first["result"], .integer(Int64.max))
+        _ = try await self.call(host, "java.set_item", arguments: ["target": target, "index": .integer(1), "value": .bool(true)])
+        let copy = try await self.construct(host, "java.util.ArrayList", [target])
+        _ = try await self.invoke(host, target, "addAll", [target])
+        let length = try await self.call(host, "java.length", arguments: ["target": target])
+        XCTAssertEqual(length["result"], .integer(4))
+        let copied = try await self.invoke(host, copy["result"], "toArray")
+        XCTAssertEqual(copied["result"], .array([.integer(Int64.max), .bool(true)]))
+        let negative = try await self.invoke(host, target, "get", [.integer(-1)])
+        XCTAssertEqual(negative["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let hidden = try await self.call(host, "java.get_private_field", arguments: ["target": target, "name": .string("values")])
+        XCTAssertEqual(hidden["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
+    func testHashMapPreservesTypedKeysAndRejectsMalformedEntryStates() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let map = try await self.construct(host, "java.util.HashMap")
+        let target = map["result"]
+        for (key, value) in [(AyuBridgeValue.integer(1), AyuBridgeValue.string("integer")), (.string("1"), .string("string")), (.bool(true), .integer(Int64.max))] {
+            _ = try await self.invoke(host, target, "put", [key, value])
+            let read = try await self.invoke(host, target, "get", [key])
+            XCTAssertEqual(read["result"], value)
+        }
+        let size = try await self.invoke(host, target, "size")
+        XCTAssertEqual(size["result"], .integer(3))
+        let validator = try XCTUnwrap(AyuBridgeClassRegistry.standard.adapters["java.util.HashMap"])
+        for entries in [AyuBridgeValue.null, .array([.array([])]), .array([.array([.integer(1)])]), .array([.object([:])])] {
+            XCTAssertThrowsError(try validator.validateState(["entries": entries]))
+        }
+        XCTAssertThrowsError(try AyuBridgeJavaValues.mapEntries(["entries": .array([.array([])])]))
+    }
+
+    func testAtomicValueSubsetsAndOverflowWrap() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let long = try await self.construct(host, "java.util.concurrent.atomic.AtomicLong", [.integer(Int64.max)])
+        let incremented = try await self.invoke(host, long["result"], "incrementAndGet")
+        XCTAssertEqual(incremented["result"], .integer(Int64.min))
+        let changed = try await self.invoke(host, long["result"], "compareAndSet", [.integer(Int64.min), .integer(7)])
+        XCTAssertEqual(changed["result"], .bool(true))
+        let bool = try await self.construct(host, "java.util.concurrent.atomic.AtomicBoolean")
+        let invalid = try await self.invoke(host, bool["result"], "set", [.integer(1)])
+        XCTAssertEqual(invalid["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let read = try await self.invoke(host, bool["result"], "get")
+        XCTAssertEqual(read["result"], .bool(false))
+    }
+
+    func testCustomAdapterStateValidationRollbackAndResultQuotas() async throws {
+        let adapter = AyuBridgeClassAdapter(name: "example.Counter", constructor: { _, _ in ["value": .integer(1)] },
+            staticMethods: ["badMap": { _, _ in .instance(className: "java.util.HashMap", state: ["entries": .array([.array([])])]) }],
+            methods: [
+                "invalidState": { state, _, _ in state["value"] = .string("bad"); return .value(.null) },
+                "invalidResult": { state, _, _ in state["value"] = .integer(2); return .value(.object(["$handle": .string("forged"), "$class": .string("example.Counter")])) },
+                "hugeResult": { state, _, _ in state["value"] = .integer(3); return .value(.string(String(repeating: "x", count: 5000))) },
+                "invalidCallback": { state, _, _ in state["value"] = .integer(4); return .value(.object(["$callback": .string("invented")])) }
+            ], readableFields: ["value"], writableFields: ["value"], validateState: { state in
+                guard Set(state.keys) == ["value"], state["value"]?.integer != nil else { throw AyuBridgeFailure("invalid_arguments", "Invalid counter state") }
+            })
+        var limits = AyuPluginBridgeLimits(); limits.responseBytes = 4096
+        let host = self.host(limits: limits, registry: try .standard.adding([adapter]))
+        try await self.authorize(host)
+        let object = try await self.construct(host, "example.Counter")
+        let target = object["result"]
+        for method in ["invalidState", "invalidResult", "hugeResult", "invalidCallback"] {
+            let failed = try await self.invoke(host, target, method)
+            XCTAssertNotNil(failed["error"]["code"].string)
+            let unchanged = try await self.call(host, "java.get_field", arguments: ["target": target, "name": .string("value")])
+            XCTAssertEqual(unchanged["result"], .integer(1))
+        }
+        let malformed = try await self.invoke(host, self.classTarget("example.Counter"), "badMap")
+        XCTAssertEqual(malformed["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let write = try await self.call(host, "java.set_field", arguments: ["target": target, "name": .string("value"), "value": .string("bad")])
+        XCTAssertEqual(write["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let unchanged = try await self.call(host, "java.get_field", arguments: ["target": target, "name": .string("value")])
+        XCTAssertEqual(unchanged["result"], .integer(1))
+    }
+
+    func testAdapterStateQuotaAndForeignAndExpiredReferences() async throws {
+        var limits = AyuPluginBridgeLimits(); limits.adapterStateBytesPerPlugin = 64
+        let host = self.host(limits: limits)
+        try await self.authorize(host)
+        try await self.authorize(host, owner: "bravo")
+        let list = try await self.construct(host, "java.util.ArrayList")
+        let target = list["result"]
+        let huge = try await self.invoke(host, target, "add", [.string(String(repeating: "x", count: 100))])
+        XCTAssertEqual(huge["error"]["code"], .string("RESOURCE_LIMIT"))
+        let unchanged = try await self.invoke(host, target, "size")
+        XCTAssertEqual(unchanged["result"], .integer(0))
+        let foreign = try await self.invoke(host, target, "size", owner: "bravo")
+        XCTAssertEqual(foreign["error"]["code"], .string("INVALID_HANDLE"))
+        _ = try await self.call(host, "plugin.deactivate")
+        try await self.authorize(host)
+        let expired = try await self.invoke(host, target, "size")
+        XCTAssertEqual(expired["error"]["code"], .string("INVALID_HANDLE"))
+    }
+
+    func testMalformedConstructorAndMethodArgumentsNeverBecomeEmptyOverload() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let bad = try await self.call(host, "java.construct", arguments: ["class_name": .string("java.util.ArrayList"), "args": .object([:])])
+        XCTAssertEqual(bad["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let badKwargs = try await self.call(host, "java.invoke", arguments: ["target": self.classTarget("java.lang.System"), "name": .string("nanoTime"), "kwargs": .array([])])
+        XCTAssertEqual(badKwargs["error"]["code"], .string("INVALID_ARGUMENTS"))
+    }
+
+    func testAdapterContextCannotEscapeWorkerOrPluginGeneration() async throws {
+        let saved = AyuBridgeTestContextBox()
+        let adapter = AyuBridgeClassAdapter(name: "example.Context", constructor: { _, context in
+            saved.storeOnce(context); return [:]
+        }, methods: ["oldState": { _, args, _ in
+            guard let context = saved.value else { throw AyuBridgeFailure("invalid_state", "No saved context") }
+            return .value(.object(try context.state(of: args.first ?? .null)))
+        }])
+        let host = self.host(registry: try .standard.adding([adapter]))
+        try await self.authorize(host)
+        let old = try await self.construct(host, "example.Context")
+        let context = try XCTUnwrap(saved.value)
+        XCTAssertThrowsError(try context.state(of: old["result"])) { error in
+            XCTAssertEqual((error as? AyuBridgeFailure)?.code, "WRONG_QUEUE")
+        }
+        _ = try await self.call(host, "plugin.deactivate")
+        try await self.authorize(host)
+        let new = try await self.construct(host, "example.Context")
+        let expired = try await self.invoke(host, new["result"], "oldState", [new["result"]])
+        XCTAssertEqual(expired["error"]["code"], .string("INVALID_HANDLE"))
     }
 
     func testBootstrapAndOwnerMismatch() async throws {
@@ -116,6 +291,21 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(outOfRange["error"]["code"], .string("INVALID_ARGUMENTS"))
     }
 
+    func testByteShortAndCharArraysRejectOutOfRangeValues() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        for (component, values, invalid) in [("byte", [AyuBridgeValue.integer(-128), .integer(127)], AyuBridgeValue.integer(128)),
+                                              ("short", [.integer(-32768), .integer(32767)], .integer(32768)),
+                                              ("char", [.string("A"), .string("\0")], .string("😀"))] {
+            let array = try await self.call(host, "java.array", arguments: ["component": .string(component), "values": .array(values)])
+            XCTAssertNotNil(array["result"]["$handle"].string)
+            let read = try await self.call(host, "java.get_item", arguments: ["target": array["result"], "index": .integer(0)])
+            XCTAssertEqual(read["result"], values[0])
+            let rejected = try await self.call(host, "java.set_item", arguments: ["target": array["result"], "index": .integer(0), "value": invalid])
+            XCTAssertEqual(rejected["error"]["code"], .string("INVALID_ARGUMENTS"))
+        }
+    }
+
     func testDuplicateKeysAndDepthAreRejected() throws {
         XCTAssertThrowsError(try AyuBridgeJSONValidation.validate(Data("{\"a\":1,\"\\u0061\":2}".utf8)))
         let deep = String(repeating: "[", count: 40) + "0" + String(repeating: "]", count: 40)
@@ -137,5 +327,15 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertFalse(gate.enter(owner: "alpha", generation: old, token: "cancelled"))
         gate.revoke(owner: "alpha"); gate.activate(owner: "alpha", generation: new)
         XCTAssertFalse(gate.enter(owner: "alpha", generation: old, token: nil))
+    }
+}
+
+private final class AyuBridgeTestContextBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var context: AyuBridgeAdapterContext?
+    var value: AyuBridgeAdapterContext? { self.lock.lock(); defer { self.lock.unlock() }; return self.context }
+    func storeOnce(_ value: AyuBridgeAdapterContext) {
+        self.lock.lock(); defer { self.lock.unlock() }
+        if self.context == nil { self.context = value }
     }
 }

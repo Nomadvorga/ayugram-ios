@@ -77,6 +77,7 @@ public struct AyuPluginBridgeLimits: Sendable {
     public var requestBytes = 262_144
     public var responseBytes = 262_144
     public var objectsPerPlugin = 256
+    public var adapterStateBytesPerPlugin = 1_048_576
     public var commandsPerTransaction = 256
     public var pendingUICommands = 1024
     public var pendingUIBytes = 1_048_576
