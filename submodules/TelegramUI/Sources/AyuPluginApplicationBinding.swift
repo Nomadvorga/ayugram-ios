@@ -2,7 +2,6 @@ import AccountContext
 import AyuPluginBridge
 import Display
 import Foundation
-import Postbox
 import SwiftSignalKit
 import TelegramCore
 import UIKit
