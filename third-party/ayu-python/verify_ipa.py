@@ -20,20 +20,23 @@ class VerificationError(RuntimeError):
 LOAD_COMMANDS = {0xC, 0x80000018, 0x8000001F, 0x80000023, 0x20}
 
 
-def read_macho(stream: BinaryIO) -> dict:
-    """Read only the header/load commands of an arm64 binary; never execute it."""
+def _read_thin_macho(stream: BinaryIO, start: int, slice_size: int | None) -> dict:
+    stream.seek(start)
     header = stream.read(32)
     if len(header) != 32:
         raise VerificationError("truncated Mach-O header")
-    magic, cpu, _, _, count, size, _, _ = struct.unpack("<8I", header)
+    magic, cpu, subtype, _, count, size, _, _ = struct.unpack("<8I", header)
     if magic != 0xFEEDFACF or cpu != 0x0100000C:
-        raise VerificationError("debug_arm64 IPA requires a thin arm64 Mach-O binary")
+        raise VerificationError(f"expected an arm64 Mach-O slice, found magic={header[:4].hex()}, cpu={cpu:#x}")
     if size > 16 * 1024 * 1024 or count > size // 8:
         raise VerificationError("invalid Mach-O load-command bounds")
+    if slice_size is not None and 32 + size > slice_size:
+        raise VerificationError("Mach-O load commands exceed slice bounds")
     data = stream.read(size)
     if len(data) != size:
         raise VerificationError("truncated Mach-O load commands")
-    result = {"ids": [], "loads": [], "rpaths": [], "platforms": []}
+    result = {"ids": [], "loads": [], "rpaths": [], "platforms": [],
+              "architecture": (cpu, subtype & 0x00FFFFFF), "raw_subtype": subtype}
     offset = 0
     for _ in range(count):
         if offset + 8 > size:
@@ -74,6 +77,70 @@ def read_macho(stream: BinaryIO) -> dict:
     return result
 
 
+def read_macho(stream: BinaryIO, file_size: int | None = None) -> list[dict]:
+    """Read thin or FAT arm64 load commands without loading executable code.
+
+    A FAT wrapper can contain just one architecture. Keep slice metadata
+    separate: a good slice must not hide another slice's stale ID or rpath.
+    ZIP streams are seekable; do not read/decompress whole framework binaries.
+    """
+    stream.seek(0)
+    magic = stream.read(4)
+    formats = {
+        b"\xca\xfe\xba\xbe": (">", False), b"\xbe\xba\xfe\xca": ("<", False),
+        b"\xca\xfe\xba\xbf": (">", True), b"\xbf\xba\xfe\xca": ("<", True),
+    }
+    if magic not in formats:
+        return [_read_thin_macho(stream, 0, file_size)]
+    endian, wide = formats[magic]
+    raw_count = stream.read(4)
+    if len(raw_count) != 4:
+        raise VerificationError("truncated FAT header")
+    count = struct.unpack(endian + "I", raw_count)[0]
+    if not 1 <= count <= 64:
+        raise VerificationError("invalid FAT architecture count")
+    entry_size = 32 if wide else 20
+    table_end = 8 + count * entry_size
+    table = stream.read(count * entry_size)
+    if len(table) != count * entry_size:
+        raise VerificationError("truncated FAT architecture table")
+    architectures = set()
+    ranges = []
+    slices = []
+    for index in range(count):
+        fields = struct.unpack_from(endian + ("IIQQII" if wide else "5I"), table, index * entry_size)
+        cpu, subtype, start, size, alignment = fields[:5]
+        if cpu != 0x0100000C:
+            raise VerificationError(f"non-arm64 architecture in device FAT binary: cpu={cpu:#x}")
+        if (cpu, subtype) in architectures:
+            raise VerificationError("duplicate FAT architecture")
+        architectures.add((cpu, subtype))
+        if alignment > 63 or start < table_end or size < 32 or start % (1 << alignment):
+            raise VerificationError("invalid FAT slice bounds/alignment")
+        if file_size is not None and start + size > file_size:
+            raise VerificationError("FAT slice exceeds binary bounds")
+        if wide and fields[5] != 0:
+            raise VerificationError("invalid FAT64 reserved field")
+        ranges.append((start, start + size))
+        slices.append((cpu, subtype, start, size))
+    ordered = sorted(ranges)
+    if any(previous[1] > following[0] for previous, following in zip(ordered, ordered[1:])):
+        raise VerificationError("overlapping FAT slices")
+    metadata = []
+    for cpu, subtype, start, size in sorted(slices, key=lambda entry: entry[2]):
+        item = _read_thin_macho(stream, start, size)
+        if item["architecture"][0] != cpu or item["raw_subtype"] != subtype:
+            raise VerificationError("FAT table/header architecture mismatch")
+        metadata.append(item)
+    return metadata
+
+
+def _matching_slices(slices: list[dict], requester: dict) -> list[dict]:
+    cpu, subtype = requester["architecture"]
+    exact = [item for item in slices if item["architecture"] == (cpu, subtype)]
+    return exact or [item for item in slices if item["architecture"] == (cpu, 0)]
+
+
 def _python_dependency(name: str) -> bool:
     return "Python.framework/" in name or "AyuPyExt_" in name or ".cpython-" in name or name.startswith(("Modules/", "/Modules/"))
 
@@ -102,11 +169,14 @@ def verify_ipa(path: Path) -> dict:
             raise VerificationError("invalid main CFBundleExecutable")
         executable = f"{app}/{executable_name}"
 
-        def read_binary(name: str) -> dict:
+        def read_binary(name: str) -> list[dict]:
             if name not in names:
                 raise VerificationError(f"missing embedded binary: {name}")
             with ipa.open(name) as stream:
-                return read_macho(stream)
+                try:
+                    return read_macho(stream, ipa.getinfo(name).file_size)
+                except VerificationError as error:
+                    raise VerificationError(f"{name}: {error}") from error
 
         main = read_binary(executable)
         framework_prefix = f"{app}/Frameworks/"
@@ -129,10 +199,11 @@ def verify_ipa(path: Path) -> dict:
         if "Python" not in python_frameworks or len(python_frameworks) < 2:
             raise VerificationError("Python runtime or extension frameworks are missing")
         expected = {}
-        for framework, (binary, metadata) in python_frameworks.items():
+        for framework, (binary, slices) in python_frameworks.items():
             install_id = f"@rpath/{framework}.framework/{framework}"
-            if metadata["ids"] != [install_id] or not binary.endswith("/" + framework):
-                raise VerificationError(f"incorrect Python framework install ID: {framework}: {metadata['ids']}")
+            for metadata in slices:
+                if metadata["ids"] != [install_id] or not binary.endswith("/" + framework):
+                    raise VerificationError(f"incorrect Python framework install ID: {framework}: {metadata['ids']}")
             expected[install_id] = binary
 
         # Validate Python edges from the executable and other app frameworks too:
@@ -141,24 +212,29 @@ def verify_ipa(path: Path) -> dict:
             (binary, metadata, framework in python_frameworks)
             for framework, (binary, metadata) in frameworks.items()
         ]
-        for binary, metadata, is_python in importers:
-            for dependency in metadata["loads"]:
-                if dependency.startswith(("/usr/lib/", "/System/Library/")):
-                    continue
-                if not is_python and not _python_dependency(dependency):
-                    continue
-                target = expected.get(dependency)
-                if target is None:
-                    raise VerificationError(f"unresolved Python dylib in {binary}: {dependency}")
-                suffix = dependency[len("@rpath/"):]
-                candidates = {
-                    posixpath.normpath(f"{root}/{suffix}")
-                    for loader, paths in ((binary, metadata["rpaths"]), (executable, main["rpaths"]))
-                    for rpath in paths
-                    if (root := _expand_rpath(rpath, loader, executable)) is not None
-                }
-                if target not in candidates:
-                    raise VerificationError(f"Python dylib cannot resolve through LC_RPATH in {binary}: {dependency}")
+        target_slices = {binary: slices for binary, slices in python_frameworks.values()}
+        for binary, slices, is_python in importers:
+            for metadata in slices:
+                for dependency in metadata["loads"]:
+                    if dependency.startswith(("/usr/lib/", "/System/Library/")):
+                        continue
+                    if not is_python and not _python_dependency(dependency):
+                        continue
+                    target = expected.get(dependency)
+                    if target is None:
+                        raise VerificationError(f"unresolved Python dylib in {binary}: {dependency}")
+                    if not _matching_slices(target_slices[target], metadata):
+                        raise VerificationError(f"Python dylib lacks a compatible arm64 slice in {binary}: {dependency}")
+                    inherited_paths = [path for item in _matching_slices(main, metadata) for path in item["rpaths"]]
+                    suffix = dependency[len("@rpath/"):]
+                    candidates = {
+                        posixpath.normpath(f"{root}/{suffix}")
+                        for loader, paths in ((binary, metadata["rpaths"]), (executable, inherited_paths))
+                        for rpath in paths
+                        if (root := _expand_rpath(rpath, loader, executable)) is not None
+                    }
+                    if target not in candidates:
+                        raise VerificationError(f"Python dylib cannot resolve through LC_RPATH in {binary}: {dependency}")
 
         marker_targets = set()
         marker_count = 0
