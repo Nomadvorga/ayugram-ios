@@ -1,8 +1,10 @@
 import AccountContext
+import AppLock
 import AyuPluginBridge
 import Display
 import Foundation
 import SwiftSignalKit
+import TabBarUI
 import TelegramCore
 import UIKit
 
