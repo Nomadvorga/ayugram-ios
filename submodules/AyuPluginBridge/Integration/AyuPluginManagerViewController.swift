@@ -3,7 +3,12 @@ import UniformTypeIdentifiers
 
 @MainActor public final class AyuPluginManagerViewController: UITableViewController, UIDocumentPickerDelegate {
     private let service: AyuPluginService
-    public init(service: AyuPluginService = .shared) { self.service = service; super.init(style: .insetGrouped); self.title = "Плагины" }
+    public init(service: AyuPluginService? = nil) {
+        // Resolve the actor-isolated singleton here, not in a nonisolated default argument.
+        self.service = service ?? .shared
+        super.init(style: .insetGrouped)
+        self.title = "Плагины"
+    }
     required init?(coder: NSCoder) { return nil }
     public override func viewDidLoad() {
         super.viewDidLoad()

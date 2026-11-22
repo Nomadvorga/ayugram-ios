@@ -298,7 +298,7 @@ public struct AyuPluginSetting: Sendable {
         if let code = response["error"]["code"].string { throw Failure.operation(Self.apiLabel(code)) }
         guard response["version"].number == 1 else { throw Failure.protocolError }; return response["result"]
     }
-    private func complete(_ work: (@escaping (String?, Error?) -> Void) -> Void) async throws -> String {
+    private func complete(_ work: (@escaping @Sendable (String?, Error?) -> Void) -> Void) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in work { json, error in if let json, error == nil { continuation.resume(returning: json) } else { continuation.resume(throwing: Failure.runtime) } } }
     }
     private func detach(_ id: String) async { await withCheckedContinuation { continuation in self.host.detach(pluginID: id) { continuation.resume() } } }
