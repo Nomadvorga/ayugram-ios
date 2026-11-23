@@ -7,8 +7,8 @@ from ayu_bridge import runtime
 class _Component:
     positional = ()
     allowed = frozenset({"text", "subtext", "icon", "key", "default", "on_click",
-                         "on_change", "items", "multiline", "hint", "input_type",
-                         "enabled", "link_alias", "accent", "destructive"})
+                         "on_change", "create_sub_fragment", "items", "multiline", "hint",
+                         "input_type", "enabled", "link_alias", "accent", "destructive"})
 
     def __init__(self, *args, **config):
         self._scope = runtime.require()
@@ -21,7 +21,7 @@ class _Component:
         unknown = set(config) - self.allowed
         if unknown:
             raise TypeError("Unsupported setting options: " + ", ".join(sorted(unknown)))
-        for callback in ("on_click", "on_change"):
+        for callback in ("on_click", "on_change", "create_sub_fragment"):
             if callback in config and config[callback] is not None and not callable(config[callback]):
                 raise TypeError(f"{callback} must be callable")
         for name in ("text", "subtext", "key", "hint"):

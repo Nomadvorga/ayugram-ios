@@ -26,16 +26,46 @@ class CommonBridgeCatalogTests(unittest.TestCase):
         for plugin in self.catalog["plugins"]:
             self.assertRegex(plugin["sha256"], r"^[0-9a-f]{64}$")
             self.assertRegex(plugin["blob"], r"^[0-9a-f]{40}$")
-            self.assertEqual(plugin["python_path"], "blocked")
-            if not plugin["native_adapter"]:
-                self.assertEqual(plugin["status"], "blocked_not_runtime_compatible")
+            if plugin["file"] == "group_mentions.plugin":
+                self.assertEqual(plugin["python_path"], "source_bridge_device_unverified")
+                self.assertIsNone(plugin["native_adapter"])
+                self.assertEqual(plugin["status"], "python_bridge_source_device_unverified")
+            else:
+                self.assertEqual(plugin["python_path"], "blocked")
+                if not plugin["native_adapter"]:
+                    self.assertEqual(plugin["status"], "blocked_not_runtime_compatible")
 
-    def test_snow_is_the_single_exact_source_native_route(self):
-        native = [item for item in self.catalog["plugins"] if item["native_adapter"]]
-        self.assertEqual(len(native), 1)
-        self.assertEqual(native[0]["file"], "atmospheric_snow.plugin")
-        self.assertEqual(native[0]["sha256"], "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763")
-        self.assertEqual(native[0]["lines"], 4237)
+    def test_five_exact_source_native_routes_keep_snow_untouched(self):
+        native = {item["file"]: item for item in self.catalog["plugins"] if item["native_adapter"]}
+        self.assertEqual(set(native), {
+            "atmospheric_snow.plugin", "sand_box.plugin", "ball.plugin",
+            "screenshot_privacy.plugin", "pull_next_chat.plugin",
+        })
+        snow = native["atmospheric_snow.plugin"]
+        self.assertEqual(snow["sha256"], "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763")
+        self.assertEqual(snow["lines"], 4237)
+        self.assertEqual(snow["native_adapter"], "Integration/AyuAtmosphericPluginAdapter.swift")
+        expected = {
+            "sand_box.plugin": ("9bd2c5ffa93e6a866212a4e0fd263b6216dc10080bbd55c79f40625e8942f8e5", "Integration/AyuSandBoxAdapter.swift"),
+            "ball.plugin": ("89f079f2a055ba851b6efec90a2c57d233b1f7204102363b2a637fa06579ea8f", "Integration/AyuBallAdapter.swift"),
+            "screenshot_privacy.plugin": ("ce11a973f667623b84aadd1fc68d50fedf410e605759c251789383641cbef23e", "Integration/AyuScreenshotPrivacyAdapter.swift"),
+            "pull_next_chat.plugin": ("69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709", "Integration/AyuPullNextChatAdapter.swift"),
+        }
+        for name, (digest, adapter) in expected.items():
+            self.assertEqual(native[name]["sha256"], digest)
+            self.assertEqual(native[name]["native_adapter"], adapter)
+            self.assertEqual(native[name]["status"], "source_pinned_native_adapter_device_unverified")
+            self.assertTrue(native[name]["ios_limitations"])
+
+    def test_group_mentions_is_a_bridge_route_not_native(self):
+        plugin = next(item for item in self.catalog["plugins"] if item["file"] == "group_mentions.plugin")
+        self.assertEqual(plugin["sha256"], "25ae71486b29481d57cc36eaf40e931522a655227d2870dfc898174b8d96f28e")
+        self.assertIsNone(plugin["native_adapter"])
+        self.assertEqual(plugin["ios_native_route_kind"], "python_bridge_source")
+        self.assertEqual(plugin["python_path"], "source_bridge_device_unverified")
+        self.assertIn("Original .plugin source", " ".join(plugin["ios_limitations"]))
+        catalog = (BRIDGE / "Integration/AyuNativePluginAdapter.swift").read_text()
+        self.assertNotIn('id: "group_mentions"', catalog)
 
     def test_catalog_sdk_hashes_match_current_sources(self):
         for name, digest in self.catalog["sdk_sha256"].items():

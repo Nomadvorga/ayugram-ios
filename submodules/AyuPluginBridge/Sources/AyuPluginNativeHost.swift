@@ -307,6 +307,17 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             var args = arguments; args["method"] = .string("animate"); args["args"] = .array([arguments["properties"] ?? .object([:])])
             try self.ui.enqueue([try self.uiCommand(owner: owner, arguments: args, generation: session.generation)]); return .null
         case "client.call", "hooks.register", "hooks.unregister", "menus.register", "menus.unregister", "ui.present":
+            if operation == "ui.present", let kind = arguments["kind"]?.string, let config = arguments["config"]?.object {
+                if kind == "alert", config["view"] != nil {
+                    return try self.presentCustomDialog(owner: owner, config: config, generation: session.generation)
+                }
+                if kind == "bulletin", let text = config["text"]?.string, let style = config["style"]?.string,
+                   ["simple", "success", "error"].contains(style), text.utf8.count <= 4096,
+                   DispatchQueue.main.sync(execute: { self.ui.hasVisibleCustomDialog(owner: owner) }) {
+                    try DispatchQueue.main.sync { self.ui.showDialogBulletin(owner: owner, text: text, style: style) }
+                    return .null
+                }
+            }
             guard self.provider.capabilities.contains(operation) else { throw AyuBridgeFailure.unsupported(operation) }
             try self.validateReferences(.object(arguments), owner: owner)
             let prepared = try self.provider.prepareCall(pluginID: owner, operation: operation, arguments: arguments, context: self.adapterContext(owner: owner, generation: session.generation))
@@ -337,11 +348,63 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard [width, height].allSatisfy({ $0 >= 0 || $0 == -1 || $0 == -2 }) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout size") }
             return try self.store(owner: owner, className: name, kind: "layout", fields: ["width": .number(width), "height": .number(height)])
         }
-        guard Self.viewClasses.contains(name), args.isEmpty || (args.count == 1 && args[0] == .null) else { throw AyuBridgeFailure.unsupported("constructor " + name) }
+        let contextArgument = args.isEmpty || (args.count == 1 && (args[0] == .null || args[0].object?["$handle"] != nil))
+        guard Self.viewClasses.contains(name), contextArgument else { throw AyuBridgeFailure.unsupported("constructor " + name) }
         let value = try self.store(owner: owner, className: name, kind: "view")
         let handle = value["$handle"].string!
         DispatchQueue.main.sync { self.ui.create(owner: owner, generation: generation, handle: handle, className: name) }
         return value
+    }
+
+    private func presentCustomDialog(owner: String, config: [String: AyuBridgeValue], generation: UUID) throws -> AyuBridgeValue {
+        guard Set(config.keys).isSubset(of: ["context", "title", "message", "view", "positive_button", "negative_button", "neutral_button", "cancelable"]),
+              config["view"] != nil else { throw AyuBridgeFailure.unsupported("alert configuration") }
+        if let context = config["context"], context != .null { _ = try self.remote(self.handle(context), owner: owner) }
+        let viewHandle = try self.handle(config["view"] ?? .null)
+        let content = try self.remote(viewHandle, owner: owner)
+        guard content.kind == "view", content.fields["parent"] == nil else { throw AyuBridgeFailure("invalid_state", "Dialog content must be an unparented view") }
+        let title = try self.dialogText(config["title"], limit: 1024)
+        let message = try self.dialogText(config["message"], limit: 8192)
+        guard let dialogHost = self.provider as? AyuPluginDialogHost else { throw AyuBridgeFailure.unsupported("dialog host") }
+        let token = UUID().uuidString
+        try dialogHost.reserveDialogToken(token, pluginID: owner)
+        let reference = try self.store(owner: owner, className: "org.telegram.ui.ActionBar.AlertDialog", kind: "adapter", fields: ["token": .string(token)])
+        var actions: [AyuBridgeUI.DialogAction] = []
+        for (key, which, style) in [("neutral_button", Int64(-3), 0), ("negative_button", Int64(-2), 1), ("positive_button", Int64(-1), 0)] {
+            guard let value = config[key] else { continue }
+            guard let button = value.object, Set(button.keys) == ["text", "on_click"],
+                  let text = button["text"]?.string, !text.isEmpty, text.utf8.count <= 1024,
+                  let callback = button["on_click"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid dialog button") }
+            let callbackID = callback == .null ? nil : try self.callbackID(callback, owner: owner, method: "onClick")
+            actions.append(AyuBridgeUI.DialogAction(title: text, style: style, handler: { [weak self] in
+                (self?.provider as? AyuPluginDialogHost)?.dismissBridgeDialog(token: token, pluginID: owner)
+                guard let self, let callbackID else { return }
+                self.enqueueCallback(owner: owner, generation: generation, callbackID: callbackID, arguments: [reference, .integer(which)])
+            }))
+        }
+        guard !actions.isEmpty else {
+            dialogHost.dismissBridgeDialog(token: token, pluginID: owner)
+            throw AyuBridgeFailure("invalid_arguments", "Dialog requires a button")
+        }
+        let cancelable = config["cancelable"]?.bool ?? true
+        do {
+            try DispatchQueue.main.sync {
+                let controller = try self.ui.makeCustomDialog(owner: owner, generation: generation, handle: viewHandle, title: title, message: message, actions: actions, cancelable: cancelable)
+                controller.onDismiss = { [weak self] in (self?.provider as? AyuPluginDialogHost)?.dismissBridgeDialog(token: token, pluginID: owner) }
+                self.ui.trackCustomDialog(owner: owner, controller: controller)
+                try dialogHost.presentBridgeDialog(controller, token: token, pluginID: owner)
+            }
+        } catch {
+            dialogHost.dismissBridgeDialog(token: token, pluginID: owner)
+            throw error
+        }
+        return reference
+    }
+
+    private func dialogText(_ value: AyuBridgeValue?, limit: Int) throws -> String? {
+        if value == nil || value == .null { return nil }
+        guard let text = value?.string, text.utf8.count <= limit else { throw AyuBridgeFailure("invalid_arguments", "Invalid dialog text") }
+        return text
     }
 
     private func invoke(owner: String, arguments: [String: AyuBridgeValue], generation: UUID) throws -> AyuBridgeValue {
@@ -374,8 +437,19 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 return try self.adapterResult(result, owner: owner)
             } catch { self.objects = snapshot; throw error }
         }
+        if remote.kind == "layout", method == "setMargins" {
+            let values = try (arguments["args"]?.array ?? []).map(self.number)
+            guard values.count == 4, values.allSatisfy({ abs($0) <= 100_000 }) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout margins") }
+            let layoutHandle = try self.target(arguments)
+            self.objects[layoutHandle]?.fields["margins"] = .array(values.map { .number($0) })
+            return .null
+        }
         guard remote.kind == "view", Self.methods(for: remote.className).contains(method) else { throw AyuBridgeFailure.unsupported(remote.className + "." + method) }
         let handle = try self.target(arguments)
+        if method == "getText", remote.className == "android.widget.EditText" {
+            let text = try DispatchQueue.main.sync { try self.ui.readText(owner: owner, handle: handle) }
+            return try self.store(owner: owner, className: "java.lang.String", kind: "adapter", fields: ["value": .string(text)])
+        }
         if Self.readMethods.contains(method) {
             guard method != "getText" || remote.className == "android.widget.TextView" else { throw AyuBridgeFailure.unsupported(method) }
             return try DispatchQueue.main.sync { try self.ui.read(owner: owner, handle: handle, method: method) }
@@ -406,7 +480,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         var args = arguments["args"]?.array ?? []
         guard args.count == arity else { throw AyuBridgeFailure("invalid_arguments", "Wrong argument count for " + method) }
         try self.validateReferences(.array(args), owner: owner)
-        if ["setText", "setTextColor", "setTextSize"].contains(method), remote.className != "android.widget.TextView" { throw AyuBridgeFailure.unsupported(method) }
+        if ["setText", "setTextColor", "setTextSize", "setHint", "setHintTextColor", "setSingleLine", "setMinLines"].contains(method), remote.className != "android.widget.TextView" && remote.className != "android.widget.EditText" { throw AyuBridgeFailure.unsupported(method) }
         if method == "setOrientation", remote.className != "android.widget.LinearLayout" { throw AyuBridgeFailure.unsupported(method) }
         if method == "setImageBase64", remote.className != "android.widget.ImageView" { throw AyuBridgeFailure.unsupported(method) }
         if method == "addView" || method == "removeView" {
@@ -427,6 +501,13 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             if args[0] != .null { args[0] = .object(["$callback": .string(try self.callbackID(args[0], owner: owner, method: method == "setOnClickListener" ? "onClick" : "onTouch"))]) }
         } else if method == "setText" {
             guard args[0].string != nil else { throw AyuBridgeFailure("invalid_arguments", "Text must be a string") }
+        } else if method == "setHint" {
+            guard args[0].string != nil else { throw AyuBridgeFailure("invalid_arguments", "Hint must be a string") }
+        } else if method == "setSingleLine" {
+            guard args[0] == .bool(true) || args[0] == .bool(false) || args[0].number != nil else { throw AyuBridgeFailure("invalid_arguments", "Expected boolean") }
+        } else if method == "setMinLines" {
+            let lines = try self.number(args[0])
+            guard lines >= 0, lines <= 64, lines == lines.rounded() else { throw AyuBridgeFailure("invalid_arguments", "Invalid line count") }
         } else if method == "setImageBase64" {
             guard let text = args[0].string, text.utf8.count <= 131_072, let data = Data(base64Encoded: text), let cost = self.imageCost(data) else { throw AyuBridgeFailure("invalid_arguments", "Expected a small bounded PNG or JPEG") }
             let otherCost = self.objects.filter { $0.key != handle && $0.value.owner == owner }.values.reduce(0) { $0 + Int($1.fields["image_cost"]?.number ?? 0) }
@@ -727,25 +808,27 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return String(data: (try? JSONEncoder().encode(manifest)) ?? Data(), encoding: .utf8) ?? "{}"
     }
 
-    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView"]
+    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView", "android.widget.EditText"]
     private static let layoutFields: Set<String> = ["width", "height", "x", "y"]
     private static let classes: [String: [String: AyuBridgeValue]] = [
         "android.view.View": ["VISIBLE": .number(0), "INVISIBLE": .number(4), "GONE": .number(8)],
+        "android.view.ViewGroup": [:],
+        "android.view.ViewGroup$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "android.widget.FrameLayout": [:], "android.widget.LinearLayout": ["HORIZONTAL": .number(0), "VERTICAL": .number(1)],
-        "android.widget.TextView": [:], "android.widget.ImageView": [:],
+        "android.widget.TextView": [:], "android.widget.ImageView": [:], "android.widget.EditText": [:],
         "android.widget.FrameLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "android.widget.LinearLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "java.lang.reflect.Method": [:], "[B": [:], "[S": [:], "[C": [:], "[I": [:], "[J": [:], "[F": [:], "[D": [:], "[Z": [:],
         "java.lang.Runnable": [:], "android.view.View$OnClickListener": [:], "android.view.View$OnTouchListener": [:]
     ]
     private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getAlpha", "getTranslationX", "getTranslationY", "getVisibility", "getText", "getChildCount"]
-    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
+    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setHint": 1, "setHintTextColor": 1, "setSingleLine": 1, "setMinLines": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
     private static func methods(for name: String) -> Set<String> {
         if name == "java.lang.reflect.Method" { return ["getName"] }
         if name.hasSuffix("$LayoutParams") { return ["getClass"] }
         guard self.viewClasses.contains(name) else { return [] }
         var result = self.readMethods.union(self.writeMethods.keys).union(["getClass"])
-        if name != "android.widget.TextView" { result.subtract(["getText", "setText", "setTextSize", "setTextColor"]) }
+        if name != "android.widget.TextView" && name != "android.widget.EditText" { result.subtract(["getText", "setText", "setTextSize", "setTextColor", "setHint", "setHintTextColor", "setSingleLine", "setMinLines"]) }
         if name != "android.widget.LinearLayout" { result.remove("setOrientation") }
         if name != "android.widget.ImageView" { result.remove("setImageBase64") }
         if name != "android.widget.FrameLayout" && name != "android.widget.LinearLayout" { result.subtract(["addView", "removeView", "removeAllViews", "getChildCount"]) }

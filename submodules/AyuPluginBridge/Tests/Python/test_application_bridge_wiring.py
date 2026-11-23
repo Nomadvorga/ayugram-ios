@@ -19,7 +19,8 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         for text in ["sharedContext.activeAccountContexts", "sharedContext.activeAccountsWithInfo", "appLock.isCurrentlyLocked",
                      "applicationBindings.applicationInForeground", "applicationBindings.applicationIsActive",
                      "id == self.primaryID", "self.identities = self.identities.filter", "self.nextSlot += 1",
-                     "case Namespaces.Peer.CloudUser", "case Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel"]:
+                     "case Namespaces.Peer.CloudUser", "case Namespaces.Peer.CloudGroup: dialogID = -id; isGroup = true",
+                     "isChannel: isChannel", "isGroup: isGroup", "ayuNativePluginChatKind()"]:
             self.assertIn(text, binding)
         app = (ROOT / "submodules/TelegramUI/Sources/AppDelegate.swift").read_text()
         self.assertIn("self.pluginApplicationBinding = AyuTelegramPluginApplicationBinding", app)
@@ -51,7 +52,8 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
                      'throw AyuBridgeFailure.unsupported("client_utils." + name)',
                      "NotificationCenter$NotificationCenterDelegate", "commitObservation", "accountChanged(selectedIndex)"]:
             self.assertIn(text, app)
-        self.assertNotIn('"get_messages_controller":', app)
+        self.assertIn('"get_messages_controller":', app)
+        self.assertIn("org.telegram.messenger.MessagesController", app)
         self.assertNotIn('"access_hash":', app)
         self.assertNotIn('"phone":', app)
 

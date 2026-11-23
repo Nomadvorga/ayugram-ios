@@ -15,6 +15,16 @@ import UniformTypeIdentifiers
         self.tableView.register(UITableViewCell.self, forCellReuseIdentifier: "plugin")
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(self.importPressed))
         NotificationCenter.default.addObserver(self, selector: #selector(self.serviceChanged(_:)), name: AyuPluginService.didChange, object: self.service)
+        AyuNativePluginRuntime.shared.feedbackPresenter = { [weak self] in
+            guard let self else { return nil }
+            var top: UIViewController = self.navigationController?.topViewController ?? self
+            var depth = 0
+            while let presented = top.presentedViewController, !presented.isBeingDismissed, depth < 8 {
+                top = (presented as? UINavigationController)?.topViewController ?? presented
+                depth += 1
+            }
+            return top
+        }
         Task { do { try await self.service.prepare() } catch { self.show(error) }; self.tableView.reloadData() }
     }
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -44,6 +54,13 @@ import UniformTypeIdentifiers
         let details = ([plugin.status] + plugin.blockers + [plugin.error].compactMap { $0 }).joined(separator: "\n")
         let sheet = UIAlertController(title: plugin.name, message: details, preferredStyle: .actionSheet)
         if plugin.isEnabled {
+            if let title = self.service.nativeActionTitle(for: plugin.id) {
+                sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                    guard let self else { return }
+                    do { try self.service.openNativePlugin(plugin.id, from: self) }
+                    catch { self.show(error) }
+                })
+            }
             sheet.addAction(UIAlertAction(title: "Выключить", style: .default) { [weak self] _ in self?.run { try await self?.service.disable(plugin.id) } })
             sheet.addAction(UIAlertAction(title: "Настройки", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginSettingsViewController(service: self.service, plugin: plugin)) })
             if plugin.nativeAdapter == nil {
@@ -65,13 +82,13 @@ import UniformTypeIdentifiers
         guard let url = urls.first else { return }; self.run { try await self.service.importPlugin(from: url) }
     }
     private func confirmEnable(_ plugin: AyuInstalledPlugin) {
-        let isNative = plugin.nativeAdapter == AyuAtmosphericPluginAdapter.adapterID
+        let isNative = plugin.nativeAdapter != nil
         let message = isNative
-            ? "Исходник Atmospheric Snow 1.0.1 проверяется по SHA-256. Эффекты и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Эффекты включатся в интерфейсе приложения и выключатся после его перезапуска."
+            ? "Исходник проверяется по SHA-256. Функции и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Нативные функции включатся в интерфейсе приложения и выключатся после его перезапуска."
             : "Python-код плагина получает доступ к контейнеру приложения и предоставленным API аккаунта. SDK не является песочницей Python. Включайте только проверенный код. Плагин будет запущен сейчас и выключен после перезапуска приложения."
-        let alert = UIAlertController(title: isNative ? "Включить Atmospheric Snow?" : "Доверять этому плагину?", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Доверять этому плагину?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: isNative ? "Включить эффекты" : "Доверяю и включаю", style: isNative ? .default : .destructive) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
+        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Доверяю и включаю", style: isNative ? .default : .destructive) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
         self.presentManaged(alert)
     }
     private func confirmDelete(_ plugin: AyuInstalledPlugin) {
@@ -103,14 +120,30 @@ import UniformTypeIdentifiers
 @MainActor private final class AyuPluginSettingsViewController: UITableViewController {
     private let service: AyuPluginService
     private let plugin: AyuInstalledPlugin
+    private let subpageCallback: String?
     private var rows: [AyuPluginSetting] = []
     private var loading = false
-    init(service: AyuPluginService, plugin: AyuInstalledPlugin) { self.service = service; self.plugin = plugin; super.init(style: .insetGrouped); self.title = "Настройки плагина" }
+    init(service: AyuPluginService, plugin: AyuInstalledPlugin, subpageCallback: String? = nil, title: String = "Настройки плагина") {
+        self.service = service; self.plugin = plugin; self.subpageCallback = subpageCallback
+        super.init(style: .insetGrouped); self.title = title
+    }
     required init?(coder: NSCoder) { return nil }
-    override func viewDidLoad() { super.viewDidLoad(); self.reload() }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.reload()
+    }
     private func reload() {
         guard !self.loading else { return }; self.loading = true
-        Task { do { self.rows = try await self.service.settings(self.plugin.id) } catch { self.present(AyuPluginAlerts.error(error), animated: true) }; self.loading = false; self.tableView.reloadData() }
+        Task {
+            do {
+                if let callback = self.subpageCallback {
+                    self.rows = try await self.service.subpage(pluginID: self.plugin.id, callbackID: callback)
+                } else {
+                    self.rows = try await self.service.settings(self.plugin.id)
+                }
+            } catch { self.present(AyuPluginAlerts.error(error), animated: true) }
+            self.loading = false; self.tableView.reloadData()
+        }
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { self.rows.count }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? { self.rows.isEmpty ? (self.loading ? "Загрузка…" : "Плагин не предоставил настройки.") : nil }
@@ -133,7 +166,15 @@ import UniformTypeIdentifiers
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let row = self.rows[indexPath.row]; guard row.descriptor["enabled"] != .bool(false), !(row.type == "Input" && row.descriptor["multiline"] == .bool(true)) else { return }
-        if row.type == "Text" { self.service.activate(row, pluginID: self.plugin.id); self.reload(); return }
+        if let callback = row.descriptor["create_sub_fragment"]["$callback"].string {
+            let page = AyuPluginSettingsViewController(service: self.service, plugin: self.plugin, subpageCallback: callback, title: row.text)
+            self.navigationController?.pushViewController(page, animated: true)
+            return
+        }
+        if row.type == "Text" {
+            self.service.activate(row, pluginID: self.plugin.id, presenter: self) { [weak self] in self?.reload() }
+            return
+        }
         if row.type == "Input" {
             let alert = UIAlertController(title: row.text, message: nil, preferredStyle: .alert)
             alert.addTextField { field in field.isSecureTextEntry = row.isSecret; field.text = row.value.string; field.placeholder = String((row.descriptor["hint"].string ?? "").prefix(128)); field.autocorrectionType = .no; field.autocapitalizationType = .none }

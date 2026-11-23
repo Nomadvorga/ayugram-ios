@@ -25,6 +25,7 @@ final class AyuBridgeUI: @unchecked Sendable {
     private var containers: [String: UIView] = [:]
     private var mountedRoots: [String: Set<String>] = [:]
     private var generations: [String: UUID] = [:]
+    private var customDialogs: [String: AyuBridgeDialogViewController] = [:]
 
     init(limit: Int, byteLimit: Int, callback: @escaping Callback) {
         self.limit = limit
@@ -67,6 +68,7 @@ final class AyuBridgeUI: @unchecked Sendable {
         self.containers.removeValue(forKey: owner)
         self.mountedRoots.removeValue(forKey: owner)
         self.generations.removeValue(forKey: owner)
+        self.customDialogs.removeValue(forKey: owner)?.dismiss(animated: false)
         self.lock.lock()
         self.pending.removeAll { $0.owner == owner }
         self.pendingBytes = self.pending.reduce(0) { total, command in
@@ -141,6 +143,45 @@ final class AyuBridgeUI: @unchecked Sendable {
         }
     }
 
+    struct DialogAction: Sendable {
+        let title: String
+        /// 0 = default, 1 = cancel, 2 = destructive.
+        let style: Int
+        let handler: @Sendable () -> Void
+    }
+
+    @MainActor func makeCustomDialog(owner: String, generation: UUID, handle: String, title: String?, message: String?, actions: [DialogAction], cancelable: Bool) throws -> AyuBridgeDialogViewController {
+        dispatchPrecondition(condition: .onQueue(.main))
+        self.flush()
+        guard self.generations[owner] == generation, let view = self.views[handle], view.owner == owner else {
+            throw AyuBridgeFailure("invalid_handle", "Dialog content view is unavailable")
+        }
+        guard view.superview == nil else { throw AyuBridgeFailure("invalid_state", "Dialog content must not have a parent") }
+        return AyuBridgeDialogViewController(title: title, message: message, content: view, actions: actions, cancelable: cancelable)
+    }
+
+    @MainActor func trackCustomDialog(owner: String, controller: AyuBridgeDialogViewController) {
+        self.customDialogs[owner] = controller
+    }
+
+    @MainActor func hasVisibleCustomDialog(owner: String) -> Bool {
+        self.customDialogs[owner]?.presentingViewController != nil
+    }
+
+    @MainActor func showDialogBulletin(owner: String, text: String, style: String) {
+        guard let controller = self.customDialogs[owner], controller.presentingViewController != nil else { return }
+        controller.showBulletin(text: text, style: style)
+    }
+
+    @MainActor func readText(owner: String, handle: String) throws -> String {
+        dispatchPrecondition(condition: .onQueue(.main))
+        self.flush()
+        guard let view = self.views[handle], view.owner == owner, let field = view.textField else {
+            throw AyuBridgeFailure("invalid_handle", "Text field is unavailable")
+        }
+        return field.text ?? ""
+    }
+
     @MainActor func mount(owner: String, handle: String) throws {
         dispatchPrecondition(condition: .onQueue(.main))
         self.flush()
@@ -179,9 +220,17 @@ final class AyuBridgeUI: @unchecked Sendable {
             view.visibility = Int(number(0)); view.isHidden = view.visibility != 0
             view.superview?.setNeedsLayout()
         case "setBackgroundColor": view.backgroundColor = AyuBridgeUI.color(args[0].number ?? 0)
-        case "setText": view.label?.text = args[0].string; view.superview?.setNeedsLayout()
-        case "setTextColor": view.label?.textColor = AyuBridgeUI.color(args[0].number ?? 0)
-        case "setTextSize": view.label?.font = .systemFont(ofSize: number(0)); view.superview?.setNeedsLayout()
+        case "setText":
+            view.label?.text = args[0].string; view.textField?.text = args[0].string; view.superview?.setNeedsLayout()
+        case "setTextColor":
+            let color = AyuBridgeUI.textColor(args[0].number ?? 0)
+            view.label?.textColor = color; view.textField?.textColor = color
+        case "setTextSize":
+            view.label?.font = .systemFont(ofSize: number(0)); view.textField?.font = .systemFont(ofSize: number(0)); view.superview?.setNeedsLayout()
+        case "setHint": view.setHint(args[0].string ?? "")
+        case "setHintTextColor": view.setHintColor(AyuBridgeUI.textColor(args[0].number ?? 0))
+        case "setSingleLine": break
+        case "setMinLines": break
         case "setOrientation": view.orientation = Int(number(0)); view.setNeedsLayout()
         case "setPadding": view.padding = UIEdgeInsets(top: number(1), left: number(0), bottom: number(3), right: number(2)); view.setNeedsLayout()
         case "setLayoutParams": view.parameters = args[0].object ?? [:]; view.superview?.setNeedsLayout()
@@ -223,13 +272,24 @@ final class AyuBridgeUI: @unchecked Sendable {
         let color = UInt32(truncatingIfNeeded: Int64(raw))
         return UIColor(red: CGFloat((color >> 16) & 255) / 255, green: CGFloat((color >> 8) & 255) / 255, blue: CGFloat(color & 255) / 255, alpha: CGFloat((color >> 24) & 255) / 255)
     }
+
+    /// Theme markers from the application adapter resolve to dynamic iOS
+    /// colours; every other value is the plugin's ARGB colour.
+    @MainActor private static func textColor(_ raw: Double) -> UIColor {
+        let marker = Int64(raw)
+        if marker == 0x0100_0001 { return .label }
+        if marker == 0x0100_0002 { return .secondaryLabel }
+        return self.color(raw)
+    }
 }
 
 private final class AyuBridgeView: UIView {
     let owner: String
     let className: String
     let label: UILabel?
+    let textField: UITextField?
     let image: UIImageView?
+    var hintColor: UIColor = .secondaryLabel
     var orientation = 1
     var visibility = 0
     var parameters: [String: AyuBridgeValue] = ["width": .number(-2), "height": .number(-2)]
@@ -247,12 +307,29 @@ private final class AyuBridgeView: UIView {
     init(owner: String, className: String) {
         self.owner = owner; self.className = className
         self.label = className == "android.widget.TextView" ? UILabel() : nil
+        self.textField = className == "android.widget.EditText" ? UITextField() : nil
         self.image = className == "android.widget.ImageView" ? UIImageView() : nil
         super.init(frame: .zero)
         if let label = self.label { label.numberOfLines = 0; self.addSubview(label) }
+        if let textField = self.textField {
+            textField.borderStyle = .none
+            textField.autocorrectionType = .no
+            textField.autocapitalizationType = .none
+            self.addSubview(textField)
+        }
         if let image = self.image { image.contentMode = .scaleAspectFit; self.addSubview(image) }
     }
     required init?(coder: NSCoder) { return nil }
+
+    @MainActor func setHint(_ text: String) {
+        guard let field = self.textField else { return }
+        field.attributedPlaceholder = NSAttributedString(string: text, attributes: [.foregroundColor: self.hintColor])
+    }
+    @MainActor func setHintColor(_ color: UIColor) {
+        self.hintColor = color
+        guard let field = self.textField, let text = field.attributedPlaceholder?.string else { return }
+        field.attributedPlaceholder = NSAttributedString(string: text, attributes: [.foregroundColor: color])
+    }
 
     @MainActor func updateTransform() {
         self.transform = CGAffineTransform(translationX: self.translationX, y: self.translationY).scaledBy(x: self.scaleX, y: self.scaleY)
@@ -279,6 +356,10 @@ private final class AyuBridgeView: UIView {
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         if let label = self.label { return label.sizeThatFits(size) }
+        if let textField = self.textField {
+            let height = self.className == "android.widget.EditText" ? max(36, textField.sizeThatFits(size).height) : 0
+            return CGSize(width: size.width.isFinite && size.width > 0 ? size.width : textField.sizeThatFits(size).width, height: height)
+        }
         if let image = self.image { return image.image?.size ?? .zero }
         return .zero
     }
@@ -286,24 +367,181 @@ private final class AyuBridgeView: UIView {
         super.layoutSubviews()
         let content = self.bounds.inset(by: self.padding)
         self.label?.frame = content
+        self.textField?.frame = content
         self.image?.frame = content
         var cursor: CGFloat = 0
         for child in self.bridgeChildren where child.visibility != 8 {
-            let fit = child.sizeThatFits(content.size)
+            let margins = (child.parameters["margins"]?.array ?? []).compactMap(\.number)
+            let left = CGFloat(margins.indices.contains(0) ? margins[0] : 0)
+            let top = CGFloat(margins.indices.contains(1) ? margins[1] : 0)
+            let right = CGFloat(margins.indices.contains(2) ? margins[2] : 0)
+            let bottom = CGFloat(margins.indices.contains(3) ? margins[3] : 0)
+            let availableWidth = max(0, content.width - left - right)
+            let availableHeight = max(0, content.height - top - bottom)
+            let fit = child.sizeThatFits(CGSize(width: availableWidth, height: availableHeight))
             @MainActor func dimension(_ key: String, available: CGFloat, intrinsic: CGFloat) -> CGFloat {
                 let raw = child.parameters[key]?.number ?? -2
                 return raw == -1 ? available : raw == -2 ? intrinsic : CGFloat(raw)
             }
-            let width = dimension("width", available: content.width, intrinsic: fit.width)
-            let height = dimension("height", available: content.height, intrinsic: fit.height)
+            let width = dimension("width", available: availableWidth, intrinsic: fit.width)
+            let height = dimension("height", available: availableHeight, intrinsic: fit.height)
             var x = CGFloat(child.parameters["x"]?.number ?? 0)
             var y = CGFloat(child.parameters["y"]?.number ?? 0)
             if self.className == "android.widget.LinearLayout" {
-                if self.orientation == 1 { y += cursor; cursor += height } else { x += cursor; cursor += width }
+                if self.orientation == 1 {
+                    y += cursor + top; cursor += top + height + bottom
+                } else {
+                    x += cursor + left; cursor += left + width + right
+                }
+            } else {
+                x += left; y += top
             }
             // Use bounds/center to avoid corrupting frame under an existing transform.
             child.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
             child.center = CGPoint(x: content.minX + x + width / 2, y: content.minY + y + height / 2)
         }
+    }
+}
+
+/// Plugin-authored dialog with an owned bridge view tree. The buttons deliver
+/// their Python callbacks only after the native modal has been dismissed.
+@MainActor final class AyuBridgeDialogViewController: UIViewController {
+    private let dialogTitle: String?
+    private let dialogMessage: String?
+    private let content: AyuBridgeView
+    private let actions: [AyuBridgeUI.DialogAction]
+    private let cancelable: Bool
+    private var bulletin: UIView?
+    var onDismiss: (() -> Void)?
+    private var didReportDismissal = false
+
+    fileprivate init(title: String?, message: String?, content: AyuBridgeView, actions: [AyuBridgeUI.DialogAction], cancelable: Bool) {
+        self.dialogTitle = title
+        self.dialogMessage = message
+        self.content = content
+        self.actions = actions
+        self.cancelable = cancelable
+        super.init(nibName: nil, bundle: nil)
+        self.modalPresentationStyle = .overFullScreen
+        self.modalTransitionStyle = .crossDissolve
+    }
+    required init?(coder: NSCoder) { return nil }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        self.view.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+
+        let card = UIView()
+        card.backgroundColor = .systemBackground
+        card.layer.cornerRadius = 16
+        card.translatesAutoresizingMaskIntoConstraints = false
+        self.view.addSubview(card)
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        if let title = self.dialogTitle, !title.isEmpty {
+            let label = UILabel()
+            label.text = title
+            label.font = .preferredFont(forTextStyle: .headline)
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            stack.addArrangedSubview(label)
+        }
+        if let message = self.dialogMessage, !message.isEmpty {
+            let label = UILabel()
+            label.text = message
+            label.font = .preferredFont(forTextStyle: .subheadline)
+            label.textColor = .secondaryLabel
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            stack.addArrangedSubview(label)
+        }
+
+        let contentHeight = max(88, CGFloat(max(1, self.content.bridgeChildren.count)) * 52 + self.content.padding.top + self.content.padding.bottom)
+        self.content.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(self.content)
+        self.content.heightAnchor.constraint(equalToConstant: contentHeight).isActive = true
+
+        let buttonRow = UIStackView()
+        buttonRow.axis = .horizontal
+        buttonRow.distribution = .fillEqually
+        buttonRow.spacing = 8
+        for action in self.actions {
+            let button = UIButton(type: .system)
+            button.setTitle(action.title, for: .normal)
+            if action.style == 1 { button.setTitleColor(.secondaryLabel, for: .normal) }
+            if action.style == 2 { button.setTitleColor(.systemRed, for: .normal) }
+            button.titleLabel?.font = .preferredFont(forTextStyle: .body)
+            button.addAction(UIAction { [weak self] _ in self?.perform(action) }, for: .touchUpInside)
+            buttonRow.addArrangedSubview(button)
+        }
+        if !self.actions.isEmpty { stack.addArrangedSubview(buttonRow) }
+
+        NSLayoutConstraint.activate([
+            card.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: self.view.centerYAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: self.view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            card.widthAnchor.constraint(lessThanOrEqualToConstant: 440),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
+        ])
+        if self.cancelable {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(self.backgroundTapped))
+            tap.cancelsTouchesInView = false
+            self.view.addGestureRecognizer(tap)
+        }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        self.content.setNeedsLayout()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard !self.didReportDismissal else { return }
+        self.didReportDismissal = true
+        self.onDismiss?()
+    }
+
+    private func perform(_ action: AyuBridgeUI.DialogAction) {
+        self.dismiss(animated: true) { action.handler() }
+    }
+
+    @objc private func backgroundTapped(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended, self.cancelable else { return }
+        let point = recognizer.location(in: self.view)
+        guard !self.view.subviews.contains(where: { $0.frame.contains(point) && $0 !== self.bulletin }) else { return }
+        self.dismiss(animated: true)
+    }
+
+    func showBulletin(text: String, style: String) {
+        self.bulletin?.removeFromSuperview()
+        let label = UILabel()
+        label.text = text
+        label.numberOfLines = 0
+        label.textColor = .white
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.textAlignment = .center
+        label.backgroundColor = style == "error" ? .systemRed : style == "success" ? .systemGreen : .darkGray
+        label.layer.cornerRadius = 10
+        label.clipsToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        self.view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            label.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+        ])
+        self.bulletin = label
+        UIAccessibility.post(notification: .announcement, argument: text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak label] in label?.removeFromSuperview() }
     }
 }

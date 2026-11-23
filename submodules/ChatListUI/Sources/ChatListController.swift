@@ -4999,7 +4999,77 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public func activateCompose() {
         self.composePressed()
     }
-    
+
+    /// Selects the next unread dialog in the current folder. The native Pull to
+    /// Next Chat adapter calls this after the user performs its two-finger swipe;
+    /// stock one-finger history scrolling is not intercepted.
+    public func selectNextUnreadChat() {
+        self.chatListDisplayNode.effectiveContainerNode.currentItemNode.selectChat(.next(unread: true))
+    }
+
+    /// Source-faithful Pull to Next Chat selection: honours the target kind,
+    /// the strategy (first/most/least unread) and the source filters. Reads the
+    /// account chat list directly, so it works without private list internals.
+    public func selectNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int,
+                                     includeMuted: Bool, skipPinned: Bool,
+                                     searchOtherFolders: Bool, countMarkedUnread: Bool) {
+        guard !targetKinds.isEmpty else { return }
+        let rootSignal = self.context.engine.messages.chatList(group: .root, count: 192)
+        let archiveSignal = self.context.engine.messages.chatList(group: .archive, count: 192)
+        let _ = (combineLatest(queue: .mainQueue(), rootSignal, archiveSignal)
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] rootList, archiveList in
+            guard let self else { return }
+            var bestPeer: EnginePeer?
+            var bestCount: Int32 = 0
+            let passes: [EngineChatList] = searchOtherFolders ? [rootList, archiveList] : [rootList]
+            outer: for list in passes {
+                for item in list.items {
+                    guard case let .chatList(index) = item.index, let peer = item.renderedPeer.peer else { continue }
+                    if peer.id == self.context.account.peerId { continue }
+                    if peer.id.namespace == Namespaces.Peer.CloudUser && peer.id.id._internalGetInt64Value() == 777000 { continue }
+                    if let currentPeerId, case .chatList = item.index, peer.id.id._internalGetInt64Value() == currentPeerId { continue }
+                    guard let kind = Self.ayuPullKind(peer), targetKinds.contains(kind) else { continue }
+                    if skipPinned && index.pinningIndex != nil { continue }
+                    let counters = item.readCounters
+                    if !includeMuted && (item.isMuted || (counters?.isMuted ?? false)) { continue }
+                    let unread = counters?.count ?? 0
+                    let marked = counters?.markedUnread ?? false
+                    guard unread > 0 || (countMarkedUnread && marked) else { continue }
+                    let weight = countMarkedUnread && marked && unread <= 0 ? Int32(1) : unread
+                    switch strategy {
+                    case 1:
+                        if bestPeer == nil || weight > bestCount { bestPeer = peer; bestCount = weight }
+                    case 2:
+                        if bestPeer == nil || weight < bestCount { bestPeer = peer; bestCount = weight }
+                    default:
+                        bestPeer = peer
+                        break outer
+                    }
+                }
+            }
+            guard let bestPeer else { return }
+            self.chatListDisplayNode.mainContainerNode.peerSelected?(bestPeer, nil, true, false, nil)
+        })
+    }
+
+    private static func ayuPullKind(_ peer: EnginePeer) -> String? {
+        switch peer {
+        case let .user(user):
+            return user.botInfo != nil ? "bot" : "private"
+        case .legacyGroup:
+            return "group"
+        case let .channel(channel):
+            switch channel.info {
+            case .group:
+                return "group"
+            case .broadcast:
+                return "channel"
+            }
+        default:
+            return nil
+        }
+    }
+
     @objc fileprivate func composePressed() {
         guard !self.context.isFrozen else {
             let controller = self.context.sharedContext.makeAccountFreezeInfoScreen(context: self.context)

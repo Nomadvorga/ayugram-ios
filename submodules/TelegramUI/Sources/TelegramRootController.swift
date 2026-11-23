@@ -1019,6 +1019,29 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             rootTabController.selectedIndex = index
         }
     }
+
+    /// Native Pull to Next Chat route: return to the chat list and ask it to
+    /// select a dialog matching the source target/strategy/filter settings. The
+    /// list owns folder state, so selection stays inside the visible folder
+    /// unless "other folders" is enabled.
+    public func openNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int, includeMuted: Bool, skipPinned: Bool, otherFolders: Bool, countMarkedUnread: Bool) {
+        guard let rootTabController = self.rootTabController else {
+            return
+        }
+        self.popToRoot(animated: false)
+        if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
+            rootTabController.selectedIndex = index
+        }
+        (self.chatListController as? ChatListControllerImpl)?.selectNextUnreadChat(
+            targetKinds: targetKinds,
+            currentPeerId: currentPeerId,
+            strategy: strategy,
+            includeMuted: includeMuted,
+            skipPinned: skipPinned,
+            searchOtherFolders: otherFolders,
+            countMarkedUnread: countMarkedUnread
+        )
+    }
     
     /// Opens the optional Contacts tab, or pushes Contacts over Settings when the tab is hidden. // MARK: Swiftgram
     public func openContacts() {

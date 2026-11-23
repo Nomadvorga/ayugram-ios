@@ -16,6 +16,7 @@ import DeviceAccess
 import TextFormat
 import TelegramBaseController
 import AccountContext
+import AyuPluginBridge
 import WalletContext
 import TelegramStringFormatting
 import OverlayStatusController
@@ -244,7 +245,7 @@ struct ScrolledToMessageId: Equatable {
     var allowedReplacementDirection: AllowedReplacementDirections
 }
 
-public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
+public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate, UIGestureRecognizerDelegate {    
     var validLayout: ContainerViewLayout?
     
     public weak var parentController: ViewController?
@@ -339,6 +340,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     public private(set) var controllerInteraction: ChatControllerInteraction?
     var interfaceInteraction: ChatPanelInterfaceInteraction?
     var ayuSendIsConfirmed = false // MARK: AyuGram
+    private var ayuNativePluginGesturesInstalled = false // MARK: AyuGram
+    private weak var ayuNativePluginGesture: UIPanGestureRecognizer? // MARK: AyuGram
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -2485,6 +2488,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     })
                 }
             }, nil)
+            // MARK: AyuGram
+            // SandBox cancels the send. Group Mentions is applied later, at
+            // enqueue time, so media captions are covered too.
+            if AyuNativePluginRuntime.shared.handleSandCommand(text, from: strongSelf) {
+                strongSelf.clearInputText()
+                return
+            }
+            //
             var attributes: [MessageAttribute] = []
             let entities = generateTextEntities(text, enabledTypes: .all)
             if !entities.isEmpty {
@@ -7901,6 +7912,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.forwardSideListAppearance(.willAppear, animated: animated)
+        self.installAyuNativePluginGesturesIfNeeded() // MARK: AyuGram
 
         self.walletTransferAnimationsVisible = true
         self.chatDisplayNode.historyNode.forEachVisibleMessageItemNode { itemNode in
@@ -9429,8 +9441,20 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, presentSchedulePickerInOverlay: Bool = false) {
+        // MARK: AyuGram — original plugin send hook runs before enqueueing.
+        if AyuPluginService.shared.hasSendHooks {
+            self.ayuApplyPluginSendHooks(to: messages) { [weak self] resolved, cancelled in
+                guard let self, !cancelled else { return }
+                self.sendMessagesResolved(resolved, media: media, postpone: postpone, commit: commit, presentSchedulePickerInOverlay: presentSchedulePickerInOverlay)
+            }
+            return
+        }
+        self.sendMessagesResolved(messages, media: media, postpone: postpone, commit: commit, presentSchedulePickerInOverlay: presentSchedulePickerInOverlay)
+    }
+
+    private func sendMessagesResolved(_ ayuMessages: [EnqueueMessage], media: Bool, postpone: Bool, commit: Bool, presentSchedulePickerInOverlay: Bool) {
         if case let .customChatContents(customChatContents) = self.subject {
-            customChatContents.enqueueMessages(messages: messages)
+            customChatContents.enqueueMessages(messages: ayuMessages)
             return
         }
         
@@ -9438,13 +9462,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
 
-        let _ = (self.shouldDivertMessagesToScheduled(messages: messages)
+        let _ = (self.shouldDivertMessagesToScheduled(messages: ayuMessages)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] shouldDivert in
             guard let self else {
                 return
             }
             
-            var messages = messages
+            var messages = ayuMessages
             var shouldOpenScheduledMessages = false
             
             if shouldDivert {
@@ -10952,6 +10976,151 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return state
             }
         })
+    }
+
+    // MARK: AyuGram native plugin surfaces
+
+    private func installAyuNativePluginGesturesIfNeeded() {
+        guard !self.ayuNativePluginGesturesInstalled else { return }
+        self.ayuNativePluginGesturesInstalled = true
+        let gesture = UIPanGestureRecognizer(target: self, action: #selector(self.ayuPullNextChatGesture(_:)))
+        gesture.minimumNumberOfTouches = 2
+        gesture.maximumNumberOfTouches = 2
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        self.ayuNativePluginGesture = gesture
+        self.view.addGestureRecognizer(gesture)
+    }
+
+    @objc private func ayuPullNextChatGesture(_ gesture: UIPanGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        let translation = gesture.translation(in: self.view)
+        let velocity = gesture.velocity(in: self.view)
+        guard translation.y < -60.0 || velocity.y < -500.0, abs(translation.y) > abs(translation.x) else { return }
+        let kind = self.ayuNativePluginChatKind()
+        let raw: String
+        if kind.channel { raw = "channel" }
+        else if kind.group { raw = "group" }
+        else if kind.bot { raw = "bot" }
+        else if kind.privateChat { raw = "private" }
+        else { return }
+        AyuNativePluginRuntime.shared.requestNextUnread(sourceKind: raw,
+                                                         currentPeerId: self.chatLocation.peerId?.id._internalGetInt64Value())
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return gestureRecognizer === self.ayuNativePluginGesture || otherGestureRecognizer === self.ayuNativePluginGesture
+    }
+
+    func ayuNativePluginChatKind() -> (group: Bool, channel: Bool, privateChat: Bool, bot: Bool) {
+        guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
+            return (false, false, false, false)
+        }
+        switch peer {
+        case is TelegramGroup:
+            return (true, false, false, false)
+        case let channel as TelegramChannel:
+            if case .group = channel.info {
+                return (true, false, false, false)
+            } else {
+                return (false, true, false, false)
+            }
+        case let user as TelegramUser:
+            return (false, false, true, user.botInfo != nil)
+        default:
+            return (false, false, false, false)
+        }
+    }
+
+    /// Sends the original plugin hook the same mutable `message`/`caption` and
+    /// `peer` fields used by AyuGram, then rebuilds the outgoing message. Android
+    /// dialog ids stay negative for groups/channels, exactly as the plugin expects.
+    private func ayuApplyPluginSendHooks(to messages: [EnqueueMessage], completion: @escaping ([EnqueueMessage], Bool) -> Void) {
+        guard let peerId = self.chatLocation.peerId else { completion(messages, false); return }
+        let accountIndex = ayuPluginBridgeAccountIndex(for: self.context.account.id) ?? 0
+        let raw = peerId.id._internalGetInt64Value()
+        let dialogID: Int64
+        switch peerId.namespace {
+        case Namespaces.Peer.CloudUser: dialogID = raw
+        case Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel: dialogID = -raw
+        default: dialogID = raw
+        }
+        var resolved = messages
+        var cancelled = false
+        func process(_ index: Int) {
+            guard !cancelled else { completion(resolved, true); return }
+            guard index < messages.count else { completion(resolved, false); return }
+            guard case let .message(text, attributes, inlineStickers, mediaReference, threadId, replyToMessageId, replyToStoryId, localGroupingKey, correlationId, bubbleUpEmojiOrStickersets) = messages[index] else {
+                process(index + 1); return
+            }
+            let isMedia = mediaReference != nil
+            AyuPluginService.shared.applySendHooks(
+                message: isMedia ? nil : text, caption: isMedia ? text : nil,
+                peerID: dialogID, accountIndex: accountIndex
+            ) { [weak self] message, caption, stop in
+                guard let self else { return }
+                if stop {
+                    cancelled = true
+                    completion(resolved, true)
+                    return
+                }
+                let replacement = isMedia ? caption : message
+                if let replacement, replacement != text {
+                    let replacements = self.ayuBridgeReplacements(old: text, new: replacement)
+                    let updatedAttributes = self.ayuRemapTextAttributes(attributes, replacements: replacements)
+                    resolved[index] = .message(text: replacement, attributes: updatedAttributes, inlineStickers: inlineStickers,
+                                               mediaReference: mediaReference, threadId: threadId, replyToMessageId: replyToMessageId,
+                                               replyToStoryId: replyToStoryId, localGroupingKey: localGroupingKey,
+                                               correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)
+                }
+                process(index + 1)
+            }
+        }
+        process(0)
+    }
+
+    /// The plugin returns text, not Android entity ranges. A single UTF-16 diff
+    /// preserves links/formatting for the usual one-command rewrite.
+    private func ayuBridgeReplacements(old: String, new: String) -> [AyuNativeTextReplacement] {
+        let a = old as NSString, b = new as NSString
+        let maximum = min(a.length, b.length)
+        var prefix = 0
+        while prefix < maximum && a.character(at: prefix) == b.character(at: prefix) { prefix += 1 }
+        var suffix = 0
+        while suffix < maximum - prefix && a.character(at: a.length - 1 - suffix) == b.character(at: b.length - 1 - suffix) { suffix += 1 }
+        let oldLength = a.length - prefix - suffix
+        let newLength = b.length - prefix - suffix
+        guard oldLength != newLength || oldLength > 0 else { return [] }
+        return [AyuNativeTextReplacement(range: NSRange(location: prefix, length: oldLength), length: newLength)]
+    }
+
+    private func ayuRemapTextAttributes(_ attributes: [MessageAttribute], replacements: [AyuNativeTextReplacement]) -> [MessageAttribute] {
+        return attributes.map { attribute -> MessageAttribute in
+            guard let textEntities = attribute as? TextEntitiesMessageAttribute else { return attribute }
+            let entities = textEntities.entities.map { entity -> MessageTextEntity in
+                let lower = self.ayuMapTextOffset(entity.range.lowerBound, replacements: replacements)
+                let upper = self.ayuMapTextOffset(entity.range.upperBound, replacements: replacements)
+                return MessageTextEntity(range: lower ..< max(lower, upper), type: entity.type)
+            }
+            return TextEntitiesMessageAttribute(entities: entities)
+        }
+    }
+
+    private func ayuMapTextOffset(_ offset: Int, replacements: [AyuNativeTextReplacement]) -> Int {
+        var result = offset
+        for replacement in replacements {
+            let start = replacement.range.location
+            let end = start + replacement.range.length
+            if offset >= end {
+                result += replacement.length - replacement.range.length
+            } else if offset > start {
+                result -= offset - start
+                break
+            } else {
+                break
+            }
+        }
+        return max(0, result)
     }
     
     func updateSlowmodeStatus() {

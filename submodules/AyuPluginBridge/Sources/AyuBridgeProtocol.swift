@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// JSON-only boundary. Handles and callbacks are data, never Swift object addresses.
 public indirect enum AyuBridgeValue: Codable, Equatable, Sendable {
@@ -35,6 +36,7 @@ public indirect enum AyuBridgeValue: Codable, Equatable, Sendable {
     }
 
     public var string: String? { if case let .string(value) = self { return value }; return nil }
+    public var bool: Bool? { if case let .bool(value) = self { return value }; return nil }
     public var number: Double? {
         switch self { case let .number(value): return value; case let .integer(value): return Double(value); default: return nil }
     }
@@ -65,6 +67,14 @@ public protocol AyuPluginHostProvider: AnyObject, Sendable {
     /// validates/stores the result before committing asynchronous native effects.
     func prepareCall(pluginID: String, operation: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult
     func detach(pluginID: String)
+}
+
+/// The app owns the visible presenter. Plugin dialogs with custom views reserve
+/// an immutable token so Python can dismiss only its own presentation.
+public protocol AyuPluginDialogHost: AnyObject {
+    func reserveDialogToken(_ token: String, pluginID: String) throws
+    @MainActor func presentBridgeDialog(_ controller: UIViewController, token: String, pluginID: String) throws
+    func dismissBridgeDialog(token: String, pluginID: String)
 }
 
 public struct AyuBridgeProviderResult: Sendable {

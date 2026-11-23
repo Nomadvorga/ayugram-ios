@@ -10,13 +10,22 @@ private final class AyuRuntimeRelay: @unchecked Sendable {
     private var errorSink: (@Sendable (String, String?) -> Void)?
     func attach(_ runtime: APBPythonRuntime, errorSink: @escaping @Sendable (String, String?) -> Void) { self.lock.lock(); self.runtime = runtime; self.errorSink = errorSink; self.lock.unlock() }
     func deliver(_ owner: String, _ callback: String, _ arguments: [AyuBridgeValue]) {
+        self.invoke(owner, callback, arguments) { _, _ in }
+    }
+    func invoke(_ owner: String, _ callback: String, _ arguments: [AyuBridgeValue], completion: @escaping @Sendable (String?, Error?) -> Void) {
         struct Event: Encodable { let version = 1; let plugin_id: String; let callback_id: String; let arguments: [AyuBridgeValue] }
-        guard let data = try? JSONEncoder().encode(Event(plugin_id: owner, callback_id: callback, arguments: arguments)), let json = String(data: data, encoding: .utf8) else { return }
+        guard let data = try? JSONEncoder().encode(Event(plugin_id: owner, callback_id: callback, arguments: arguments)), let json = String(data: data, encoding: .utf8) else {
+            completion(nil, NSError(domain: "AyuPluginPython", code: 2)); return
+        }
         self.lock.lock(); let runtime = self.runtime; self.lock.unlock()
-        runtime?.invokeCallback(json: json, pluginID: owner) { [weak self] _, error in
-            guard error != nil, let self else { return }
-            self.lock.lock(); let sink = self.errorSink; self.lock.unlock(); sink?(owner, callback.split(separator: ":").first.map(String.init))
-        } // Expired callbacks never revive a plugin.
+        guard let runtime else { completion(nil, NSError(domain: "AyuPluginPython", code: 2)); return }
+        runtime.invokeCallback(json: json, pluginID: owner) { [weak self] result, error in
+            if error != nil, let self {
+                self.lock.lock(); let sink = self.errorSink; self.lock.unlock()
+                sink?(owner, callback.split(separator: ":").first.map(String.init))
+            }
+            completion(result, error)
+        }
     }
     func event(_ owner: String, generation: String, name: String) {
         struct Event: Encodable { let version = 1; let plugin_id: String; let generation: String; let name = "app"; let arguments: [String] }
@@ -68,11 +77,13 @@ public struct AyuPluginSetting: Sendable {
     public let host: AyuPluginNativeHost
     private let runtime = APBPythonRuntime()
     private let relay: AyuRuntimeRelay
+    private let sendHookSource: AyuPluginSendHookSource?
     private let defaults: UserDefaults
     private let root: URL
     private var preparation: Task<Void, Error>?
     private var runtimePreparation: Task<Void, Error>?
     private var atmosphericAdapter: AyuAtmosphericPluginAdapter?
+    private var nativeAdapters: [String: AyuNativePluginAdapter] = [:]
     private var pending: Set<String> = []
     private var pendingImportSlots = 0
     private var classes: Set<String> = []
@@ -85,6 +96,7 @@ public struct AyuPluginSetting: Sendable {
     public init(defaults: UserDefaults = .standard, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), classRegistry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits()) {
         let relay = AyuRuntimeRelay()
         self.relay = relay; self.defaults = defaults
+        self.sendHookSource = provider as? AyuPluginSendHookSource
         self.host = AyuPluginNativeHost(defaults: defaults, provider: provider, classRegistry: classRegistry, limits: limits, trustedOwner: { nil }, callback: { owner, callback, arguments in relay.deliver(owner, callback, arguments) })
         self.root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AyuPlugins", isDirectory: true)
         relay.attach(self.runtime) { [weak self] owner, generation in Task { @MainActor in
@@ -131,14 +143,22 @@ public struct AyuPluginSetting: Sendable {
                     record.isEnabled = false; record.isBusy = false; record.error = nil
                     record.nativeAdapter = nil
                     // Recheck bytes instead of trusting saved native-adapter metadata.
+                    let sourceURL = root.appendingPathComponent(record.id + ".plugin")
                     if record.id == AyuAtmosphericPluginAdapter.pluginID {
-                        let sourceURL = root.appendingPathComponent(record.id + ".plugin")
                         if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
                            let verified = AyuAtmosphericPluginAdapter.record(for: source) {
                             record = verified
                         } else {
                             record.nativeAdapter = nil
                             record.blockers = ["Нативный адаптер требует исходный Atmospheric Snow 1.0.1 с проверенной контрольной суммой."]
+                        }
+                    } else if let descriptor = AyuNativePluginCatalog.descriptor(id: record.id) {
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                           let verified = descriptor.record(for: source) {
+                            record = verified
+                        } else {
+                            record.nativeAdapter = nil
+                            record.blockers = [AyuNativePluginCatalog.blocker(for: record.id)]
                         }
                     }
                     return record
@@ -223,6 +243,15 @@ public struct AyuPluginSetting: Sendable {
                 self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
                 return
             }
+            if let descriptor = AyuNativePluginCatalog.descriptor(id: id), inspection.nativeAdapter == descriptor.adapterID {
+                let adapter = descriptor.make(self.defaults, { [weak self] message in
+                    self?.update(id) { $0.error = message }
+                })
+                try adapter.enable()
+                self.nativeAdapters[id] = adapter
+                self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
+                return
+            }
             let json = try await self.complete { self.runtime.load(source: source, filename: id + ".plugin", completion: $0) }
             let loaded = try self.decode(json)
             guard loaded["plugin_id"].string == id, let generation = loaded["generation"].string,
@@ -237,6 +266,7 @@ public struct AyuPluginSetting: Sendable {
             if id == AyuAtmosphericPluginAdapter.pluginID {
                 self.atmosphericAdapter?.disable(); self.atmosphericAdapter = nil
             }
+            self.nativeAdapters.removeValue(forKey: id)?.disable()
             if self.runtimePreparation != nil { _ = try? await self.complete { self.runtime.unload(pluginID: id, completion: $0) } }
             await self.detach(id); self.update(id) { $0.isEnabled = false; $0.error = self.message(error) }; throw error
         }
@@ -247,6 +277,11 @@ public struct AyuPluginSetting: Sendable {
         self.pythonGenerations.removeValue(forKey: id)
         if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
             adapter.disable(); self.atmosphericAdapter = nil
+            self.update(id) { $0.isEnabled = false; $0.error = nil }
+            return
+        }
+        if let adapter = self.nativeAdapters.removeValue(forKey: id) {
+            adapter.disable()
             self.update(id) { $0.isEnabled = false; $0.error = nil }
             return
         }
@@ -273,14 +308,75 @@ public struct AyuPluginSetting: Sendable {
     public func settings(_ id: String) async throws -> [AyuPluginSetting] {
         guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
         if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter { return try adapter.settings() }
+        if let adapter = self.nativeAdapters[id] { return try adapter.settings() }
         let json = try await self.complete { self.runtime.settings(pluginID: id, completion: $0) }
         guard let rows = try self.decode(json).array, rows.count <= 256 else { throw Failure.protocolError }
         let values = try await self.command("settings.all", owner: id, arguments: [:])
+        return try Self.settings(rows: rows, values: values)
+    }
+
+    /// Rows returned by a `create_sub_fragment` callback. The same bounded
+    /// persistence keys are used as on the root settings page.
+    public func subpage(pluginID: String, callbackID: String) async throws -> [AyuPluginSetting] {
+        guard self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
+        guard !callbackID.isEmpty, callbackID.utf8.count <= 128 else { throw Failure.protocolError }
+        let json = try await self.invokeCallback(pluginID, callbackID, [])
+        guard let rows = try self.decode(json).array, rows.count <= 256 else { throw Failure.protocolError }
+        let values = try await self.command("settings.all", owner: pluginID, arguments: [:])
+        return try Self.settings(rows: rows, values: values)
+    }
+
+    private static func settings(rows: [AyuBridgeValue], values: AyuBridgeValue) throws -> [AyuPluginSetting] {
         return try rows.map { row in
             let value = row["key"].string.flatMap { values.object?[$0] } ?? row["default"]
             guard (value.string?.utf8.count ?? 0) <= 8192 else { throw Failure.operation("SETTING_VALUE_TOO_LARGE") }
             return AyuPluginSetting(descriptor: row, value: value)
         }
+    }
+
+    private func invokeCallback(_ owner: String, _ callback: String, _ arguments: [AyuBridgeValue]) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            self.relay.invoke(owner, callback, arguments) { json, error in
+                if let json, error == nil { continuation.resume(returning: json) }
+                else { continuation.resume(throwing: Self.runtimeFailure(error, starting: false)) }
+            }
+        }
+    }
+
+    public var hasSendHooks: Bool { self.sendHookSource?.sendHooks().isEmpty == false }
+
+    /// Runs the original plugin `on_send_message_hook` chain before enqueueing.
+    /// A plugin result with CANCEL suppresses the send; MODIFY/MODIFY_FINAL
+    /// replaces the mutable `message`/`caption` fields. Completion is on main.
+    public func applySendHooks(message: String?, caption: String?, peerID: Int64, accountIndex: Int64, completion: @escaping @MainActor (String?, String?, Bool) -> Void) {
+        let hooks = self.sendHookSource?.sendHooks() ?? []
+        guard !hooks.isEmpty else { completion(message, caption, false); return }
+        var params: [String: AyuBridgeValue] = ["peer": .integer(peerID)]
+        if let message { params["message"] = .string(message) }
+        if let caption { params["caption"] = .string(caption) }
+        func finish(_ values: [String: AyuBridgeValue], _ cancelled: Bool) {
+            let message = values["message"]?.string
+            let caption = values["caption"]?.string
+            DispatchQueue.main.async { completion(message, caption, cancelled) }
+        }
+        func step(_ index: Int, _ values: [String: AyuBridgeValue]) {
+            guard index < hooks.count else { finish(values, false); return }
+            let hook = hooks[index]
+            self.relay.invoke(hook.pluginID, hook.callbackID, [.integer(accountIndex), .object(values)]) { json, error in
+                guard error == nil, let json, json.utf8.count <= Self.maximumBytes,
+                      let decoded = try? JSONDecoder().decode(AyuBridgeValue.self, from: Data(json.utf8)),
+                      let result = decoded.object else {
+                    step(index + 1, values); return
+                }
+                let strategy = result["strategy"]?.integer ?? 0
+                if strategy == 1 { finish(values, true); return }
+                if strategy == 2 || strategy == 3, let updated = result["params"]?.object {
+                    step(index + 1, updated); return
+                }
+                step(index + 1, values)
+            }
+        }
+        step(0, params)
     }
 
     public func set(_ row: AyuPluginSetting, value: AyuBridgeValue, pluginID: String) async throws {
@@ -289,17 +385,52 @@ public struct AyuPluginSetting: Sendable {
         if pluginID == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
             try adapter.set(row, value: value); self.changed(); return
         }
+        if let adapter = self.nativeAdapters[pluginID] {
+            try adapter.set(row, value: value); self.changed(); return
+        }
         _ = try await self.command("settings.set", owner: pluginID, arguments: ["key": .string(key), "value": value, "reload_settings": .bool(true)])
         if let callback = row.descriptor["on_change"]["$callback"].string { self.relay.deliver(pluginID, callback, [value]) }
     }
-    public func activate(_ row: AyuPluginSetting, pluginID: String) {
+    public func activate(_ row: AyuPluginSetting, pluginID: String, presenter: UIViewController? = nil, completion: @escaping () -> Void = {}) {
+        guard self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy }) else { return }
         if pluginID == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter {
-            guard self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy }) else { return }
             do { try adapter.activate(row); self.changed() }
             catch { self.update(pluginID) { $0.error = self.message(error) } }
+            completion()
+            return
+        }
+        if let adapter = self.nativeAdapters[pluginID] {
+            do { try adapter.activate(row, presenter: presenter, completion: { [weak self] in self?.changed(); completion() }) }
+            catch { self.update(pluginID) { $0.error = self.message(error) }; completion() }
             return
         }
         if let callback = row.descriptor["on_click"]["$callback"].string { self.relay.deliver(pluginID, callback, [.null]) }
+        completion()
+    }
+
+    /// Nil unless the enabled source-verified adapter contributes a full-screen
+    /// or host-owned surface. The plugin manager uses this for its action row.
+    public func nativeActionTitle(for id: String) -> String? {
+        guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { return nil }
+        return self.nativeAdapters[id]?.actionTitle
+    }
+
+    public func openNativePlugin(_ id: String, from presenter: UIViewController) throws {
+        guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
+        guard let adapter = self.nativeAdapters[id] else { throw Failure.inactive }
+        switch id {
+        case "screenshot_privacy":
+            guard let privacy = adapter as? AyuScreenshotPrivacyAdapter else { throw Failure.inactive }
+            privacy.open(from: presenter)
+        case "sand_box":
+            guard let sand = adapter as? AyuSandBoxAdapter else { throw Failure.inactive }
+            sand.open(from: presenter)
+        case "ball":
+            guard let ball = adapter as? AyuBallAdapter else { throw Failure.inactive }
+            ball.open(from: presenter)
+        default:
+            adapter.open(from: presenter)
+        }
     }
     public func mount(_ view: UIView?, pluginID: String) { self.host.setMountContainer(view, pluginID: pluginID) }
 
@@ -320,12 +451,17 @@ public struct AyuPluginSetting: Sendable {
 
     private func inspect(_ source: String) async throws -> (AyuInstalledPlugin, AyuBridgeValue) {
         if let record = AyuAtmosphericPluginAdapter.record(for: Data(source.utf8)) { return (record, .object([:])) }
+        if let record = AyuNativePluginCatalog.record(for: Data(source.utf8)) { return (record, .object([:])) }
         try await self.prepareRuntime()
         let json = try await self.complete { self.runtime.inspect(source: source, filename: "import.plugin", completion: $0) }
         let report = try self.decode(json), metadata = report["metadata"]
         guard let id = metadata["__id__"].string, Self.validID(id), let name = metadata["__name__"].string, !name.isEmpty, name.utf8.count <= 256 else { throw Failure.identity }
         if id == AyuAtmosphericPluginAdapter.pluginID {
             return (AyuInstalledPlugin(id: id, name: "NewYear Interface", version: "1.0.1", blockers: ["Исходник не совпадает с проверенным Atmospheric Snow 1.0.1 (SHA-256). Нативный адаптер не может его выполнить."]), report)
+        }
+        if let descriptor = AyuNativePluginCatalog.descriptor(id: id) {
+            return (AyuInstalledPlugin(id: id, name: descriptor.displayName, version: descriptor.version,
+                                      blockers: [AyuNativePluginCatalog.blocker(for: id)]), report)
         }
         var blockers = (report["classes"].array ?? []).compactMap(\.string).filter { !self.classes.contains($0) }.map { "Класс не поддерживается: " + Self.apiLabel($0) }
         for (module, symbols) in (report["unsupported_sdk_symbols"].object ?? [:]).sorted(by: { $0.key < $1.key }) {

@@ -10,23 +10,26 @@
   "sdk_sha256": {
     "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
-    "Sources/AyuBridgeProtocol.swift": "4d2b2a6c6fd750c35e90d136c8c8e7c60b1447717ac806658ba27c4088cd2c77",
-    "Sources/AyuPluginNativeHost.swift": "e3707c00987f2f3042b2473636ee6108f7d47952bb93b4f47fa27dac45f52fe5",
-    "Integration/AyuPluginApplicationBridge.swift": "362ac3e819321199d40e8e463f1c23a2ebda998e2a2104c66f3be355fb23d989",
-    "Integration/AyuPluginService.swift": "0052fc8a044611e87738315a89749a9a2adc54de26ce1b5593e63932d983a746",
+    "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
+    "Sources/AyuPluginNativeHost.swift": "39d417f3d141959b9713477401cf3254c97528833bb3d998cbe9cf6470189baa",
+    "Integration/AyuPluginApplicationBridge.swift": "64466d69a3a64dda89cb050e725919a3cb15132d99aa1c3b5bfbb5180b5c825d",
+    "Integration/AyuPluginService.swift": "97ef247b89e78288db889c782dd2df27a33610dae9fab32e0ca16d35543fc79b",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
     "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
-    "Python/android_utils.py": "d7102bf87e814fd09c479d1539511d99d9a510c5f63bdfce150bd7b126e327ca",
+    "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
     "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
     "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91"
   },
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",
     "Dynamic names and members require further runtime/API audit",
-    "Application provider supplies only narrow account, visible-context, alert/bulletin and app-lifecycle subsets",
+    "Application provider supplies only narrow account, visible-context, alert/bulletin, client-call and app-lifecycle subsets",
     "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
     "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
-    "AST alias inspection is conservative, not a scope-aware Python resolver"
+    "AST alias inspection is conservative, not a scope-aware Python resolver",
+    "Five source-pinned native routes exist (Atmospheric Snow plus four); Group Mentions executes its original source through the Python bridge and remains device-unverified",
+    "Native routes are host-authored iOS implementations of audited contracts, not translations or execution of Android/plugin code",
+    "No native route or bridge route is device-verified, and build success proves compilation only"
   ],
   "plugins": [
     {
@@ -140,9 +143,9 @@
       "sha256": "89f079f2a055ba851b6efec90a2c57d233b1f7204102363b2a637fa06579ea8f",
       "bytes": 20574,
       "lines": 623,
-      "status": "blocked_not_runtime_compatible",
+      "status": "source_pinned_native_adapter_device_unverified",
       "python_path": "blocked",
-      "native_adapter": null,
+      "native_adapter": "Integration/AyuBallAdapter.swift",
       "implemented_value_subsets": [],
       "declared_ui_or_reference_subsets": [
         "android.view.View",
@@ -211,6 +214,13 @@
         "org.telegram.messenger.AndroidUtilities",
         "org.telegram.ui.Components.AvatarDrawable",
         "org.telegram.ui.Components.BackupImageView"
+      ],
+      "ios_native_route_kind": "host_owned_native",
+      "ios_limitations": [
+        "Native UIKit/CADisplayLink physics; Android Choreographer and decor overlay are not used",
+        "Source counter setting and X-combo label are preserved, including the 1.6 s timeout",
+        "The peer avatar is not used as the ball because the native surface opens without a chat target",
+        "Gyroscope tilt is unavailable on this route; drag and tap replace it"
       ]
     },
     {
@@ -334,42 +344,51 @@
       "sha256": "25ae71486b29481d57cc36eaf40e931522a655227d2870dfc898174b8d96f28e",
       "bytes": 28308,
       "lines": 679,
-      "status": "blocked_not_runtime_compatible",
-      "python_path": "blocked",
+      "status": "python_bridge_source_device_unverified",
+      "python_path": "source_bridge_device_unverified",
       "native_adapter": null,
-      "implemented_value_subsets": [],
-      "declared_ui_or_reference_subsets": [
-        "android.widget.LinearLayout"
-      ],
-      "declared_application_subsets": [],
-      "partially_wired_features": [
-        "basic_alerts_and_bulletins",
-        "visible_screen_context"
-      ],
-      "unadapted_classes": [
+      "implemented_value_subsets": [
         "android.util.TypedValue",
+        "android.view.ViewGroup$LayoutParams",
+        "android.widget.EditText",
+        "android.widget.LinearLayout",
+        "android.widget.Toast",
+        "java.lang.String",
+        "org.telegram.messenger.MessagesController",
+        "org.telegram.tgnet.TLRPC$Chat",
+        "org.telegram.ui.ActionBar.Theme",
+        "org.telegram.ui.Components.BulletinFactory",
+        "org.telegram.ui.Components.Bulletin"
+      ],
+      "declared_ui_or_reference_subsets": [
         "android.view.ViewGroup",
         "android.widget.EditText",
-        "android.widget.Toast",
+        "android.widget.LinearLayout"
+      ],
+      "declared_application_subsets": [
+        "android_utils.get_context",
+        "client_utils.get_last_fragment",
+        "client_utils.get_messages_controller",
         "org.telegram.messenger.ApplicationLoader",
+        "org.telegram.messenger.MessagesController",
+        "org.telegram.tgnet.TLRPC$Chat",
         "org.telegram.ui.ActionBar.Theme",
         "org.telegram.ui.Components.BulletinFactory",
         "org.telegram.ui.PhotoViewer"
       ],
-      "unsupported_sdk_symbols": {
-        "android_utils": [
-          "get_context"
-        ]
-      },
-      "external_imports_not_default_enabled": [],
-      "required_unwired_features": [
-        "application_or_message_events",
-        "client_fragment_adapter",
-        "method_or_request_hooks",
-        "native_alert_or_bulletin_presentation",
-        "telegram_android_ui",
-        "telegram_objects_and_requests"
+      "partially_wired_features": [
+        "account_identity_and_own_profile",
+        "basic_alerts_and_bulletins",
+        "custom_view_alerts",
+        "generation_bound_app_lifecycle",
+        "message_send_hooks",
+        "settings_sub_fragments",
+        "visible_screen_context"
       ],
+      "unadapted_classes": [],
+      "unsupported_sdk_symbols": {},
+      "external_imports_not_default_enabled": [],
+      "required_unwired_features": [],
       "hook_forms": [
         "add_on_send_message_hook"
       ],
@@ -405,6 +424,14 @@
         "org.telegram.ui.ActionBar.Theme",
         "org.telegram.ui.Components.BulletinFactory",
         "org.telegram.ui.PhotoViewer"
+      ],
+      "ios_native_route_kind": "python_bridge_source",
+      "ios_limitations": [
+        "Original .plugin source is executed by the Python bridge; no Swift reimplementation of the plugin logic",
+        "Cooldown feedback uses the adapted BulletinFactory/Toast shim; the ApplicationLoader context is a bounded adapter, not an Android Application",
+        "Custom settings/group dialogs use native UIKit text fields and buttons, not pixel-identical Android widgets",
+        "Settings sub-pages are reconstructed by the original create_sub_fragment callback",
+        "No device, visual or runtime compatibility has been verified"
       ]
     },
     {
@@ -1482,9 +1509,9 @@
       "sha256": "69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709",
       "bytes": 32931,
       "lines": 727,
-      "status": "blocked_not_runtime_compatible",
+      "status": "source_pinned_native_adapter_device_unverified",
       "python_path": "blocked",
-      "native_adapter": null,
+      "native_adapter": "Integration/AyuPullNextChatAdapter.swift",
       "implemented_value_subsets": [
         "java.lang.Boolean",
         "java.lang.Integer",
@@ -1565,6 +1592,13 @@
         "org.telegram.tgnet.TLRPC$TL_chat",
         "org.telegram.ui.ChatActivity",
         "org.telegram.ui.Components.AvatarDrawable"
+      ],
+      "ios_native_route_kind": "host_owned_native",
+      "ios_limitations": [
+        "Android pull-up is mapped to a two-finger upward swipe so one-finger history scrolling is untouched",
+        "The real chat list applies the source target kinds, first/most/least-unread strategy, muted, pinned, other-folder and manual-unread filters",
+        "Selection reads the account root and archive chat lists directly; forum-topic rows keep stock Telegram behaviour",
+        "Folders outside the current one are only scanned when the source other-folders switch is on"
       ]
     },
     {
@@ -1667,9 +1701,9 @@
       "sha256": "9bd2c5ffa93e6a866212a4e0fd263b6216dc10080bbd55c79f40625e8942f8e5",
       "bytes": 61843,
       "lines": 1167,
-      "status": "blocked_not_runtime_compatible",
+      "status": "source_pinned_native_adapter_device_unverified",
       "python_path": "blocked",
-      "native_adapter": null,
+      "native_adapter": "Integration/AyuSandBoxAdapter.swift",
       "implemented_value_subsets": [],
       "declared_ui_or_reference_subsets": [
         "android.widget.FrameLayout"
@@ -1737,6 +1771,13 @@
         "android.webkit.ValueCallback",
         "android.webkit.WebView",
         "android.widget.FrameLayout"
+      ],
+      "ios_native_route_kind": "host_owned_native",
+      "ios_limitations": [
+        "Host-authored UIKit simulation; GAME_HTML and its JavaScript are never executed",
+        "Source palette names, emoji, fixed 150-wide grid, speed x1 and WATER default are preserved",
+        "Android WebView layout and SVG palette icons are approximated by native tiles",
+        "The scene starts empty like the source; demo, save and load stay explicit user actions"
       ]
     },
     {
@@ -1745,9 +1786,9 @@
       "sha256": "ce11a973f667623b84aadd1fc68d50fedf410e605759c251789383641cbef23e",
       "bytes": 182662,
       "lines": 4204,
-      "status": "blocked_not_runtime_compatible",
+      "status": "source_pinned_native_adapter_device_unverified",
       "python_path": "blocked",
-      "native_adapter": null,
+      "native_adapter": "Integration/AyuScreenshotPrivacyAdapter.swift",
       "implemented_value_subsets": [
         "java.lang.Boolean",
         "java.lang.Integer",
@@ -1938,6 +1979,12 @@
         "org.telegram.ui.Components.AvatarDrawable",
         "org.telegram.ui.Components.URLSpanNoUnderline",
         "org.telegram.ui.Components.URLSpanUserMention"
+      ],
+      "ios_native_route_kind": "host_owned_native",
+      "ios_limitations": [
+        "iOS has no FLAG_SECURE equivalent and cannot delete or sanitize an already saved screenshot",
+        "A window-level shield hides the whole screen before capture instead of masking individual names/avatars",
+        "Automatic mode reacts to UIScreen capture; manual mode is an explicit in-app toggle"
       ]
     },
     {

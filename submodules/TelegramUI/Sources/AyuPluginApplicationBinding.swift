@@ -11,6 +11,7 @@ import UIKit
 /// Real main-app account and screen wiring. No TelegramApi dependency, runtime
 /// reflection, global window lookup or synchronous calls into Python.
 @MainActor final class AyuTelegramPluginApplicationBinding {
+    static weak var current: AyuTelegramPluginApplicationBinding?
     private weak var sharedContext: SharedAccountContextImpl?
     private let root: () -> (AccountRecordId, UIViewController)?
     private let bridge: AyuPluginApplicationBridge
@@ -29,9 +30,25 @@ import UIKit
 
     init(sharedContext: SharedAccountContextImpl, bridge: AyuPluginApplicationBridge = .shared, root: @escaping () -> (AccountRecordId, UIViewController)?) {
         self.sharedContext = sharedContext; self.bridge = bridge; self.root = root
+        AyuTelegramPluginApplicationBinding.current = self
         bridge.bindScreen(screen: { [weak self] in self?.screen() }, presenter: { [weak self] in self?.visibleController()?.1 }, presentAlert: { [weak sharedContext] alert in
             sharedContext?.mainWindow?.presentNative(alert)
         })
+        AyuNativePluginRuntime.shared.presenter = { [weak self] in
+            self?.visibleController()?.1
+        }
+        AyuNativePluginRuntime.shared.nextUnread = { [weak self] policy in
+            guard let self, self.active, !self.locked, let (_, root) = self.root() else { return }
+            (root as? TelegramRootController)?.openNextUnreadChat(
+                targetKinds: policy.targetKinds,
+                currentPeerId: policy.currentPeerId,
+                strategy: policy.strategy,
+                includeMuted: policy.includeMuted,
+                skipPinned: policy.skipPinned,
+                otherFolders: policy.otherFolders,
+                countMarkedUnread: policy.countMarkedUnread
+            )
+        }
         self.disposables.add((sharedContext.activeAccountContexts |> deliverOnMainQueue).start(next: { [weak self] primary, accounts, _ in
             guard let self else { return }
             self.primaryID = primary?.account.id
@@ -79,6 +96,12 @@ import UIKit
         self.bridge.updateAccounts(Array(self.accountSnapshots.values), selected: self.primaryID.flatMap { self.slots[$0] })
     }
 
+    /// Process-stable bridge slot for a Telegram account. The bridge never sees
+    /// AccountRecordId or any other private account identity.
+    func bridgeSlot(for id: AccountRecordId) -> Int64? {
+        return self.slots[id]
+    }
+
     private func visibleController() -> (Int64, UIViewController)? {
         guard self.active, !self.locked, let (id, root) = self.root(), id == self.primaryID,
               let slot = self.slots[id], self.identities[id] != nil else { return nil }
@@ -93,17 +116,28 @@ import UIKit
     private func screen() -> AyuPluginScreenSnapshot? {
         guard let (slot, controller) = self.visibleController() else { return nil }
         var dialogID: Int64?
+        var isGroup = false
+        var isChannel = false
         if let chat = controller as? ChatControllerImpl, let peerID = chat.chatLocation.peerId {
             let id = peerID.id._internalGetInt64Value()
             switch peerID.namespace {
             case Namespaces.Peer.CloudUser: dialogID = id
-            case Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel: dialogID = -id
+            case Namespaces.Peer.CloudGroup: dialogID = -id; isGroup = true
+            case Namespaces.Peer.CloudChannel:
+                dialogID = -id
+                let kind = chat.ayuNativePluginChatKind()
+                isChannel = kind.channel
+                isGroup = kind.group
             default: break // Secret/local IDs are not Android dialog IDs.
             }
         }
         if self.lastController !== controller || self.lastAccount != slot || self.lastDialog != dialogID {
             self.screenIdentity = UUID(); self.lastController = controller; self.lastAccount = slot; self.lastDialog = dialogID
         }
-        return AyuPluginScreenSnapshot(identity: self.screenIdentity, accountIndex: slot, dialogID: dialogID)
+        return AyuPluginScreenSnapshot(identity: self.screenIdentity, accountIndex: slot, dialogID: dialogID, isGroup: isGroup, isChannel: isChannel)
     }
+}
+
+@MainActor func ayuPluginBridgeAccountIndex(for id: AccountRecordId) -> Int64? {
+    return AyuTelegramPluginApplicationBinding.current?.bridgeSlot(for: id)
 }
