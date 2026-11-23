@@ -747,11 +747,11 @@ final class AyuSandCanvas: UIView {
     }
 
     private func nearFire(x: Int, y: Int) -> Bool {
-        self.hasNeighbor(x: x, y: y, where: { $0 == .fire || $0 == .lava || $0 == .spark })
+        self.neighborIndex(x: x, y: y, where: { $0 == .fire || $0 == .lava || $0 == .spark }) != nil
     }
 
     private func hasNeighbor(x: Int, y: Int, matching element: AyuSandElement) -> Bool {
-        self.hasNeighbor(x: x, y: y, where: { $0 == element })
+        self.neighborIndex(x: x, y: y, where: { $0 == element }) != nil
     }
 
     private func hasNeighbor(x: Int, y: Int, where predicate: (Int) -> Bool) -> Bool {
@@ -764,7 +764,7 @@ final class AyuSandCanvas: UIView {
     }
 
     @discardableResult
-    private func igniteNeighbors(_ x: Int, _ y: Int) -> Bool {
+    private func igniteNeighbors(x: Int, y: Int) -> Bool {
         var ignited = false
         for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)] {
             let nx = x + dx, ny = y + dy
