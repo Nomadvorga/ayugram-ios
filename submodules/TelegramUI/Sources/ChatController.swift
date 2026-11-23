@@ -11016,20 +11016,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return (false, false, false, false)
         }
-        switch peer {
-        case .legacyGroup:
+        // `renderedPeer.peer` is the Postbox `Peer` existential, not `EnginePeer`.
+        if peer is TelegramGroup {
             return (true, false, false, false)
-        case let .channel(channel):
+        }
+        if let channel = peer as? TelegramChannel {
             if case .group = channel.info {
                 return (true, false, false, false)
             } else {
                 return (false, true, false, false)
             }
-        case let .user(user):
-            return (false, false, true, user.botInfo != nil)
-        default:
-            return (false, false, false, false)
         }
+        if let user = peer as? TelegramUser {
+            return (false, false, true, user.botInfo != nil)
+        }
+        return (false, false, false, false)
     }
 
     /// Sends the original plugin hook the same mutable `message`/`caption` and
