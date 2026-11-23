@@ -1,9 +1,11 @@
+import CoreMotion
 import Foundation
 import UIKit
 
 /// Native contract for Ball 1.1. The audited source draws a self-contained
 /// physics toy over the chat. iOS uses a real UIKit overlay, Core Animation
-/// timing and native gestures instead of Choreographer/SensorEventListener.
+/// timing, CoreMotion gravity for the tilt mode and native gestures instead of
+/// Choreographer/SensorEventListener.
 @MainActor
 final class AyuBallAdapter: AyuNativePluginAdapter {
     private(set) var isEnabled = false
@@ -33,22 +35,15 @@ final class AyuBallAdapter: AyuNativePluginAdapter {
     var showsCounter: Bool { self.boolValue("counter", default: true) }
 
     override func settings() throws -> [AyuPluginSetting] {
-        let gyro = AyuPluginSetting(
-            descriptor: .object([
-                "type": .string("Switch"), "key": .string("gyro"),
-                "text": .string("Управление наклоном"),
-                "subtext": .string("Мяч скатывается в сторону наклона телефона"),
-                "default": .bool(true), "enabled": .bool(false)
-            ]),
-            value: .bool(true)
-        )
         var rows: [AyuPluginSetting] = [
             self.staticRow("Header", "Игра"),
             self.switchRow("counter", "Счётчик комбо",
                            subtext: "Показывать множитель X при ударах",
                            value: self.boolValue("counter", default: true)),
-            gyro,
-            self.staticRow("Divider", "На iOS гироскоп не используется: мяч кидается и тянется пальцем. Физика считается нативно, без Android-сенсоров и Choreographer."),
+            self.switchRow("gyro", "Управление наклоном",
+                           subtext: "Мяч скатывается в сторону наклона телефона",
+                           value: self.boolValue("gyro", default: true)),
+            self.staticRow("Divider", "iOS: наклон читается через CoreMotion с тем же сглаживанием и мёртвой зоной, что в исходнике. Если сенсор недоступен, остаются перетаскивание и бросок пальцем."),
         ]
         rows.append(self.textRow("Открыть игру", subtext: "Мини-игра с мячом поверх приложения", action: "ball.open"))
         return rows
@@ -57,8 +52,8 @@ final class AyuBallAdapter: AyuNativePluginAdapter {
     override func set(_ row: AyuPluginSetting, value: AyuBridgeValue) throws {
         guard self.isEnabled else { throw AyuPluginService.Failure.inactive }
         guard let key = row.key else { throw AyuPluginService.Failure.operation("INVALID_SETTING") }
-        guard key == "counter", case .bool = value else {
-            throw AyuPluginService.Failure.operation(key == "counter" ? "INVALID_SETTING_TYPE" : "INVALID_SETTING")
+        guard key == "counter" || key == "gyro", case .bool = value else {
+            throw AyuPluginService.Failure.operation(key == "counter" || key == "gyro" ? "INVALID_SETTING_TYPE" : "INVALID_SETTING")
         }
         try self.setValue(value, for: key)
     }
@@ -75,7 +70,8 @@ final class AyuBallAdapter: AyuNativePluginAdapter {
     override func open(from presenter: UIViewController) {
         guard self.isEnabled else { return }
         let controller = AyuBallViewController(gravity: self.gravity, diameter: self.diameter, restitution: self.restitution,
-                                               showsCounter: self.showsCounter)
+                                               showsCounter: self.showsCounter,
+                                               usesTilt: self.boolValue("gyro", default: true))
         controller.modalPresentationStyle = .fullScreen
         presenter.present(controller, animated: true)
     }
@@ -87,9 +83,15 @@ final class AyuBallViewController: UIViewController {
     private let diameter: CGFloat
     private let restitution: CGFloat
     private let showsCounter: Bool
+    private let usesTilt: Bool
     private let ball = AyuBallView()
     private let comboLabel = UILabel()
     private let hintLabel = UILabel()
+    private let motion = CMMotionManager()
+    private var filteredTiltX: CGFloat = 0
+    private var filteredTiltY: CGFloat = 1
+    private var tiltX: CGFloat = 0
+    private var tiltY: CGFloat = 1
     private var link: CADisplayLink?
     private var velocity = CGVector(dx: 120, dy: -300)
     private var position = CGPoint.zero
@@ -97,11 +99,12 @@ final class AyuBallViewController: UIViewController {
     private var combo = 0
     private var lastHit = CACurrentMediaTime()
 
-    init(gravity: CGFloat, diameter: CGFloat, restitution: CGFloat, showsCounter: Bool) {
+    init(gravity: CGFloat, diameter: CGFloat, restitution: CGFloat, showsCounter: Bool, usesTilt: Bool) {
         self.gravity = gravity
         self.diameter = diameter
         self.restitution = restitution
         self.showsCounter = showsCounter
+        self.usesTilt = usesTilt
         super.init(nibName: nil, bundle: nil)
         self.modalPresentationStyle = .fullScreen
     }
@@ -144,7 +147,9 @@ final class AyuBallViewController: UIViewController {
         self.view.addSubview(self.comboLabel)
         self.view.addSubview(top)
 
-        self.hintLabel.text = "Тяните мяч или нажмите на поле — мяч полетит от пальца"
+        self.hintLabel.text = self.usesTilt
+            ? "Наклоняйте телефон, тяните мяч или нажмите на поле"
+            : "Тяните мяч или нажмите на поле — мяч полетит от пальца"
         self.hintLabel.font = .preferredFont(forTextStyle: .footnote)
         self.hintLabel.textColor = UIColor.white.withAlphaComponent(0.55)
         self.hintLabel.textAlignment = .center
@@ -195,18 +200,52 @@ final class AyuBallViewController: UIViewController {
         let link = CADisplayLink(target: self, selector: #selector(self.tick))
         link.add(to: .main, forMode: .common)
         self.link = link
+        self.startTilt()
     }
 
     private func stop() {
         self.link?.invalidate()
         self.link = nil
+        self.motion.stopDeviceMotionUpdates()
+    }
+
+    /// Source `set_gyro(on)`: reset to plain downward gravity, then let the
+    /// sensor steer the ball. CoreMotion gravity points down in g while Android's
+    /// gravity sensor reports the opposite in m/s², so the source targets map to
+    /// +x and -y here.
+    private func startTilt() {
+        guard self.usesTilt, self.motion.isDeviceMotionAvailable, !self.motion.isDeviceMotionActive else { return }
+        self.tiltX = 0
+        self.tiltY = 1
+        self.filteredTiltX = 0
+        self.filteredTiltY = 1
+        self.motion.deviceMotionUpdateInterval = 1.0 / 60.0
+        self.motion.startDeviceMotionUpdates(to: .main, withHandler: { [weak self] data, _ in
+            guard let self, let gravity = data?.gravity else { return }
+            self.applyTilt(x: CGFloat(gravity.x), y: CGFloat(gravity.y))
+        })
+    }
+
+    /// Source `_on_tilt(ax, ay)`: the same ×0.2 filter, ±0.05 dead zone and
+    /// ±1.5 clamp, applied to the converted CoreMotion gravity vector.
+    private func applyTilt(x: CGFloat, y: CGFloat) {
+        self.filteredTiltX += (x - self.filteredTiltX) * 0.2
+        self.filteredTiltY += (-y - self.filteredTiltY) * 0.2
+        let dead = abs(self.filteredTiltX) - 0.05
+        if dead > 0 {
+            self.tiltX = (self.filteredTiltX < 0 ? -1 : 1) * min(dead, 1.5)
+        } else {
+            self.tiltX = 0
+        }
+        self.tiltY = max(-1.5, min(self.filteredTiltY, 1.5))
     }
 
     @objc private func tick() {
         let now = CACurrentMediaTime()
         let delta = min(0.05, max(0.001, now - self.lastStamp))
         self.lastStamp = now
-        self.velocity.dy += self.gravity * CGFloat(delta)
+        self.velocity.dx += self.gravity * self.tiltX * CGFloat(delta)
+        self.velocity.dy += self.gravity * self.tiltY * CGFloat(delta)
         self.position.x += self.velocity.dx * CGFloat(delta)
         self.position.y += self.velocity.dy * CGFloat(delta)
         self.resolveCollisions()

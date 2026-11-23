@@ -220,7 +220,7 @@
         "Native UIKit/CADisplayLink physics; Android Choreographer and decor overlay are not used",
         "Source counter setting and X-combo label are preserved, including the 1.6 s timeout",
         "The peer avatar is not used as the ball because the native surface opens without a chat target",
-        "Gyroscope tilt is unavailable on this route; drag and tap replace it"
+        "Tilt uses CoreMotion gravity with the source 0.2 filter, 0.05 dead zone and 1.5 clamp; drag and tap remain available, and motion feel is device-unverified"
       ]
     },
     {
