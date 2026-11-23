@@ -342,6 +342,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var ayuSendIsConfirmed = false // MARK: AyuGram
     private var ayuNativePluginGesturesInstalled = false // MARK: AyuGram
     private weak var ayuNativePluginGesture: UIPanGestureRecognizer? // MARK: AyuGram
+    private var ayuPullNextChatStartedWithStockOffer = false // MARK: AyuGram
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -10983,9 +10984,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     private func installAyuNativePluginGesturesIfNeeded() {
         guard !self.ayuNativePluginGesturesInstalled else { return }
         self.ayuNativePluginGesturesInstalled = true
+        // One finger, like Android: the pull only counts while the history is at
+        // the newest message, where an upward drag has nothing left to scroll.
+        // Two-finger gestures were invisible to users and are gone.
         let gesture = UIPanGestureRecognizer(target: self, action: #selector(self.ayuPullNextChatGesture(_:)))
-        gesture.minimumNumberOfTouches = 2
-        gesture.maximumNumberOfTouches = 2
+        gesture.minimumNumberOfTouches = 1
+        gesture.maximumNumberOfTouches = 1
         gesture.cancelsTouchesInView = false
         gesture.delegate = self
         self.ayuNativePluginGesture = gesture
@@ -10993,10 +10997,26 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     @objc private func ayuPullNextChatGesture(_ gesture: UIPanGestureRecognizer) {
+        if gesture.state == .began {
+            // Remember whether the stock next-channel pull owned this gesture
+            // from the start, so a channel hand-over is never navigated twice.
+            self.ayuPullNextChatStartedWithStockOffer = self.chatDisplayNode.historyNode.offerNextChannelToRead
+            return
+        }
         guard gesture.state == .ended else { return }
         let translation = gesture.translation(in: self.view)
         let velocity = gesture.velocity(in: self.view)
         guard translation.y < -60.0 || velocity.y < -500.0, abs(translation.y) > abs(translation.x) else { return }
+        // Only the end of the history can carry this gesture; anywhere else the
+        // same drag is ordinary scrolling. Threads/topics and multi-select keep
+        // stock Telegram behaviour, as the source does.
+        guard self.chatDisplayNode.historyNode.isScrollAtBottomPosition else { return }
+        guard self.presentationInterfaceState.interfaceState.selectionState == nil else { return }
+        guard self.chatLocation.threadId == nil else { return }
+        // Channels that already offer the stock next-channel pull keep it; we
+        // must not navigate twice on the same release.
+        guard !self.ayuPullNextChatStartedWithStockOffer else { return }
+        guard !self.chatDisplayNode.historyNode.offerNextChannelToRead else { return }
         let kind = self.ayuNativePluginChatKind()
         let raw: String
         if kind.channel { raw = "channel" }
@@ -11010,6 +11030,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return gestureRecognizer === self.ayuNativePluginGesture || otherGestureRecognizer === self.ayuNativePluginGesture
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === self.ayuNativePluginGesture else { return true }
+        // Ignore the input panel and navigation bar: only a touch that actually
+        // lands inside the message history may start a pull, so typing, the
+        // attach panel and media menus are never intercepted.
+        let location = touch.location(in: self.view)
+        let historyView = self.chatDisplayNode.historyNode.view
+        guard let hitView = self.view.hitTest(location, with: nil) else { return false }
+        return hitView === historyView || hitView.isDescendant(of: historyView)
     }
 
     func ayuNativePluginChatKind() -> (group: Bool, channel: Bool, privateChat: Bool, bot: Bool) {

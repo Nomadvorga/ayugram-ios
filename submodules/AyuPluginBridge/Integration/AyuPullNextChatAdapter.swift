@@ -2,9 +2,10 @@ import Foundation
 import UIKit
 
 /// Native contract for Pull to Next Chat 1.0.0. Android hooks ChatActivity and
-/// its pull drawable; iOS performs the same "pull up" intent with a two-finger
-/// upward swipe so one-finger history scrolling is untouched, then asks the real
-/// chat list to open a dialog chosen by the source settings.
+/// its pull drawable; iOS recognises the same "pull up at the newest message"
+/// intent with one finger once the history is at the bottom, then asks the real
+/// chat list to open a dialog chosen by the source settings. Channels keep the
+/// stock Telegram next-channel pull instead of navigating twice.
 @MainActor
 final class AyuPullNextChatAdapter: AyuNativePluginAdapter {
     private(set) var isEnabled = false
@@ -36,9 +37,9 @@ final class AyuPullNextChatAdapter: AyuNativePluginAdapter {
         var rows: [AyuPluginSetting] = [
             self.staticRow("Header", "Жест"),
             self.switchRow("enabled", "Включить жест",
-                           subtext: "Потяните вверх у конца чата, чтобы перейти в следующий непрочитанный чат.",
+                           subtext: "Потяните вверх у последнего сообщения, чтобы перейти в следующий непрочитанный чат.",
                            value: self.boolValue("enabled", default: true)),
-            self.staticRow("Divider", "iOS: то же движение выполняется двумя пальцами вверх, чтобы не мешать обычной прокрутке истории одним пальцем."),
+            self.staticRow("Divider", "iOS: жест работает одним пальцем и только когда история уже внизу — обычная прокрутка и поле ввода его не перехватывают. В каналах с родным переходом Telegram работает штатный жест."),
             self.staticRow("Header", "Где работает жест"),
             self.switchRow("src_channel", "Каналы", subtext: "Как в Telegram.",
                            value: self.boolValue("src_channel", default: true)),
@@ -121,7 +122,7 @@ final class AyuPullNextChatAdapter: AyuNativePluginAdapter {
                 + "\nЦель: " + (targets.isEmpty ? "—" : targets)
                 + "\nВыбор: " + strategyText
                 + "\nФильтры: " + filters.joined(separator: ", ")
-                + "\niOS: свайп двумя пальцами вверх. Ошибок нет."
+                + "\niOS: потяните вверх у последнего сообщения чата."
             AyuNativePluginRuntime.shared.showMessage(text, style: "simple")
         }
         completion()

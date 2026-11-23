@@ -1024,22 +1024,28 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     /// select a dialog matching the source target/strategy/filter settings. The
     /// list owns folder state, so selection stays inside the visible folder
     /// unless "other folders" is enabled.
-    public func openNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int, includeMuted: Bool, skipPinned: Bool, otherFolders: Bool, countMarkedUnread: Bool) {
+    public func openNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int, includeMuted: Bool, skipPinned: Bool, otherFolders: Bool, countMarkedUnread: Bool, completion: @escaping (Bool) -> Void) {
         guard let rootTabController = self.rootTabController else {
+            completion(false)
             return
         }
         self.popToRoot(animated: false)
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
             rootTabController.selectedIndex = index
         }
-        (self.chatListController as? ChatListControllerImpl)?.selectNextUnreadChat(
+        guard let chatList = self.chatListController as? ChatListControllerImpl else {
+            completion(false)
+            return
+        }
+        chatList.selectNextUnreadChat(
             targetKinds: targetKinds,
             currentPeerId: currentPeerId,
             strategy: strategy,
             includeMuted: includeMuted,
             skipPinned: skipPinned,
             searchOtherFolders: otherFolders,
-            countMarkedUnread: countMarkedUnread
+            countMarkedUnread: countMarkedUnread,
+            completion: completion
         )
     }
     

@@ -241,7 +241,7 @@ public final class AyuNativePluginRuntime {
     /// The plugin manager sets this while it is on screen so adapter feedback is
     /// visible above the modal instead of being dropped by the app presenter gate.
     public var feedbackPresenter: (@MainActor () -> UIViewController?)?
-    public var nextUnread: (@MainActor (AyuPullNextChatPolicy) -> Void)?
+    public var nextUnread: (@MainActor (AyuPullNextChatPolicy, @escaping (Bool) -> Void) -> Void)?
     weak var groupMentions: AyuGroupMentionsAdapter?
     weak var sandBox: AyuSandBoxAdapter?
     weak var ball: AyuBallAdapter?
@@ -284,7 +284,19 @@ public final class AyuNativePluginRuntime {
         guard let adapter = self.pullNextChat else { return }
         let kind = AyuPullNextChatAdapter.Kind(rawValue: sourceKind)
         guard let policy = adapter.policy(forSourceKind: kind) else { return }
-        self.nextUnread?(policy.withCurrentPeerId(currentPeerId))
+        let resolved = policy.withCurrentPeerId(currentPeerId)
+        self.nextUnread?(resolved, { [weak self] found in
+            guard let self, !found else { return }
+            let labels: [String: String] = ["channel": "каналов", "group": "групп",
+                                            "private": "личных чатов", "bot": "ботов"]
+            let text: String
+            if resolved.targetKinds.count == 1, let only = resolved.targetKinds.first, let label = labels[only] {
+                text = "Нет непрочитанных " + label
+            } else {
+                text = "Нет непрочитанных чатов"
+            }
+            self.showMessage(text, style: "simple")
+        })
     }
 
     public func showMessage(_ text: String, style: String = "simple") {

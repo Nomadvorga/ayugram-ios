@@ -5000,74 +5000,147 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.composePressed()
     }
 
-    /// Selects the next unread dialog in the current folder. The native Pull to
-    /// Next Chat adapter calls this after the user performs its two-finger swipe;
-    /// stock one-finger history scrolling is not intercepted.
+    /// Selects the next unread dialog in the current folder. Kept for the
+    /// keyboard shortcut; the Pull to Next Chat adapter uses the source-aware
+    /// overload below.
     public func selectNextUnreadChat() {
         self.chatListDisplayNode.effectiveContainerNode.currentItemNode.selectChat(.next(unread: true))
     }
 
     /// Source-faithful Pull to Next Chat selection: honours the target kind,
-    /// the strategy (first/most/least unread) and the source filters. Reads the
-    /// account chat list directly, so it works without private list internals.
+    /// the strategy (first/most/least unread) and the source filters. Runs as a
+    /// single Postbox transaction so it does not depend on any chat list signal
+    /// having emitted — the archive feed is lazy, and waiting for it used to
+    /// leave the pull gesture doing nothing at all for groups.
     public func selectNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int,
                                      includeMuted: Bool, skipPinned: Bool,
-                                     searchOtherFolders: Bool, countMarkedUnread: Bool) {
-        guard !targetKinds.isEmpty else { return }
-        let rootSignal = self.context.engine.messages.chatList(group: .root, count: 192)
-        let archiveSignal = self.context.engine.messages.chatList(group: .archive, count: 192)
-        let _ = (combineLatest(queue: .mainQueue(), rootSignal, archiveSignal)
-        |> deliverOnMainQueue).startStandalone(next: { [weak self] rootList, archiveList in
-            guard let self else { return }
-            var bestPeer: EnginePeer?
-            var bestCount: Int32 = 0
-            let passes: [EngineChatList] = searchOtherFolders ? [rootList, archiveList] : [rootList]
-            outer: for list in passes {
-                for item in list.items {
-                    guard case let .chatList(index) = item.index, let peer = item.renderedPeer.peer else { continue }
-                    if peer.id == self.context.account.peerId { continue }
-                    if peer.id.namespace == Namespaces.Peer.CloudUser && peer.id.id._internalGetInt64Value() == 777000 { continue }
-                    if let currentPeerId, case .chatList = item.index, peer.id.id._internalGetInt64Value() == currentPeerId { continue }
-                    guard let kind = Self.ayuPullKind(peer), targetKinds.contains(kind) else { continue }
-                    if skipPinned && index.pinningIndex != nil { continue }
-                    let counters = item.readCounters
-                    if !includeMuted && (item.isMuted || (counters?.isMuted ?? false)) { continue }
-                    let unread = counters?.count ?? 0
-                    let marked = counters?.markedUnread ?? false
-                    guard unread > 0 || (countMarkedUnread && marked) else { continue }
-                    let weight = countMarkedUnread && marked && unread <= 0 ? Int32(1) : unread
-                    switch strategy {
-                    case 1:
-                        if bestPeer == nil || weight > bestCount { bestPeer = peer; bestCount = weight }
-                    case 2:
-                        if bestPeer == nil || weight < bestCount { bestPeer = peer; bestCount = weight }
-                    default:
-                        bestPeer = peer
-                        break outer
+                                     searchOtherFolders: Bool, countMarkedUnread: Bool,
+                                     completion: @escaping (Bool) -> Void) {
+        guard !targetKinds.isEmpty else {
+            completion(false)
+            return
+        }
+        let accountPeerId = self.context.account.peerId
+        // The source scans the current folder first and only widens to other
+        // folders/archive when `other_folders` is on. A custom folder is a
+        // subset of the root list, so it becomes an explicit first pass.
+        var currentFilterData: ChatListFilterData?
+        if let filter = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter,
+           case let .filter(_, _, _, data) = filter {
+            currentFilterData = data
+        }
+        let _ = (self.context.account.postbox.transaction { transaction -> EnginePeer? in
+            let globalSettings = transaction.getGlobalNotificationSettings()
+
+            func kind(of peer: Peer) -> String? {
+                if peer is TelegramGroup {
+                    return "group"
+                }
+                if let channel = peer as? TelegramChannel {
+                    switch channel.info {
+                    case .group:
+                        return "group"
+                    case .broadcast:
+                        return "channel"
                     }
                 }
+                if let user = peer as? TelegramUser {
+                    if user.botInfo != nil {
+                        return "bot"
+                    }
+                    return "private"
+                }
+                return nil
             }
-            guard let bestPeer else { return }
-            self.chatListDisplayNode.mainContainerNode.peerSelected?(bestPeer, nil, true, false, nil)
-        })
-    }
 
-    private static func ayuPullKind(_ peer: EnginePeer) -> String? {
-        switch peer {
-        case let .user(user):
-            return user.botInfo != nil ? "bot" : "private"
-        case .legacyGroup:
-            return "group"
-        case let .channel(channel):
-            switch channel.info {
-            case .group:
-                return "group"
-            case .broadcast:
-                return "channel"
+            func qualifies(_ peer: Peer) -> Bool {
+                if peer.id == accountPeerId {
+                    return false
+                }
+                if let currentPeerId, peer.id.id._internalGetInt64Value() == currentPeerId {
+                    return false
+                }
+                if let user = peer as? TelegramUser, user.id.namespace == Namespaces.Peer.CloudUser, user.id.id._internalGetInt64Value() == 777000 {
+                    return false
+                }
+                guard let kindValue = kind(of: peer), targetKinds.contains(kindValue) else {
+                    return false
+                }
+                if skipPinned, transaction.getPeerChatListIndex(peer.id)?.1.pinningIndex != nil {
+                    return false
+                }
+                if !includeMuted {
+                    let settings = transaction.getPeerNotificationSettings(id: peer.id)
+                    if resolvedIsRemovedFromTotalUnreadCount(globalSettings: globalSettings, peer: peer, peerSettings: settings) {
+                        return false
+                    }
+                }
+                guard let readState = transaction.getCombinedPeerReadState(peer.id) else {
+                    return false
+                }
+                if readState.count <= 0 && !(countMarkedUnread && readState.markedUnread) {
+                    return false
+                }
+                return true
             }
-        default:
-            return nil
-        }
+
+            var passes: [(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?)] = []
+            if let currentFilterData {
+                passes.append((.root, chatListFilterPredicate(filter: currentFilterData, accountPeerId: accountPeerId)))
+                if searchOtherFolders {
+                    passes.append((.root, nil))
+                }
+            } else {
+                passes.append((.root, nil))
+            }
+            if searchOtherFolders {
+                passes.append((Namespaces.PeerGroup.archive, nil))
+            }
+            var bestPeer: EnginePeer?
+            var bestWeight: Int32 = 0
+            for pass in passes {
+                let peerIds = transaction.getUnreadChatListPeerIds(
+                    groupId: pass.groupId,
+                    filterPredicate: pass.filterPredicate,
+                    additionalFilter: { qualifies($0) },
+                    stopOnFirstMatch: strategy == 0
+                )
+                for peerId in peerIds {
+                    guard let peer = transaction.getPeer(peerId) else {
+                        continue
+                    }
+                    let readState = transaction.getCombinedPeerReadState(peerId)
+                    let unread = readState?.count ?? 0
+                    let marked = readState?.markedUnread ?? false
+                    let weight: Int32 = (countMarkedUnread && marked && unread <= 0) ? 1 : unread
+                    switch strategy {
+                    case 1:
+                        if bestPeer == nil || weight > bestWeight {
+                            bestPeer = EnginePeer(peer)
+                            bestWeight = weight
+                        }
+                    case 2:
+                        if bestPeer == nil || weight < bestWeight {
+                            bestPeer = EnginePeer(peer)
+                            bestWeight = weight
+                        }
+                    default:
+                        bestPeer = EnginePeer(peer)
+                    }
+                }
+                if strategy == 0, bestPeer != nil {
+                    break
+                }
+            }
+            return bestPeer
+        } |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+            guard let self, let peer else {
+                completion(false)
+                return
+            }
+            self.chatListDisplayNode.mainContainerNode.peerSelected?(peer, nil, true, false, nil)
+            completion(true)
+        })
     }
 
     @objc fileprivate func composePressed() {

@@ -37,16 +37,24 @@ import UIKit
         AyuNativePluginRuntime.shared.presenter = { [weak self] in
             self?.visibleController()?.1
         }
-        AyuNativePluginRuntime.shared.nextUnread = { [weak self] policy in
-            guard let self, self.active, !self.locked, let (_, root) = self.root() else { return }
-            (root as? TelegramRootController)?.openNextUnreadChat(
+        AyuNativePluginRuntime.shared.nextUnread = { [weak self] policy, completion in
+            guard let self, self.active, !self.locked, let (_, root) = self.root() else {
+                completion(false)
+                return
+            }
+            guard let root = root as? TelegramRootController else {
+                completion(false)
+                return
+            }
+            root.openNextUnreadChat(
                 targetKinds: policy.targetKinds,
                 currentPeerId: policy.currentPeerId,
                 strategy: policy.strategy,
                 includeMuted: policy.includeMuted,
                 skipPinned: policy.skipPinned,
                 otherFolders: policy.otherFolders,
-                countMarkedUnread: policy.countMarkedUnread
+                countMarkedUnread: policy.countMarkedUnread,
+                completion: completion
             )
         }
         self.disposables.add((sharedContext.activeAccountContexts |> deliverOnMainQueue).start(next: { [weak self] primary, accounts, _ in
