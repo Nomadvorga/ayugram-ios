@@ -247,6 +247,7 @@ public struct AyuPluginSetting: Sendable {
                 let adapter = descriptor.make(self.defaults, AyuNativePluginReporter { [weak self] message in
                     self?.update(id) { $0.error = message }
                 })
+                adapter.verifiedSource = source
                 try adapter.enable()
                 self.nativeAdapters[id] = adapter
                 self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }

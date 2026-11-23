@@ -42,25 +42,37 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("guard inspection.blockers.isEmpty else { throw Failure.operation(\"UNSUPPORTED_API\") }", service)
         self.assertIn("record.nativeAdapter = nil", service)
 
-    def test_sandbox_matches_source_palette_and_defaults(self):
+    def test_sandbox_runs_original_game_html_in_wkwebview(self):
         sand = (INTEGRATION / "AyuSandBoxAdapter.swift").read_text()
-        for name in ["Ластик", "Стена", "Камень", "Песок", "Земля", "Порох", "Снег",
-                     "Семя", "Пепел", "Вода", "Масло", "Кислота", "Щёлочь", "Ртуть",
-                     "Лава", "Пар", "Дым", "Газ", "Дерево", "Уголь", "Динамит",
-                     "Лёд", "Растение", "Грибок", "Провод", "Батарея", "Лампа",
-                     "Стекло", "Соль", "Огонь", "Молния", "Искра"]:
-            self.assertIn('return "%s"' % name, sand)
-        self.assertEqual(sand.count("var emoji: String"), 1)
-        self.assertIn('var selected: AyuSandElement = .water', sand)
-        self.assertIn('var gridWidth: Int { 150 }', sand)
-        self.assertIn('var speed: Int { 1 }', sand)
-        self.assertIn('self.button("Очистить"', sand)
-        self.assertIn('Поле очищено', sand)
-        self.assertIn('Демо-сцена построена', sand)
-        self.assertIn('Сцена загружена', sand)
+        # The audited literal is extracted from the pinned source, never vendored.
+        self.assertIn(r'let marker = "GAME_HTML = \"\"\""', sand)
+        self.assertIn('source.range(of: marker, range: opening.upperBound..<source.endIndex) == nil', sand)
+        self.assertIn('literal.hasPrefix("<!DOCTYPE html>")', sand)
+        self.assertIn('literal.hasSuffix("</html>")', sand)
+        self.assertIn(r'!literal.contains("\\")', sand)
+        self.assertIn('.replacingOccurrences(of: "__GW__", with: String(Self.defaultGridWidth))', sand)
+        self.assertIn('.replacingOccurrences(of: "__SP__", with: String(Self.defaultSpeed))', sand)
+        self.assertIn("static let defaultGridWidth = 150", sand)
+        self.assertIn("static let defaultSpeed = 1", sand)
+        # Real WebView host, same base URL, poll cadence and close event as Android.
+        self.assertIn("import WebKit", sand)
+        self.assertIn("let webView = WKWebView(frame: .zero, configuration: configuration)", sand)
+        self.assertIn("configuration.websiteDataStore = .default()", sand)
+        self.assertIn('URL(string: "https://localhost/")', sand)
+        self.assertIn("Timer(timeInterval: 0.3", sand)
+        self.assertIn("window.__ev && window.__ev.length", sand)
+        self.assertIn('sand://close', sand)
+        self.assertIn("modalPresentationStyle = .fullScreen", sand)
+        self.assertIn("document.getElementById('cv') !== null", sand)
+        # The Swift reimplementation of the game must not return.
+        for forbidden in ["AyuSandCanvas", "AyuSandElement", "requestAnimationFrame", "grid.fill"]:
+            self.assertNotIn(forbidden, sand)
         runtime = (INTEGRATION / "AyuNativePluginAdapter.swift").read_text()
         self.assertIn('command.hasPrefix(".sand")', runtime)
         self.assertIn("return true", runtime[runtime.index("public func handleSandCommand"):])
+        # Verified bytes are handed to the adapter; the route never re-reads disk.
+        service = (INTEGRATION / "AyuPluginService.swift").read_text()
+        self.assertIn("adapter.verifiedSource = source", service)
 
     def test_ball_uses_source_combo_and_honest_gyro_gap(self):
         ball = (INTEGRATION / "AyuBallAdapter.swift").read_text()

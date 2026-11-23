@@ -63,6 +63,10 @@ class AyuNativePluginAdapter {
     let defaults: UserDefaults
     let reportError: (String?) -> Void
     var actionTitle: String? { nil }
+    /// Exact source the host verified before enabling this adapter. Routes that
+    /// execute a pinned embedded asset (SandBox `GAME_HTML`) read it instead of
+    /// duplicating the file path or re-reading unverified bytes.
+    var verifiedSource: String?
 
     init(pluginID: String, defaults: UserDefaults, reportError: @escaping (String?) -> Void) {
         self.pluginID = pluginID

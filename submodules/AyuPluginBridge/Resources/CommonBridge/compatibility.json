@@ -13,7 +13,7 @@
     "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
     "Sources/AyuPluginNativeHost.swift": "a15b1d4676876488b8ef52834adb1a7717e286b2daf351d7471bd5d2a6b542a0",
     "Integration/AyuPluginApplicationBridge.swift": "adc6b20f53a01afe398267457227daacdfd1b16241ed63600fef6110c34ccaa8",
-    "Integration/AyuPluginService.swift": "ae3684eceab9c43f282a9fd0fe6f78c9b2c342a4b559a32c9cb9e8e4a5303081",
+    "Integration/AyuPluginService.swift": "00248558baa3760f8475f8169bc197d8772d4417172083641f9b0ef9b358a5ff",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
     "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
     "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
@@ -1774,10 +1774,11 @@
       ],
       "ios_native_route_kind": "host_owned_native",
       "ios_limitations": [
-        "Host-authored UIKit simulation; GAME_HTML and its JavaScript are never executed",
-        "Source palette names, emoji, fixed 150-wide grid, speed x1 and WATER default are preserved",
-        "Android WebView layout and SVG palette icons are approximated by native tiles",
-        "The scene starts empty like the source; demo, save and load stay explicit user actions"
+        "GAME_HTML is extracted at runtime from the SHA-256-verified plugin source and rendered in WKWebView; no game logic is reimplemented",
+        "Android parity: base URL https://localhost/, __GW__ replaced by 150, __SP__ replaced by 1, window.__ev polled every 0.3 s, sand://close dismisses",
+        "localStorage keeps sand_rows and sand_v1 exactly as the source expects, so the in-page settings and save/load behave like Android",
+        "The plugin's Python launcher still imports threading and is blocked on the bridge path; this native route is host-owned",
+        "Rendering, touch feel and FPS on a device are unverified; CI only compiles the route"
       ]
     },
     {
