@@ -109,7 +109,7 @@ class NativePluginRouteTests(unittest.TestCase):
         privacy = (INTEGRATION / "AyuScreenshotPrivacyAdapter.swift").read_text()
         self.assertIn('"Когда замазывать"', privacy)
         self.assertIn('items: ["Автоматически", "Только вручную"]', privacy)
-        self.assertIn("UIScreen.main.isCaptured", privacy)
+        self.assertIn("UIScreen.screens.contains(where: { $0.isCaptured })", privacy)
         self.assertIn("UIApplication.userDidTakeScreenshotNotification", privacy)
         self.assertIn("не Android FLAG_SECURE", privacy)
         self.assertIn("не может удалить системный скриншот", privacy)
@@ -152,7 +152,12 @@ class NativePluginRouteTests(unittest.TestCase):
         service = (INTEGRATION / "AyuPluginService.swift").read_text()
         self.assertIn("public func applySendHooks(message: String?, caption: String?", service)
         self.assertIn("[.integer(accountIndex), .object(values)]", service)
-        self.assertIn("if strategy == 1 { finish(values, true); return }", service)
+        # The chain is an async main-actor loop: CANCEL stops it, MODIFY replaces
+        # the mutable params for every later hook.
+        self.assertIn("for hook in hooks {", service)
+        self.assertIn("if strategy == 1 {", service)
+        self.assertIn('completion(values["message"]?.string, values["caption"]?.string, true)', service)
+        self.assertIn("if strategy == 2 || strategy == 3, let updated = result[\"params\"]?.object {", service)
 
     def test_no_supplied_plugin_sources_are_vendored(self):
         names = {"sand_box.plugin", "ball.plugin", "group_mentions.plugin",
