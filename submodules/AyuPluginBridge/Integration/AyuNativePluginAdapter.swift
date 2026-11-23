@@ -151,13 +151,22 @@ class AyuNativePluginAdapter {
     }
 }
 
+/// Escaping error sink for descriptor factories. A bare `(String?) -> Void`
+/// closure parameter is non-escaping inside a closure literal, so adapters take
+/// this small main-actor box instead.
+@MainActor
+final class AyuNativePluginReporter {
+    let report: (String?) -> Void
+    init(_ report: @escaping (String?) -> Void) { self.report = report }
+}
+
 struct AyuNativePluginDescriptor: Sendable {
     let id: String
     let adapterID: String
     let displayName: String
     let version: String
     let sha256: String
-    let make: @MainActor @Sendable (UserDefaults, (String?) -> Void) -> AyuNativePluginAdapter
+    let make: @MainActor @Sendable (UserDefaults, AyuNativePluginReporter) -> AyuNativePluginAdapter
 
     func record(for source: Data) -> AyuInstalledPlugin? {
         guard source.count <= 1_048_576 else { return nil }
@@ -172,16 +181,16 @@ enum AyuNativePluginCatalog {
     static let plugins: [AyuNativePluginDescriptor] = [
         AyuNativePluginDescriptor(id: "sand_box", adapterID: "sand_box.native.ios.v1", displayName: "SandBox", version: "1.0.0",
             sha256: "9bd2c5ffa93e6a866212a4e0fd263b6216dc10080bbd55c79f40625e8942f8e5",
-            make: { defaults, report in AyuSandBoxAdapter(defaults: defaults, reportError: report) }),
+            make: { defaults, reporter in AyuSandBoxAdapter(defaults: defaults, reportError: reporter.report) }),
         AyuNativePluginDescriptor(id: "ball", adapterID: "ball.native.ios.v1", displayName: "Ball", version: "1.1",
             sha256: "89f079f2a055ba851b6efec90a2c57d233b1f7204102363b2a637fa06579ea8f",
-            make: { defaults, report in AyuBallAdapter(defaults: defaults, reportError: report) }),
+            make: { defaults, reporter in AyuBallAdapter(defaults: defaults, reportError: reporter.report) }),
         AyuNativePluginDescriptor(id: "screenshot_privacy", adapterID: "screenshot_privacy.native.ios.v1", displayName: "Screenshot Privacy", version: "1.4.2",
             sha256: "ce11a973f667623b84aadd1fc68d50fedf410e605759c251789383641cbef23e",
-            make: { defaults, report in AyuScreenshotPrivacyAdapter(defaults: defaults, reportError: report) }),
+            make: { defaults, reporter in AyuScreenshotPrivacyAdapter(defaults: defaults, reportError: reporter.report) }),
         AyuNativePluginDescriptor(id: "pull_next_chat", adapterID: "pull_next_chat.native.ios.v1", displayName: "Pull to Next Chat", version: "1.0.0",
             sha256: "69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709",
-            make: { defaults, report in AyuPullNextChatAdapter(defaults: defaults, reportError: report) }),
+            make: { defaults, reporter in AyuPullNextChatAdapter(defaults: defaults, reportError: reporter.report) }),
     ]
 
     static func descriptor(for source: Data) -> AyuNativePluginDescriptor? {

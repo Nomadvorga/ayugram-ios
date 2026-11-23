@@ -322,11 +322,10 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                       let value = args[1].number, value.isFinite, abs(value) <= 100_000 else { throw Self.invalid() }
                 return .value(.number(value))
             }])
-        let stringAdapter = AyuBridgeClassAdapter(name: Self.javaString,
-            readableFields: ["value"], methods: [
+        let stringAdapter = AyuBridgeClassAdapter(name: Self.javaString, methods: [
                 "toString": { state, args, _ in guard args.isEmpty, let value = state["value"]?.string else { throw Self.invalid() }; return .value(.string(value)) },
                 "length": { state, args, _ in guard args.isEmpty, let value = state["value"]?.string else { throw Self.invalid() }; return .value(.integer(Int64(value.utf16.count))) }
-            ], validateState: { state in
+            ], readableFields: ["value"], validateState: { state in
                 guard Set(state.keys) == ["value"], let value = state["value"]?.string, value.utf8.count <= 65_536 else { throw Self.invalid() }
             })
         let bulletinFactoryAdapter = AyuBridgeClassAdapter(name: Self.bulletinFactory,

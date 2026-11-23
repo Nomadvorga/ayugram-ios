@@ -314,7 +314,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 if kind == "bulletin", let text = config["text"]?.string, let style = config["style"]?.string,
                    ["simple", "success", "error"].contains(style), text.utf8.count <= 4096,
                    DispatchQueue.main.sync(execute: { self.ui.hasVisibleCustomDialog(owner: owner) }) {
-                    try DispatchQueue.main.sync { self.ui.showDialogBulletin(owner: owner, text: text, style: style) }
+                    DispatchQueue.main.sync { self.ui.showDialogBulletin(owner: owner, text: text, style: style) }
                     return .null
                 }
             }
@@ -375,7 +375,12 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard let button = value.object, Set(button.keys) == ["text", "on_click"],
                   let text = button["text"]?.string, !text.isEmpty, text.utf8.count <= 1024,
                   let callback = button["on_click"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid dialog button") }
-            let callbackID = callback == .null ? nil : try self.callbackID(callback, owner: owner, method: "onClick")
+            let callbackID: String?
+            if callback == .null {
+                callbackID = nil
+            } else {
+                callbackID = try self.callbackID(callback, owner: owner, method: "onClick")
+            }
             actions.append(AyuBridgeUI.DialogAction(title: text, style: style, handler: { [weak self] in
                 (self?.provider as? AyuPluginDialogHost)?.dismissBridgeDialog(token: token, pluginID: owner)
                 guard let self, let callbackID else { return }

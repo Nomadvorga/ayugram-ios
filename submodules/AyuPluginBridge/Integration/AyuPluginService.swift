@@ -244,7 +244,7 @@ public struct AyuPluginSetting: Sendable {
                 return
             }
             if let descriptor = AyuNativePluginCatalog.descriptor(id: id), inspection.nativeAdapter == descriptor.adapterID {
-                let adapter = descriptor.make(self.defaults, { [weak self] message in
+                let adapter = descriptor.make(self.defaults, AyuNativePluginReporter { [weak self] message in
                     self?.update(id) { $0.error = message }
                 })
                 try adapter.enable()
@@ -345,6 +345,22 @@ public struct AyuPluginSetting: Sendable {
 
     public var hasSendHooks: Bool { self.sendHookSource?.sendHooks().isEmpty == false }
 
+    /// One callback round trip. `relay.invoke` may complete on the Python
+    /// thread, so the result is handed back through a continuation and the
+    /// caller stays on its own executor.
+    private func sendHookResult(_ owner: String, _ callback: String, _ arguments: [AyuBridgeValue]) async -> AyuBridgeValue? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<AyuBridgeValue?, Never>) in
+            self.relay.invoke(owner, callback, arguments) { json, error in
+                guard error == nil, let json, json.utf8.count <= Self.maximumBytes,
+                      let decoded = try? JSONDecoder().decode(AyuBridgeValue.self, from: Data(json.utf8)) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: decoded)
+            }
+        }
+    }
+
     /// Runs the original plugin `on_send_message_hook` chain before enqueueing.
     /// A plugin result with CANCEL suppresses the send; MODIFY/MODIFY_FINAL
     /// replaces the mutable `message`/`caption` fields. Completion is on main.
@@ -354,29 +370,22 @@ public struct AyuPluginSetting: Sendable {
         var params: [String: AyuBridgeValue] = ["peer": .integer(peerID)]
         if let message { params["message"] = .string(message) }
         if let caption { params["caption"] = .string(caption) }
-        func finish(_ values: [String: AyuBridgeValue], _ cancelled: Bool) {
-            let message = values["message"]?.string
-            let caption = values["caption"]?.string
-            DispatchQueue.main.async { completion(message, caption, cancelled) }
-        }
-        func step(_ index: Int, _ values: [String: AyuBridgeValue]) {
-            guard index < hooks.count else { finish(values, false); return }
-            let hook = hooks[index]
-            self.relay.invoke(hook.pluginID, hook.callbackID, [.integer(accountIndex), .object(values)]) { json, error in
-                guard error == nil, let json, json.utf8.count <= Self.maximumBytes,
-                      let decoded = try? JSONDecoder().decode(AyuBridgeValue.self, from: Data(json.utf8)),
-                      let result = decoded.object else {
-                    step(index + 1, values); return
-                }
+        Task { @MainActor in
+            var values = params
+            for hook in hooks {
+                guard let decoded = await self.sendHookResult(hook.pluginID, hook.callbackID, [.integer(accountIndex), .object(values)]),
+                      let result = decoded.object else { continue }
                 let strategy = result["strategy"]?.integer ?? 0
-                if strategy == 1 { finish(values, true); return }
-                if strategy == 2 || strategy == 3, let updated = result["params"]?.object {
-                    step(index + 1, updated); return
+                if strategy == 1 {
+                    completion(values["message"]?.string, values["caption"]?.string, true)
+                    return
                 }
-                step(index + 1, values)
+                if strategy == 2 || strategy == 3, let updated = result["params"]?.object {
+                    values = updated
+                }
             }
+            completion(values["message"]?.string, values["caption"]?.string, false)
         }
-        step(0, params)
     }
 
     public func set(_ row: AyuPluginSetting, value: AyuBridgeValue, pluginID: String) async throws {

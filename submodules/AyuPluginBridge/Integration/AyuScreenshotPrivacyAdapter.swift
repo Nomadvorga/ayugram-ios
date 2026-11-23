@@ -101,7 +101,7 @@ final class AyuScreenshotPrivacyAdapter: AyuNativePluginAdapter {
 
     func refresh() {
         guard self.isEnabled else { self.removeShield(); return }
-        let captureActive = self.automatic && UIScreen.main.isCaptured
+        let captureActive = self.automatic && UIScreen.screens.contains(where: { $0.isCaptured })
         if captureActive || self.manualMode { self.installShield() } else { self.removeShield() }
     }
 

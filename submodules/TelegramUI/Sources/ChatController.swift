@@ -11017,15 +11017,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return (false, false, false, false)
         }
         switch peer {
-        case is TelegramGroup:
+        case .legacyGroup:
             return (true, false, false, false)
-        case let channel as TelegramChannel:
+        case let .channel(channel):
             if case .group = channel.info {
                 return (true, false, false, false)
             } else {
                 return (false, true, false, false)
             }
-        case let user as TelegramUser:
+        case let .user(user):
             return (false, false, true, user.botInfo != nil)
         default:
             return (false, false, false, false)

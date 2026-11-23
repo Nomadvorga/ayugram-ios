@@ -178,6 +178,7 @@ final class AyuPullNextChatAdapter: AyuNativePluginAdapter {
         guard !targets.isEmpty else { return nil }
         return AyuPullNextChatPolicy(
             sourceKind: kind?.rawValue,
+            currentPeerId: nil,
             targetKinds: Set(targets.map { $0.rawValue }),
             strategy: max(0, min(2, self.integerValue("strategy", default: 0))),
             includeMuted: self.integerValue("muted", default: 0) != 1,

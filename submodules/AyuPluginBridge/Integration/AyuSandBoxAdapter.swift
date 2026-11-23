@@ -728,7 +728,7 @@ final class AyuSandCanvas: UIView {
         }
     }
 
-    private func neighborIndex(_ x: Int, _ y: Int, where predicate: (AyuSandElement) -> Bool) -> Int? {
+    private func neighborIndex(x: Int, y: Int, where predicate: (AyuSandElement) -> Bool) -> Int? {
         for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
             let nx = x + dx, ny = y + dy
             guard self.inside(nx, ny) else { continue }
@@ -738,23 +738,23 @@ final class AyuSandCanvas: UIView {
         return nil
     }
 
-    private func neighborIndex(_ x: Int, _ y: Int, matching element: AyuSandElement) -> Int? {
-        self.neighborIndex(x, y, where: { $0 == element })
+    private func neighborIndex(x: Int, y: Int, matching element: AyuSandElement) -> Int? {
+        self.neighborIndex(x: x, y: y, where: { $0 == element })
     }
 
-    private func nearElement(_ x: Int, _ y: Int, _ element: AyuSandElement) -> Bool {
-        self.neighborIndex(x, y, matching: element) != nil
+    private func nearElement(x: Int, y: Int, _ element: AyuSandElement) -> Bool {
+        self.neighborIndex(x: x, y: y, matching: element) != nil
     }
 
-    private func nearFire(_ x: Int, _ y: Int) -> Bool {
+    private func nearFire(x: Int, y: Int) -> Bool {
         self.hasNeighbor(x: x, y: y, where: { $0 == .fire || $0 == .lava || $0 == .spark })
     }
 
-    private func hasNeighbor(_ x: Int, _ y: Int, matching element: AyuSandElement) -> Bool {
+    private func hasNeighbor(x: Int, y: Int, matching element: AyuSandElement) -> Bool {
         self.hasNeighbor(x: x, y: y, where: { $0 == element })
     }
 
-    private func hasNeighbor(_ x: Int, _ y: Int, where predicate: (Int) -> Bool) -> Bool {
+    private func hasNeighbor(x: Int, y: Int, where predicate: (Int) -> Bool) -> Bool {
         for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
             let nx = x + dx, ny = y + dy
             guard self.inside(nx, ny) else { continue }
