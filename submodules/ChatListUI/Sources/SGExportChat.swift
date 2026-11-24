@@ -3,7 +3,7 @@ import SwiftSignalKit
 import TelegramCore
 import AccountContext
 
-public func sgExportChatJSON(context: AccountContext, peerId: PeerId, completion: @escaping (URL?) -> Void) -> Disposable {
+public func sgExportChatJSON(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (URL?) -> Void) -> Disposable {
     let disposable = context.engine.messages.exportChatJSON(peerId: peerId).startStandalone(next: { data in
         guard let data else {
             completion(nil)
