@@ -159,6 +159,7 @@ final class AyuDialogCardBackgroundView: UIView {
 
     private var configuredSpecial: AyuDialogCardSpecial?
     private var configuredStroke: (width: CGFloat, alpha: CGFloat, radius: CGFloat)?
+    private var currentAvatarImage: CGImage?
 
     init() {
         super.init(frame: .zero)
@@ -252,9 +253,10 @@ final class AyuDialogCardBackgroundView: UIView {
     }
 
     func setAvatar(_ image: CGImage?, animated: Bool) {
+        let changed = self.currentAvatarImage !== image
+        self.currentAvatarImage = image
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let changed = self.avatarLayer.contents == nil || image == nil || (self.avatarLayer.contents as? CGImage) !== image
         self.avatarLayer.contents = image
         CATransaction.commit()
         if animated && changed && image != nil {

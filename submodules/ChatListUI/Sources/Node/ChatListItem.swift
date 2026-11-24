@@ -2471,7 +2471,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         let currentChatListQuoteSearchResult = self.cachedChatListQuoteSearchResult
         let currentCustomTextEntities = self.cachedCustomTextEntities
         
-        return { [weak self] item, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls in
+        return { [weak self] (item: ChatListItem, params: ListViewItemLayoutParams, first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) in
             // MARK: Swiftgram — Side-list rows already fit their content and use inline avatars.
             let sgCompactChatList = SGSimpleSettings.shared.compactChatList && !item.interaction.isSideListMode
             let sgCompactMessagePreview = SGCompactMessagePreviewLayout.isEnabled() && !item.interaction.isSideListMode
