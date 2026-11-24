@@ -248,12 +248,12 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                                     try await AyuPluginService.shared.importPlugin(from: URL(fileURLWithPath: data.path))
                                     let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
                                     if let navigationController = params.navigationController {
-                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), custom: true, alignment: .center), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
                                     }
                                 } catch {
                                     if let navigationController = params.navigationController {
                                         let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), custom: true, alignment: .center), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
                                     }
                                 }
                             }
