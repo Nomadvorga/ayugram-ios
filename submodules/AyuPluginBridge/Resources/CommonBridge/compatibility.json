@@ -30,7 +30,7 @@
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
     "Sources/AyuBridgeProtocol.swift": "fd8aa6f0b3b8c1c7dc19b0ea7c1e6057022e684176090d055e52ffa6a9d68016",
     "Sources/AyuPluginNativeHost.swift": "fda74e9b65e4db1f664769bad964110b2f41a3bf5294df9dd5197a326119a89f",
-    "Sources/AyuBridgeJavaRuntime.swift": "1b8ccd2cd506ecf661be23a10dcdb58f415019b92e7c5e5a3ba213a167d1734b"
+    "Sources/AyuBridgeJavaRuntime.swift": "47d3498cab61ac67f2a5dc48c718c5184d468bd9779fcf1edaf11eb43e5a2799"
   },
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",

@@ -207,10 +207,10 @@ enum AyuBridgeJavaRuntime {
     // MARK: Bundle
 
     static var bundle: AyuBridgeClassAdapter {
-        let put: (String, String) -> AyuBridgeClassAdapter.InstanceMethod = { keyType, key in
+        let put: (String, String) -> AyuBridgeClassAdapter.InstanceMethod = { keyType, _ in
             { state, args, _ in
                 try Self.arity(args, 2)
-                let name = try Self.string(args[0], "bundle key")
+                let key = try Self.string(args[0], "bundle key")
                 guard keyType != "String" || args[1].string != nil,
                       keyType != "Int" || args[1].integer != nil,
                       keyType != "Boolean" || args[1].bool != nil,
@@ -218,21 +218,17 @@ enum AyuBridgeJavaRuntime {
                       keyType != "Double" || args[1].double != nil else {
                     throw Self.unsupported("Bundle.put\(keyType)")
                 }
-                var updated = state
-                var entries = updated["entries"]?.object ?? [:]
-                entries[key] = args[1]
-                updated["entries"] = .object(entries)
+                state["entries"] = .object((state["entries"]?.object ?? [:]).merging([key: args[1]]) { _, new in new })
                 return .value(.null)
             }
         }
         let get: (String, Bool) -> AyuBridgeClassAdapter.InstanceMethod = { keyType, required in
             { state, args, _ in
-                let name: String
-                if required { try Self.arity(args, 1) } else { try Self.arity(args, 1) }
-                name = try Self.string(args[0], "bundle key")
+                try Self.arity(args, 1)
+                let key = try Self.string(args[0], "bundle key")
                 guard let entries = state["entries"]?.object else { throw AyuBridgeFailure("invalid_arguments", "Invalid android.os.Bundle state") }
-                let stored = entries[name]
-                guard let stored, Self.matches(stored, keyType) else { return required ? .value(.null) : .value(.null) }
+                let stored = entries[key]
+                guard let stored, Self.matches(stored, keyType) else { return .value(.null) }
                 return .value(stored)
             }
         }
@@ -323,14 +319,11 @@ enum AyuBridgeJavaRuntime {
                 "getAction": { state, args, _ in try Self.arity(args, 0); return .value(state["action"] ?? .null) },
                 "putExtra": { state, args, _ in
                     guard args.count == 2 else { throw Self.unsupported("Intent.putExtra") }
-                "putExtra": { state, args, _ in
-                    guard args.count == 2 else { throw Self.unsupported("Intent.putExtra") }
                     let key = try Self.string(args[0], "extra key")
                     var entries = state["entries"]?.object ?? [:]
                     entries[key] = args[1]
                     state["entries"] = .object(entries)
                     return .value(.null)
-                },
                 },
                 "getStringExtra": { state, args, _ in
                     try Self.arity(args, 1)
@@ -361,7 +354,8 @@ enum AyuBridgeJavaRuntime {
                 "addFlags": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
-                    updated["flags"] = .integer((updated["flags"]?.integer ?? 0) | try Self.integer(args[0], "flags"))
+                    let flagBits = try Self.integer(args[0], "flags")
+                    updated["flags"] = .integer((updated["flags"]?.integer ?? 0) | flagBits)
                     return Self.instance("android.content.Intent", updated)
                 },
                 "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(0)) },

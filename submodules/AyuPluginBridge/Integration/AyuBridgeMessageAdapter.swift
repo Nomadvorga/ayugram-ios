@@ -148,7 +148,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
         let pre = try self.hooks.publish(.messageSendPre, payload: ["request": AyuBridgeValue.encodable(request)])
         if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "send.cancelled", reason) }
         let sent = try await self.transport.send(self.decodeRequest(pre.payload))
-        try self.hooks.publish(.messageSendPost, payload: ["message": AyuBridgeValue.encodable(sent)])
+        _ = try self.hooks.publish(.messageSendPost, payload: ["message": AyuBridgeValue.encodable(sent)])
         return sent
     }
 
@@ -162,7 +162,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
         let pre = try self.hooks.publish(.messageEditPre, payload: ["request": AyuBridgeValue.encodable(request)])
         if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "edit.cancelled", reason) }
         let edited = try await self.transport.edit(self.decodeEditRequest(pre.payload))
-        try self.hooks.publish(.messageEditPost, payload: ["message": AyuBridgeValue.encodable(edited)])
+        _ = try self.hooks.publish(.messageEditPost, payload: ["message": AyuBridgeValue.encodable(edited)])
         return edited
     }
 
