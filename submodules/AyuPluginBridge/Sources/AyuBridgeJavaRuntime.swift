@@ -421,7 +421,7 @@ enum AyuBridgeJavaRuntime {
                 },
                 "setPadding": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("View.setPadding") }
-                    let paddings = try args.map { .number(Double(try Self.integer($0, "padding"))) }
+                    let paddings: [AyuBridgeValue] = try args.map { .number(Double(try Self.integer($0, "padding"))) }
                     var updated = state
                     updated["padding"] = .object(["left": paddings[0], "top": paddings[1], "right": paddings[2], "bottom": paddings[3]])
                     return Self.instance("android.view.View", updated)
@@ -452,7 +452,7 @@ enum AyuBridgeJavaRuntime {
             methods: [
                 "setMargins": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("LayoutParams.setMargins") }
-                    let margins = try args.map { .number(Double(try Self.integer($0, "margin"))) }
+                    let margins: [AyuBridgeValue] = try args.map { .number(Double(try Self.integer($0, "margin"))) }
                     var updated = state
                     updated["margins"] = .object(["left": margins[0], "top": margins[1], "right": margins[2], "bottom": margins[3]])
                     return Self.instance("android.view.ViewGroup.LayoutParams", updated)
