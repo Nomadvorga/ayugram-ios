@@ -39,7 +39,7 @@ final class AyuPullNextChatAdapter: AyuNativePluginAdapter {
             self.switchRow("enabled", "Включить жест",
                            subtext: "Потяните вверх у последнего сообщения, чтобы перейти в следующий непрочитанный чат.",
                            value: self.boolValue("enabled", default: true)),
-            self.staticRow("Divider", "iOS: жест работает одним пальцем и только когда история уже внизу — обычная прокрутка и поле ввода его не перехватывают. В каналах с родным переходом Telegram работает штатный жест."),
+            self.staticRow("Divider", "iOS: жест работает одним пальцем и только когда история уже внизу — обычная прокрутка и поле ввода его не перехватывают. В группах, личных чатах и ботах показывается та же тянущаяся плашка со следующим чатом, что и в каналах."),
             self.staticRow("Header", "Где работает жест"),
             self.switchRow("src_channel", "Каналы", subtext: "Как в Telegram.",
                            value: self.boolValue("src_channel", default: true)),

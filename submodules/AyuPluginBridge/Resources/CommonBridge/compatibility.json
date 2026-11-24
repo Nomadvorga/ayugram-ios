@@ -1596,10 +1596,11 @@
       "ios_native_route_kind": "host_owned_native",
       "ios_limitations": [
         "Android pull-up maps to one finger pulling up at the newest message; the gesture only arms when the history is already at the bottom, so normal scrolling and the input panel are never intercepted",
-        "Channels that already offer Telegram's stock next-channel pull keep that path; the native route handles groups, private chats and bots",
+        "Channels that already offer Telegram's stock next-channel pull keep that path; the native route supplies the same stock overscroll control for groups, private chats and bots, so the pull shows the target avatar/title and unread count instead of being invisible",
         "The real chat list applies the source target kinds, first/most/least-unread strategy, muted, pinned, other-folder and manual-unread filters",
         "Selection uses one Postbox transaction over root and archive, so it does not depend on a lazy chat list signal; forum topics keep stock Telegram behaviour",
-        "Folders outside the current one are only scanned when the source other-folders switch is on"
+        "Folders outside the current one are only scanned when the source other-folders switch is on",
+        "The control is Telegram iOS's own overscroll pill, not a pixel copy of the Android ChatPullingDownDrawable; the release threshold and animation are the host's"
       ]
     },
     {

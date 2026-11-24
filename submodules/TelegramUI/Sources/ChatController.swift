@@ -343,6 +343,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     private var ayuNativePluginGesturesInstalled = false // MARK: AyuGram
     private weak var ayuNativePluginGesture: UIPanGestureRecognizer? // MARK: AyuGram
     private var ayuPullNextChatStartedWithStockOffer = false // MARK: AyuGram
+    private var ayuNextUnreadOffer: (peer: EnginePeer, unreadCount: Int, location: TelegramEngine.NextUnreadChannelLocation)? // MARK: AyuGram
+    private var ayuNextUnreadPolledPeerId: PeerId? // MARK: AyuGram
+    private let ayuNextUnreadOfferDisposable = MetaDisposable() // MARK: AyuGram
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -7914,6 +7917,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         super.viewWillAppear(animated)
         self.forwardSideListAppearance(.willAppear, animated: animated)
         self.installAyuNativePluginGesturesIfNeeded() // MARK: AyuGram
+        self.ayuRefreshNextUnreadOffer() // MARK: AyuGram
 
         self.walletTransferAnimationsVisible = true
         self.chatDisplayNode.historyNode.forEachVisibleMessageItemNode { itemNode in
@@ -11028,6 +11032,66 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                                          currentPeerId: self.chatLocation.peerId?.id._internalGetInt64Value())
     }
 
+    /// Resolves the stock overscroll-control preview from the same policy and
+    /// Postbox passes as the list selection, so the control shows the dialog a
+    /// release will actually open. Channels keep their own stock target.
+    private func ayuRefreshNextUnreadOffer() {
+        self.ayuNextUnreadOfferDisposable.dispose()
+        self.ayuNextUnreadOffer = nil
+        let kind = self.ayuNativePluginChatKind()
+        guard !kind.channel, self.chatLocation.threadId == nil else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        let raw: String
+        if kind.group { raw = "group" }
+        else if kind.bot { raw = "bot" }
+        else if kind.privateChat { raw = "private" }
+        else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        guard let policy = AyuNativePluginRuntime.shared.nextUnreadPolicy(sourceKind: raw) else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        let query = AyuNextUnreadQuery(
+            targetKinds: policy.targetKinds,
+            currentPeerId: self.chatLocation.peerId?.id._internalGetInt64Value(),
+            strategy: policy.strategy,
+            includeMuted: policy.includeMuted,
+            skipPinned: policy.skipPinned,
+            otherFolders: policy.otherFolders,
+            countMarkedUnread: policy.countMarkedUnread
+        )
+        let filterData = self.ayuCurrentChatListFilterData()
+        let accountPeerId = self.context.account.peerId
+        self.ayuNextUnreadOfferDisposable.set((self.context.account.postbox.transaction { transaction -> AyuNextUnreadTarget? in
+            AyuNextUnreadSelection.resolve(
+                transaction: transaction,
+                accountPeerId: accountPeerId,
+                currentFilterData: filterData,
+                query: query
+            )
+        } |> deliverOnMainQueue).startStrict(next: { [weak self] target in
+            guard let self else { return }
+            if let target {
+                self.ayuNextUnreadOffer = (target.peer, target.unreadCount, target.isArchived ? .archived : .same)
+            } else {
+                self.ayuNextUnreadOffer = nil
+            }
+            self.updateNextChannelToReadVisibility()
+        }))
+    }
+
+    private func ayuCurrentChatListFilterData() -> ChatListFilterData? {
+        guard let root = self.context.sharedContext.mainWindow?.viewController as? TelegramRootController,
+              let list = root.chatListController as? ChatListControllerImpl else {
+            return nil
+        }
+        return list.ayuCurrentChatListFilterData
+    }
+
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return gestureRecognizer === self.ayuNativePluginGesture || otherGestureRecognizer === self.ayuNativePluginGesture
     }
@@ -11677,7 +11741,31 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let contentData = self.contentData else {
             return
         }
-        self.chatDisplayNode.historyNode.offerNextChannelToRead = contentData.state.offerNextChannelToRead && self.presentationInterfaceState.interfaceState.selectionState == nil
+        let stockOffer = contentData.state.offerNextChannelToRead
+        var ayuOffer = false
+        // Pull to Next Chat uses Telegram's own overscroll control outside
+        // channels: the source hooks the same ChatPullingDownDrawable that
+        // channels already show, so the preview must be the real thing.
+        if !stockOffer {
+            if let offer = self.ayuNextUnreadOffer, self.chatLocation.threadId == nil {
+                ayuOffer = true
+                self.chatDisplayNode.historyNode.nextChannelToRead = (offer.peer, nil, offer.unreadCount, offer.location)
+            } else {
+                self.chatDisplayNode.historyNode.nextChannelToRead = nil
+            }
+        }
+        self.chatDisplayNode.historyNode.offerNextChannelToRead = (stockOffer || ayuOffer) && self.presentationInterfaceState.interfaceState.selectionState == nil
+        // The first display update can arrive before the peer exists. Poll once
+        // per peer after it loads, without turning every update into a query.
+        if let peerId = self.chatLocation.peerId, self.ayuNextUnreadPolledPeerId != peerId {
+            self.ayuNextUnreadPolledPeerId = peerId
+            Queue.mainQueue().after(0.35) { [weak self] in
+                guard let self, self.chatLocation.peerId == peerId else {
+                    return
+                }
+                self.ayuRefreshNextUnreadOffer()
+            }
+        }
     }
     
     func displayGiveawayStatusInfo(messageId: EngineMessage.Id, giveawayInfo: PremiumGiveawayInfo) {

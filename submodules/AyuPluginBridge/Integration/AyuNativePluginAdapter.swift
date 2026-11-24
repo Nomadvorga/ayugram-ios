@@ -280,10 +280,15 @@ public final class AyuNativePluginRuntime {
         return true
     }
 
+    /// The same policy the pull uses, exposed so the chat screen can preview
+    /// the target in Telegram's stock overscroll control before the release.
+    public func nextUnreadPolicy(sourceKind: String) -> AyuPullNextChatPolicy? {
+        guard let adapter = self.pullNextChat else { return nil }
+        return adapter.policy(forSourceKind: AyuPullNextChatAdapter.Kind(rawValue: sourceKind))
+    }
+
     public func requestNextUnread(sourceKind: String, currentPeerId: Int64?) {
-        guard let adapter = self.pullNextChat else { return }
-        let kind = AyuPullNextChatAdapter.Kind(rawValue: sourceKind)
-        guard let policy = adapter.policy(forSourceKind: kind) else { return }
+        guard let policy = self.nextUnreadPolicy(sourceKind: sourceKind) else { return }
         let resolved = policy.withCurrentPeerId(currentPeerId)
         self.nextUnread?(resolved, { [weak self] found in
             guard let self, !found else { return }
