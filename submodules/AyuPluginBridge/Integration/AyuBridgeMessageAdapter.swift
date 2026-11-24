@@ -146,7 +146,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
     public func send(_ request: AyuBridgeOutgoingMessage, now: Date = Date()) async throws -> AyuBridgeIncomingMessage {
         try request.validate(now: now)
         let pre = try self.hooks.publish(.messageSendPre, payload: ["request": AyuBridgeValue.encodable(request)])
-        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "send.cancelled", reason) }
+        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "send.cancelled", reason: reason) }
         let sent = try await self.transport.send(self.decodeRequest(pre.payload))
         _ = try self.hooks.publish(.messageSendPost, payload: ["message": AyuBridgeValue.encodable(sent)])
         return sent
@@ -160,7 +160,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
             }
         }
         let pre = try self.hooks.publish(.messageEditPre, payload: ["request": AyuBridgeValue.encodable(request)])
-        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "edit.cancelled", reason) }
+        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "edit.cancelled", reason: reason) }
         let edited = try await self.transport.edit(self.decodeEditRequest(pre.payload))
         _ = try self.hooks.publish(.messageEditPost, payload: ["message": AyuBridgeValue.encodable(edited)])
         return edited
@@ -168,7 +168,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
 
     public func delete(accountID: Int64, chatID: Int64, messageID: Int64) async throws {
         let pre = try self.hooks.publish(.messageDeletePre, payload: ["account_id": .integer(accountID), "chat_id": .integer(chatID), "message_id": .integer(messageID)])
-        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "delete.cancelled", reason) }
+        if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "delete.cancelled", reason: reason) }
         try await self.transport.delete(accountID: accountID, chatID: chatID, messageID: messageID)
     }
 
