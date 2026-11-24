@@ -1479,10 +1479,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             self.onlineNode.isHidden = false
             return
         }
+        let strongSelf = self
         let special: AyuDialogCardSpecial?
         if peer.id == item.context.account.peerId {
             special = .saved
-        } else if peer.id == AyuDialogCardsMetrics.servicePeerId {
+        } else if peer.id._internalGetInt64Value() == AyuDialogCardsMetrics.servicePeerId {
             special = .service
         } else {
             special = nil
@@ -1493,16 +1494,16 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             width: max(1.0, contentSize.width - AyuDialogCardsMetrics.marginX * 2.0),
             height: max(1.0, itemHeight - AyuDialogCardsMetrics.marginY * 2.0)
         )
-        self.ayuDialogCardRow?.update(AyuDialogCardInfo(
+        strongSelf.ayuDialogCardRow?.update(AyuDialogCardInfo(
             style: style,
-            peerId: peer.id,
+            peerId: peer.id._internalGetInt64Value(),
             special: special,
             isMuted: isMuted,
             isOnline: isOnline,
             frame: cardFrame,
-            avatarImage: self.avatarNode.imageNode.image
+            avatarImage: strongSelf.avatarNode.imageNode.image
         ))
-        self.onlineNode.isHidden = !style.showsOnlineBadge
+        strongSelf.onlineNode.isHidden = !style.showsOnlineBadge
     }
     
     let contextContainer: ContextControllerSourceNode
