@@ -2,7 +2,6 @@ import Foundation
 import CommonCrypto
 import SwiftSignalKit
 import Postbox
-import TelegramCore
 
 let sgMicrosoftSigningKeyBase64Url = "VkoWrMP7SOoLpld96DpMgu62G2pGf-nql2-ArwaqpebuNvhBXWDd9dO607hKGNSk_kMvimVi2tfSTw9dSnzblT9IYMCO5KWoixFL73MvoMVQ7xGMhfkBHp-U6wBIuw"
 
@@ -20,7 +19,7 @@ private func sgHmacSha256(key: Data, payload: Data) -> Data {
     var hmac = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
     payload.withUnsafeBytes { payloadBytes in
         key.withUnsafeBytes { keyBytes in
-            _ = CCHmac(CCHmacAlg(kCCHmacAlgSHA256), keyBytes.baseAddress, key.count, payloadBytes.baseAddress, payload.count, &hmac)
+            _ = CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), keyBytes.baseAddress, key.count, payloadBytes.baseAddress, payload.count, &hmac)
         }
     }
     return Data(hmac)
@@ -30,14 +29,14 @@ private func sgHttpProviderSignal(request: URLRequest, expected: Int, parse: @es
     return Signal { subscriber in
         let task = URLSession.shared.dataTask(with: request) { data, response, _ in
             guard let data, !data.isEmpty else {
-                subscriber.sendError(.generic)
+                subscriber.putError(.generic)
                 return
             }
             if let parsed = parse(data), parsed.count == expected {
                 subscriber.putNext(parsed)
-                subscriber.sendCompletion()
+                subscriber.putCompletion()
             } else {
-                subscriber.sendError(.generic)
+                subscriber.putError(.generic)
             }
         }
         task.resume()
@@ -127,7 +126,7 @@ func sgYandexTranslate(texts: [String], toLang: String) -> Signal<[(String, [Mes
     }
     var bodyComponents = URLComponents()
     bodyComponents.queryItems = bodyItems
-    let query = bodyComponents.percentEncodedQuery.replacingOccurrences(of: "+", with: "%2B")
+    let query = (bodyComponents.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
     request.httpBody = query.data(using: .utf8)
 
     return sgHttpProviderSignal(request: request, expected: texts.count, parse: { data in

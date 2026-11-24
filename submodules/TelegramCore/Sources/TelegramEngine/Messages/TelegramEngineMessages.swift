@@ -171,7 +171,7 @@ public extension TelegramEngine {
                         "id": message.id.id,
                         "date": message.timestamp,
                         "sender": message.effectiveAuthor?.debugDisplayTitle ?? "",
-                        "out": message.isOutgoing,
+                        "out": !message.flags.contains(.Incoming),
                         "text": message.text
                     ])
                     return true
