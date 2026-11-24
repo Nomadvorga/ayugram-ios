@@ -363,12 +363,12 @@ final class AyuDialogCardRow {
     private var pendingKey: String?
     private var hasAvatarImage = false
 
-    init(hostView: UIView, separatorView: UIView) {
+    init(hostView: UIView, separatorLayer: CALayer?) {
         self.hostView = hostView
-        if separatorView.superview === hostView {
-            hostView.insertSubview(self.backgroundView, aboveSubview: separatorView)
+        if let separatorLayer = separatorLayer, separatorLayer.superlayer === hostView.layer {
+            hostView.layer.insertSublayer(self.backgroundView.layer, above: separatorLayer)
         } else {
-            hostView.insertSubview(self.backgroundView, at: 0)
+            hostView.layer.insertSublayer(self.backgroundView.layer, at: 0)
         }
         hostView.addSubview(self.overlayView)
         self.backgroundView.isHidden = true

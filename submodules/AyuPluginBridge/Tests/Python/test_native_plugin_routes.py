@@ -217,7 +217,7 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("CIGaussianBlur", row)
         self.assertIn("while self.order.count > 64", row)
         self.assertIn("ObjectIdentifier(source)", row)
-        self.assertIn("hostView.insertSubview(self.backgroundView, aboveSubview: separatorView)", row)
+        self.assertIn("hostView.layer.insertSublayer(self.backgroundView.layer, above: separatorLayer)", row)
         # The chat list links only the lightweight style module, never the
         # Python bridge or its runtime.
         self.assertIn("import AyuDialogCards", row)
