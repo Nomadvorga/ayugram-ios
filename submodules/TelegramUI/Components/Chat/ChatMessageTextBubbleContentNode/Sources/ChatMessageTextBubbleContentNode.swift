@@ -24,6 +24,7 @@ import ChatMessageDateAndStatusNode
 import ChatMessageBubbleContentNode
 import ShimmeringLinkNode
 import ChatMessageItemCommon
+import ChatMessageItemView
 import TextLoadingEffect
 import ChatControllerInteraction
 import InteractiveTextComponent

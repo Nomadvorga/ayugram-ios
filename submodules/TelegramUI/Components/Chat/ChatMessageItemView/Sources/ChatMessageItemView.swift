@@ -711,7 +711,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     
     private var zalgoCleanedText: String?
 
-    static func cleanedZalgoText(_ source: String) -> String {
+    public static func cleanedZalgoText(_ source: String) -> String {
         var scalars: [Unicode.Scalar] = []
         var consecutiveMarks = 0
         for scalar in source.unicodeScalars {

@@ -2,9 +2,6 @@ import Foundation
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
-import TelegramPresentationData
-import Display
-import UIKit
 
 public func sgExportChatJSON(context: AccountContext, peerId: PeerId, completion: @escaping (URL?) -> Void) -> Disposable {
     let disposable = context.engine.messages.exportChatJSON(peerId: peerId).startStandalone(next: { data in
