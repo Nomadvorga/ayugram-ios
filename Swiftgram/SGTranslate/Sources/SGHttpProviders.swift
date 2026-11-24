@@ -19,7 +19,7 @@ private func sgHmacSha256(key: Data, payload: Data) -> Data {
     var hmac = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
     payload.withUnsafeBytes { payloadBytes in
         key.withUnsafeBytes { keyBytes in
-            _ = CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), keyBytes.baseAddress, key.count, payloadBytes.baseAddress, payload.count, &hmac)
+            CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), keyBytes.baseAddress, key.count, payloadBytes.baseAddress, payload.count, &hmac)
         }
     }
     return Data(hmac)
