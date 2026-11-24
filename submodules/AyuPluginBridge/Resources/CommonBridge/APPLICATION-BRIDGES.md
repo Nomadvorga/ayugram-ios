@@ -1,7 +1,8 @@
 # Application bridges — exact scope and remaining plugin work
 
-All 19 inputs are pinned to `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa`.
-The audit covers 40,950 lines using AST only. No supplied plugin was imported or executed.
+All 19 inputs are pinned to `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa`;
+Premium Dialog Cards 2.1.1 is a separately supplied source with its own SHA-256 pin.
+The audit covers 42,600 lines using AST only. No supplied plugin was imported or executed.
 Neither successful imports nor an IPA build establish functional compatibility.
 
 ## Implemented source paths (device/native-test execution unverified)
@@ -81,7 +82,7 @@ The legacy `AyuGroupMentionsAdapter.swift` file remains in the tree but is not
 referenced by the native catalog or by the send path. It must not be expanded; the
 bridge route is authoritative for this plugin.
 
-## Source-pinned native iOS routes (four, device unverified)
+## Source-pinned native iOS routes (six including Atmospheric Snow, device unverified)
 
 These routes are host-owned iOS implementations of contracts that were read
 statically from the exact pinned sources. They never import or run plugin Python
@@ -95,6 +96,7 @@ closed with `UNSUPPORTED_API` and a blocker instead of enabling the route.
 | `ball` | `Integration/AyuBallAdapter.swift` | `counter` default true, `X<n>` combo near the ball, 1.6 s combo timeout, source gravity/radius/floor restitution, drag/tap play | Fullscreen native overlay instead of the Android decor overlay; peer avatar and gyroscope tilt are not available on this route |
 | `screenshot_privacy` | `Integration/AyuScreenshotPrivacyAdapter.swift` | `capture_mode` automatic/manual, manual “Режим скриншота” toggle | No FLAG_SECURE equivalent: a window shield hides everything before capture; it cannot mask individual names/avatars or delete an already saved screenshot |
 | `pull_next_chat` | `Integration/AyuPullNextChatAdapter.swift` | all source settings (`enabled`, source kinds, `target_mode`, target kinds, `strategy`, `muted`, `pinned_skip`, `other_folders`, `mark_unread`) and source texts | One-finger pull up at the newest message reuses Telegram's stock next-chat overscroll pill; the real root/archive chat list applies target/strategy/filter settings, channels keep stock behaviour, and forum topics stay stock |
+| `premium_dialog_cards` | `Integration/AyuPremiumDialogCardsAdapter.swift` | all 11 `rcards.*` settings unchanged (enable, rounding 0–30, blur 1–25, darken 55 %, stroke 0.5 dp/24 %, muted dim/opacity/stroke, online badge/border), 6/5 pt card margins, 90 px blurred avatar, dark tint, vertical white stroke gradient, Saved Messages and Telegram-service gradients, dark theme only | Chat rows draw the card with native `UIView`/`CALayer` and a cached Core Image blur; the source's 0.75 avatar scale is not reproduced because it would relayout the real row. No Android Canvas and no plugin Python |
 
 Atmospheric Snow remains on its separate exact-hash route and was not changed:
 4,237 lines, all 15 settings/migrations, lifecycle/reset, surface bindings,
@@ -119,6 +121,7 @@ API identifiers are safe audit data; plugin source and configuration are not bun
 | `music_tab` | Real music-browser/tab/player integration and native navigation/state seams. |
 | `passguard` | Explicit private-data/storage and UI lifecycle boundaries, platform security equivalents and media services; Android subclasses/file helpers cannot be silently emulated. |
 | `player_below` | Native player/composer placement and lifecycle hooks, gesture and layout ownership, animation acceptance from recorded frames. |
+| `premium_dialog_cards` | Native chat-list route implemented: 6/5 pt card geometry, configurable rounding, 90 px blurred avatar with dark tint, vertical stroke gradient, muted and online overlays, Saved Messages/service gradients, and all 11 source settings. Remaining honest gap: the source's 0.75 avatar scale and Android Canvas painting; no device/FPS acceptance. |
 | `profile_info` | Real peer/profile requests, image conversion and presentation; PIL/media/threading APIs need safe native services. |
 | `pull_next_chat` | Native route implemented with one finger at the newest message, using Telegram's stock overscroll control outside channels. Source target kinds, strategy and muted/pinned/other-folder/manual-unread filters are applied to root and archive dialogs. |
 | `quick_stickers` | Sticker sets/media data and send services, input-panel lifecycle and native controls. |
@@ -135,10 +138,11 @@ accepts only these pinned sources:
 
 1. `atmospheric_snow.plugin` — NewYear Interface (native, Python-free).
 2. `ball.plugin` — Ball (native).
-3. `pull_next_chat.plugin` — Pull to Next Chat (native).
-4. `sand_box.plugin` — SandBox (native, WKWebView runs the audited `GAME_HTML`).
-5. `screenshot_privacy.plugin` — Screenshot Privacy (native shield).
-6. `group_mentions.plugin` — Group Mentions (the only pinned Python source).
+3. `premium_dialog_cards.plugin` — Premium Dialog Cards (native chat-list route).
+4. `pull_next_chat.plugin` — Pull to Next Chat (native).
+5. `sand_box.plugin` — SandBox (native, WKWebView runs the audited `GAME_HTML`).
+6. `screenshot_privacy.plugin` — Screenshot Privacy (native shield).
+7. `group_mentions.plugin` — Group Mentions (the only pinned Python source).
 
 Any other file must fail with the supported-plugin message before it is written
 or executed. Previously installed unsupported plugins stay visible only so they

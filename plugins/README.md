@@ -14,12 +14,14 @@ sources; every other file is rejected before it is written or executed.
 | `atmospheric_snow.plugin` | Native, Python-free |
 | `ball.plugin` | Native |
 | `pull_next_chat.plugin` | Native |
+| `premium_dialog_cards.plugin` | Native chat-list cards |
 | `sand_box.plugin` | Native, audited `GAME_HTML` in WKWebView |
 | `screenshot_privacy.plugin` | Native shield |
 | `group_mentions.plugin` | Pinned Python source |
 
-The remaining files below are reference material for future work. They are not
-importable and are not claimed to run.
+The table below is the full audited inventory. Files not listed under Supported
+are reference material for future work: they are not importable and are not
+claimed to run.
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -34,6 +36,7 @@ importable and are not claimed to run.
 | `music_tab.plugin` | 12925 | `784131522216c43d86a9ac1af627bf4082af17be0202da8e11104a18b7bb144e` |
 | `passguard.plugin` | 173638 | `d161e81b25f4863d0a374f56f39c5a565f84b0743b55925acb1b3573d23458c8` |
 | `player_below.plugin` | 89661 | `9da5241f0c5827c25e58a04efdc970836a71d4edbd19feaebe0827c8da78aeac` |
+| `premium_dialog_cards.plugin` | 57961 | `0bb3f720881d6921101c17691127ed4833ebcde0a10ac8ee1dd8fecb55ef4180` |
 | `profile_info.plugin` | 134608 | `69076df05ba89c804d0b9e944c1ecc17ed6b69e9eb0f9051c7c57ffef6722792` |
 | `pull_next_chat.plugin` | 32931 | `69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709` |
 | `quick_stickers.plugin` | 27529 | `abdad44b0acf3730008cb37d38d3c89610522f8bf20ec7f3906f8860c905c1ac` |

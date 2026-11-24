@@ -1,4 +1,4 @@
-"""Static contracts for the four source-pinned native iOS routes plus the
+"""Static contracts for the source-pinned native iOS routes plus the
 Group Mentions bridge route.
 
 These tests read Swift sources as text. They prove the audited plugin contract
@@ -14,15 +14,16 @@ INTEGRATION = BRIDGE / "Integration"
 
 
 class NativePluginRouteTests(unittest.TestCase):
-    def test_catalog_pins_four_native_sources_and_routes_group_mentions_to_python(self):
+    def test_catalog_pins_five_native_sources_and_routes_group_mentions_to_python(self):
         catalog = (INTEGRATION / "AyuNativePluginAdapter.swift").read_text()
         expected = {
             "sand_box": "9bd2c5ffa93e6a866212a4e0fd263b6216dc10080bbd55c79f40625e8942f8e5",
             "ball": "89f079f2a055ba851b6efec90a2c57d233b1f7204102363b2a637fa06579ea8f",
             "screenshot_privacy": "ce11a973f667623b84aadd1fc68d50fedf410e605759c251789383641cbef23e",
             "pull_next_chat": "69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709",
+            "premium_dialog_cards": "0bb3f720881d6921101c17691127ed4833ebcde0a10ac8ee1dd8fecb55ef4180",
         }
-        self.assertEqual(catalog.count("AyuNativePluginDescriptor(id: \""), 4)
+        self.assertEqual(catalog.count("AyuNativePluginDescriptor(id: \""), 5)
         for plugin_id, digest in expected.items():
             self.assertIn('id: "%s"' % plugin_id, catalog)
             self.assertIn('sha256: "%s"' % digest, catalog)
@@ -194,6 +195,43 @@ class NativePluginRouteTests(unittest.TestCase):
         runtime = (INTEGRATION / "AyuNativePluginAdapter.swift").read_text()
         self.assertIn("public func nextUnreadPolicy(sourceKind: String) -> AyuPullNextChatPolicy?", runtime)
 
+    def test_premium_dialog_cards_native_chat_list_route(self):
+        cards = (INTEGRATION / "AyuPremiumDialogCardsAdapter.swift").read_text()
+        for key in ["rcards.enable", "rcards.rounding", "rcards.online_badge", "rcards.online_border",
+                    "rcards.blur", "rcards.darken", "rcards.stroke_width", "rcards.stroke_alpha",
+                    "rcards.mute_dim", "rcards.mute_opacity", "rcards.mute_stroke"]:
+            self.assertIn('"%s"' % key, cards)
+        self.assertIn('"Основные настройки"', cards)
+        self.assertIn("AyuDialogCardsState.shared.setStyle(self.makeStyle())", cards)
+        self.assertIn("clamped(\"rcards.rounding\", 15.0, 0.0 ... 30.0)", cards)
+        self.assertIn("clamped(\"rcards.blur\", 7.0, 1.0 ... 25.0)", cards)
+
+        style = (ROOT / "submodules/AyuDialogCards/Sources/AyuDialogCards.swift").read_text()
+        self.assertIn("public static let marginX: CGFloat = 6.0", style)
+        self.assertIn("public static let marginY: CGFloat = 5.0", style)
+        self.assertIn("public static let blurSourceSize: CGFloat = 90.0", style)
+        self.assertIn("public static let servicePeerId: Int64 = 1271266957", style)
+
+        row = (ROOT / "submodules/ChatListUI/Sources/Node/AyuDialogCardRow.swift").read_text()
+        self.assertIn("import CoreImage", row)
+        self.assertIn("CIGaussianBlur", row)
+        self.assertIn("while self.order.count > 64", row)
+        self.assertIn("ObjectIdentifier(source)", row)
+        self.assertIn("hostView.insertSubview(self.backgroundView, aboveSubview: separatorView)", row)
+        # The chat list links only the lightweight style module, never the
+        # Python bridge or its runtime.
+        self.assertIn("import AyuDialogCards", row)
+        self.assertNotIn("import AyuPluginBridge", row)
+
+        item = (ROOT / "submodules/ChatListUI/Sources/Node/ChatListItem.swift").read_text()
+        self.assertIn("AyuDialogCardsState.shared.style", item)
+        self.assertIn("AyuDialogCardsMetrics.marginX", item)
+        self.assertIn("ayuDialogCardRow?.update(nil)", item)
+        self.assertIn("strongSelf.onlineNode.isHidden = !style.showsOnlineBadge", item)
+        controller = (ROOT / "submodules/ChatListUI/Sources/ChatListController.swift").read_text()
+        self.assertIn("AyuDialogCardsState.didChange", controller)
+        self.assertIn("refreshAyuDialogCards()", controller)
+
     def test_plugin_send_hooks_run_before_entity_generation(self):
         controller = (ROOT / "submodules/TelegramUI/Sources/ChatController.swift").read_text()
         self.assertIn("handleSandCommand(text, from: strongSelf)", controller)
@@ -218,7 +256,8 @@ class NativePluginRouteTests(unittest.TestCase):
 
     def test_no_supplied_plugin_sources_are_vendored(self):
         names = {"sand_box.plugin", "ball.plugin", "group_mentions.plugin",
-                 "screenshot_privacy.plugin", "pull_next_chat.plugin"}
+                 "screenshot_privacy.plugin", "pull_next_chat.plugin",
+                 "premium_dialog_cards.plugin"}
         found = {path.name for path in BRIDGE.rglob("*.plugin")}
         self.assertTrue(names.isdisjoint(found), found)
 

@@ -15,11 +15,11 @@ class CommonBridgeCatalogTests(unittest.TestCase):
     def setUp(self):
         self.catalog = json.loads((BRIDGE / "Resources/CommonBridge/compatibility.json").read_text())
 
-    def test_catalog_pins_19_sources_and_no_unverified_runtime_success(self):
+    def test_catalog_pins_20_sources_and_no_unverified_runtime_success(self):
         self.assertEqual(self.catalog["source_commit"], "a4b6bb472fd657e0f659531dae090e12c02a0aaa")
-        self.assertEqual(len(self.catalog["plugins"]), 19)
-        self.assertEqual(len({item["file"] for item in self.catalog["plugins"]}), 19)
-        self.assertEqual(sum(item["lines"] for item in self.catalog["plugins"]), 40950)
+        self.assertEqual(len(self.catalog["plugins"]), 20)
+        self.assertEqual(len({item["file"] for item in self.catalog["plugins"]}), 20)
+        self.assertEqual(sum(item["lines"] for item in self.catalog["plugins"]), 42600)
         self.assertEqual(self.catalog["plugins_runtime_verified"], [])
         self.assertFalse(self.catalog["device_launch_verified"])
         self.assertFalse(self.catalog["native_tests_executed"])
@@ -35,11 +35,12 @@ class CommonBridgeCatalogTests(unittest.TestCase):
                 if not plugin["native_adapter"]:
                     self.assertEqual(plugin["status"], "blocked_not_runtime_compatible")
 
-    def test_five_exact_source_native_routes_keep_snow_untouched(self):
+    def test_six_exact_source_native_routes_keep_snow_untouched(self):
         native = {item["file"]: item for item in self.catalog["plugins"] if item["native_adapter"]}
         self.assertEqual(set(native), {
             "atmospheric_snow.plugin", "sand_box.plugin", "ball.plugin",
             "screenshot_privacy.plugin", "pull_next_chat.plugin",
+            "premium_dialog_cards.plugin",
         })
         snow = native["atmospheric_snow.plugin"]
         self.assertEqual(snow["sha256"], "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763")
@@ -50,6 +51,7 @@ class CommonBridgeCatalogTests(unittest.TestCase):
             "ball.plugin": ("89f079f2a055ba851b6efec90a2c57d233b1f7204102363b2a637fa06579ea8f", "Integration/AyuBallAdapter.swift"),
             "screenshot_privacy.plugin": ("ce11a973f667623b84aadd1fc68d50fedf410e605759c251789383641cbef23e", "Integration/AyuScreenshotPrivacyAdapter.swift"),
             "pull_next_chat.plugin": ("69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709", "Integration/AyuPullNextChatAdapter.swift"),
+            "premium_dialog_cards.plugin": ("0bb3f720881d6921101c17691127ed4833ebcde0a10ac8ee1dd8fecb55ef4180", "Integration/AyuPremiumDialogCardsAdapter.swift"),
         }
         for name, (digest, adapter) in expected.items():
             self.assertEqual(native[name]["sha256"], digest)

@@ -30,6 +30,7 @@ import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import ShimmerEffect
 import GlassBackgroundComponent
+import AyuDialogCards
 
 public enum ChatListItemContent {
     public final class ThreadInfo: Equatable {
@@ -1468,6 +1469,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private let backgroundNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
+
+    /// Premium Dialog Cards route state (nil until the node view loads).
+    var ayuDialogCardRow: AyuDialogCardRow?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -1955,6 +1959,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             let avatarTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.avatarStoryTapGesture(_:)))
             self.avatarTapRecognizer = avatarTapRecognizer
             self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
+
+            self.ayuDialogCardRow = AyuDialogCardRow(hostView: self.view, separatorView: self.separatorNode.view)
         }
     }
 
@@ -4132,6 +4138,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             var online = false
+            var ayuCardOnline = false
             var animateOnline = false
             var onlineIsVoiceChat = false
             
@@ -4163,6 +4170,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             let relativeStatus = relativeUserPresenceStatus(updatedPresence, relativeTo: timestamp)
                             if case .online = relativeStatus {
                                 online = true
+                                ayuCardOnline = peer.botInfo == nil
                             }
                             animateOnline = true
                         } else if case let .channel(channel) = renderedPeer.peer, case .chatList = item.index {
@@ -5677,6 +5685,22 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     let leftSeparatorInset: CGFloat
                     let rightSeparatorInset: CGFloat
+                    // MARK: AyuGram Premium Dialog Cards
+                    let ayuCardStyle = AyuDialogCardsState.shared.style
+                    var ayuCardPeer: EnginePeer?
+                    if case let .chat(renderedPeer) = contentPeer {
+                        ayuCardPeer = renderedPeer.chatOrMonoforumMainPeer
+                    }
+                    var ayuCardActive = false
+                    if let style = ayuCardStyle, style.isEnabled, ayuCardPeer != nil,
+                       item.presentationData.theme.overallDarkAppearance,
+                       !item.interaction.isSearchMode, !item.interaction.isSideListMode,
+                       item.interaction.inlineNavigationLocation == nil {
+                        if case .chatList = item.chatListLocation {
+                            ayuCardActive = true
+                        }
+                    }
+
                     let hideCommunitySeparator = item.useCommunityViewLayout && last
                     // Separators stay out of the side safe areas. The content-aligned ones end 16pt
                     // before the right inset; the full-width ones run to the edge unless there is a
@@ -5714,11 +5738,15 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         // The side list ends without a closing separator.
                         strongSelf.separatorNode.isHidden = true
                     }
+                    if ayuCardActive {
+                        // The card replaces the flat row background and divider.
+                        strongSelf.separatorNode.isHidden = true
+                    }
                     strongSelf.separatorBaseIsHidden = strongSelf.separatorNode.isHidden
                     strongSelf.updateSideListSeparatorVisibility()
                     
                     transition.updateFrame(node: strongSelf.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: itemHeight)))
-                    let backgroundColor: UIColor
+                    var backgroundColor: UIColor
                     let highlightedBackgroundColor: UIColor
                     if item.selected {
                         backgroundColor = theme.itemSelectedBackgroundColor
@@ -5741,6 +5769,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
+                    if ayuCardActive {
+                        backgroundColor = .clear
+                    }
+
                     if animated {
                         transition.updateBackgroundColor(node: strongSelf.backgroundNode, color: backgroundColor)
                     } else {
@@ -5753,6 +5785,37 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0)
                     }
                     
+                    // MARK: AyuGram Premium Dialog Cards
+                    if ayuCardActive, let style = ayuCardStyle, let peer = ayuCardPeer {
+                        let special: AyuDialogCardSpecial?
+                        if peer.id == item.context.account.peerId {
+                            special = .saved
+                        } else if peer.id == AyuDialogCardsMetrics.servicePeerId {
+                            special = .service
+                        } else {
+                            special = nil
+                        }
+                        let cardFrame = CGRect(
+                            x: AyuDialogCardsMetrics.marginX,
+                            y: AyuDialogCardsMetrics.marginY,
+                            width: max(1.0, layout.contentSize.width - AyuDialogCardsMetrics.marginX * 2.0),
+                            height: max(1.0, itemHeight - AyuDialogCardsMetrics.marginY * 2.0)
+                        )
+                        strongSelf.ayuDialogCardRow?.update(AyuDialogCardInfo(
+                            style: style,
+                            peerId: peer.id,
+                            special: special,
+                            isMuted: isMuted,
+                            isOnline: ayuCardOnline,
+                            frame: cardFrame,
+                            avatarImage: strongSelf.avatarNode.imageNode.image
+                        ))
+                        strongSelf.onlineNode.isHidden = !style.showsOnlineBadge
+                    } else {
+                        strongSelf.ayuDialogCardRow?.update(nil)
+                        strongSelf.onlineNode.isHidden = false
+                    }
+
                     // The side list's plate matches its search field.
                     strongSelf.highlightedBackgroundNode.backgroundColor = item.interaction.isSideListMode ? item.presentationData.theme.rootController.navigationSearchBar.inputFillColor : highlightedBackgroundColor
                     let topNegativeInset: CGFloat = 0.0

@@ -35,6 +35,7 @@ swift_library(
         ":AyuPluginPython",
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
+        "//submodules/AyuDialogCards:AyuDialogCards",
     ],
     visibility = ["//visibility:public"],
 )
@@ -47,6 +48,7 @@ swift_library(
         ":AyuPluginBridge",
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
+        "//submodules/AyuDialogCards:AyuDialogCards",
     ],
 )
 

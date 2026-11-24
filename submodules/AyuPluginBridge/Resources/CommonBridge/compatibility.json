@@ -13,16 +13,17 @@
     "group_mentions.plugin",
     "pull_next_chat.plugin",
     "sand_box.plugin",
-    "screenshot_privacy.plugin"
+    "screenshot_privacy.plugin",
+    "premium_dialog_cards.plugin"
   ],
-  "source_total_lines": 40950,
+  "source_total_lines": 42600,
   "sdk_sha256": {
     "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
     "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
     "Sources/AyuPluginNativeHost.swift": "a15b1d4676876488b8ef52834adb1a7717e286b2daf351d7471bd5d2a6b542a0",
     "Integration/AyuPluginApplicationBridge.swift": "adc6b20f53a01afe398267457227daacdfd1b16241ed63600fef6110c34ccaa8",
-    "Integration/AyuPluginService.swift": "0cd2453024d7521f241299b92c629d617ad915106342fc15997f879f7b9f96f5",
+    "Integration/AyuPluginService.swift": "8bef44f9666ee8f23515f246ba4adee216f313dcb12fd2a17b98723ce41cfb6d",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
     "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
     "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
@@ -37,7 +38,8 @@
     "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
     "AST alias inspection is conservative, not a scope-aware Python resolver",
     "This build has no general plugin runtime: import accepts only the audited native sources and the one pinned Group Mentions source. Unknown .plugin files are rejected before any code is written or Python starts",
-    "Five source-pinned native routes exist (Atmospheric Snow plus four); Group Mentions executes its original source through a pinned Python path and remains device-unverified",
+    "Six source-pinned native routes exist (Atmospheric Snow plus five); Group Mentions executes its original source through a pinned Python path and remains device-unverified",
+    "Premium Dialog Cards 2.1.1 is a separately supplied source pinned by its own SHA-256; it is not part of the Nomadvorga/ayugram-src audit commit used for the other sources",
     "Native routes are host-authored iOS implementations of audited contracts, not translations or execution of Android/plugin code",
     "No native route or bridge route is device-verified, and build success proves compilation only"
   ],
@@ -1362,6 +1364,125 @@
         "org.telegram.messenger.MediaController",
         "org.telegram.ui.ActionBar.Theme",
         "org.telegram.ui.Components.BackupImageView"
+      ]
+    },
+    {
+      "file": "premium_dialog_cards.plugin",
+      "blob": "36985cbbeccefbc69094ae2e647741a877c694d7",
+      "sha256": "0bb3f720881d6921101c17691127ed4833ebcde0a10ac8ee1dd8fecb55ef4180",
+      "bytes": 57961,
+      "lines": 1650,
+      "status": "source_pinned_native_adapter_device_unverified",
+      "python_path": "blocked",
+      "native_adapter": "Integration/AyuPremiumDialogCardsAdapter.swift",
+      "provenance": "User-provided PremiumDialogCards.plugin 2.1.1; exact SHA-256 pinned outside the upstream audit commit",
+      "implemented_value_subsets": [
+        "java.lang.Integer",
+        "java.lang.Long",
+        "java.lang.System"
+      ],
+      "declared_ui_or_reference_subsets": [],
+      "declared_application_subsets": [
+        "org.telegram.messenger.UserConfig"
+      ],
+      "partially_wired_features": [
+        "account_identity_and_own_profile"
+      ],
+      "unadapted_classes": [
+        "android.graphics.Bitmap",
+        "android.graphics.BitmapShader",
+        "android.graphics.Canvas",
+        "android.graphics.LinearGradient",
+        "android.graphics.Matrix",
+        "android.graphics.Paint",
+        "android.graphics.Paint$Style",
+        "android.graphics.Shader",
+        "android.graphics.Shader$TileMode",
+        "android.graphics.drawable.BitmapDrawable",
+        "java.lang.Class",
+        "org.telegram.messenger.AndroidUtilities",
+        "org.telegram.messenger.ApplicationLoader",
+        "org.telegram.messenger.ConnectionsManager",
+        "org.telegram.messenger.MessagesController",
+        "org.telegram.messenger.Utilities",
+        "org.telegram.tgnet.ConnectionsManager",
+        "org.telegram.ui.ActionBar.Theme",
+        "org.telegram.ui.Cells.DialogCell",
+        "org.telegram.ui.DialogsActivity"
+      ],
+      "unsupported_sdk_symbols": {},
+      "external_imports_not_default_enabled": [],
+      "required_unwired_features": [
+        "android_graphics",
+        "method_or_request_hooks",
+        "plugin_threads",
+        "telegram_android_ui",
+        "telegram_objects_and_requests"
+      ],
+      "hook_forms": [
+        "hook_method"
+      ],
+      "event_forms": [],
+      "dynamic_class_lookup_lines": [
+        29,
+        134,
+        147,
+        153,
+        154,
+        464,
+        465,
+        466,
+        467,
+        468,
+        469,
+        951
+      ],
+      "imports": [
+        "android.graphics",
+        "android.graphics.drawable",
+        "android_utils",
+        "base_plugin",
+        "concurrent.futures",
+        "hook_utils",
+        "org.telegram.messenger",
+        "threading",
+        "time",
+        "ui.settings",
+        "weakref"
+      ],
+      "java_classes": [
+        "android.graphics.Bitmap",
+        "android.graphics.BitmapShader",
+        "android.graphics.Canvas",
+        "android.graphics.LinearGradient",
+        "android.graphics.Matrix",
+        "android.graphics.Paint",
+        "android.graphics.Paint$Style",
+        "android.graphics.Shader",
+        "android.graphics.Shader$TileMode",
+        "android.graphics.drawable.BitmapDrawable",
+        "java.lang.Class",
+        "java.lang.Integer",
+        "java.lang.Long",
+        "java.lang.System",
+        "org.telegram.messenger.AndroidUtilities",
+        "org.telegram.messenger.ApplicationLoader",
+        "org.telegram.messenger.ConnectionsManager",
+        "org.telegram.messenger.MessagesController",
+        "org.telegram.messenger.UserConfig",
+        "org.telegram.messenger.Utilities",
+        "org.telegram.tgnet.ConnectionsManager",
+        "org.telegram.ui.ActionBar.Theme",
+        "org.telegram.ui.Cells.DialogCell",
+        "org.telegram.ui.DialogsActivity"
+      ],
+      "ios_native_route_kind": "host_owned_native",
+      "ios_limitations": [
+        "The chat list draws the card with Core Animation instead of Android Canvas: the source 6 x 5 dp margins, configurable rounding, 90 px blurred avatar bitmap, vertical darken tint, white vertical stroke gradient, muted/online overlays and Saved Messages/service gradients are preserved",
+        "The source shrinks the avatar bitmap to 0.75 of the row avatar; iOS keeps the stock avatar layout so the row keeps its existing text/geometry and scroll cost. This is the only intentional visual deviation",
+        "Blur uses Core Image on a 90 px copy of the avatar already loaded by the real chat row; results are cached (64 entries) and never computed on the main thread",
+        "Cards are dark-theme only, are not drawn in search or the side list, and hide the stock online dot when the source `rcards.online_badge` switch is off",
+        "No device run, frame recording or visual/FPS acceptance is claimed"
       ]
     },
     {

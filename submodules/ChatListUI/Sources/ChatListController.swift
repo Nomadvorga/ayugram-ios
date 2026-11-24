@@ -2,6 +2,7 @@ import SGSimpleSettings // MARK: Swiftgram
 
 import Foundation
 import UIKit
+import AyuDialogCards
 import Postbox
 import SwiftSignalKit
 import AsyncDisplayKit
@@ -891,7 +892,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         fatalError("init(coder:) has not been implemented")
     }
     
+    private var dialogCardsObserver: NSObjectProtocol?
+
     deinit {
+        if let dialogCardsObserver = self.dialogCardsObserver {
+            NotificationCenter.default.removeObserver(dialogCardsObserver)
+        }
         self.openMessageFromSearchDisposable.dispose()
         self.badgeDisposable?.dispose()
         self.badgeIconDisposable?.dispose()
@@ -1408,6 +1414,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.displayNode = ChatListControllerNode(context: self.context, location: self.location, previewing: self.previewing, controlsHistoryPreload: self.controlsHistoryPreload, presentationData: self.presentationData, animationCache: self.animationCache, animationRenderer: self.animationRenderer, controller: self)
         
         self.chatListDisplayNode.navigationBar = self.navigationBar
+
+        self.dialogCardsObserver = NotificationCenter.default.addObserver(forName: AyuDialogCardsState.didChange, object: nil, queue: .main) { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.chatListDisplayNode.mainContainerNode.currentItemNode.forEachItemNode { node in
+                (node as? ChatListItemNode)?.refreshAyuDialogCards()
+            }
+        }
         
         self.chatListDisplayNode.requestDeactivateSearch = { [weak self] in
             self?.deactivateSearch(animated: true)

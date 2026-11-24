@@ -78,7 +78,7 @@ public struct AyuPluginSetting: Sendable {
     /// before any code is written or Python starts.
     nonisolated static let groupMentionsID = "group_mentions"
     nonisolated static let groupMentionsSHA256 = "25ae71486b29481d57cc36eaf40e931522a655227d2870dfc898174b8d96f28e"
-    nonisolated static let supportedPluginSummary = "Ball, Pull to Next Chat, SandBox, Screenshot Privacy, NewYear Interface и Group Mentions"
+    nonisolated static let supportedPluginSummary = "Ball, Pull to Next Chat, SandBox, Screenshot Privacy, Premium Dialog Cards, NewYear Interface и Group Mentions"
     nonisolated static let unsupportedBlocker = "Эта сборка поддерживает только проверенные плагины: " + supportedPluginSummary + ". Остальные .plugin не импортируются и не запускаются."
     nonisolated static let pinnedPythonBlocker = "Исходник Group Mentions не совпадает с проверенной версией. Эта сборка не запускает изменённый Python-код."
     public private(set) var plugins: [AyuInstalledPlugin] = []
@@ -483,7 +483,7 @@ public struct AyuPluginSetting: Sendable {
         }
     }
 
-    /// Only audited sources pass: five native contracts and the one pinned
+    /// Only audited sources pass: six native contracts and the one pinned
     /// Group Mentions Python source. Unknown plugins are rejected without
     /// importing, writing or starting an interpreter.
     private func inspect(_ source: String) async throws -> (AyuInstalledPlugin, AyuBridgeValue) {

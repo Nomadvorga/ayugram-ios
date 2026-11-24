@@ -1,8 +1,9 @@
-# Common bridge: pinned 19-plugin compatibility audit
+# Common bridge: pinned 20-plugin compatibility audit
 
-Source: `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa`. **Not a claim that all 19 work.**
+Source: `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa` for 19 inputs, plus a separately
+SHA-256-pinned Premium Dialog Cards 2.1.1 source. **Not a claim that all 20 work.**
 
-40,950 lines inspected as AST only. No supplied plugin execution; no device/native-test verification.
+42,600 lines inspected as AST only. No supplied plugin execution; no device/native-test verification.
 
 | Plugin | Path status | Value subsets | Application subsets | Unadapted classes | Missing SDK symbols |
 |---|---|---:|---:|---:|---:|
@@ -17,6 +18,7 @@ Source: `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa`. **Not
 | `music_tab.plugin` | Blocked (Python path) | 2 | 1 | 8 | 0 |
 | `passguard.plugin` | Blocked (Python path) | 2 | 0 | 24 | 3 |
 | `player_below.plugin` | Blocked (Python path) | 2 | 0 | 25 | 0 |
+| `premium_dialog_cards.plugin` | Pinned native adapter; device unverified | 3 | 1 | 20 | 0 |
 | `profile_info.plugin` | Blocked (Python path) | 3 | 0 | 23 | 3 |
 | `pull_next_chat.plugin` | Blocked (Python path) | 4 | 1 | 16 | 0 |
 | `quick_stickers.plugin` | Blocked (Python path) | 0 | 0 | 17 | 0 |
@@ -28,6 +30,6 @@ Source: `Nomadvorga/ayugram-src@a4b6bb472fd657e0f659531dae090e12c02a0aaa`. **Not
 
 See `compatibility.json` for each source hash, required API, hook/event form and missing class/symbol.
 
-Atmospheric Snow, SandBox, Ball, Screenshot Privacy and Pull to Next Chat bypass Python only for their exact pinned SHA-256. They are host-owned native routes and remain device-unverified.
+Atmospheric Snow, SandBox, Ball, Screenshot Privacy, Pull to Next Chat and Premium Dialog Cards bypass Python only for their exact pinned SHA-256. They are host-owned native routes and remain device-unverified.
 Group Mentions is deliberately routed through the original Python source with narrow host shims; it is not a native reimplementation. The remaining 13 plugins stay blocked. Narrow app adapters are not a substitute for their remaining Telegram/iOS services.
 See `APPLICATION-BRIDGES.md` for exact implemented members, per-plugin work packages and device checks.

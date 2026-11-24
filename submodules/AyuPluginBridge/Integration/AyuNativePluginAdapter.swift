@@ -195,6 +195,9 @@ enum AyuNativePluginCatalog {
         AyuNativePluginDescriptor(id: "pull_next_chat", adapterID: "pull_next_chat.native.ios.v1", displayName: "Pull to Next Chat", version: "1.0.0",
             sha256: "69975fd768369d2a46d28dbe87f8c580f772d0f974ce8434fca58f65babed709",
             make: { defaults, reporter in AyuPullNextChatAdapter(defaults: defaults, reportError: reporter.report) }),
+        AyuNativePluginDescriptor(id: "premium_dialog_cards", adapterID: "premium_dialog_cards.native.ios.v1", displayName: "Premium Dialog Cards", version: "2.1.1",
+            sha256: "0bb3f720881d6921101c17691127ed4833ebcde0a10ac8ee1dd8fecb55ef4180",
+            make: { defaults, reporter in AyuPremiumDialogCardsAdapter(defaults: defaults, reportError: reporter.report) }),
     ]
 
     static func descriptor(for source: Data) -> AyuNativePluginDescriptor? {

@@ -100,6 +100,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SideColumnLayout",
         "//submodules/TelegramUI/Components/ChatListTitleView",
         "//submodules/AvatarNode:AvatarNode",
+        "//submodules/AyuDialogCards:AyuDialogCards",
         "//submodules/AvatarVideoNode:AvatarVideoNode",
         "//submodules/InviteLinksUI",
         "//submodules/TelegramUI/Components/ChatFolderLinkPreviewScreen",

@@ -98,6 +98,8 @@ final class AyuBallViewController: UIViewController {
     private var lastStamp = CACurrentMediaTime()
     private var combo = 0
     private var lastHit = CACurrentMediaTime()
+    private let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
 
     init(gravity: CGFloat, diameter: CGFloat, restitution: CGFloat, showsCounter: Bool, usesTilt: Bool) {
         self.gravity = gravity
@@ -198,8 +200,16 @@ final class AyuBallViewController: UIViewController {
         guard self.link == nil else { return }
         self.lastStamp = CACurrentMediaTime()
         let link = CADisplayLink(target: self, selector: #selector(self.tick))
+        // The source runs from Choreographer at the display refresh rate. The
+        // game is not visual-critical, so cap it at 60 fps on ProMotion devices
+        // instead of waking the main thread 120 times a second.
+        if #available(iOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30.0, maximum: 60.0, preferred: 60.0)
+        }
         link.add(to: .main, forMode: .common)
         self.link = link
+        self.lightFeedback.prepare()
+        self.mediumFeedback.prepare()
         self.startTilt()
     }
 
@@ -285,6 +295,7 @@ final class AyuBallViewController: UIViewController {
         self.lastHit = now
         if self.showsCounter {
             self.comboLabel.text = "X\(self.combo)"
+            self.comboLabel.sizeToFit()
             self.comboLabel.isHidden = false
             self.comboLabel.alpha = 1.0
             self.comboLabel.transform = CGAffineTransform(scaleX: 1.7, y: 1.7)
@@ -294,7 +305,8 @@ final class AyuBallViewController: UIViewController {
             }
         }
         if abs(self.velocity.dy) + abs(self.velocity.dx) > 500 {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self.lightFeedback.impactOccurred()
+            self.lightFeedback.prepare()
         }
     }
 
@@ -305,7 +317,6 @@ final class AyuBallViewController: UIViewController {
         let radius = self.diameter / 2
         let x = min(max(self.position.x, 60), self.view.bounds.width - 60)
         let y = min(max(self.position.y - radius - 36, 60), self.view.bounds.height - 100)
-        self.comboLabel.sizeToFit()
         self.comboLabel.center = CGPoint(x: x, y: y)
         let idle = now - self.lastHit
         if idle > 1.6 {
@@ -358,7 +369,8 @@ final class AyuBallViewController: UIViewController {
         let power: CGFloat = 900
         self.velocity = CGVector(dx: dx * power, dy: dy * power - 120)
         if abs(dx) < 0.05 { self.velocity.dx = Bool.random() ? 260 : -260 }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        self.mediumFeedback.impactOccurred()
+        self.mediumFeedback.prepare()
     }
 
     @objc private func closePressed() { self.dismiss(animated: true) }
