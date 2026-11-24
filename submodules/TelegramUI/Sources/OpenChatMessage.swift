@@ -2,6 +2,7 @@ import Foundation
 import MediaPlayer
 import AVFAudio
 import SGSimpleSettings
+import SGStrings
 import Display
 import AsyncDisplayKit
 import TelegramCore
@@ -28,6 +29,7 @@ import StoryContainerScreen
 import WallpaperGalleryScreen
 import BrowserUI
 import PeerMessagesMediaPlaylist
+import AyuPluginBridge
 
 func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
     var story: TelegramMediaStory?
@@ -233,6 +235,36 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 return true
             case let .document(file, immediateShare):
                 params.dismissInput()
+                if !immediateShare, let fileName = file.fileName, (fileName as NSString).pathExtension.lowercased() == "plugin" {
+                    let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                    let install: () -> Void = {
+                        let _ = (params.context.engine.resources.data(resource: EngineMediaResource(file.resource), waitUntilFetchStatus: true)
+                        |> deliverOnMainQueue).startStandalone(next: { data in
+                            guard data.isComplete else {
+                                return
+                            }
+                            let task = Task {
+                                do {
+                                    try await AyuPluginService.shared.importPlugin(from: URL(fileURLWithPath: data.path))
+                                    let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                                    if let navigationController = params.navigationController {
+                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), custom: true, alignment: .center), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                    }
+                                } catch {
+                                    if let navigationController = params.navigationController {
+                                        let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), custom: true, alignment: .center), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                    }
+                                }
+                            }
+                            _ = task
+                        })
+                    }
+                    if let rootController = params.navigationController?.view.window?.rootViewController {
+                        params.present(textAlertController(context: params.context, title: "Plugin.InstallTitle".i18n(presentationData.strings.baseLanguageCode), text: fileName, actions: [TextAlertAction(type: .defaultAction, title: "Plugin.InstallAction".i18n(presentationData.strings.baseLanguageCode), action: install), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})]), nil, .window(.root))
+                    }
+                    return true
+                }
                 let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
                 if immediateShare {
                     let controller = params.context.sharedContext.makeShareScreen(context: params.context, params: ShareControllerParams(subject: .media(.standalone(media: file), nil), immediateExternalShare: true))
