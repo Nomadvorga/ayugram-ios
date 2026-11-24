@@ -405,7 +405,7 @@ class Session:
                 # requests returns responses for HTTP status errors; only
                 # raise_for_status() converts 4xx/5xx into HTTPError.
                 response = error
-            body = _read_response(response, deadline)
+            body = b"" if request.get_method() == "HEAD" else _read_response(response, deadline)
             final_url = _normalize_url(response.geturl())
             status = response.status if getattr(response, "status", None) is not None else response.code
             return Response(status, body, response.headers, final_url)
@@ -427,11 +427,27 @@ class Session:
             if response is not None:
                 response.close()
 
-    def get(self, url, **kwargs):
-        return self.request("GET", url, **kwargs)
+    def get(self, url, params=None, **kwargs):
+        return self.request("GET", url, params=params, **kwargs)
 
     def post(self, url, data=None, json=None, **kwargs):
         return self.request("POST", url, data=data, json=json, **kwargs)
+
+    def put(self, url, data=None, **kwargs):
+        return self.request("PUT", url, data=data, **kwargs)
+
+    def patch(self, url, data=None, **kwargs):
+        return self.request("PATCH", url, data=data, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.request("DELETE", url, **kwargs)
+
+    def head(self, url, **kwargs):
+        kwargs.setdefault("allow_redirects", False)
+        return self.request("HEAD", url, **kwargs)
+
+    def options(self, url, **kwargs):
+        return self.request("OPTIONS", url, **kwargs)
 
     def close(self):
         self._closed = True
@@ -455,3 +471,24 @@ def get(url, params=None, **kwargs):
 
 def post(url, data=None, json=None, **kwargs):
     return request("POST", url, data=data, json=json, **kwargs)
+
+
+def put(url, data=None, **kwargs):
+    return request("PUT", url, data=data, **kwargs)
+
+
+def patch(url, data=None, **kwargs):
+    return request("PATCH", url, data=data, **kwargs)
+
+
+def delete(url, **kwargs):
+    return request("DELETE", url, **kwargs)
+
+
+def head(url, **kwargs):
+    kwargs.setdefault("allow_redirects", False)
+    return request("HEAD", url, **kwargs)
+
+
+def options(url, **kwargs):
+    return request("OPTIONS", url, **kwargs)

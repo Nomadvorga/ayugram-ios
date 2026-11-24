@@ -28,7 +28,7 @@ from _ayu_inspection import import_inventory
 
 VERSION = 1
 SDK_MODULES = frozenset({"ayu_bridge", "base_plugin", "client_utils", "android_utils",
-                         "hook_utils", "plugin_settings", "java", "ui", "ui.settings",
+                         "hook_utils", "plugin_settings", "zwylib", "extera_utils", "java", "jarray", "tlrpc", "ui", "ui.settings",
                          "ui.alert", "ui.bulletin"})
 UNSUPPORTED_IMPORTS = {
     "threading": "Plugin-created Python threads are unsupported",
@@ -558,6 +558,40 @@ class Runtime:
                             "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
                             "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
+    def preflight_plugin_json(self, source, filename="plugin.plugin"):
+        report = json.loads(self.inspect_plugin_json(source, filename))
+        capabilities = self._capabilities()
+        blockers = []
+
+        def block(code, detail):
+            blockers.append({"code": code, "detail": detail})
+
+        for module, symbols in report["unsupported_sdk_symbols"].items():
+            for symbol in symbols:
+                block("SDK_MEMBER", module + "." + symbol)
+        for name in report["unsupported_imports"]:
+            block("IMPORT", name)
+        for name in report["classes"]:
+            if name not in capabilities["classes"]:
+                block("CLASS", name)
+        allowed = SDK_MODULES | set(capabilities["modules"]) | set(getattr(sys, "stdlib_module_names", ()))
+        for name in report["imports"]:
+            native_package = any(c.startswith(name + ".") for c in capabilities["classes"])
+            if name not in allowed and name.split(".")[0] not in allowed and not native_package:
+                block("DEPENDENCY", name)
+        for name in report["requirements"]:
+            block("REQUIREMENT", name)
+        required = report["metadata"].get("__bridge_operations__", [])
+        if not isinstance(required, list) or not all(isinstance(name, str) and name for name in required):
+            raise BridgeError("LOAD_REJECTED", "__bridge_operations__ must be a literal string list")
+        for name in required:
+            if name not in capabilities["operations"]:
+                block("OPERATION", name)
+        if report["dynamic_class_lookup_lines"]:
+            report["warnings"].append("DYNAMIC_CLASSES: computed native classes are checked only at runtime")
+        report["blockers"] = blockers
+        return json.dumps(report, allow_nan=False)
+
     def load_plugin(self, source, filename="plugin.plugin", expected_id=None):
         self.check_queue()
         tree, metadata, imports, classes = self.inspect(source, filename)
@@ -792,6 +826,10 @@ def install_native_importer():
 
 def inspect_plugin_json(source, filename="plugin.plugin"):
     return runtime.inspect_plugin_json(source, filename)
+
+
+def preflight_plugin_json(source, filename="plugin.plugin"):
+    return runtime.preflight_plugin_json(source, filename)
 
 
 def load_plugin(source, filename="plugin.plugin", expected_id=None):

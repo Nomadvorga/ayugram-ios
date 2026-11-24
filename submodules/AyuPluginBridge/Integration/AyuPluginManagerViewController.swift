@@ -29,16 +29,40 @@ import UniformTypeIdentifiers
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func serviceChanged(_ notification: Notification) { self.tableView.reloadData() }
-    public override func numberOfSections(in tableView: UITableView) -> Int { return 2 }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 1 : self.service.plugins.count }
-    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? nil : "Установленные плагины" }
+    public override func numberOfSections(in tableView: UITableView) -> Int { return 3 }
+    private var nativePlugins: [AyuInstalledPlugin] { self.service.plugins.filter { $0.nativeAdapter != nil } }
+    private var pythonPlugins: [AyuInstalledPlugin] { self.service.plugins.filter { $0.nativeAdapter == nil } }
+    private func plugin(at indexPath: IndexPath) -> AyuInstalledPlugin? {
+        switch indexPath.section {
+        case 1: return indexPath.row < self.nativePlugins.count ? self.nativePlugins[indexPath.row] : nil
+        case 2: return indexPath.row < self.pythonPlugins.count ? self.pythonPlugins[indexPath.row] : nil
+        default: return nil
+        }
+    }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 1 : (section == 1 ? self.nativePlugins.count : self.pythonPlugins.count) }
+    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        switch section {
+        case 1: return "Нативные адаптеры"
+        case 2: return "Python-плагины"
+        default: return nil
+        }
+    }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Эта сборка запускает только проверенные плагины: " + AyuPluginService.supportedPluginSummary + ". Другие .plugin не импортируются и не исполняются." : self.service.startupError
+        switch section {
+        case 0: return "Импорт проверяет доступные API без исполнения кода плагина. Python-плагины включаются только с вашего согласия и не запускаются автоматически. Отсутствие блокировок не гарантирует работоспособность: Android/Xposed API поддерживаются лишь через явно реализованные адаптеры."
+        case 1: return "Пиннированные исходники работают через нативные адаптеры iOS без Python."
+        case 2: return self.service.startupError
+        default: return nil
+        }
     }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        if indexPath.section == 0 { cell.textLabel?.text = "Импортировать проверенный .plugin"; cell.imageView?.image = UIImage(systemName: "square.and.arrow.down"); return cell }
-        let plugin = self.service.plugins[indexPath.row]
+        if indexPath.section == 0 { cell.textLabel?.text = "Импортировать .plugin"; cell.imageView?.image = UIImage(systemName: "square.and.arrow.down"); return cell }
+        let plugin: AyuInstalledPlugin
+        switch indexPath.section {
+        case 1: plugin = self.nativePlugins[indexPath.row]
+        default: plugin = self.pythonPlugins[indexPath.row]
+        }
         cell.textLabel?.text = plugin.name + " · " + plugin.version
         cell.detailTextLabel?.text = plugin.status
         cell.accessoryType = .disclosureIndicator
@@ -49,8 +73,7 @@ import UniformTypeIdentifiers
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 0 { self.importPressed(); return }
-        let plugin = self.service.plugins[indexPath.row]
-        guard !plugin.isBusy else { return }
+        guard let plugin = self.plugin(at: indexPath), !plugin.isBusy else { return }
         let details = ([plugin.status] + plugin.blockers + [plugin.error].compactMap { $0 }).joined(separator: "\n")
         let sheet = UIAlertController(title: plugin.name, message: details, preferredStyle: .actionSheet)
         if plugin.isEnabled {
@@ -76,19 +99,22 @@ import UniformTypeIdentifiers
     }
     @objc private func importPressed() {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType(filenameExtension: "plugin") ?? .data], asCopy: true)
-        picker.allowsMultipleSelection = false; picker.delegate = self; self.present(picker, animated: true)
+        picker.allowsMultipleSelection = true; picker.delegate = self; self.present(picker, animated: true)
     }
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        guard let url = urls.first else { return }; self.run { try await self.service.importPlugin(from: url) }
+        guard !urls.isEmpty else { return }
+        self.run {
+            for url in urls { try await self.service.importPlugin(from: url) }
+        }
     }
     private func confirmEnable(_ plugin: AyuInstalledPlugin) {
         let isNative = plugin.nativeAdapter != nil
         let message = isNative
             ? "Исходник проверяется по SHA-256. Функции и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Нативные функции включатся в интерфейсе приложения и выключатся после его перезапуска."
-            : "Это единственный плагин этой сборки, который запускается через встроенный Python. Его исходник проверен по SHA-256 и не может быть заменён другим файлом. Включайте, только если скачали именно проверенную версию Group Mentions."
-        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Включить проверенный Group Mentions?", message: message, preferredStyle: .alert)
+            : "Плагин запускает Python-код с правами приложения. Это не песочница: код может читать данные приложения и обращаться к сети. Проверка API не гарантирует безопасность или полную совместимость. Включайте только исходники, автору которых доверяете. После перезапуска потребуется включить плагин снова."
+        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Доверять коду плагина?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Включить проверенный исходник", style: .default) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
+        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Доверяю, включить", style: .default) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
         self.presentManaged(alert)
     }
     private func confirmDelete(_ plugin: AyuInstalledPlugin) {

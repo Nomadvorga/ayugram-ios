@@ -6,7 +6,7 @@
   "device_launch_verified": false,
   "native_tests_executed": false,
   "plugins_runtime_verified": [],
-  "import_policy": "pinned_sources_only",
+  "import_policy": "native_sources_pinned_other_python_ast_preflight_explicit_trust",
   "supported_plugin_files": [
     "atmospheric_snow.plugin",
     "ball.plugin",
@@ -18,17 +18,19 @@
   ],
   "source_total_lines": 42600,
   "sdk_sha256": {
+    "Integration/AyuPluginApplicationBridge.swift": "40240d2810ed5e1e104c70010f7f9e8604a943335a710bf367607e990ebb28ef",
+    "Integration/AyuPluginService.swift": "52a7ca14b3b7388c0c1ba2cc7eae8046a914b31dc3adc9111fcb23db0105eaee",
+    "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
+    "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
+    "Python/ayu_bridge.py": "d231ffda03b22a90c2bc2a33c340be44ea86001fc01bfe44139254fc7506819a",
+    "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
+    "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91",
+    "Python/zwylib.py": "5f23ae97726fe7ba0cd9eb61f6ed2e505dbdea67ea87a0386fb49a4b653cdf4a",
     "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
     "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
-    "Sources/AyuPluginNativeHost.swift": "a15b1d4676876488b8ef52834adb1a7717e286b2daf351d7471bd5d2a6b542a0",
-    "Integration/AyuPluginApplicationBridge.swift": "adc6b20f53a01afe398267457227daacdfd1b16241ed63600fef6110c34ccaa8",
-    "Integration/AyuPluginService.swift": "8bef44f9666ee8f23515f246ba4adee216f313dcb12fd2a17b98723ce41cfb6d",
-    "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
-    "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
-    "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
-    "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
-    "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91"
+    "Sources/AyuPluginNativeHost.swift": "0173492f757f4acd3a3832c0f3ccbed83ab1c63a7ad185ad451b09a1345ea5b8",
+    "Sources/AyuBridgeJavaRuntime.swift": "52612fdc4f0541f3b22877a6e89eddc14db13594c378b9a3df0afcebe0cdc1c4"
   },
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",
@@ -37,7 +39,7 @@
     "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
     "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
     "AST alias inspection is conservative, not a scope-aware Python resolver",
-    "This build has no general plugin runtime: import accepts only the audited native sources and the one pinned Group Mentions source. Unknown .plugin files are rejected before any code is written or Python starts",
+    "General Python import uses AST preflight without executing plugin code; enable repeats inspection and requires explicit trust. Missing APIs, external requirements and unimplemented version policy are blockers. Native adapter IDs remain source-pinned",
     "Six source-pinned native routes exist (Atmospheric Snow plus five); Group Mentions executes its original source through a pinned Python path and remains device-unverified",
     "Premium Dialog Cards 2.1.1 is a separately supplied source pinned by its own SHA-256; it is not part of the Nomadvorga/ayugram-src audit commit used for the other sources",
     "Native routes are host-authored iOS implementations of audited contracts, not translations or execution of Android/plugin code",
@@ -2578,5 +2580,26 @@
         "org.telegram.ui.LaunchActivity"
       ]
     }
-  ]
+  ],
+  "corpus_recheck": {
+    "files_seen": 491,
+    "verdicts": {
+      "unsupported": 387,
+      "supported": 96,
+      "partial": 8
+    },
+    "facades_added": [
+      "zwylib",
+      "extera_utils",
+      "jarray",
+      "tlrpc",
+      "requests",
+      "requests.exceptions",
+      "AndroidUtilities",
+      "Theme(palette)",
+      "UserConfig",
+      "ApplicationLoader",
+      "android.widget(TextView/EditText/LinearLayout/FrameLayout/ImageView/ScrollView/CheckBox/Toast)"
+    ]
+  }
 }

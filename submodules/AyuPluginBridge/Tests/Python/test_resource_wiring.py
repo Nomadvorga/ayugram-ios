@@ -42,8 +42,10 @@ class ResourceWiringTests(unittest.TestCase):
         self.assertLess(inspect.index("AyuAtmosphericPluginAdapter.record"), inspect.index("AyuNativePluginCatalog.record"))
         self.assertLess(inspect.index("AyuNativePluginCatalog.record"), inspect.index("Self.pinnedPythonRecord"))
         self.assertNotIn("self.runtime.inspect", inspect)
-        self.assertNotIn("prepareRuntime()", inspect)
-        self.assertIn("throw Failure.unsupportedPlugin", inspect)
+        # Pinned sources never start an interpreter; unknown plugins reach the
+        # generic AST preflight only after the fast native routes missed.
+        self.assertLess(inspect.index("Self.pinnedPythonRecord(for: data)"), inspect.index("try await self.prepareRuntime()"))
+        self.assertIn("runtime.preflight(source: source", inspect)
         packager = (REPO / "third-party/ayu-python/prepare.py").read_text()
         self.assertIn("bundle_only = True", packager)
 

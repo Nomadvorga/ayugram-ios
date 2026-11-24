@@ -258,6 +258,11 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
     [self invoke:"inspect_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
 }
 
+- (void)preflightPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
+    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 1048576) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 1 MiB source limit")]; return; }
+    [self invoke:"preflight_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
+}
+
 - (void)loadPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
     // Inspection is AST-only. Establish owner before executing any code from the source.
     [self inspectPluginSource:source filename:filename completion:^(NSString *inspection, NSError *error) {

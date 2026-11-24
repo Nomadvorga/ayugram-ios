@@ -133,8 +133,8 @@ API identifiers are safe audit data; plugin source and configuration are not bun
 
 ## Device check for this phase
 
-This build has no general `.plugin` runtime. **Импортировать проверенный .plugin**
-accepts only these pinned sources:
+**Импортировать .plugin** recognizes these audited sources before the general
+Python preflight:
 
 1. `atmospheric_snow.plugin` — NewYear Interface (native, Python-free).
 2. `ball.plugin` — Ball (native).
@@ -142,20 +142,28 @@ accepts only these pinned sources:
 4. `pull_next_chat.plugin` — Pull to Next Chat (native).
 5. `sand_box.plugin` — SandBox (native, WKWebView runs the audited `GAME_HTML`).
 6. `screenshot_privacy.plugin` — Screenshot Privacy (native shield).
-7. `group_mentions.plugin` — Group Mentions (the only pinned Python source).
+7. `group_mentions.plugin` — Group Mentions (known Python source).
 
-Any other file must fail with the supported-plugin message before it is written
-or executed. Previously installed unsupported plugins stay visible only so they
-can be deleted; they cannot be enabled.
+Other sources are inspected on the Python worker without executing their code.
+Valid records can be imported disabled with explicit blockers for unavailable
+imports, SDK members, native classes, requirements, declared operations or
+unimplemented version policy. A clean preflight is not proof of compatibility:
+dynamic API usage is checked at runtime. A mismatched source claiming a native
+adapter's ID remains blocked. Enabling Python requires explicit trust because
+it runs with application privileges, not in a security sandbox.
 
-For the supported routes:
+For the native and general routes:
 
-1. Import the exact source and enable it; the app rechecks its SHA-256.
-2. Native routes show settings implemented by their iOS adapters. Group Mentions
-   starts Python lazily only for its pinned source.
-3. Switch account and background/foreground: native surfaces and Group Mentions
+1. Import and enable; the app inspects the stored bytes again. Native adapters
+   require their exact source hashes and never start Python.
+2. Native routes show their iOS adapter settings. General Python starts lazily
+   for preflight, but plugin code runs only after explicit enable and host authorization.
+3. Import a source with a missing API and verify its blockers without executing it.
+   Test load failure, disable and re-enable for callback and generation cleanup.
+4. Switch account and background/foreground: native surfaces and Python
    callbacks must follow the real selected account and must stop cleanly.
-4. Restart: plugins stay disabled; disabling preserves preferences; deleting a
+5. Restart: plugins stay disabled; restoring metadata does not start Python;
+   enabling repeats validation. Disabling preserves preferences; deleting a
    plugin clears only its namespace.
 
 No device run, plugin runtime run, frame recording, visual acceptance or FPS

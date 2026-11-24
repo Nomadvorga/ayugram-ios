@@ -73,14 +73,9 @@ public struct AyuPluginSetting: Sendable {
         catch { preconditionFailure("Invalid compiled application adapters") }
     }()
     public static let didChange = Notification.Name("AyuPluginServiceDidChange")
-    /// This build has no general plugin runtime. Only audited native adapters
-    /// and one pinned Python source are importable; everything else is rejected
-    /// before any code is written or Python starts.
     nonisolated static let groupMentionsID = "group_mentions"
     nonisolated static let groupMentionsSHA256 = "25ae71486b29481d57cc36eaf40e931522a655227d2870dfc898174b8d96f28e"
-    nonisolated static let supportedPluginSummary = "Ball, Pull to Next Chat, SandBox, Screenshot Privacy, Premium Dialog Cards, NewYear Interface и Group Mentions"
-    nonisolated static let unsupportedBlocker = "Эта сборка поддерживает только проверенные плагины: " + supportedPluginSummary + ". Остальные .plugin не импортируются и не запускаются."
-    nonisolated static let pinnedPythonBlocker = "Исходник Group Mentions не совпадает с проверенной версией. Эта сборка не запускает изменённый Python-код."
+    nonisolated static let unsupportedBlocker = "Плагин требует возможности, которые ещё не реализованы в этой версии iOS-моста."
     public private(set) var plugins: [AyuInstalledPlugin] = []
     public private(set) var startupError: String?
     public let host: AyuPluginNativeHost
@@ -171,20 +166,15 @@ public struct AyuPluginSetting: Sendable {
                             record.nativeAdapter = nil
                             record.blockers = [AyuNativePluginCatalog.blocker(for: record.id)]
                         }
-                    } else if record.id == Self.groupMentionsID {
-                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
-                           let verified = Self.pinnedPythonRecord(for: source) {
-                            record = verified
-                        } else {
-                            record.nativeAdapter = nil
-                            record.blockers = [Self.pinnedPythonBlocker]
-                        }
                     } else {
-                        // A plugin installed by an older build is no longer a
-                        // supported route. Keep it visible so the user can
-                        // delete it, but never run it again.
                         record.nativeAdapter = nil
-                        record.blockers = [Self.unsupportedBlocker]
+                        record.blockers = []
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                           String(data: source, encoding: .utf8) != nil {
+                            if let verified = Self.pinnedPythonRecord(for: source) { record = verified }
+                        } else {
+                            record.blockers = ["Исходник недоступен или не является допустимым UTF-8 файлом .plugin."]
+                        }
                     }
                     return record
                 }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -273,9 +263,6 @@ public struct AyuPluginSetting: Sendable {
                 self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
                 return
             }
-            // No generic Python route: only the pinned Group Mentions source
-            // may reach the interpreter, and it starts lazily here.
-            guard id == Self.groupMentionsID else { throw Failure.unsupportedPlugin }
             try await self.prepareRuntime()
             let json = try await self.complete { self.runtime.load(source: source, filename: id + ".plugin", completion: $0) }
             let loaded = try self.decode(json)
@@ -483,15 +470,34 @@ public struct AyuPluginSetting: Sendable {
         }
     }
 
-    /// Only audited sources pass: six native contracts and the one pinned
-    /// Group Mentions Python source. Unknown plugins are rejected without
-    /// importing, writing or starting an interpreter.
     private func inspect(_ source: String) async throws -> (AyuInstalledPlugin, AyuBridgeValue) {
         let data = Data(source.utf8)
         if let record = AyuAtmosphericPluginAdapter.record(for: data) { return (record, .object([:])) }
         if let record = AyuNativePluginCatalog.record(for: data) { return (record, .object([:])) }
         if let record = Self.pinnedPythonRecord(for: data) { return (record, .object([:])) }
-        throw Failure.unsupportedPlugin
+        try await self.prepareRuntime()
+        let json = try await self.complete { self.runtime.preflight(source: source, filename: "import.plugin", completion: $0) }
+        let report = try self.decode(json)
+        let metadata = report["metadata"]
+        guard let id = metadata["__id__"].string, Self.validID(id),
+              let name = metadata["__name__"].string, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.utf8.count <= 1024, let findings = report["blockers"].array else { throw Failure.protocolError }
+        let version = metadata["__version__"].string ?? "—"
+        guard version.utf8.count <= 128 else { throw Failure.source }
+        var blockers: [String] = []
+        for finding in findings.prefix(64) {
+            guard let code = finding["code"].string, let detail = finding["detail"].string else { throw Failure.protocolError }
+            blockers.append("\(Self.apiLabel(code)): \(String(detail.prefix(160)))")
+        }
+        if id == AyuAtmosphericPluginAdapter.pluginID {
+            blockers.append("Нативный адаптер требует исходный Atmospheric Snow 1.0.1 с проверенной контрольной суммой.")
+        } else if AyuNativePluginCatalog.descriptor(id: id) != nil {
+            blockers.append(AyuNativePluginCatalog.blocker(for: id))
+        }
+        for key in ["__sdk_version__", "__app_version__", "__min_version__", "sdk_version", "app_version", "min_version"] {
+            if metadata.object?[key] != nil { blockers.append("VERSION_POLICY: \(key) требует проверки версии приложением; эта политика пока не реализована.") }
+        }
+        return (AyuInstalledPlugin(id: id, name: name, version: version, blockers: blockers, nativeAdapter: nil), report)
     }
 
     nonisolated private static func pinnedPythonRecord(for source: Data) -> AyuInstalledPlugin? {

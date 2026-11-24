@@ -15,6 +15,12 @@ Experimental Android Python plugin compatibility layer for the `plugins-test` br
 
 Native animations should run in Core Animation/UIKit. Do not add synchronous main→Python calls, a main-thread semaphore wait, per-frame JSON round trips, or an unconditional display-link interpreter callback. Bound queues, references and source size; cancel/revoke work by plugin generation on unload. Keep Int64 account/chat/message IDs exact on the wire. Metrics are diagnostic counters until validated on a real iPhone; they are not an FPS guarantee.
 
+## General Python route
+
+`AyuPluginService.inspect` recognizes source-pinned native routes first without starting Python. Other sources pass `preflight_plugin_json` on the interpreter worker: AST metadata, SDK members, imports, native classes, dependencies and declared operations are checked without executing or authorizing plugin code. Valid records with unsupported requirements can be imported disabled with blockers. Each enable repeats inspection against the stored bytes, then loads only after explicit trust consent. Native adapter IDs with mismatched source hashes remain blocked; generic Python must never fall into an ID-selected native adapter.
+
+Restoring installed metadata never loads plugins or starts Python; generic records are checked again at explicit enable. Python is trusted application code, not a sandbox. Static preflight is not a runtime compatibility guarantee. App/SDK version constraints remain blocked until the application supplies a real version policy; do not silently ignore them.
+
 ## Source-pinned Atmospheric Snow route
 
 `Integration/AyuAtmosphericPluginAdapter.swift` recognizes only Atmospheric Snow 1.0.1 by SHA-256, not by a user-controlled ID/version field. Reverify the stored UTF-8 source on every enable and when restoring installed metadata. Do not execute this attachment or advertise Android Canvas/method-hook APIs as implemented merely because its native adapter exists.

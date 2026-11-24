@@ -154,6 +154,72 @@ class BridgeTests(unittest.TestCase):
         bridge.load_plugin(source(plugin_id, body, imports), expected_id=plugin_id)
         return bridge.runtime.scopes[plugin_id]
 
+    def test_preflight_does_not_execute_or_authorize(self):
+        self.host.authorize = False
+        text = source() + "\nraise RuntimeError('must not execute')\n"
+        report = json.loads(bridge.preflight_plugin_json(text))
+        self.assertEqual(report["metadata"]["__id__"], "sample")
+        self.assertEqual(report["blockers"], [])
+        self.assertEqual(bridge.runtime.scopes, {})
+        self.assertEqual(self.host.active, {})
+
+    def test_preflight_reports_all_known_incompatibilities(self):
+        text = source(imports="from base_plugin import MissingSymbol\nimport absent_dependency\nfrom java import jclass\nUnknown = jclass('missing.Class')\n")
+        text += "\n__requirements__ = ['unavailable-wheel']\n__bridge_operations__ = ['unknown.operation']\n"
+        report = json.loads(bridge.preflight_plugin_json(text))
+        findings = {(item["code"], item["detail"]) for item in report["blockers"]}
+        self.assertIn(("SDK_MEMBER", "base_plugin.MissingSymbol"), findings)
+        self.assertIn(("DEPENDENCY", "absent_dependency"), findings)
+        self.assertIn(("CLASS", "missing.Class"), findings)
+        self.assertIn(("REQUIREMENT", "unavailable-wheel"), findings)
+        self.assertIn(("OPERATION", "unknown.operation"), findings)
+        self.assertEqual(self.host.active, {})
+
+    def test_preflight_compatible_plugin_loads_and_unloads(self):
+        text = source("portable", body="    def on_plugin_load(self):\n        self.set_setting('loaded', True)\n")
+        self.assertEqual(json.loads(bridge.preflight_plugin_json(text))["blockers"], [])
+        result = bridge.load_plugin(text, expected_id="portable")
+        self.assertEqual(result["plugin_id"], "portable")
+        self.assertTrue(self.host.settings["portable"]["loaded"])
+        bridge.unload_plugin("portable")
+        self.assertNotIn("portable", bridge.runtime.scopes)
+        self.assertNotIn("portable", self.host.active)
+
+    def test_preflight_rejects_malformed_operation_requirements(self):
+        for value in ("'operation'", "[1]", "['']"):
+            with self.subTest(value=value), self.assertRaises(bridge.BridgeError):
+                bridge.preflight_plugin_json(source() + "\n__bridge_operations__ = " + value)
+
+    def test_preflight_uses_current_capabilities(self):
+        text = source(imports="from java import jclass\nNative = jclass('example.Native')\n")
+        self.assertEqual(json.loads(bridge.preflight_plugin_json(text))["blockers"], [])
+        self.host.capabilities["classes"].remove("example.Native")
+        report = json.loads(bridge.preflight_plugin_json(text))
+        self.assertIn({"code": "CLASS", "detail": "example.Native"}, report["blockers"])
+        with self.assertRaises(bridge.BridgeError):
+            bridge.load_plugin(text)
+        self.assertEqual(self.host.active, {})
+
+    def test_preflight_does_not_hide_dynamic_class_lookup(self):
+        text = source(imports="from java import jclass\nname = 'example.Native'\nNative = jclass(name)\n")
+        report = json.loads(bridge.preflight_plugin_json(text))
+        self.assertTrue(report["dynamic_class_lookup_lines"])
+        self.assertTrue(any(warning.startswith("DYNAMIC_CLASSES:") for warning in report["warnings"]))
+
+    def test_failed_general_plugin_load_releases_generation(self):
+        text = source("portable", body="    def on_plugin_load(self):\n        raise RuntimeError('load failed')\n")
+        modules_before = {name for name in sys.modules if name.startswith("_ayu_plugin_")}
+        self.assertEqual(json.loads(bridge.preflight_plugin_json(text))["blockers"], [])
+        with self.assertRaises(RuntimeError):
+            bridge.load_plugin(text)
+        self.assertNotIn("portable", bridge.runtime.scopes)
+        self.assertNotIn("portable", self.host.active)
+        self.assertEqual({name for name in sys.modules if name.startswith("_ayu_plugin_")}, modules_before)
+        bridge.load_plugin(source("portable"))
+        bridge.unload_plugin("portable")
+        self.assertNotIn("portable", self.host.active)
+        self.assertEqual({name for name in sys.modules if name.startswith("_ayu_plugin_")}, modules_before)
+
     def test_settings_and_transient_state_are_owned(self):
         left, right = self.load("left"), self.load("right")
         with bridge.runtime.context(left):

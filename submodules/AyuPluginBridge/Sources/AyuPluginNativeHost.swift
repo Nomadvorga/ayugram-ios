@@ -760,7 +760,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private let operations = ["runtime.capabilities", "plugin.authorize", "plugin.activate", "plugin.deactivate", "settings.get", "settings.set", "settings.all", "state.get", "state.set", "log.write", "java.member", "java.construct", "java.invoke", "java.get_field", "java.set_field", "java.get_private_field", "java.set_private_field", "java.array", "java.length", "java.get_item", "java.set_item", "java.cast", "java.proxy", "java.release", "scheduler.schedule", "scheduler.cancel", "ui.mount", "ui.transaction", "ui.animate", "host.metrics"]
-    private static let modules = ["base_plugin", "client_utils", "android_utils", "hook_utils", "java", "ui.settings", "ui.alert", "ui.bulletin", "plugin_settings"]
+    private static let modules = ["base_plugin", "client_utils", "android_utils", "hook_utils", "java", "jarray", "tlrpc", "ui.settings", "ui.alert", "ui.bulletin", "plugin_settings", "requests", "requests.exceptions", "zwylib", "extera_utils"]
     private static let proxyInterfaces: [String: [String]] = ["java.lang.Runnable": ["run"], "android.view.View$OnClickListener": ["onClick"], "android.view.View$OnTouchListener": ["onTouch"], "org.telegram.messenger.NotificationCenter$NotificationCenterDelegate": ["didReceivedNotification"]]
     private static let arrayClasses = ["byte": "[B", "short": "[S", "char": "[C", "int": "[I", "long": "[J", "float": "[F", "double": "[D", "boolean": "[Z"]
     static var primitiveArrayClassNames: Set<String> { Set(self.arrayClasses.values) }

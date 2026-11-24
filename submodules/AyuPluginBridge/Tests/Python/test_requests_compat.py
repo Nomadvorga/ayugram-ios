@@ -52,6 +52,53 @@ class RequestsCompatibilityTests(unittest.TestCase):
             result = compat.request(method, url, **kwargs)
         return result, opener
 
+    def test_http_helpers_use_transport_and_preserve_payloads(self):
+        for use_session in (False, True):
+            for method in ("get", "post", "put", "patch", "delete", "head", "options"):
+                with self.subTest(session=use_session, method=method):
+                    opener = FakeOpener([FakeResponse()])
+                    with compat.Session() as session:
+                        api = session if use_session else compat
+                        args = [{"q": "a b"}] if method == "get" else []
+                        kwargs = {"json": {"value": 1}} if method in ("post", "put", "patch") else {}
+                        with patch.object(compat, "_make_opener", return_value=opener) as factory:
+                            response = getattr(api, method)("https://example.test/", *args, **kwargs)
+                        request = opener.calls[0][0]
+                        self.assertEqual(request.get_method(), method.upper())
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(factory.call_args.args[1], method != "head")
+                        if method == "get":
+                            self.assertEqual(request.full_url, "https://example.test/?q=a+b")
+                        if kwargs:
+                            self.assertEqual(json.loads(request.data), kwargs["json"])
+
+    def test_head_redirect_override_and_positional_bodies(self):
+        for use_session in (False, True):
+            with compat.Session() as session:
+                api = session if use_session else compat
+                opener = FakeOpener([FakeResponse()])
+                with patch.object(compat, "_make_opener", return_value=opener) as factory:
+                    api.head("https://example.test/", allow_redirects=True)
+                self.assertTrue(factory.call_args.args[1])
+                for method in ("post", "put", "patch"):
+                    with self.subTest(session=use_session, method=method):
+                        opener = FakeOpener([FakeResponse()])
+                        with patch.object(compat, "_make_opener", return_value=opener):
+                            getattr(api, method)("https://example.test/", b"payload")
+                        self.assertEqual(opener.calls[0][0].data, b"payload")
+
+    def test_http_helpers_keep_https_and_session_close_guards(self):
+        for method in ("get", "post", "put", "patch", "delete", "head", "options"):
+            with self.subTest(method=method), patch.object(compat, "_make_opener") as factory:
+                with self.assertRaises(compat.InvalidURL):
+                    getattr(compat, method)("http://example.test/")
+                with compat.Session() as session:
+                    with self.assertRaises(compat.InvalidURL):
+                        getattr(session, method)("http://example.test/")
+                with self.assertRaisesRegex(compat.RequestException, "closed"):
+                    getattr(session, method)("https://example.test/")
+                factory.assert_not_called()
+
     def test_query_json_headers_and_final_url(self):
         body = '{"title":"Музыка"}'.encode()
         raw = FakeResponse(body, url="https://music.example/final?x=1")
@@ -124,6 +171,24 @@ class RequestsCompatibilityTests(unittest.TestCase):
         raw = FakeResponse(gzip.compress(b"hello"), headers={"Content-Encoding": "gzip"})
         response, _ = self.run_request(raw)
         self.assertEqual(response.content, b"hello")
+
+    def test_head_returns_metadata_without_reading_or_decoding_body(self):
+        for use_session in (False, True):
+            with self.subTest(session=use_session), compat.Session() as session:
+                raw = FakeResponse(headers={
+                    "Content-Length": str(compat.MAX_RESPONSE_BYTES + 1),
+                    "Content-Encoding": "br",
+                })
+                opener = FakeOpener([raw])
+                api = session if use_session else compat
+                with patch.object(compat, "_make_opener", return_value=opener), \
+                        patch.object(raw, "read", side_effect=AssertionError("HEAD must not read a body")):
+                    response = api.head("https://example.test/")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.content, b"")
+                self.assertEqual(response.headers["Content-Length"], str(compat.MAX_RESPONSE_BYTES + 1))
+                self.assertEqual(response.headers["Content-Encoding"], "br")
+                self.assertTrue(raw.closed)
 
     def test_invalid_urls_options_and_header_injection_fail_before_network(self):
         with patch.object(compat, "_make_opener") as factory:

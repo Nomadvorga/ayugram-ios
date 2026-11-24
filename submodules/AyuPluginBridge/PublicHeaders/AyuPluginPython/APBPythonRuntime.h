@@ -14,6 +14,7 @@ typedef void (^APBCompletion)(NSString * _Nullable resultJSON, NSError * _Nullab
           dispatchHandler:(APBHostDispatch)dispatchHandler
                completion:(APBCompletion)completion NS_SWIFT_NAME(start(pythonHome:sdkPath:dispatchHandler:completion:));
 - (void)inspectPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion NS_SWIFT_NAME(inspect(source:filename:completion:));
+- (void)preflightPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion NS_SWIFT_NAME(preflight(source:filename:completion:));
 - (void)loadPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion NS_SWIFT_NAME(load(source:filename:completion:));
 - (void)unloadPlugin:(NSString *)pluginID completion:(APBCompletion)completion NS_SWIFT_NAME(unload(pluginID:completion:));
 - (void)settingsForPlugin:(NSString *)pluginID completion:(APBCompletion)completion NS_SWIFT_NAME(settings(pluginID:completion:));

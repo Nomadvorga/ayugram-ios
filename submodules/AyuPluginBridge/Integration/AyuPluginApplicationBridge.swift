@@ -310,10 +310,13 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                   state["broadcast"]?.bool != nil, state["megagroup"]?.bool != nil else { throw Self.invalid() }
         })
         let themeAdapter = AyuBridgeClassAdapter(name: Self.theme,
-            constants: ["key_dialogTextBlack": .integer(1), "key_dialogTextHint": .integer(2)],
+            constants: Self.themeKeys,
             staticMethods: ["getColor": { args, _ in
-                guard args.count == 1, let key = args[0].integer, key == 1 || key == 2 else { throw Self.invalid() }
-                return .value(.integer(Self.dialogTextColor(secondary: key == 2)))
+                guard args.count == 1, let key = args[0].integer, key >= 0, Self.themeKeyNames.count > Int(key) else { throw Self.invalid() }
+                return .value(.integer(Self.dialogTextColor(secondary: key != 1)))
+            }, "isDarkThemeEnabled": { args, _ in
+                guard args.isEmpty else { throw Self.invalid() }
+                return .value(.bool(Self.interfaceIsDark()))
             }])
         let typedValueAdapter = AyuBridgeClassAdapter(name: Self.typedValue,
             constants: ["COMPLEX_UNIT_DIP": .integer(1), "COMPLEX_UNIT_PX": .integer(0)],
@@ -385,6 +388,14 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
             ], validateState: { state in
                 guard Set(state.keys) == ["text"], let text = state["text"]?.string, text.utf8.count <= 4096 else { throw Self.invalid() }
             })
+        let androidUtilitiesAdapter = AyuBridgeClassAdapter(name: Self.androidUtilities, staticMethods: [
+            "dp": { args, _ in
+                guard args.count == 1, let value = args[0].number, value.isFinite, abs(value) <= 100_000 else { throw Self.invalid() }
+                return .value(.number(value * Self.screenScale(main: true)))
+            },
+            "dpRatio": { args, _ in guard args.isEmpty else { throw Self.invalid() }; return .value(.number(Self.screenScale(main: true))) },
+            "getPx": { args, _ in throw AyuBridgeFailure.unsupported("AndroidUtilities.getPx") }
+        ])
         let applicationLoaderAdapter = AyuBridgeClassAdapter(name: Self.applicationLoader,
             staticFields: ["applicationContext": { _ in
                 guard let screen = self.currentScreen() else {
@@ -426,7 +437,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
             ], validateState: { state in guard state == Self.notificationCenterState else { throw Self.invalid() } })
         let notificationDelegate = AyuBridgeClassAdapter(name: Self.notificationDelegate,
             validateState: { state in guard state.isEmpty else { throw Self.invalid() } })
-        return try .standard.adding([accountAdapter, userAdapter, fragmentAdapter, contextAdapter, resourcesAdapter, displayMetricsAdapter, messagesControllerAdapter, chatAdapter, themeAdapter, typedValueAdapter, stringAdapter, bulletinFactoryAdapter, bulletinAdapter, photoViewerAdapter, toastAdapter, applicationLoaderAdapter, dialogAdapter, notificationCenter, notificationDelegate])
+        return try .standard.adding([accountAdapter, userAdapter, fragmentAdapter, contextAdapter, resourcesAdapter, displayMetricsAdapter, messagesControllerAdapter, chatAdapter, themeAdapter, typedValueAdapter, stringAdapter, bulletinFactoryAdapter, bulletinAdapter, photoViewerAdapter, toastAdapter, applicationLoaderAdapter, androidUtilitiesAdapter, dialogAdapter, notificationCenter, notificationDelegate])
     }
 
     private static let notificationCenter = "org.telegram.messenger.NotificationCenter"
@@ -436,6 +447,30 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     private static let messagesController = "org.telegram.messenger.MessagesController"
     private static let chat = "org.telegram.tgnet.TLRPC$Chat"
     private static let theme = "org.telegram.ui.ActionBar.Theme"
+    /// Theme color-key names observed in the corpus, resolved to opaque
+    /// dynamic-color markers by index. The full palette stays native.
+    private static let themeKeyNames = [
+        "key_dialogTextBlack", "key_dialogTextHint", "key_windowBackgroundWhiteBlackText", "key_windowBackgroundWhite",
+        "key_windowBackgroundWhiteGrayText", "key_chats_name", "key_chats_message", "key_chats_date",
+        "key_chats_unreadCounter", "key_chats_secretName", "key_listSelector", "key_windowBackgroundGray",
+        "key_switchTrack", "key_switchThumb", "key_actionBarDefault", "key_actionBarTitle",
+    ]
+    private static var themeKeys: [String: AyuBridgeValue] {
+        var keys: [String: AyuBridgeValue] = [:]
+        for (index, name) in themeKeyNames.enumerated() { keys[name] = .integer(Int64(index + 1)) }
+        return keys
+    }
+    private static func screenScale(main: Bool) -> Double {
+        // Android dp ≈ iOS pt on 1x density; return the plain scale factor.
+        return main ? DispatchQueue.main.sync { UIScreen.main.scale / 3.0 * 3.0 } : UIScreen.main.scale / 3.0 * 3.0
+    }
+    private static func currentScreen(main: Bool) -> CGRect? {
+        return main ? DispatchQueue.main.sync { UIScreen.main.bounds } : UIScreen.main.bounds
+    }
+    private static func interfaceIsDark() -> Bool {
+        self.currentScreen(main: true)
+        return UIScreen.main.traitCollection.userInterfaceStyle == .dark
+    }
     private static let typedValue = "android.util.TypedValue"
     private static let javaString = "java.lang.String"
     private static let bulletinFactory = "org.telegram.ui.Components.BulletinFactory"
@@ -479,6 +514,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     }
 
     private static let userConfig = "org.telegram.messenger.UserConfig"
+    private static let androidUtilities = "org.telegram.messenger.AndroidUtilities"
     private static let user = "org.telegram.tgnet.TLRPC$User"
     private static let fragment = "org.telegram.ui.ActionBar.BaseFragment"
     private static let context = "android.content.Context"
