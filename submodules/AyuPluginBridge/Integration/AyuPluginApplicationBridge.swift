@@ -468,7 +468,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         return main ? DispatchQueue.main.sync { UIScreen.main.bounds } : UIScreen.main.bounds
     }
     private static func interfaceIsDark() -> Bool {
-        self.currentScreen(main: true)
+        _ = self.currentScreen(main: true)
         return UIScreen.main.traitCollection.userInterfaceStyle == .dark
     }
     private static let typedValue = "android.util.TypedValue"

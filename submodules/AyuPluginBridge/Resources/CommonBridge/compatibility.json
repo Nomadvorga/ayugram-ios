@@ -18,7 +18,7 @@
   ],
   "source_total_lines": 42600,
   "sdk_sha256": {
-    "Integration/AyuPluginApplicationBridge.swift": "40240d2810ed5e1e104c70010f7f9e8604a943335a710bf367607e990ebb28ef",
+    "Integration/AyuPluginApplicationBridge.swift": "828af9f799dea1d2ddeafc54d5973c8dd7cb7d6a159feb8d1e5b41402128f5f5",
     "Integration/AyuPluginService.swift": "52a7ca14b3b7388c0c1ba2cc7eae8046a914b31dc3adc9111fcb23db0105eaee",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
     "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
@@ -26,11 +26,11 @@
     "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
     "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91",
     "Python/zwylib.py": "5f23ae97726fe7ba0cd9eb61f6ed2e505dbdea67ea87a0386fb49a4b653cdf4a",
-    "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
+    "Sources/AyuBridgeClassRegistry.swift": "9d917861e5ddab5a05ad0469cc70df757c08ecf1d225311ad99cf127f729a1a9",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
-    "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
-    "Sources/AyuPluginNativeHost.swift": "0173492f757f4acd3a3832c0f3ccbed83ab1c63a7ad185ad451b09a1345ea5b8",
-    "Sources/AyuBridgeJavaRuntime.swift": "52612fdc4f0541f3b22877a6e89eddc14db13594c378b9a3df0afcebe0cdc1c4"
+    "Sources/AyuBridgeProtocol.swift": "fd8aa6f0b3b8c1c7dc19b0ea7c1e6057022e684176090d055e52ffa6a9d68016",
+    "Sources/AyuPluginNativeHost.swift": "fda74e9b65e4db1f664769bad964110b2f41a3bf5294df9dd5197a326119a89f",
+    "Sources/AyuBridgeJavaRuntime.swift": "1b8ccd2cd506ecf661be23a10dcdb58f415019b92e7c5e5a3ba213a167d1734b"
   },
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",

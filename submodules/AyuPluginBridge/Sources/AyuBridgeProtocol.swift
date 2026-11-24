@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// JSON-only boundary. Handles and callbacks are data, never Swift object addresses.
-public indirect enum AyuBridgeValue: Codable, Equatable, Sendable {
+public indirect enum AyuBridgeValue: Codable, Equatable, Hashable, Sendable {
     case null
     case bool(Bool)
     case integer(Int64)
@@ -40,12 +40,22 @@ public indirect enum AyuBridgeValue: Codable, Equatable, Sendable {
     public var number: Double? {
         switch self { case let .number(value): return value; case let .integer(value): return Double(value); default: return nil }
     }
+    /// Strictly a floating-point payload, not an integer coercion.
+    public var double: Double? { if case let .number(value) = self { return value }; return nil }
     public var integer: Int64? {
         if case let .integer(value) = self { return value }; return nil
     }
     public var array: [AyuBridgeValue]? { if case let .array(value) = self { return value }; return nil }
     public var object: [String: AyuBridgeValue]? { if case let .object(value) = self { return value }; return nil }
     public subscript(_ key: String) -> AyuBridgeValue { self.object?[key] ?? .null }
+
+    /// Bridge helper: wraps any Codable bridge DTO into a JSON value.
+    /// Encoding failures become `.null` — payloads were validated upstream.
+    public static func encodable<T: Encodable>(_ value: T) -> AyuBridgeValue {
+        guard let data = try? JSONEncoder().encode(value),
+              let decoded = try? JSONDecoder().decode(AyuBridgeValue.self, from: data) else { return .null }
+        return decoded
+    }
 }
 
 public struct AyuBridgeFailure: Error, Codable, Sendable {

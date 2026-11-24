@@ -56,7 +56,11 @@ public struct AyuBridgeAdapterContext: Sendable {
 
 public struct AyuBridgeNativeCallback: Sendable {
     private let sink: @Sendable ([AyuBridgeValue]) -> Void
-    init(_ sink: @escaping @Sendable ([AyuBridgeValue]) -> Void) { self.sink = sink }
+    public let id: String
+    init(id: String, sink: @escaping @Sendable ([AyuBridgeValue]) -> Void) {
+        self.id = id
+        self.sink = sink
+    }
     public func send(_ arguments: [AyuBridgeValue]) { self.sink(arguments) }
 }
 

@@ -675,7 +675,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("callback_expired", "Callback context generation expired") }
             try self.validateReferences(reference, owner: owner, registerCallbacks: false)
             guard let id = reference["$callback"].string else { throw AyuBridgeFailure("invalid_arguments", "Expected a declared callback reference") }
-            return AyuBridgeNativeCallback { [weak self] arguments in
+            return AyuBridgeNativeCallback(id: id) { [weak self] arguments in
                 self?.enqueueCallback(owner: owner, generation: generation, callbackID: id, arguments: arguments)
             }
         }) { [weak self] reference in

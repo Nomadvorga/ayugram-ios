@@ -219,7 +219,9 @@ enum AyuBridgeJavaRuntime {
                     throw Self.unsupported("Bundle.put\(keyType)")
                 }
                 var updated = state
-                updated["entries", default: .object([:])].object?[key] = args[1]
+                var entries = updated["entries"]?.object ?? [:]
+                entries[key] = args[1]
+                updated["entries"] = .object(entries)
                 return .value(.null)
             }
         }
@@ -321,10 +323,14 @@ enum AyuBridgeJavaRuntime {
                 "getAction": { state, args, _ in try Self.arity(args, 0); return .value(state["action"] ?? .null) },
                 "putExtra": { state, args, _ in
                     guard args.count == 2 else { throw Self.unsupported("Intent.putExtra") }
+                "putExtra": { state, args, _ in
+                    guard args.count == 2 else { throw Self.unsupported("Intent.putExtra") }
                     let key = try Self.string(args[0], "extra key")
-                    var updated = state
-                    updated["entries", default: .object([:])].object?[key] = args[1]
-                    return Self.instance("android.content.Intent", updated)
+                    var entries = state["entries"]?.object ?? [:]
+                    entries[key] = args[1]
+                    state["entries"] = .object(entries)
+                    return .value(.null)
+                },
                 },
                 "getStringExtra": { state, args, _ in
                     try Self.arity(args, 1)
@@ -388,40 +394,40 @@ enum AyuBridgeJavaRuntime {
                     try Self.arity(args, 1)
                     guard let alpha = args[0].double, (0.0...1.0).contains(alpha) else { throw Self.unsupported("View.setAlpha") }
                     var updated = state
-                    updated["alpha"] = .double(alpha)
+                    updated["alpha"] = .number(alpha)
                     return Self.instance("android.view.View", updated)
                 },
                 "setTranslationX": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
-                    updated["translation_x"] = .double(Double(try Self.integer(args[0], "translation")))
-                    updated["translation_y"] = updated["translation_y"] ?? .double(0)
+                    updated["translation_x"] = .number(Double(try Self.integer(args[0], "translation")))
+                    updated["translation_y"] = updated["translation_y"] ?? .number(0)
                     return Self.instance("android.view.View", updated)
                 },
                 "setTranslationY": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
-                    updated["translation_y"] = .double(Double(try Self.integer(args[0], "translation")))
-                    updated["translation_x"] = updated["translation_x"] ?? .double(0)
+                    updated["translation_y"] = .number(Double(try Self.integer(args[0], "translation")))
+                    updated["translation_x"] = updated["translation_x"] ?? .number(0)
                     return Self.instance("android.view.View", updated)
                 },
                 "setScaleX": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
-                    updated["scale_x"] = .double(Double(try Self.integer(args[0], "scale")))
-                    updated["scale_y"] = updated["scale_y"] ?? .double(1)
+                    updated["scale_x"] = .number(Double(try Self.integer(args[0], "scale")))
+                    updated["scale_y"] = updated["scale_y"] ?? .number(1)
                     return Self.instance("android.view.View", updated)
                 },
                 "setScaleY": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
-                    updated["scale_y"] = .double(Double(try Self.integer(args[0], "scale")))
-                    updated["scale_x"] = updated["scale_x"] ?? .double(1)
+                    updated["scale_y"] = .number(Double(try Self.integer(args[0], "scale")))
+                    updated["scale_x"] = updated["scale_x"] ?? .number(1)
                     return Self.instance("android.view.View", updated)
                 },
                 "setPadding": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("View.setPadding") }
-                    let paddings = try args.map { .double(Double(try Self.integer($0, "padding"))) }
+                    let paddings = try args.map { .number(Double(try Self.integer($0, "padding"))) }
                     var updated = state
                     updated["padding"] = .object(["left": paddings[0], "top": paddings[1], "right": paddings[2], "bottom": paddings[3]])
                     return Self.instance("android.view.View", updated)
@@ -452,7 +458,7 @@ enum AyuBridgeJavaRuntime {
             methods: [
                 "setMargins": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("LayoutParams.setMargins") }
-                    let margins = try args.map { .double(Double(try Self.integer($0, "margin"))) }
+                    let margins = try args.map { .number(Double(try Self.integer($0, "margin"))) }
                     var updated = state
                     updated["margins"] = .object(["left": margins[0], "top": margins[1], "right": margins[2], "bottom": margins[3]])
                     return Self.instance("android.view.ViewGroup.LayoutParams", updated)
@@ -478,15 +484,15 @@ enum AyuBridgeJavaRuntime {
                 guard let action = args[0].integer, [0, 1, 2, 3].contains(action) else { throw Self.unsupported("MotionEvent action") }
                 var state: [String: AyuBridgeValue] = [
                     "action": .integer(action),
-                    "x": .double(Double(try Self.integer(args[1], "x"))),
-                    "y": .double(Double(try Self.integer(args[2], "y"))),
+                    "x": .number(Double(try Self.integer(args[1], "x"))),
+                    "y": .number(Double(try Self.integer(args[2], "y"))),
                 ]
                 if args.count == 4 { state["pointer_count"] = .integer(try Self.integer(args[3], "pointer count")) }
                 return state
             },
             methods: [
-                "getX": { state, args, _ in try Self.arity(args, 0); return .value(state["x"] ?? .double(0)) },
-                "getY": { state, args, _ in try Self.arity(args, 0); return .value(state["y"] ?? .double(0)) },
+                "getX": { state, args, _ in try Self.arity(args, 0); return .value(state["x"] ?? .number(0)) },
+                "getY": { state, args, _ in try Self.arity(args, 0); return .value(state["y"] ?? .number(0)) },
                 "getAction": { state, args, _ in try Self.arity(args, 0); return .value(state["action"] ?? .integer(0)) },
                 "getPointerCount": { state, args, _ in try Self.arity(args, 0); return .value(state["pointer_count"] ?? .integer(1)) },
             ], validateState: { state in
@@ -500,7 +506,7 @@ enum AyuBridgeJavaRuntime {
         let caps: [String: AyuBridgeValue] = ["BUTT": .integer(0), "ROUND": .integer(1), "SQUARE": .integer(2)]
         let styles: [String: AyuBridgeValue] = ["FILL": .integer(0), "STROKE": .integer(1), "FILL_AND_STROKE": .integer(2)]
         return AyuBridgeClassAdapter(name: "android.graphics.Paint", constants: caps.merging(styles) { a, _ in a },
-            constructor: { args, _ in try Self.arity(args, 0); return ["color": .integer(0xFF00_0000), "stroke_width": .double(0), "style": .integer(0), "cap": .integer(0), "anti_alias": .bool(true)] },
+            constructor: { args, _ in try Self.arity(args, 0); return ["color": .integer(0xFF00_0000), "stroke_width": .number(0), "style": .integer(0), "cap": .integer(0), "anti_alias": .bool(true)] },
             methods: [
                 "setColor": { state, args, _ in
                     try Self.arity(args, 1)
@@ -513,7 +519,7 @@ enum AyuBridgeJavaRuntime {
                     try Self.arity(args, 1)
                     guard let width = args[0].double, width >= 0 else { throw Self.unsupported("Paint.setStrokeWidth") }
                     var updated = state
-                    updated["stroke_width"] = .double(width)
+                    updated["stroke_width"] = .number(width)
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setStyle": { state, args, _ in
@@ -557,22 +563,25 @@ enum AyuBridgeJavaRuntime {
                 "drawCircle": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("Canvas.drawCircle") }
                     let x = try Self.doubleArgument(args[0]), y = try Self.doubleArgument(args[1]), radius = try Self.doubleArgument(args[2])
-                    var updated = state
-                    updated["path", default: .array([])].array?.append(.object(["op": .string("circle"), "x": .double(x), "y": .double(y), "radius": .double(radius)]))
+                    var path = state["path"]?.array ?? []
+                    path.append(.object(["op": .string("circle"), "x": .number(x), "y": .number(y), "radius": .number(radius)]))
+                    state["path"] = .array(path)
                     return .value(.null)
                 },
                 "drawRect": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("Canvas.drawRect") }
                     let left = try Self.doubleArgument(args[0]), top = try Self.doubleArgument(args[1]), right = try Self.doubleArgument(args[2]), bottom = try Self.doubleArgument(args[3])
-                    var updated = state
-                    updated["path", default: .array([])].array?.append(.object(["op": .string("rect"), "left": .double(left), "top": .double(top), "right": .double(right), "bottom": .double(bottom)]))
+                    var path = state["path"]?.array ?? []
+                    path.append(.object(["op": .string("rect"), "left": .number(left), "top": .number(top), "right": .number(right), "bottom": .number(bottom)]))
+                    state["path"] = .array(path)
                     return .value(.null)
                 },
                 "drawLine": { state, args, _ in
                     guard args.count == 4 else { throw Self.unsupported("Canvas.drawLine") }
                     let x0 = try Self.doubleArgument(args[0]), y0 = try Self.doubleArgument(args[1]), x1 = try Self.doubleArgument(args[2]), y1 = try Self.doubleArgument(args[3])
-                    var updated = state
-                    updated["path", default: .array([])].array?.append(.object(["op": .string("line"), "x0": .double(x0), "y0": .double(y0), "x1": .double(x1), "y1": .double(y1)]))
+                    var path = state["path"]?.array ?? []
+                    path.append(.object(["op": .string("line"), "x0": .number(x0), "y0": .number(y0), "x1": .number(x1), "y1": .number(y1)]))
+                    state["path"] = .array(path)
                     return .value(.null)
                 },
                 "getWidth": { state, args, _ in try Self.arity(args, 0); return .value(state["width"] ?? .integer(0)) },
@@ -617,7 +626,7 @@ enum AyuBridgeJavaRuntime {
             constructor: { args, context in
                 try Self.arity(args, 1)
                 let callback = try context.callback(args[0])
-                return ["callback": .string(callback.debugDescription), "callback_ref": args[0]]
+                return ["callback": .string(callback.id), "callback_ref": args[0]]
             },
             methods: [
                 "run": { state, args, context in
