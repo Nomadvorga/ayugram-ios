@@ -195,6 +195,9 @@ public class SGSimpleSettings {
         case showProfileId
         case sendWithReturnKey
         case videoControlsInFooter
+        case lyricsInPlayer
+        case hideSponsoredMessages
+        case filterZalgoText
         case combinedMediaViewer
         case hideAccountInNotifications
     }
@@ -250,6 +253,8 @@ public class SGSimpleSettings {
     public enum TranslationBackend: String, CaseIterable {
         case `default`
         case gtranslate
+        case microsoft
+        case yandex
         case system
         // Make sure to update TranslationConfiguration
     }
@@ -352,6 +357,9 @@ public class SGSimpleSettings {
         Keys.showProfileId.rawValue: false, // MARK: AyuGram
         Keys.sendWithReturnKey.rawValue: false,
         Keys.videoControlsInFooter.rawValue: false,
+        Keys.lyricsInPlayer.rawValue: true,
+        Keys.hideSponsoredMessages.rawValue: false,
+        Keys.filterZalgoText.rawValue: false,
         Keys.combinedMediaViewer.rawValue: false,
     ]
     
@@ -649,6 +657,15 @@ public class SGSimpleSettings {
 
     @UserDefault(key: Keys.videoControlsInFooter.rawValue)
     public var videoControlsInFooter: Bool
+
+    @UserDefault(key: Keys.lyricsInPlayer.rawValue)
+    public var lyricsInPlayer: Bool
+
+    @UserDefault(key: Keys.hideSponsoredMessages.rawValue)
+    public var hideSponsoredMessages: Bool
+
+    @UserDefault(key: Keys.filterZalgoText.rawValue)
+    public var filterZalgoText: Bool
 
     @UserDefault(key: Keys.combinedMediaViewer.rawValue)
     public var combinedMediaViewer: Bool

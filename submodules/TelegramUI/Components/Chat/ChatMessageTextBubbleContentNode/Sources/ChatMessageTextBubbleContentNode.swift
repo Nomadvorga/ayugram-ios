@@ -3,6 +3,7 @@ import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AsyncDisplayKit
 import Display
+import SGSimpleSettings
 import TelegramCore
 import TextFormat
 import UrlEscaping
@@ -377,6 +378,9 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         rawText = updatingMedia.text
                     } else {
                         rawText = item.message.text
+                    }
+                    if SGSimpleSettings.shared.filterZalgoText {
+                        rawText = ChatMessageItemView.cleanedZalgoText(rawText)
                     }
                     
                     for attribute in item.message.attributes {

@@ -82,6 +82,24 @@ func sgWrappedTranslateSingle(text: String, toLang: String, `default`: Signal<(S
     switch backend {
     case .gtranslate:
         return sgGTranslate(text: text, toLang: toLang)
+    case .microsoft:
+        return sgMicrosoftTranslate(texts: [text], toLang: toLang)
+        |> map { result -> (String, [MessageTextEntity])? in
+            result.first
+        }
+        |> mapError { error in
+            sgTranslationDebugError(backend: .microsoft, inputLength: text.count, fromLang: nil, toLang: toLang, error: error)
+            return .generic
+        }
+    case .yandex:
+        return sgYandexTranslate(texts: [text], toLang: toLang)
+        |> map { result -> (String, [MessageTextEntity])? in
+            result.first
+        }
+        |> mapError { error in
+            sgTranslationDebugError(backend: .yandex, inputLength: text.count, fromLang: nil, toLang: toLang, error: error)
+            return .generic
+        }
     case .system:
         guard let engineExperimentalInternalTranslationService else {
             sgTranslationDebugError(backend: backend, inputLength: text.count, fromLang: nil, toLang: toLang, error: "unavailable")
@@ -123,11 +141,31 @@ func sgGTranslate(texts: [(String, [MessageTextEntity])], toLang: String) -> Sig
     })
 }
 
+func sgMicrosoftTranslate(texts: [(String, [MessageTextEntity])], toLang: String) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
+    return sgMicrosoftTranslate(texts: texts.map { $0.0 }, toLang: toLang)
+}
+
+func sgYandexTranslate(texts: [(String, [MessageTextEntity])], toLang: String) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
+    return sgYandexTranslate(texts: texts.map { $0.0 }, toLang: toLang)
+}
+
 func sgWrappedTranslateMultiple(texts: [(String, [MessageTextEntity])], toLang: String, `default`: Signal<[(String, [MessageTextEntity])], TranslationError>) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
     let backend = SGSimpleSettings.shared.translationBackendEnum
     switch backend {
     case .gtranslate:
         return sgGTranslate(texts: texts, toLang: toLang)
+    case .microsoft:
+        return sgMicrosoftTranslate(texts: texts, toLang: toLang)
+        |> mapError { error in
+            sgTranslationDebugError(backend: .microsoft, inputLength: texts.reduce(0) { $0 + $1.0.count }, fromLang: nil, toLang: toLang, error: error)
+            return .generic
+        }
+    case .yandex:
+        return sgYandexTranslate(texts: texts, toLang: toLang)
+        |> mapError { error in
+            sgTranslationDebugError(backend: .yandex, inputLength: texts.reduce(0) { $0 + $1.0.count }, fromLang: nil, toLang: toLang, error: error)
+            return .generic
+        }
     case .system:
         guard let engineExperimentalInternalTranslationService else {
             sgTranslationDebugError(backend: backend, inputLength: texts.reduce(0) { $0 + $1.0.count }, fromLang: nil, toLang: toLang, error: "unavailable")
@@ -203,6 +241,26 @@ func sgTranslateRawText(account: Account, text: String, fromLang: String?, toLan
     let backend = SGSimpleSettings.shared.translationBackendEnum
     if forceGTranslate || backend == .gtranslate {
         return sgGTranslate(text: text, fromLang: fromLang, toLang: toLang)
+    }
+    if backend == .microsoft {
+        return sgMicrosoftTranslate(texts: [text], toLang: toLang)
+        |> map { result -> (String, [MessageTextEntity])? in
+            result.first
+        }
+        |> mapError { error in
+            sgTranslationDebugError(backend: .microsoft, inputLength: text.count, fromLang: fromLang, toLang: toLang, error: error)
+            return .generic
+        }
+    }
+    if backend == .yandex {
+        return sgYandexTranslate(texts: [text], toLang: toLang)
+        |> map { result -> (String, [MessageTextEntity])? in
+            result.first
+        }
+        |> mapError { error in
+            sgTranslationDebugError(backend: .yandex, inputLength: text.count, fromLang: fromLang, toLang: toLang, error: error)
+            return .generic
+        }
     }
     if backend == .system {
         guard let engineExperimentalInternalTranslationService else {

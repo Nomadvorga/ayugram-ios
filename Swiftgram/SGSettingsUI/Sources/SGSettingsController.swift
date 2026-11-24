@@ -83,6 +83,27 @@ private enum SGBoolSetting: String {
     case confirmCalls
     case warnOnStoriesOpen
     case storyStealthMode
+    case swipeForVideoPIP
+    case enableVoipTcp
+    case nyStyleSnow
+    case nyStyleLightning
+    case tabBarSearchEnabled
+    case videoControlsInFooter
+    case lyricsInPlayer
+    case hideSponsoredMessages
+    case filterZalgoText
+    case commaAfterMention
+    case combinedMediaViewer
+    case hideAccountInNotifications
+    // MARK: AyuGram
+    case ayuGhostMode
+    case ayuDontReadMessages
+    case ayuDontReadStories
+    case ayuDontSendOnline
+    case ayuDontSendTyping
+    case ayuOfflineAfterSending
+    case ayuSaveDeletedMessages
+    case ayuSaveMessagesHistory
 }
 
 private enum SGOneFromManySetting: String {
@@ -246,32 +267,12 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     }
     entries.append(.notice(id: id.count, section: .accountColors, text: i18n("Settings.CustomColors.Saturation.Notice", lang)))
 
-    // Chats: exteraGram first, then gestures and stickers.
-    entries.append(.header(id: id.count, section: .chats, text: i18n("Ayu.CategoryChats", lang).uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .replaceEditedWithIcon, value: ExteraSettings.shared.replaceEditedWithIcon, text: i18n("Extera.ReplaceEditedWithIcon", lang, strings.Conversation_MessageEditedLabel), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideShareButton, value: ExteraSettings.shared.hideShareButton, text: i18n("Extera.HideShareButton", lang, strings.Conversation_ContextMenuShare), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .disableGreetingSticker, value: ExteraSettings.shared.disableGreetingSticker, text: i18n("Extera.DisableGreetingSticker", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .filterZalgo, value: ExteraSettings.shared.filterZalgo, text: i18n("Extera.FilterZalgo", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .chats, text: i18n("Extera.FilterZalgoInfo", lang, "Zalgo")))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .widePosts, value: settings.wideChannelPosts, text: i18n("Extera.WidePosts", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .bottomButton, value: !settings.hideChannelBottomButton, text: i18n("Extera.BottomButton", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .quickTransitions, value: !settings.disableScrollToNextChannel, text: i18n("Extera.QuickTransitions", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .quickTransitionsTopics, value: !settings.disableScrollToNextTopic, text: i18n("Settings.PullToNextTopic", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideCameraTile, value: settings.disableGalleryCamera, text: i18n("Extera.HideCameraTile", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .cameraTilePreview, value: !settings.disableGalleryCameraPreview, text: i18n("Settings.GalleryCameraPreview", lang), enabled: !settings.disableGalleryCamera))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .recordingButton, value: !settings.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .snapDeletionEffect, value: !settings.disableSnapDeletionEffect, text: i18n("Settings.SnapDeletionEffect", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideReactions, value: settings.hideReactions, text: i18n("Settings.HideReactions", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideSendAsPeer, value: settings.disableSendAsButton, text: i18n("Extera.HideSendAsPeer", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .chats, text: i18n("Extera.HideSendAsPeerInfo", lang)))
-
-    entries.append(.header(id: id.count, section: .gestures, text: i18n("Extera.Gestures", lang).uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .gestures, settingName: .doubleTapOutgoingEdit, value: settings.messageDoubleTapActionOutgoing == SGSimpleSettings.MessageDoubleTapAction.edit.rawValue, text: i18n("Extera.DoubleTapOutgoingEdit", lang), enabled: true))
-
-    entries.append(.header(id: id.count, section: .stickers, text: strings.StickerPacksSettings_Title.uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .stickers, settingName: .stickerTime, value: settings.stickerTimestamp, text: i18n("Extera.StickerTimeMode", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .stickers, settingName: .forceEmojiTab, value: settings.forceEmojiTab, text: i18n("Settings.ForceEmojiTab", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .stickers, settingName: .defaultEmojisFirst, value: settings.defaultEmojisFirst, text: i18n("Settings.DefaultEmojisFirst", lang), enabled: true))
+    entries.append(.header(id: id.count, section: .other, text: strings.Appearance_Other.uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .lyricsInPlayer, value: SGSimpleSettings.shared.lyricsInPlayer, text: i18n("Settings.LyricsInPlayer", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hideSponsoredMessages, value: SGSimpleSettings.shared.hideSponsoredMessages, text: i18n("Settings.HideSponsoredMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .filterZalgoText, value: SGSimpleSettings.shared.filterZalgoText, text: i18n("Settings.FilterZalgoText", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .commaAfterMention, value: SGSimpleSettings.shared.commaAfterMention, text: i18n("Settings.CommaAfterMention", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hideRecordingButton, value: !SGSimpleSettings.shared.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))s.DefaultEmojisFirst", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .stickers, text: i18n("Settings.DefaultEmojisFirst.Notice", lang)))
 
     // Other: profiles and stories.
@@ -436,6 +437,21 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             settings.warnOnStoriesOpen = value
         case .storyStealthMode:
             settings.storyStealthMode = value
+        case .combinedMediaViewer:
+            SGSimpleSettings.shared.combinedMediaViewer = value
+        case .videoControlsInFooter:
+            SGSimpleSettings.shared.videoControlsInFooter = value
+        case .lyricsInPlayer:
+            SGSimpleSettings.shared.lyricsInPlayer = value
+        case .hideSponsoredMessages:
+            SGSimpleSettings.shared.hideSponsoredMessages = value
+        case .filterZalgoText:
+            SGSimpleSettings.shared.filterZalgoText = value
+        case .commaAfterMention:
+            SGSimpleSettings.shared.commaAfterMention = value
+        case .hideAccountInNotifications:
+            SGSimpleSettings.shared.hideAccountInNotifications = value
+            SGSimpleSettings.shared.synchronizeShared()
         }
     }, updateSliderValue: { setting, value in
         switch setting {

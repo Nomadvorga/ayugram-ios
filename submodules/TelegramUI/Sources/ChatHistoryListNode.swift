@@ -979,7 +979,11 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                         return (10, fakeAdMessages, nil, nil)
                     }
                 } else {
-                    adMessages = adMessagesContext.state
+                    if SGSimpleSettings.shared.hideSponsoredMessages {
+                        adMessages = .single((nil, [], nil, nil))
+                    } else {
+                        adMessages = adMessagesContext.state
+                    }
                 }
             }
         } else {

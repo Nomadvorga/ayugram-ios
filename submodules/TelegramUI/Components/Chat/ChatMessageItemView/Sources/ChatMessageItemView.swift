@@ -709,9 +709,42 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         self.matchedFilterKeyword = nil
     }
     
+    private var zalgoCleanedText: String?
+
+    static func cleanedZalgoText(_ source: String) -> String {
+        var scalars: [Unicode.Scalar] = []
+        var consecutiveMarks = 0
+        for scalar in source.unicodeScalars {
+            let category = scalar.properties.generalCategory
+            if category == .nonspacingMark || category == .enclosingMark {
+                consecutiveMarks += 1
+                if consecutiveMarks <= 1 {
+                    scalars.append(scalar)
+                }
+            } else {
+                consecutiveMarks = 0
+                scalars.append(scalar)
+            }
+        }
+        return String(String.UnicodeScalarView(scalars))
+    }
+
     open func setupItem(_ item: ChatMessageItem, synchronousLoad: Bool) {
         self.item = item
-        
+
+        if SGSimpleSettings.shared.filterZalgoText && !item.message.text.isEmpty {
+            let text = item.message.text
+            var markCount = 0
+            for scalar in text.unicodeScalars {
+                if scalar.properties.generalCategory == .nonspacingMark || scalar.properties.generalCategory == .enclosingMark {
+                    markCount += 1
+                }
+            }
+            if markCount > Int(Double(text.unicodeScalars.count) * 0.3) {
+                self.zalgoCleanedText = ChatMessageItemView.cleanedZalgoText(text)
+            }
+        }
+
         if !self.wasFilteredKeywordTested && !SGSimpleSettings.shared.messageFilterKeywords.isEmpty && SGSimpleSettings.shared.ephemeralStatus > 1 {
             let incomingMessage = item.message.effectivelyIncoming(item.context.account.peerId)
             if incomingMessage {

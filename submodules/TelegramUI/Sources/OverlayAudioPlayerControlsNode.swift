@@ -22,6 +22,7 @@ import MultilineTextComponent
 import BundleIconComponent
 import ButtonComponent
 import Markdown
+import SGSimpleSettings
 import TextFormat
 
 private func normalizeValue(_ value: CGFloat) -> CGFloat {
@@ -180,6 +181,12 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
     
     private var currentRate: AudioPlaybackRate?
     private let rateButton: AudioRateButton
+
+    private var lyricsVisible = false
+    private var lyricsEnabled = SGSimpleSettings.shared.lyricsInPlayer
+    private var currentTrackKey: String?
+    private let lyricsButton: IconButtonNode
+    private let lyricsNode: OverlayAudioPlayerLyricsNode
     
     let separatorNode: ASDisplayNode
     
@@ -280,6 +287,17 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         self.rateButton = AudioRateButton()
         self.rateButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -4.0, bottom: -8.0, right: -4.0)
         self.rateButton.displaysAsynchronously = false
+
+        self.lyricsButton = IconButtonNode()
+        self.lyricsButton.displaysAsynchronously = false
+        self.lyricsButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -4.0, bottom: -8.0, right: -4.0)
+        self.lyricsButton.icon = generateTintedImage(image: UIImage(bundleImageName: "Chat List/Search/Music"), color: presentationData.theme.list.itemPrimaryTextColor)
+
+        self.lyricsNode = OverlayAudioPlayerLyricsNode(presentationData: presentationData)
+        self.lyricsNode.isHidden = true
+        self.lyricsNode.requestSeek = { [weak self] timestamp in
+            self?.control?(.seek(timestamp))
+        }
         
         self.backwardButton = IconButtonNode()
         self.backwardButton.displaysAsynchronously = false
@@ -327,6 +345,8 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         self.addSubnode(self.playPauseButton)
         self.playPauseButton.addSubnode(self.playPauseIconNode)
         self.addSubnode(self.rateButton)
+        self.addSubnode(self.lyricsButton)
+        self.addSubnode(self.lyricsNode)
         
         //self.addSubnode(self.separatorNode)
         
@@ -435,13 +455,23 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
                 }
                 
                 strongSelf.rateButton.isHidden = rateButtonIsHidden
-                
+
                 strongSelf.currentPosition = value.status.timestamp
+
+                if let displayData = displayData, case let .music(title, performer, _, _, _) = displayData {
+                    let trackKey = "\(title ?? "")|\(performer ?? "")"
+                    if trackKey != strongSelf.currentTrackKey {
+                        strongSelf.currentTrackKey = trackKey
+                        strongSelf.lyricsNode.setTrack(title: title, performer: performer)
+                    }
+                }
+                strongSelf.lyricsNode.updateStatus(value.status)
             } else {
                 strongSelf.playPauseButton.isEnabled = false
                 strongSelf.backwardButton.isEnabled = false
                 strongSelf.forwardButton.isEnabled = false
                 strongSelf.rateButton.isHidden = true
+                strongSelf.lyricsNode.updateStatus(nil)
                 displayData = nil
             }
             
@@ -539,6 +569,7 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         self.forwardButton.addTarget(self, action: #selector(self.forwardPressed), forControlEvents: .touchUpInside)
         self.playPauseButton.addTarget(self, action: #selector(self.playPausePressed), forControlEvents: .touchUpInside)
         self.rateButton.addTarget(self, action: #selector(self.rateButtonPressed), forControlEvents: .touchUpInside)
+        self.lyricsButton.addTarget(self, action: #selector(self.lyricsButtonPressed), forControlEvents: .touchUpInside)
         self.artistButton.addTarget(self, action: #selector(self.artistPressed), forControlEvents: .touchUpInside)
         
         self.artistButton.highligthedChanged = { [weak self] highlighted in
@@ -672,6 +703,8 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         
         self.backgroundNode.image = self.hasPlainBackground ? generatePlainBackground(theme: presentationData.theme) : generateBackground(theme: presentationData.theme)
         self.shareNode.setImage(generateTintedImage(image: UIImage(bundleImageName: "GlobalMusicPlayer/Share"), color: presentationData.theme.list.itemPrimaryTextColor), for: [])
+        self.lyricsButton.icon = generateTintedImage(image: UIImage(bundleImageName: "Chat List/Search/Music"), color: self.lyricsVisible ? presentationData.theme.list.itemAccentColor : presentationData.theme.list.itemPrimaryTextColor)
+        self.lyricsNode.updateTheme(presentationData)
         self.scrubberNode.updateColors(backgroundColor: presentationData.theme.list.controlSecondaryColor.withMultipliedAlpha(0.5), foregroundColor: presentationData.theme.list.itemPrimaryTextColor)
         self.leftDurationLabel.textColor = presentationData.theme.list.itemSecondaryTextColor
         self.rightDurationLabel.textColor = presentationData.theme.list.itemSecondaryTextColor
@@ -804,12 +837,13 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
     
     static let basePanelHeight: CGFloat = 190.0
     
-    static func heightForLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, maxHeight: CGFloat, isExpanded: Bool, savedMusic: Bool?) -> CGFloat {
+    static func heightForLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, maxHeight: CGFloat, isExpanded: Bool, savedMusic: Bool?, lyricsHeight: CGFloat = 0.0) -> CGFloat {
         var panelHeight: CGFloat = OverlayAudioPlayerControlsNode.basePanelHeight
         if isExpanded {
             let sideInset: CGFloat = 20.0
             panelHeight += width - leftInset - rightInset - sideInset * 2.0 + 24.0
         }
+        panelHeight += lyricsHeight
         var height = min(panelHeight, maxHeight)
         if let _ = savedMusic {
             height += 52.0
@@ -836,9 +870,20 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         if !self.hasCompletedLayout || previousWidth == nil || previousWidth?.isZero == true {
             transition = .immediate
         }
-        
-        let finalPanelHeight = OverlayAudioPlayerControlsNode.heightForLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, maxHeight: maxHeight, isExpanded: self.isExpanded, savedMusic: savedMusic)
-        let panelHeight = OverlayAudioPlayerControlsNode.heightForLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, maxHeight: maxHeight, isExpanded: self.isExpanded, savedMusic: nil)
+
+        var isMusic = false
+        if let displayData = self.displayData, case .music = displayData {
+            isMusic = true
+        }
+        self.lyricsEnabled = SGSimpleSettings.shared.lyricsInPlayer
+        if !self.lyricsEnabled || !isMusic {
+            self.lyricsVisible = false
+        }
+        let lyricsDisplayed = self.lyricsVisible && self.isExpanded
+        let lyricsHeight: CGFloat = lyricsDisplayed ? 220.0 : 0.0
+
+        let finalPanelHeight = OverlayAudioPlayerControlsNode.heightForLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, maxHeight: maxHeight, isExpanded: self.isExpanded, savedMusic: savedMusic, lyricsHeight: lyricsHeight)
+        let panelHeight = OverlayAudioPlayerControlsNode.heightForLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, maxHeight: maxHeight, isExpanded: self.isExpanded, savedMusic: nil, lyricsHeight: lyricsHeight)
         
         transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: panelHeight), size: CGSize(width: width, height: UIScreenPixel)))
                 
@@ -880,6 +925,9 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         
         let rateRightOffset = timestampLabelWidthForDuration(self.currentDuration)
         transition.updateFrame(node: self.rateButton, frame: CGRect(origin: CGPoint(x: width - sideInset - rightInset - rateRightOffset - 38.0, y: scrubberVerticalOrigin + 10.0 + rightLabelVerticalOffset - 6.0 + UIScreenPixel), size: CGSize(width: 24.0, height: 44.0)))
+        self.lyricsButton.isHidden = !isMusic
+        self.lyricsButton.icon = generateTintedImage(image: UIImage(bundleImageName: "Chat List/Search/Music"), color: self.lyricsVisible ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemPrimaryTextColor)
+        transition.updateFrame(node: self.lyricsButton, frame: CGRect(origin: CGPoint(x: width - sideInset - rightInset - rateRightOffset - 38.0 - 32.0, y: scrubberVerticalOrigin + 10.0 + rightLabelVerticalOffset - 6.0 + UIScreenPixel), size: CGSize(width: 24.0, height: 44.0)))
         
         transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: -8.0), size: CGSize(width: width, height: finalPanelHeight + 8.0)))
         
@@ -896,6 +944,13 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         let playPauseFrame = CGRect(origin: CGPoint(x: buttonsRect.minX + floor((buttonsRect.width - buttonSize.width) / 2.0), y: buttonsRect.minY), size: buttonSize)
         transition.updateFrame(node: self.playPauseButton, frame: playPauseFrame)
         transition.updateFrame(node: self.playPauseIconNode, frame: CGRect(origin: CGPoint(x: -6.0, y: -6.0), size: CGSize(width: 76.0, height: 76.0)))
+
+        let lyricsFrame = CGRect(origin: CGPoint(x: leftInset, y: buttonsRect.maxY), size: CGSize(width: width - leftInset - rightInset, height: lyricsHeight))
+        transition.updateFrame(node: self.lyricsNode, frame: lyricsFrame)
+        self.lyricsNode.isHidden = !lyricsDisplayed
+        if lyricsDisplayed {
+            self.lyricsNode.updateLayout(size: lyricsFrame.size, transition: transition)
+        }
                                  
         if let savedMusic {
             var profileAudioTransition = transition
@@ -1075,6 +1130,11 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
             nextRate = .x1_5
         }
         self.control?(.setBaseRate(nextRate))
+    }
+
+    @objc func lyricsButtonPressed() {
+        self.lyricsVisible = !self.lyricsVisible
+        self.requestLayout?(.animated(duration: 0.25, curve: .easeInOut))
     }
     
     private func speedList(strings: PresentationStrings) -> [(String, String, AudioPlaybackRate)] {
