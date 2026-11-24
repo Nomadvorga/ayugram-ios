@@ -3937,7 +3937,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
             }, action: { [weak sourceController] _, f in
                 f(.default)
-                let _ = sgExportChatJSON(context: context, peerId: peerId.id, completion: { [weak sourceController] url in
+                let _ = sgExportChatJSON(context: context, peerId: peerId, completion: { [weak sourceController] url in
                     guard let sourceController, let url else {
                         return
                     }

@@ -163,6 +163,33 @@ public extension TelegramEngine {
         	return _internal_clearCloudDraftsInteractively(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }
 
+        public func exportChatJSON(peerId: EnginePeer.Id) -> Signal<Data?, NoError> {
+            return self.account.postbox.transaction { transaction -> Data? in
+                var entries: [[String: Any]] = []
+                transaction.scanMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, tag: MessageTags()) { message -> Bool in
+                    entries.append([
+                        "id": message.id.id,
+                        "date": message.timestamp,
+                        "sender": message.effectiveAuthor?.debugDisplayTitle ?? "",
+                        "out": message.isOutgoing,
+                        "text": message.text
+                    ])
+                    return true
+                }
+                guard !entries.isEmpty else {
+                    return nil
+                }
+                let peer = transaction.getPeer(peerId)
+                let result: [String: Any] = [
+                    "chat": peer?.debugDisplayTitle ?? "",
+                    "peerId": peerId.id._internalGetInt64Value(),
+                    "exportedAt": Int32(Date().timeIntervalSince1970),
+                    "messages": entries
+                ]
+                return try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+            }
+        }
+
         public func stopIncomingTypingDraft(peerId: EnginePeer.Id, threadId: Int64?) -> Signal<Never, NoError> {
             return _internal_stopIncomingTypingDraft(postbox: self.account.postbox, network: self.account.network, peerId: peerId, threadId: threadId)
         }
