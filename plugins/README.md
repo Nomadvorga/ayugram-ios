@@ -4,6 +4,23 @@ Original AyuGram plugin sources, kept here verbatim for the iOS bridge work.
 They are reference inputs: the app does not import or execute them at build time,
 and the iOS routes reimplement audited contracts natively.
 
+## Supported by the app now
+
+This build has no general `.plugin` runtime. Import accepts only these pinned
+sources; every other file is rejected before it is written or executed.
+
+| Supported file | Route |
+| --- | --- |
+| `atmospheric_snow.plugin` | Native, Python-free |
+| `ball.plugin` | Native |
+| `pull_next_chat.plugin` | Native |
+| `sand_box.plugin` | Native, audited `GAME_HTML` in WKWebView |
+| `screenshot_privacy.plugin` | Native shield |
+| `group_mentions.plugin` | Pinned Python source |
+
+The remaining files below are reference material for future work. They are not
+importable and are not claimed to run.
+
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
 | `atmospheric_snow.plugin` | 175422 | `bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763` |

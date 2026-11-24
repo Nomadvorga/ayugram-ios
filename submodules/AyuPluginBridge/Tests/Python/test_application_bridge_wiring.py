@@ -11,7 +11,8 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
     def test_singleton_installs_real_provider_without_changing_snow_route(self):
         service = (BRIDGE / "Integration/AyuPluginService.swift").read_text()
         for text in ["let application = AyuPluginApplicationBridge.shared", "provider: application, classRegistry: try application.classRegistry()",
-                     "if let record = AyuAtmosphericPluginAdapter.record(for: Data(source.utf8))", "adapter.enable()"]:
+                     "if let record = AyuAtmosphericPluginAdapter.record(for: data)", "adapter.enable()",
+                     "throw Failure.unsupportedPlugin", "guard id == Self.groupMentionsID else { throw Failure.unsupportedPlugin }"]:
             self.assertIn(text, service)
 
     def test_app_binding_uses_real_signals_and_explicit_authorized_root(self):

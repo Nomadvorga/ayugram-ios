@@ -30,14 +30,14 @@ import UniformTypeIdentifiers
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func serviceChanged(_ notification: Notification) { self.tableView.reloadData() }
     public override func numberOfSections(in tableView: UITableView) -> Int { return 2 }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 2 : self.service.plugins.count }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 1 : self.service.plugins.count }
     public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? nil : "Установленные плагины" }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Импорт не запускает плагин. После перезапуска приложения все плагины выключены. Совместимость Android API ограничена этой сборкой." : self.service.startupError
+        section == 0 ? "Эта сборка запускает только проверенные плагины: " + AyuPluginService.supportedPluginSummary + ". Другие .plugin не импортируются и не исполняются." : self.service.startupError
     }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        if indexPath.section == 0 { cell.textLabel?.text = indexPath.row == 0 ? "Импортировать .plugin" : "Тест моста"; cell.imageView?.image = UIImage(systemName: indexPath.row == 0 ? "square.and.arrow.down" : "testtube.2"); return cell }
+        if indexPath.section == 0 { cell.textLabel?.text = "Импортировать проверенный .plugin"; cell.imageView?.image = UIImage(systemName: "square.and.arrow.down"); return cell }
         let plugin = self.service.plugins[indexPath.row]
         cell.textLabel?.text = plugin.name + " · " + plugin.version
         cell.detailTextLabel?.text = plugin.status
@@ -48,7 +48,7 @@ import UniformTypeIdentifiers
     }
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if indexPath.section == 0 { if indexPath.row == 0 { self.importPressed() } else { self.run { try await self.service.importBundledTest() } }; return }
+        if indexPath.section == 0 { self.importPressed(); return }
         let plugin = self.service.plugins[indexPath.row]
         guard !plugin.isBusy else { return }
         let details = ([plugin.status] + plugin.blockers + [plugin.error].compactMap { $0 }).joined(separator: "\n")
@@ -85,10 +85,10 @@ import UniformTypeIdentifiers
         let isNative = plugin.nativeAdapter != nil
         let message = isNative
             ? "Исходник проверяется по SHA-256. Функции и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Нативные функции включатся в интерфейсе приложения и выключатся после его перезапуска."
-            : "Python-код плагина получает доступ к контейнеру приложения и предоставленным API аккаунта. SDK не является песочницей Python. Включайте только проверенный код. Плагин будет запущен сейчас и выключен после перезапуска приложения."
-        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Доверять этому плагину?", message: message, preferredStyle: .alert)
+            : "Это единственный плагин этой сборки, который запускается через встроенный Python. Его исходник проверен по SHA-256 и не может быть заменён другим файлом. Включайте, только если скачали именно проверенную версию Group Mentions."
+        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Включить проверенный Group Mentions?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Доверяю и включаю", style: isNative ? .default : .destructive) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
+        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Включить проверенный исходник", style: .default) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
         self.presentManaged(alert)
     }
     private func confirmDelete(_ plugin: AyuInstalledPlugin) {

@@ -38,8 +38,12 @@ class ResourceWiringTests(unittest.TestCase):
 
     def test_atmospheric_still_bypasses_python_preparation(self):
         text = (BRIDGE / "Integration/AyuPluginService.swift").read_text()
-        inspect = text.split("private func inspect(_ source:", 1)[1]
-        self.assertLess(inspect.index("AyuAtmosphericPluginAdapter.record"), inspect.index("try await self.prepareRuntime()"))
+        inspect = text.split("private func inspect(_ source:", 1)[1].split("private static func pinnedPythonRecord", 1)[0]
+        self.assertLess(inspect.index("AyuAtmosphericPluginAdapter.record"), inspect.index("AyuNativePluginCatalog.record"))
+        self.assertLess(inspect.index("AyuNativePluginCatalog.record"), inspect.index("Self.pinnedPythonRecord"))
+        self.assertNotIn("self.runtime.inspect", inspect)
+        self.assertNotIn("prepareRuntime()", inspect)
+        self.assertIn("throw Failure.unsupportedPlugin", inspect)
         packager = (REPO / "third-party/ayu-python/prepare.py").read_text()
         self.assertIn("bundle_only = True", packager)
 

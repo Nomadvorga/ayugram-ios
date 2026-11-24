@@ -84,16 +84,17 @@ bridge route is authoritative for this plugin.
 ## Source-pinned native iOS routes (four, device unverified)
 
 These routes are host-owned iOS implementations of contracts that were read
-statically from the exact pinned sources. They never import, translate or run
-the plugin code, GAME_HTML or Android classes. A source hash mismatch fails
+statically from the exact pinned sources. They never import or run plugin Python
+or Android classes; SandBox alone renders the pinned source's own `GAME_HTML`
+in a `WKWebView`, as Android does. A source hash mismatch fails
 closed with `UNSUPPORTED_API` and a blocker instead of enabling the route.
 
 | Plugin | Pinned route | Preserved from source | Honest iOS deviation |
 |---|---|---|---|
-| `sand_box` | `Integration/AyuSandBoxAdapter.swift` | 32-element palette names/emoji, WATER default, the fixed source 150-wide grid and x1 speed, brush 1–16, empty initial scene, demo/save/load, `.sand` consumes the send | Native UIKit simulation, not the Android WebView/JS game; SVG tiles become native emoji/colour tiles |
+| `sand_box` | `Integration/AyuSandBoxAdapter.swift` | 32-element palette names/emoji, WATER default, the fixed source 150-wide grid and x1 speed, brush 1–16, empty initial scene, demo/save/load, `.sand` consumes the send | The pinned source's own `GAME_HTML` runs unchanged in a full-screen `WKWebView` with the same base URL and polling; iOS replaces the Android WebView and settings screen |
 | `ball` | `Integration/AyuBallAdapter.swift` | `counter` default true, `X<n>` combo near the ball, 1.6 s combo timeout, source gravity/radius/floor restitution, drag/tap play | Fullscreen native overlay instead of the Android decor overlay; peer avatar and gyroscope tilt are not available on this route |
 | `screenshot_privacy` | `Integration/AyuScreenshotPrivacyAdapter.swift` | `capture_mode` automatic/manual, manual “Режим скриншота” toggle | No FLAG_SECURE equivalent: a window shield hides everything before capture; it cannot mask individual names/avatars or delete an already saved screenshot |
-| `pull_next_chat` | `Integration/AyuPullNextChatAdapter.swift` | all source settings (`enabled`, source kinds, `target_mode`, target kinds, `strategy`, `muted`, `pinned_skip`, `other_folders`, `mark_unread`) and source texts | Two-finger upward swipe, because one-finger pull belongs to history scrolling; the real root/archive chat list applies the target/strategy/filter settings, while forum-topic rows keep stock Telegram behaviour |
+| `pull_next_chat` | `Integration/AyuPullNextChatAdapter.swift` | all source settings (`enabled`, source kinds, `target_mode`, target kinds, `strategy`, `muted`, `pinned_skip`, `other_folders`, `mark_unread`) and source texts | One-finger pull up at the newest message reuses Telegram's stock next-chat overscroll pill; the real root/archive chat list applies target/strategy/filter settings, channels keep stock behaviour, and forum topics stay stock |
 
 Atmospheric Snow remains on its separate exact-hash route and was not changed:
 4,237 lines, all 15 settings/migrations, lifecycle/reset, surface bindings,
@@ -119,9 +120,9 @@ API identifiers are safe audit data; plugin source and configuration are not bun
 | `passguard` | Explicit private-data/storage and UI lifecycle boundaries, platform security equivalents and media services; Android subclasses/file helpers cannot be silently emulated. |
 | `player_below` | Native player/composer placement and lifecycle hooks, gesture and layout ownership, animation acceptance from recorded frames. |
 | `profile_info` | Real peer/profile requests, image conversion and presentation; PIL/media/threading APIs need safe native services. |
-| `pull_next_chat` | Native route implemented as a two-finger swipe into the real chat list. Source target kinds, strategy and muted/pinned/other-folder/manual-unread filters are applied to root and archive dialogs. |
+| `pull_next_chat` | Native route implemented with one finger at the newest message, using Telegram's stock overscroll control outside channels. Source target kinds, strategy and muted/pinned/other-folder/manual-unread filters are applied to root and archive dialogs. |
 | `quick_stickers` | Sticker sets/media data and send services, input-panel lifecycle and native controls. |
-| `sand_box` | Native route implemented as a UIKit automaton. The Android WebView/JS `GAME_HTML` is not executed; palette and gameplay constants follow the source. |
+| `sand_box` | Native route implemented as the pinned source's `GAME_HTML` in a full-screen `WKWebView`; palette and gameplay constants come from the source unchanged. |
 | `screenshot_privacy` | Native route implemented as an honest shield: `capture_mode`, screen-capture observation, manual escape. No FLAG_SECURE, no deletion or sanitizing of an already saved screenshot. |
 | `side_panel` | Real account/chat navigation, native side-panel surface, gestures and layout/lifecycle hooks. |
 | `spekgram` | Message/TL model coverage, requests, media, lifecycle, menus, file services and native UI components; very broad Android/extera surface must be decomposed, not import-whitelisted. |
@@ -129,21 +130,29 @@ API identifiers are safe audit data; plugin source and configuration are not bun
 
 ## Device check for this phase
 
-Remove an older installed **Bridge smoke test** first, then use **Тест моста** to
-install bundled version 0.2.0. Enable only after trusting it. In its settings:
+This build has no general `.plugin` runtime. **Импортировать проверенный .plugin**
+accepts only these pinned sources:
 
-1. Verify load count and START/RESUME event; no Telegram message is sent.
-2. Tap **Проверить аккаунт и нативный диалог**: verify the displayed selected slot
-   and your account user ID, then press **Проверить callback**.
-3. Expect one success bulletin after the dialog closes, no duplicate callbacks.
-4. Switch account and repeat; IDs must follow the real selected account.
-5. Background/foreground then reopen settings: inspect STOP/RESUME. Locking,
-   disabling or changing account must remove bridge-owned UI without reviving it.
-6. Restart: plugins stay disabled; disabling preserves preferences; deleting this
-   synthetic plugin clears only its namespace.
+1. `atmospheric_snow.plugin` — NewYear Interface (native, Python-free).
+2. `ball.plugin` — Ball (native).
+3. `pull_next_chat.plugin` — Pull to Next Chat (native).
+4. `sand_box.plugin` — SandBox (native, WKWebView runs the audited `GAME_HTML`).
+5. `screenshot_privacy.plugin` — Screenshot Privacy (native shield).
+6. `group_mentions.plugin` — Group Mentions (the only pinned Python source).
 
-Visual expectation before recording: alert uses native presentation/dismissal;
-the next bulletin appears only after dismissal, above the bottom safe area, remains
-about three seconds, and disappears without leaving an orphan overlay. No duplicate
-overlay, off-screen text or flash during account/lock transitions. No frames have
-been recorded or evaluated, and no visual/FPS/runtime acceptance is claimed.
+Any other file must fail with the supported-plugin message before it is written
+or executed. Previously installed unsupported plugins stay visible only so they
+can be deleted; they cannot be enabled.
+
+For the supported routes:
+
+1. Import the exact source and enable it; the app rechecks its SHA-256.
+2. Native routes show settings implemented by their iOS adapters. Group Mentions
+   starts Python lazily only for its pinned source.
+3. Switch account and background/foreground: native surfaces and Group Mentions
+   callbacks must follow the real selected account and must stop cleanly.
+4. Restart: plugins stay disabled; disabling preserves preferences; deleting a
+   plugin clears only its namespace.
+
+No device run, plugin runtime run, frame recording, visual acceptance or FPS
+measurement has been performed. Build success proves compilation only.

@@ -6,6 +6,15 @@
   "device_launch_verified": false,
   "native_tests_executed": false,
   "plugins_runtime_verified": [],
+  "import_policy": "pinned_sources_only",
+  "supported_plugin_files": [
+    "atmospheric_snow.plugin",
+    "ball.plugin",
+    "group_mentions.plugin",
+    "pull_next_chat.plugin",
+    "sand_box.plugin",
+    "screenshot_privacy.plugin"
+  ],
   "source_total_lines": 40950,
   "sdk_sha256": {
     "Sources/AyuBridgeClassRegistry.swift": "8fada0484a66973bd0befcce7551efa9b8555e1b5b6cbe1589c08991c832b0ba",
@@ -13,7 +22,7 @@
     "Sources/AyuBridgeProtocol.swift": "603ffc0f6849c5369fb4342159703cbe4315a4ff4071a56464759d69beddd4fe",
     "Sources/AyuPluginNativeHost.swift": "a15b1d4676876488b8ef52834adb1a7717e286b2daf351d7471bd5d2a6b542a0",
     "Integration/AyuPluginApplicationBridge.swift": "adc6b20f53a01afe398267457227daacdfd1b16241ed63600fef6110c34ccaa8",
-    "Integration/AyuPluginService.swift": "00248558baa3760f8475f8169bc197d8772d4417172083641f9b0ef9b358a5ff",
+    "Integration/AyuPluginService.swift": "0cd2453024d7521f241299b92c629d617ad915106342fc15997f879f7b9f96f5",
     "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
     "Python/ayu_bridge.py": "ee2e5c07315293297c11cdfe962090ab43b0ada0b8401d3a1fadf28537ea38d6",
     "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
@@ -27,7 +36,8 @@
     "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
     "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
     "AST alias inspection is conservative, not a scope-aware Python resolver",
-    "Five source-pinned native routes exist (Atmospheric Snow plus four); Group Mentions executes its original source through the Python bridge and remains device-unverified",
+    "This build has no general plugin runtime: import accepts only the audited native sources and the one pinned Group Mentions source. Unknown .plugin files are rejected before any code is written or Python starts",
+    "Five source-pinned native routes exist (Atmospheric Snow plus four); Group Mentions executes its original source through a pinned Python path and remains device-unverified",
     "Native routes are host-authored iOS implementations of audited contracts, not translations or execution of Android/plugin code",
     "No native route or bridge route is device-verified, and build success proves compilation only"
   ],
