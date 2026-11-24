@@ -243,26 +243,28 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                             guard data.isComplete else {
                                 return
                             }
-                            let task = Task {
+                            let importURL = URL(fileURLWithPath: data.path)
+                            let _ = Task {
                                 do {
-                                    try await AyuPluginService.shared.importPlugin(from: URL(fileURLWithPath: data.path))
-                                    let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                                    if let navigationController = params.navigationController {
-                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                    try await AyuPluginService.shared.importPlugin(from: importURL)
+                                    await MainActor.run {
+                                        if let navigationController = params.navigationController {
+                                            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                                            navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                        }
                                     }
                                 } catch {
-                                    if let navigationController = params.navigationController {
-                                        let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                                        navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                    await MainActor.run {
+                                        if let navigationController = params.navigationController {
+                                            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                                            navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
+                                        }
                                     }
                                 }
                             }
-                            _ = task
                         })
                     }
-                    if let rootController = params.navigationController?.view.window?.rootViewController {
-                        params.present(textAlertController(context: params.context, title: "Plugin.InstallTitle".i18n(presentationData.strings.baseLanguageCode), text: fileName, actions: [TextAlertAction(type: .defaultAction, title: "Plugin.InstallAction".i18n(presentationData.strings.baseLanguageCode), action: install), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})]), nil, .window(.root))
-                    }
+                    params.present(textAlertController(context: params.context, title: "Plugin.InstallTitle".i18n(presentationData.strings.baseLanguageCode), text: fileName, actions: [TextAlertAction(type: .defaultAction, title: "Plugin.InstallAction".i18n(presentationData.strings.baseLanguageCode), action: install), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})]), nil, .window(.root))
                     return true
                 }
                 let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
