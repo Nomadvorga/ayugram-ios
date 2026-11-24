@@ -662,6 +662,9 @@ public final class AvatarNode: ASDisplayNode {
         public let imageNode: ImageNode
         private var imageNodeMask: UIImageView?
         public var editOverlayNode: AvatarEditOverlayNode?
+        /// Called after the displayed avatar image changes. Used by the chat list
+        /// to refresh a blurred card once the avatar has actually loaded.
+        public var imageUpdated: ((UIImage?) -> Void)?
         
         private let imageReadyDisposable = MetaDisposable()
         fileprivate var state: AvatarNodeState = .empty
@@ -734,6 +737,7 @@ public final class AvatarNode: ASDisplayNode {
                 }
                 
                 self.currentImage = image
+                self.imageUpdated?(image)
                 
                 guard let badgeView = self.badgeView, let parameters = self.parameters else {
                     return

@@ -47,20 +47,27 @@ public enum AyuDialogCardsMetrics {
     public static let fadeDuration: CFTimeInterval = 0.16
     public static let blurSourceSize: CGFloat = 90.0
 
-    public static let onlineFill = UIColor(red: 0xB1.0 / 255.0, green: 0xE5.0 / 255.0, blue: 0x48.0 / 255.0, alpha: 0x26.0 / 255.0)
-    public static let onlineBorder = UIColor(red: 0xB1.0 / 255.0, green: 0xE5.0 / 255.0, blue: 0x48.0 / 255.0, alpha: 1.0)
-    public static let mutedFill = UIColor(red: 0x22.0 / 255.0, green: 0x24.0 / 255.0, blue: 0x2B.0 / 255.0, alpha: 1.0)
-    public static let mutedBorder = UIColor(red: 0x43.0 / 255.0, green: 0x47.0 / 255.0, blue: 0x53.0 / 255.0, alpha: 1.0)
+    public static let onlineFill = color(0xB1, 0xE5, 0x48, 0x26)
+    public static let onlineBorder = color(0xB1, 0xE5, 0x48)
+    public static let mutedFill = color(0x22, 0x24, 0x2B)
+    public static let mutedBorder = color(0x43, 0x47, 0x53)
 
     /// `SPECIAL_COLORS` from the source: Saved Messages and the Telegram service chat.
-    public static let savedGradient = (top: UIColor(red: 0x28.0 / 255.0, green: 0x18.0 / 255.0, blue: 0x4F.0 / 255.0, alpha: 1.0),
-                                       bottom: UIColor(red: 0x12.0 / 255.0, green: 0x2D.0 / 255.0, blue: 0x5B.0 / 255.0, alpha: 1.0))
-    public static let serviceGradient = (top: UIColor(red: 0x0D.0 / 255.0, green: 0x3E.0 / 255.0, blue: 0x44.0 / 255.0, alpha: 1.0),
-                                         bottom: UIColor(red: 0x1A.0 / 255.0, green: 0x25.0 / 255.0, blue: 0x3B.0 / 255.0, alpha: 1.0))
+    public static let savedGradient = (top: color(0x28, 0x18, 0x4F),
+                                       bottom: color(0x12, 0x2D, 0x5B))
+    public static let serviceGradient = (top: color(0x0D, 0x3E, 0x44),
+                                         bottom: color(0x1A, 0x25, 0x3B))
     public static let servicePeerId: Int64 = 1271266957
     public static let placeholderColors: [UInt32] = [
         0xFFE17076, 0xFFFAA774, 0xFFA695E7, 0xFF7BC862, 0xFF6EC9CB, 0xFF65AADD, 0xFFEE7AEC,
     ]
+
+    private static func color(_ red: UInt32, _ green: UInt32, _ blue: UInt32, _ alpha: UInt32 = 255) -> UIColor {
+        return UIColor(red: CGFloat(red) / 255.0,
+                       green: CGFloat(green) / 255.0,
+                       blue: CGFloat(blue) / 255.0,
+                       alpha: CGFloat(alpha) / 255.0)
+    }
 
     /// `get_placeholder_color`: the avatar palette colour scaled by the darken
     /// percentage, used until a blurred avatar is available.
@@ -83,24 +90,38 @@ public enum AyuDialogCardsMetrics {
     }
 }
 
-/// Main-thread snapshot used by the chat list. The adapter updates it only when
-/// the plugin is enabled or a setting changes; reading it is a plain property
-/// load and never starts Python or decodes JSON. The type is deliberately not
-/// actor-isolated so the nonisolated chat-list layout code can read it without
-/// an async hop; every writer is on the main thread.
+/// Snapshot used by the chat list. The adapter updates it only when the plugin
+/// is enabled or a setting changes; reading it never starts Python or decodes
+/// JSON. The type is deliberately not actor-isolated so the nonisolated
+/// chat-list layout code can read it without an async hop; every writer is on
+/// the main thread and the small lock only protects cross-queue reads.
 public final class AyuDialogCardsState {
     public static let shared = AyuDialogCardsState()
     public static let didChange = Notification.Name("AyuDialogCardsStateDidChange")
 
-    public private(set) var style: AyuDialogCardsStyle?
+    private let lock = NSLock()
+    private var storage: AyuDialogCardsStyle?
+
+    /// Plain locked read: row layout may run off the main queue, and style
+    /// changes are rare, so this stays cheap without a main-thread hop.
+    public var style: AyuDialogCardsStyle? {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.storage
+    }
 
     private init() {}
 
     public func setStyle(_ style: AyuDialogCardsStyle?) {
-        guard self.style != style else {
+        self.lock.lock()
+        let changed = self.storage != style
+        if changed {
+            self.storage = style
+        }
+        self.lock.unlock()
+        guard changed else {
             return
         }
-        self.style = style
         NotificationCenter.default.post(name: AyuDialogCardsState.didChange, object: self)
     }
 }

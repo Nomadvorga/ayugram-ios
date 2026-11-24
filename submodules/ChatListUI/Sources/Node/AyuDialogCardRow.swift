@@ -21,7 +21,7 @@ struct AyuDialogCardInfo {
     let isMuted: Bool
     let isOnline: Bool
     let frame: CGRect
-    let avatarImage: UIImage?
+    var avatarImage: UIImage?
 }
 
 /// Shared LRU of finished 90 px, already tinted card bitmaps. The blur runs on a
@@ -31,34 +31,46 @@ struct AyuDialogCardInfo {
 final class AyuDialogCardImageCache {
     static let shared = AyuDialogCardImageCache()
 
+    private final class Entry {
+        weak var source: CGImage?
+        let image: CGImage
+        init(source: CGImage, image: CGImage) {
+            self.source = source
+            self.image = image
+        }
+    }
+
     private static let dimension = Int(AyuDialogCardsMetrics.blurSourceSize)
     private static let context = CIContext(options: [CIContextOption.cacheIntermediates: false])
     private static let colorSpace = CGColorSpaceCreateDeviceRGB()
 
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "org.telegram.ayu.dialogCards.blur", qos: .utility)
-    private var storage: [String: CGImage] = [:]
+    private var storage: [String: Entry] = [:]
     private var order: [String] = []
 
     private init() {}
 
-    func cached(_ key: String) -> CGImage? {
+    func cached(_ key: String, source: CGImage) -> CGImage? {
         self.lock.lock()
         defer { self.lock.unlock() }
-        guard let image = self.storage[key] else {
+        guard let entry = self.storage[key], entry.source === source else {
+            if self.storage.removeValue(forKey: key) != nil {
+                self.order.removeAll(where: { $0 == key })
+            }
             return nil
         }
         if let index = self.order.firstIndex(of: key) {
             self.order.remove(at: index)
             self.order.append(key)
         }
-        return image
+        return entry.image
     }
 
     func render(key: String, source: CGImage, placeholder: UIColor, blur: CGFloat, darken: CGFloat,
                 completion: @escaping (CGImage?) -> Void) {
-        if self.cached(key) != nil {
-            completion(self.cached(key))
+        if let cached = self.cached(key, source: source) {
+            completion(cached)
             return
         }
         let dimension = Self.dimension
@@ -68,19 +80,19 @@ final class AyuDialogCardImageCache {
                                                          blur: blur, darken: darken,
                                                          dimension: dimension, colorSpace: colorSpace)
             if let image {
-                self?.store(image, for: key)
+                self?.store(image, for: key, source: source)
             }
             completion(image)
         }
     }
 
-    private func store(_ image: CGImage, for key: String) {
+    private func store(_ image: CGImage, for key: String, source: CGImage) {
         self.lock.lock()
         defer { self.lock.unlock() }
         if self.storage[key] == nil {
             self.order.append(key)
         }
-        self.storage[key] = image
+        self.storage[key] = Entry(source: source, image: image)
         while self.order.count > 64 {
             let old = self.order.removeFirst()
             if old != key {
@@ -179,7 +191,7 @@ final class AyuDialogCardBackgroundView: UIView {
     }
 
     required init?(coder: NSCoder) {
-        return nil
+        fatalError("init(coder:) has not been implemented")
     }
 
     func apply(radius: CGFloat, special: AyuDialogCardSpecial?) {
@@ -304,7 +316,7 @@ final class AyuDialogCardOverlayView: UIView {
     }
 
     required init?(coder: NSCoder) {
-        return nil
+        fatalError("init(coder:) has not been implemented")
     }
 
     func apply(radius: CGFloat, fill: UIColor?, border: UIColor?, borderWidth: CGFloat) {
@@ -351,12 +363,29 @@ final class AyuDialogCardRow {
 
     init(hostView: UIView, separatorView: UIView) {
         self.hostView = hostView
-        hostView.insertSubview(self.backgroundView, aboveSubview: separatorView)
+        if separatorView.superview === hostView {
+            hostView.insertSubview(self.backgroundView, aboveSubview: separatorView)
+        } else {
+            hostView.insertSubview(self.backgroundView, at: 0)
+        }
         hostView.addSubview(self.overlayView)
+        self.backgroundView.isHidden = true
+        self.overlayView.isHidden = true
+    }
+
+    func updateAvatarImage(_ image: UIImage?) {
+        guard var info = self.current, info.avatarImage?.cgImage !== image?.cgImage else {
+            return
+        }
+        info.avatarImage = image
+        self.update(info)
     }
 
     func update(_ info: AyuDialogCardInfo?) {
         guard let info else {
+            guard self.current != nil || !self.backgroundView.isHidden || !self.overlayView.isHidden else {
+                return
+            }
             self.current = nil
             self.imageKey = nil
             self.pendingKey = nil
@@ -422,7 +451,7 @@ final class AyuDialogCardRow {
         }
 
         let key = "\(UInt(bitPattern: ObjectIdentifier(source)))|\(style.blur)|\(style.darken)"
-        if let cached = AyuDialogCardImageCache.shared.cached(key) {
+        if let cached = AyuDialogCardImageCache.shared.cached(key, source: source) {
             if self.imageKey != key {
                 self.imageKey = key
                 self.pendingKey = nil
