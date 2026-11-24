@@ -198,6 +198,7 @@ public class SGSimpleSettings {
         case lyricsInPlayer
         case hideSponsoredMessages
         case filterZalgoText
+        case commaAfterMention
         case combinedMediaViewer
         case hideAccountInNotifications
     }
@@ -360,6 +361,7 @@ public class SGSimpleSettings {
         Keys.lyricsInPlayer.rawValue: true,
         Keys.hideSponsoredMessages.rawValue: false,
         Keys.filterZalgoText.rawValue: false,
+        Keys.commaAfterMention.rawValue: false,
         Keys.combinedMediaViewer.rawValue: false,
     ]
     
@@ -666,6 +668,9 @@ public class SGSimpleSettings {
 
     @UserDefault(key: Keys.filterZalgoText.rawValue)
     public var filterZalgoText: Bool
+
+    @UserDefault(key: Keys.commaAfterMention.rawValue)
+    public var commaAfterMention: Bool
 
     @UserDefault(key: Keys.combinedMediaViewer.rawValue)
     public var combinedMediaViewer: Bool

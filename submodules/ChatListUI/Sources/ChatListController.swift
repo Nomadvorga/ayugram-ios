@@ -3929,13 +3929,29 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public static func openMoreMenu(context: AccountContext, peerId: EnginePeer.Id, sourceController: ViewController, isViewingAsTopics: Bool, sourceView: UIView, gesture: ContextGesture?) {
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
         |> deliverOnMainQueue).startStandalone(next: { [sourceController] peer in
+            let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+
+            var items: [ContextMenuItem] = []
+
+            items.append(.action(ContextMenuActionItem(text: "Export Chat", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak sourceController] _, f in
+                f(.default)
+                let _ = sgExportChatJSON(context: context, peerId: peerId.id, completion: { [weak sourceController] url in
+                    guard let sourceController, let url else {
+                        return
+                    }
+                    let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                    DispatchQueue.main.async {
+                        sourceController.view.window?.windowScene?.keyWindow?.rootViewController?.present(activityController, animated: true)
+                    }
+                })
+            })))
+
             guard case let .channel(channel) = peer else {
                 return
             }
-            
-            let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-            
-            var items: [ContextMenuItem] = []
+
             
             items.append(.action(ContextMenuActionItem(text: strings.Chat_ContextViewAsTopics, icon: { theme in
                 if !isViewingAsTopics {

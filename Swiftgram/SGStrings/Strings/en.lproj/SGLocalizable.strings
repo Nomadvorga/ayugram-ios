@@ -193,6 +193,7 @@
 "Player.Lyrics.NotFound" = "Lyrics not found for this track";
 "Settings.HideSponsoredMessages" = "Hide Sponsored Messages";
 "Settings.FilterZalgoText" = "Clean Zalgo Text";
+"Settings.CommaAfterMention" = "Add Comma After Mention (Ping)";
 "Settings.CombinedMediaViewer" = "Combined Media Viewer";
 "Settings.CombinedMediaViewer.Notice" = "Swipe between photos, videos and GIFs together when opening media in a chat.";
 

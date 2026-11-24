@@ -2829,21 +2829,22 @@ public final class MessageInputPanelComponent: Component {
                                     }
                                     
                                     if let range = mentionQueryRange {
+                                        let addComma = SGSimpleSettings.shared.commaAfterMention
                                         let inputText = NSMutableAttributedString(attributedString: inputState.inputText)
                                         if let addressName = peer.addressName, !addressName.isEmpty {
-                                            let replacementText = addressName + " "
+                                            let replacementText = addressName + (addComma ? ", " : " ")
                                             inputText.replaceCharacters(in: range, with: replacementText)
-                                            
+
                                             let selectionPosition = range.lowerBound + (replacementText as NSString).length
                                             textView.updateText(inputText, selectionRange: selectionPosition ..< selectionPosition)
                                         } else if !peer.compactDisplayTitle.isEmpty {
                                             let replacementText = NSMutableAttributedString()
                                             replacementText.append(NSAttributedString(string: peer.compactDisplayTitle, attributes: [ChatTextInputAttributes.textMention: ChatTextInputTextMentionAttribute(peerId: peer.id)]))
-                                            replacementText.append(NSAttributedString(string: " "))
-                                            
+                                            replacementText.append(NSAttributedString(string: addComma ? ", " : " "))
+
                                             let updatedRange = NSRange(location: range.location - 1, length: range.length + 1)
                                             inputText.replaceCharacters(in: updatedRange, with: replacementText)
-                                            
+
                                             let selectionPosition = updatedRange.lowerBound + replacementText.length
                                             textView.updateText(inputText, selectionRange: selectionPosition ..< selectionPosition)
                                         }
