@@ -32,6 +32,19 @@ public extension AyuBridgeHookPoint {
     var isMutable: Bool { Self.mutating.contains(self) }
 }
 
+/// The aggregate result of a publication: the possibly replaced payload, an
+/// explicit cancellation with its reason, and per-plugin failure records.
+public struct AyuBridgeHookOutcome: Sendable {
+    public let payload: [String: AyuBridgeValue]
+    public let cancelled: String?
+    public let failures: [String: String]
+    public init(payload: [String: AyuBridgeValue], cancelled: String?, failures: [String: String]) {
+        self.payload = payload
+        self.cancelled = cancelled
+        self.failures = failures
+    }
+}
+
 /// Capabilities a plugin requests at install. Denial names the missing
 /// capability; the predicate evaluates the request's declared scope, so a
 /// narrower request can pass where a broader one fails.

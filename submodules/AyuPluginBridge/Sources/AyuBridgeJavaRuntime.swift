@@ -222,16 +222,6 @@ enum AyuBridgeJavaRuntime {
                 return .value(.null)
             }
         }
-        let get: (String, Bool) -> AyuBridgeClassAdapter.InstanceMethod = { keyType, required in
-            { state, args, _ in
-                try Self.arity(args, 1)
-                let key = try Self.string(args[0], "bundle key")
-                guard let entries = state["entries"]?.object else { throw AyuBridgeFailure("invalid_arguments", "Invalid android.os.Bundle state") }
-                let stored = entries[key]
-                guard let stored, Self.matches(stored, keyType) else { return .value(.null) }
-                return .value(stored)
-            }
-        }
         return AyuBridgeClassAdapter(name: "android.os.Bundle",
             constructor: { args, _ in try Self.arity(args, 0); return ["entries": .object([:])] },
             methods: [
