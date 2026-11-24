@@ -1483,7 +1483,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         let special: AyuDialogCardSpecial?
         if peer.id == item.context.account.peerId {
             special = .saved
-        } else if peer.id._internalGetInt64Value() == AyuDialogCardsMetrics.servicePeerId {
+        } else if peer.id.toInt64() == AyuDialogCardsMetrics.servicePeerId {
             special = .service
         } else {
             special = nil
@@ -1496,7 +1496,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         )
         strongSelf.ayuDialogCardRow?.update(AyuDialogCardInfo(
             style: style,
-            peerId: peer.id._internalGetInt64Value(),
+            peerId: peer.id.toInt64(),
             special: special,
             isMuted: isMuted,
             isOnline: isOnline,
