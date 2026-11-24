@@ -31,7 +31,7 @@ public enum AyuBridgeMessageError: Error, Equatable, Sendable {
     case silentAndScheduleConflict
     case scheduleInPast(Date)
     case transportUnavailable(String)
-    case missingCapability(name: String)
+    case missingCapability(name: String, reason: String)
     case notEditable
 }
 
