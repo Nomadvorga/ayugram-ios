@@ -227,7 +227,7 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("AyuDialogCardsState.shared.style", item)
         self.assertIn("AyuDialogCardsMetrics.marginX", item)
         self.assertIn("ayuDialogCardRow?.update(nil)", item)
-        self.assertIn("self.avatarNode.imageUpdated = { [weak self] _ in", item)
+        self.assertIn("self.avatarNode.contentNode.imageUpdated = { [weak self] _ in", item)
         self.assertIn("updateAvatarImage(self.avatarNode.imageNode.image)", item)
         self.assertIn("strongSelf.onlineNode.isHidden = !style.showsOnlineBadge", item)
         controller = (ROOT / "submodules/ChatListUI/Sources/ChatListController.swift").read_text()

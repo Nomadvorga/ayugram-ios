@@ -1961,7 +1961,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
 
             self.ayuDialogCardRow = AyuDialogCardRow(hostView: self.view, separatorView: self.separatorNode.view)
-            self.avatarNode.imageUpdated = { [weak self] _ in
+            self.avatarNode.contentNode.imageUpdated = { [weak self] _ in
                 guard let self else {
                     return
                 }
