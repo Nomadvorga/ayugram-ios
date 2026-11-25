@@ -469,3 +469,4 @@
 "Extera.HideFloatingButtonInfo" = "Убирает кнопку создания сообщения из верхней панели списка чатов.";
 "Extera.Application" = "Приложение";
 "Extera.HideActionBarStatus" = "Скрыть статус в заголовке";
+"Extera.HideDialogsSearchBar" = "Скрыть строку поиска в списке чатов";

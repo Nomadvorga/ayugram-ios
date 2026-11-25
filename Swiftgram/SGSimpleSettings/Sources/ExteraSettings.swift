@@ -16,6 +16,7 @@ public final class ExteraSettings {
         case centerTitle
         case hideActionBarStatus
         case hideFloatingButton
+        case hideDialogsSearchBar
         case singleCornerRadius
         case avatarCorners
         case chatListTitle
@@ -62,6 +63,7 @@ public final class ExteraSettings {
             ExteraSettings.key(.centerTitle): false,
             ExteraSettings.key(.hideActionBarStatus): false,
             ExteraSettings.key(.hideFloatingButton): false,
+            ExteraSettings.key(.hideDialogsSearchBar): false,
             ExteraSettings.key(.singleCornerRadius): false,
             ExteraSettings.key(.avatarCorners): 28,
             ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
@@ -115,6 +117,11 @@ public final class ExteraSettings {
     /// exteraGram's "Hide floating button": on iOS the compose action lives in the chat list header.
     public var hideFloatingButton: Bool {
         return self.value(.hideFloatingButton)
+    }
+
+    /// exteraGram's "Hide dialogs search bar": the chat list's inline search field is not created.
+    public var hideDialogsSearchBar: Bool {
+        return self.value(.hideDialogsSearchBar)
     }
 
     public var singleCornerRadius: Bool {

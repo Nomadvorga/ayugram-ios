@@ -70,6 +70,7 @@ private enum SGBoolSetting: String {
     case hideStories
     case hideActionBarStatus
     case hideFloatingButton
+    case hideDialogsSearchBar
     case showNavigationBar
     case hideNavigationBarLabels
     case showContactsTab
@@ -300,6 +301,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideStories, value: settings.hideStories, text: i18n("Extera.HideStories", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideFloatingButton, value: ExteraSettings.shared.hideFloatingButton, text: i18n("Extera.HideFloatingButton", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.HideFloatingButtonInfo", lang)))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideDialogsSearchBar, value: ExteraSettings.shared.hideDialogsSearchBar, text: i18n("Extera.HideDialogsSearchBar", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .chatList, settingName: .chatListTitle, text: i18n("Extera.ActionBarTitle", lang), value: chatListTitleOption(ExteraSettings.shared.chatListTitle, lang: lang), enabled: true))
@@ -513,6 +515,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraSettings.shared.set(.hideActionBarStatus, value)
         case .hideFloatingButton:
             ExteraSettings.shared.set(.hideFloatingButton, value)
+        case .hideDialogsSearchBar:
+            ExteraSettings.shared.set(.hideDialogsSearchBar, value)
         case .hidePhoneNumber:
             settings.hidePhoneInSettings = value
             askForRestart?()

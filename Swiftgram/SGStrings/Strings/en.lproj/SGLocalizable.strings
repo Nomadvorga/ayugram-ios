@@ -484,3 +484,4 @@
 "Extera.HideFloatingButtonInfo" = "Removes the compose button from the chat list header.";
 "Extera.Application" = "Application";
 "Extera.HideActionBarStatus" = "Hide Status in Header";
+"Extera.HideDialogsSearchBar" = "Hide Search Bar in Chat List";
