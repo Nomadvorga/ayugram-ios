@@ -46,6 +46,9 @@ Implemented **subsets**, not complete Java classes:
 | AtomicLong | empty/value constructor, get, set, getAndSet, incrementAndGet, compareAndSet |
 | AtomicBoolean | empty/value constructor, get, set, compareAndSet |
 | System | currentTimeMillis, monotonic nanoTime |
+| Resources / Configuration | `Resources.getConfiguration()` returns an owned, read-only visible-screen snapshot; `Configuration.orientation` and `ORIENTATION_UNDEFINED`, `ORIENTATION_PORTRAIT`, `ORIENTATION_LANDSCAPE` only |
+| Gravity / TextView / LinearLayout / ScrollView | `Gravity` exposes a bounded subset of left/right/start/end/center/top/bottom constants. `TextView.setGravity` aligns text; `LinearLayout.setGravity` aligns its child group and cross-axis children; basic positive `LinearLayout.LayoutParams` weights divide remaining main-axis space. `ScrollView` owns one direct child in a bounded vertical `UIScrollView` backing. Fill/clip flags and per-child gravity are unsupported. |
+| Bundle / Intent / MotionEvent / Handler | Bounded local `Bundle` and `Intent` value containers, synthetic `MotionEvent` value snapshots, and `Handler.post`/`postDelayed` delivery through revocable callbacks. `Intent` does not launch OS activities; handler cancellation and Android queue/looper parity are unsupported. |
 
 Primitive descriptors: byte, short, int, long, char, boolean, float, double, void.
 Arrays support the eight non-void primitives, bounded by the existing transaction
@@ -62,17 +65,19 @@ the declared generation-owned click proxy; `get_static_private_field` exposes
 only declared constants/static readers; `get_client` forwards to an owned AccountClient and
 does not manufacture a Telegram provider.
 
-The hash-pinned 19-plugin requirements table lives in
+The hash-pinned plugin requirements table lives in
 `Resources/CommonBridge/compatibility.json` and its README. It records zero
 runtime-verified plugins. Atmospheric Snow retains its exact-hash native route;
-the other 18 remain blocked. The shared service now has narrow native account,
-visible-screen, basic alert/bulletin, generation-bound app-lifecycle and global
-account-change notification adapters. See `Resources/CommonBridge/APPLICATION-BRIDGES.md`
-for exact supported members. The only notification id is `activeAccountChanged`;
-observer proxies must be declared `NotificationCenter$NotificationCenterDelegate`
-values and delivery is asynchronous, owner/generation checked and quota-bounded.
-Theme control, requests/messages, method hooks, menus, graphics and media remain
-unsupported. Camera, passcode, screen-capture and destructive-message
+the other source routes have independent blockers. The shared service has narrow
+native account, visible-screen, basic alert/bulletin, generation-bound app-lifecycle,
+global account-change notification, clipboard-write and message-context-menu adapters.
+See `Resources/CommonBridge/APPLICATION-BRIDGES.md` for exact supported members.
+The only notification id is `activeAccountChanged`; observer proxies must be
+declared `NotificationCenter$NotificationCenterDelegate` values and delivery is
+asynchronous, owner/generation checked and quota-bounded. Only
+`MESSAGE_CONTEXT_MENU` is wired; Android MVEL conditions and other menu types
+remain unsupported. Theme control, requests/messages, method hooks, graphics
+and media remain unsupported. Camera, passcode, screen-capture and destructive-message
 features require real iOS adapters respecting platform and account invariants.
 
 Regenerate the static table with `Build/audit-plugin-requirements.py`, supplying
@@ -124,11 +129,12 @@ Execution module identity is always the unique `_ayu_plugin_<generation>` name r
 | settings.get | `{key:str, default:JSON}` | stored value or default; always owner-scoped |
 | settings.set | `{key:str, value:JSON, reload_settings:bool}` | null |
 | settings.all | `{}` | ordinary JSON dictionary of this owner's settings |
+| settings.replace | `{values:object,reload_settings:bool}` | null; validate all keys/values and encoded namespace quota before one owner-scoped write; `{}` clears it |
 | state.get | `{key:str, default:JSON}` | transient state value or default, owner-scoped |
 | state.set | `{key:str, value:JSON}` | null |
 | log.write | `{level:str,message:str}` | null |
 
-Persistent settings belong to plugin ID, transient native state/handles/jobs belong to plugin ID AND generation. Host handles storage type and size limits. Metadata literals are parsed without exec. Importing threading or `_thread` is load-rejected: original Music Bridge/Fish files requiring Python threads are therefore not fully compatible yet. No silent thread emulation is implemented.
+Persistent settings belong to plugin ID, transient native state/handles/jobs belong to plugin ID AND generation. Host handles storage type and size limits. Successful writes with `reload_settings=true` enqueue an owner/generation-tagged main-thread notification; settings screens coalesce refreshes and reject stale generations. Metadata literals are parsed without exec. Importing threading or `_thread` is load-rejected: original Music Bridge/Fish files requiring Python threads are therefore not fully compatible yet. No silent thread emulation is implemented.
 
 ## Scheduling and callbacks
 
@@ -136,7 +142,17 @@ Persistent settings belong to plugin ID, transient native state/handles/jobs bel
 
 `hooks.register`: `{kind:str,...config}` → opaque token string. Kinds used by SDK: `send_message`, `request` (name,priority), `java_method` (method native ref, before/after callback tags,priority), `java_all_methods` / `java_all_constructors` (class native value, optional name, before/after tags,priority). Unsupported hook kind/target must error before registering. Hook callback receives host-adapted JSON arguments/native refs. `hooks.unregister`: `{token:str}` → null.
 
-`menus.register`: `{type:str,text:str,on_click:callback,...config}` → opaque token. Config may include icon,priority,condition. `menus.unregister`: `{token:str}` → null.
+`menus.register`: `{type:str,text:str,on_click:callback,...config}` → opaque token.
+Only `MESSAGE_CONTEXT_MENU` is wired to the chat message context menu. Supported
+optional fields are `item_id` (string), `icon` (one of the native mapped icon
+names), `priority` (signed 32-bit integer), and `condition` (Python callback).
+`subtext`, `on_long_click`, MVEL condition strings, and other menu types reject
+explicitly. A condition and click callback receive one object containing exact
+signed-Int64 `account`, `dialog_id`, and `message_id` values; no Java message or
+fragment object is constructed. The native provider retains no adapter context,
+rechecks callback generation and current chat before dispatch, bounds
+registrations/evaluations, and revokes items on unregister or deactivate.
+`menus.unregister`: `{token:str}` → null.
 
 Tokens cannot be shared across owners. Host must not invoke retained callback IDs after cancel/deactivate. Python also checks generation and drops one-shot callbacks on invocation.
 
@@ -181,8 +197,10 @@ Not implemented: streaming/iter_content, multipart/files, auth helpers, custom c
 
 ## Limits and validation
 
-Python bounds: source 2 MB UTF-8, JSON input 4 million characters, nesting 64, 32 loaded scopes, 4096 callbacks and 1024 registrations per plugin. Native host must separately bound its handles/queues and preserve signed Int64 values. A cooperative `sys.settrace` CPU-time budget uses `time.thread_time` and checks every 64 original-source line events: load 2 CPU seconds, callback/event 250 CPU ms, settings/unload 500 CPU ms. The previous trace is restored. Elapsed wall time and I/O waits are not the budget. This interrupts ordinary Python loops but is catchable and cannot interrupt blocking native/stdlib calls; it is not a hostile-code watchdog or sandbox, and no native watchdog is implemented by this SDK.
+The source limit is **4 MiB UTF-8**, aligned across the installer, Objective-C load/preflight and Python inspection. Wire request/response limits remain independently bounded; AST depth/node quotas still apply even within the byte limit.
 
-No upstream requests/pip installation, Android emulator, arbitrary Java class/member, arbitrary Swift selector, Python native extension loader, unrestricted method hooking, Canvas/layout renderer, or background-thread compatibility is supplied in these Python files. The optional requests facade above is only its documented subset. Host capabilities must advertise only adapters really implemented. A plugin may pass static inspection and later request a dynamically computed unsupported API: it must then receive an explicit failure. Static inspection is a preflight, not proof of full compatibility or a security sandbox.
+Python bounds: source 4 MiB UTF-8, JSON input 4 million characters, nesting 64, 32 loaded scopes, 4096 callbacks and 1024 registrations per plugin. Native host must separately bound its handles/queues and preserve signed Int64 values. A cooperative `sys.settrace` CPU-time budget uses `time.thread_time` and checks every 64 original-source line events: load 2 CPU seconds, callback/event 250 CPU ms, settings/unload 500 CPU ms. The previous trace is restored. Elapsed wall time and I/O waits are not the budget. This interrupts ordinary Python loops but is catchable and cannot interrupt blocking native/stdlib calls; it is not a hostile-code watchdog or sandbox, and no native watchdog is implemented by this SDK.
+
+No upstream requests/pip installation, Android emulator, arbitrary Java class/member, arbitrary Swift selector, Python native extension loader, unrestricted method hooking, Android Canvas renderer, full Android layout engine, or background-thread compatibility is supplied in these Python files. The optional requests facade above is only its documented subset. Host capabilities must advertise only adapters really implemented. A plugin may pass static inspection and later request a dynamically computed unsupported API: it must then receive an explicit failure. Static inspection is a preflight, not proof of full compatibility or a security sandbox.
 
 Tests in Tests/Python use a fake injected host, test-authored synthetic source and offline source/hash fixtures only. They cover owner isolation, response validation, generation-bound lifecycle events, remote reference round trips, callback lifetime, unload cleanup, enums, undeclared classes and pre-execution rejection. HTTPS fixtures use a fake urllib opener and fake clock; no live service is contacted. No supplied plugin is executed. Offline source wiring and hash checks do not execute Swift, establish native UI behavior or verify device startup. Native integration still requires the authorized iOS test environment and real device/recorded-frame verification.

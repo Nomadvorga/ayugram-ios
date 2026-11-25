@@ -321,9 +321,9 @@ class BridgeTests(unittest.TestCase):
         with bridge.runtime.context(left):
             client = get_client(account=2)
             with patch.object(bridge.runtime, "call", return_value=None) as dispatch:
-                client.send_message(text="synthetic")
+                client.send_message({"peer": 7, "message": "synthetic"})
                 self.assertEqual(dispatch.call_args.args, ("client.call", {
-                    "name": "send_message", "args": [], "kwargs": {"text": "synthetic", "account": 2}}))
+                    "name": "send_message", "args": [{"peer": 7, "message": "synthetic"}], "kwargs": {"account": 2}}))
             with self.assertRaisesRegex(bridge.BridgeError, "UNSUPPORTED_API"):
                 client.get_user_config()
         with bridge.runtime.context(right):

@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import unittest
+import runpy
 
 BRIDGE = Path(__file__).resolve().parents[2]
 
@@ -69,11 +70,23 @@ class CommonBridgeCatalogTests(unittest.TestCase):
         catalog = (BRIDGE / "Integration/AyuNativePluginAdapter.swift").read_text()
         self.assertNotIn('id: "group_mentions"', catalog)
 
+    def test_clipboard_write_is_no_longer_a_missing_sdk_symbol(self):
+        for plugin in self.catalog["plugins"]:
+            symbols = plugin.get("unsupported_sdk_symbols", {})
+            self.assertNotIn("copy_to_clipboard", symbols.get("android_utils", []), plugin["file"])
+        fish = next(item for item in self.catalog["plugins"] if item["file"] == "fish_audio_integration.plugin")
+        self.assertIn("clipboard_write", fish["partially_wired_features"])
+
     def test_catalog_sdk_hashes_match_current_sources(self):
         for name, digest in self.catalog["sdk_sha256"].items():
             path = BRIDGE / name
             self.assertTrue(path.resolve().is_relative_to(BRIDGE))
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest, name)
+
+    def test_catalog_hash_inventory_covers_all_bundled_python_and_native_sources(self):
+        # The audit script is trusted tooling; it never imports the SDK or plugins.
+        audit = runpy.run_path(str(BRIDGE / "Build/audit-plugin-requirements.py"))
+        self.assertEqual(set(self.catalog["sdk_sha256"]), set(audit["implementation_hashes"](BRIDGE)))
 
     def test_java_facade_functions_are_not_invented_classes(self):
         forbidden = {"java.jclass", "java.jint", "java.jlong", "java.dynamic_proxy", "java.cast", "java.jarray"}

@@ -5,6 +5,7 @@ import UIKit
 /// Native JSON host. `dispatch` is synchronous for a Python C extension but is worker-only.
 /// Never call it from main or have main wait for the Python/host worker.
 public final class AyuPluginNativeHost: @unchecked Sendable {
+    public static let settingsDidChange = Notification.Name("AyuPluginNativeSettingsDidChange")
     public typealias CallbackSink = @Sendable (String, String, [AyuBridgeValue]) -> Void
     public typealias OwnerResolver = @Sendable () -> String?
     private struct Remote {
@@ -21,6 +22,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         var timerCallbacks: [String: String] = [:]
         var state: [String: AyuBridgeValue] = [:]
         var callbackIDs: Set<String> = []
+        var persistentCallbackIDs: Set<String> = []
     }
     private let worker = DispatchQueue(label: "AyuPluginBridge.native")
     private let workerKey = DispatchSpecificKey<Bool>()
@@ -161,6 +163,20 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             let key = try self.text(arguments, "key")
             return try self.settings(owner)[key] ?? arguments["default"] ?? .null
         case "settings.all": return .object(try self.settings(owner))
+        case "settings.replace":
+            guard Set(arguments.keys) == ["values", "reload_settings"],
+                  let values = arguments["values"]?.object,
+                  let reload = arguments["reload_settings"], case .bool = reload else { throw AyuBridgeFailure("invalid_arguments", "Invalid settings replacement") }
+            guard values.keys.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 && !$0.hasPrefix("$") }) else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid setting key")
+            }
+            try self.validatePersistentValue(.object(values))
+            let data = try JSONEncoder().encode(values)
+            guard data.count <= self.limits.settingsBytesPerPlugin else { throw AyuBridgeFailure("resource_limit", "Plugin settings quota exceeded") }
+            // Validate and encode the entire namespace before a single mutation.
+            self.defaults.set(data, forKey: self.settingsKey(owner))
+            if reload == .bool(true) { self.notifySettingsChanged(owner: owner) }
+            return .null
         case "settings.set":
             let key = try self.text(arguments, "key")
             guard key.utf8.count <= 256 else { throw AyuBridgeFailure("resource_limit", "Setting key is too long") }
@@ -170,7 +186,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             values[key] = setting
             let data = try JSONEncoder().encode(values)
             guard data.count <= self.limits.settingsBytesPerPlugin else { throw AyuBridgeFailure("resource_limit", "Plugin settings quota exceeded") }
-            self.defaults.set(data, forKey: self.settingsKey(owner)); return .null
+            self.defaults.set(data, forKey: self.settingsKey(owner))
+            if arguments["reload_settings"] == .bool(true) { self.notifySettingsChanged(owner: owner) }
+            return .null
         case "java.class":
             let name = try self.className(arguments)
             guard self.knownClass(name) else { throw AyuBridgeFailure.unsupported(name) }
@@ -193,7 +211,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                     } catch { self.objects = snapshot; throw error }
                 }
             }
-            if remote.kind == "layout", Self.layoutFields.contains(name) {
+            if remote.kind == "layout", self.isReadableLayoutField(name, className: remote.className) {
                 return .object(["kind": .string("field"), "value": remote.fields[name] ?? .integer(0)])
             }
             if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.readableFields.contains(name) == true {
@@ -212,14 +230,27 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 try self.validateAdapterState(fields, className: remote.className, owner: owner, replacing: target)
                 self.objects[target]?.fields = fields; return .null
             }
-            guard remote.kind == "layout", Self.layoutFields.contains(name) else { throw AyuBridgeFailure.unsupported(remote.className + "." + name) }
+            guard remote.kind == "layout", self.isReadableLayoutField(name, className: remote.className) else {
+                throw AyuBridgeFailure.unsupported(remote.className + "." + name)
+            }
             let number = try self.number(arguments["value"] ?? .null)
-            guard number >= 0 || ((name == "width" || name == "height") && (number == -1 || number == -2)) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout dimension") }
+            if name == "weight" {
+                guard number.isFinite, (0...100_000).contains(number) else { throw AyuBridgeFailure("invalid_arguments", "Invalid LinearLayout weight") }
+            } else {
+                guard number >= 0 || ((name == "width" || name == "height") && (number == -1 || number == -2)) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout dimension") }
+            }
             self.objects[target]?.fields[name] = .number(number); return .null
         case "java.release":
             let target = try self.target(arguments); let remote = try self.remote(target, owner: owner)
             guard !self.objects.values.contains(where: { $0.owner == owner && $0.fields["parent"]?.string == target }) else { throw AyuBridgeFailure("invalid_state", "Remove children before releasing their parent") }
             if remote.kind == "view" { DispatchQueue.main.sync { self.ui.release(owner: owner, handle: target) } }
+            if remote.kind == "proxy" {
+                let ids = remote.fields.values.compactMap { $0["$callback"].string }
+                self.sessions[owner]?.persistentCallbackIDs.subtract(ids)
+                for id in ids where self.sessions[owner]?.timerCallbacks.values.contains(id) != true {
+                    self.sessions[owner]?.callbackIDs.remove(id)
+                }
+            }
             self.objects.removeValue(forKey: target); return .null
         case "java.cast":
             let value = arguments["value"] ?? .null
@@ -255,8 +286,11 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         case "java.proxy":
             guard let interfaces = arguments["interfaces"]?.array, interfaces.count == 1, let name = interfaces.first?.string, let required = Self.proxyInterfaces[name] else { throw AyuBridgeFailure.unsupported("proxy interface") }
             guard let callbacks = arguments["callbacks"]?.object, Set(callbacks.keys) == Set(required) else { throw AyuBridgeFailure("invalid_arguments", "Proxy requires all declared interface callbacks") }
-            for callback in callbacks.values { _ = try self.callbackID(callback, owner: owner, method: "") }
-            return try self.store(owner: owner, className: name, kind: "proxy", fields: callbacks)
+            var callbackIDs: Set<String> = []
+            for callback in callbacks.values { callbackIDs.insert(try self.callbackID(callback, owner: owner, method: "")) }
+            let result = try self.store(owner: owner, className: name, kind: "proxy", fields: callbacks)
+            self.sessions[owner]?.persistentCallbackIDs.formUnion(callbackIDs)
+            return result
         case "scheduler.schedule":
             guard session.active else { throw AyuBridgeFailure("inactive_plugin", "Plugin is not active") }
             let queue = arguments["queue"]?.string ?? "pluginsQueue"
@@ -311,9 +345,19 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 if kind == "alert", config["view"] != nil {
                     return try self.presentCustomDialog(owner: owner, config: config, generation: session.generation)
                 }
-                if kind == "bulletin", let text = config["text"]?.string, let style = config["style"]?.string,
-                   ["simple", "success", "error"].contains(style), text.utf8.count <= 4096,
-                   DispatchQueue.main.sync(execute: { self.ui.hasVisibleCustomDialog(owner: owner) }) {
+                if kind == "bulletin", DispatchQueue.main.sync(execute: { self.ui.hasVisibleCustomDialog(owner: owner) }) {
+                    // The dialog-local overlay cannot validate screen fragments
+                    // or implement custom durations/buttons. Reject those options
+                    // instead of silently bypassing the application provider.
+                    guard Set(arguments.keys) == ["kind", "config"],
+                          Set(config.keys).isSubset(of: ["style", "text", "fragment"]),
+                          config["fragment"] == nil || config["fragment"] == .null else {
+                        throw AyuBridgeFailure.unsupported("custom-dialog bulletin options or fragment")
+                    }
+                    guard let text = config["text"]?.string, !text.isEmpty, text.utf8.count <= 4096,
+                          let style = config["style"]?.string, ["simple", "success", "error"].contains(style) else {
+                        throw AyuBridgeFailure("invalid_arguments", "Invalid custom-dialog bulletin")
+                    }
                     DispatchQueue.main.sync { self.ui.showDialogBulletin(owner: owner, text: text, style: style) }
                     return .null
                 }
@@ -343,10 +387,19 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             return try self.store(owner: owner, className: name, kind: "adapter", fields: fields)
         }
         if name.hasSuffix("$LayoutParams") {
-            guard args.count == 2 else { throw AyuBridgeFailure("invalid_arguments", "LayoutParams requires width and height") }
+            let isLinearParams = name == "android.widget.LinearLayout$LayoutParams"
+            guard args.count == 2 || (isLinearParams && args.count == 3) else {
+                throw AyuBridgeFailure("invalid_arguments", "LayoutParams requires width and height, with optional LinearLayout weight")
+            }
             let width = try self.number(args[0]); let height = try self.number(args[1])
             guard [width, height].allSatisfy({ $0 >= 0 || $0 == -1 || $0 == -2 }) else { throw AyuBridgeFailure("invalid_arguments", "Invalid layout size") }
-            return try self.store(owner: owner, className: name, kind: "layout", fields: ["width": .number(width), "height": .number(height)])
+            var fields: [String: AyuBridgeValue] = ["width": .number(width), "height": .number(height)]
+            if isLinearParams {
+                let weight = args.count == 3 ? try self.number(args[2]) : 0
+                guard weight.isFinite, (0...100_000).contains(weight) else { throw AyuBridgeFailure("invalid_arguments", "Invalid LinearLayout weight") }
+                fields["weight"] = .number(weight)
+            }
+            return try self.store(owner: owner, className: name, kind: "layout", fields: fields)
         }
         let contextArgument = args.isEmpty || (args.count == 1 && (args[0] == .null || args[0].object?["$handle"] != nil))
         guard Self.viewClasses.contains(name), contextArgument else { throw AyuBridgeFailure.unsupported("constructor " + name) }
@@ -437,8 +490,25 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             let snapshot = self.objects
             do {
                 let result = try handler(&fields, arguments["args"]?.array ?? [], self.adapterContext(owner: owner, generation: generation))
-                try self.validateAdapterState(fields, className: remote.className, owner: owner, replacing: handle)
+                do {
+                    try self.validateAdapterState(fields, className: remote.className, owner: owner, replacing: handle)
+                } catch {
+                    self.rollbackPreparedResult(result)
+                    throw error
+                }
                 self.objects[handle]?.fields = fields
+                if case let .instance(className, returnedFields) = result,
+                   className == remote.className,
+                   self.classRegistry.adapters[remote.className]?.receiverMethods.contains(method) == true {
+                    // Android mutators return the same object. Keep the
+                    // existing owner-scoped handle rather than allocating a
+                    // second identity for an Intent/View/Paint-style setter.
+                    try self.validateAdapterState(returnedFields, className: className, owner: owner, replacing: handle)
+                    let reference = self.reference(handle, className: className)
+                    try self.validateAdapterResponse(reference)
+                    self.objects[handle]?.fields = returnedFields
+                    return reference
+                }
                 return try self.adapterResult(result, owner: owner)
             } catch { self.objects = snapshot; throw error }
         }
@@ -483,24 +553,41 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let method = arguments["method"]?.string ?? arguments["name"]?.string ?? ""
         guard remote.kind == "view", Self.methods(for: remote.className).contains(method), let arity = Self.writeMethods[method] else { throw AyuBridgeFailure.unsupported(remote.className + "." + method) }
         var args = arguments["args"]?.array ?? []
-        guard args.count == arity else { throw AyuBridgeFailure("invalid_arguments", "Wrong argument count for " + method) }
+        let validArity = args.count == arity || (method == "addView" && args.count == 2)
+        guard validArity else { throw AyuBridgeFailure("invalid_arguments", "Wrong argument count for " + method) }
         try self.validateReferences(.array(args), owner: owner)
         if ["setText", "setTextColor", "setTextSize", "setHint", "setHintTextColor", "setSingleLine", "setMinLines"].contains(method), remote.className != "android.widget.TextView" && remote.className != "android.widget.EditText" { throw AyuBridgeFailure.unsupported(method) }
         if method == "setOrientation", remote.className != "android.widget.LinearLayout" { throw AyuBridgeFailure.unsupported(method) }
         if method == "setImageBase64", remote.className != "android.widget.ImageView" { throw AyuBridgeFailure.unsupported(method) }
         if method == "addView" || method == "removeView" {
-            guard ["android.widget.FrameLayout", "android.widget.LinearLayout"].contains(remote.className) else { throw AyuBridgeFailure.unsupported(method) }
+            guard ["android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView"].contains(remote.className) else { throw AyuBridgeFailure.unsupported(method) }
             let child = try self.handle(args[0]); let childRemote = try self.remote(child, owner: owner)
             guard childRemote.kind == "view", child != handle else { throw AyuBridgeFailure("invalid_arguments", "Expected a distinct child view") }
             if method == "addView" {
                 guard childRemote.fields["parent"] == nil else { throw AyuBridgeFailure("invalid_state", "Child already has a parent") }
                 var ancestor: String? = handle
                 while let current = ancestor { guard current != child else { throw AyuBridgeFailure("invalid_arguments", "View hierarchy cycle") }; ancestor = self.objects[current]?.fields["parent"]?.string }
+                if remote.className == "android.widget.ScrollView" {
+                    let childCount = self.objects.values.filter { $0.owner == owner && $0.fields["parent"]?.string == handle }.count
+                    guard childCount == 0 else { throw AyuBridgeFailure("invalid_state", "ScrollView accepts only one direct child") }
+                }
+                if args.count == 2 {
+                    let layout = try self.remote(self.handle(args[1]), owner: owner)
+                    guard layout.kind == "layout" else { throw AyuBridgeFailure("invalid_arguments", "Expected LayoutParams") }
+                    let accepted = remote.className == "android.widget.LinearLayout"
+                        ? ["android.view.ViewGroup$LayoutParams", "android.widget.LinearLayout$LayoutParams"].contains(layout.className)
+                        : ["android.view.ViewGroup$LayoutParams", "android.widget.FrameLayout$LayoutParams"].contains(layout.className)
+                    guard accepted else { throw AyuBridgeFailure("invalid_arguments", "LayoutParams do not match the parent") }
+                    args[1] = .object(layout.fields)
+                }
             } else if childRemote.fields["parent"]?.string != handle { throw AyuBridgeFailure("invalid_state", "View is not a child of this parent") }
         }
         if method == "setLayoutParams" {
             let layout = try self.remote(self.handle(args[0]), owner: owner)
             guard layout.kind == "layout" else { throw AyuBridgeFailure("invalid_arguments", "Expected LayoutParams") }
+            guard ["android.view.ViewGroup$LayoutParams", "android.widget.LinearLayout$LayoutParams", "android.widget.FrameLayout$LayoutParams"].contains(layout.className) else {
+                throw AyuBridgeFailure("invalid_arguments", "Unsupported LayoutParams class")
+            }
             args[0] = .object(layout.fields)
         } else if method == "setOnClickListener" || method == "setOnTouchListener" {
             if args[0] != .null { args[0] = .object(["$callback": .string(try self.callbackID(args[0], owner: owner, method: method == "setOnClickListener" ? "onClick" : "onTouch"))]) }
@@ -513,6 +600,12 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         } else if method == "setMinLines" {
             let lines = try self.number(args[0])
             guard lines >= 0, lines <= 64, lines == lines.rounded() else { throw AyuBridgeFailure("invalid_arguments", "Invalid line count") }
+        } else if method == "setGravity" {
+            guard let gravity = try? AyuBridgeViewGravity(args[0]) else { throw AyuBridgeFailure("invalid_arguments", "Unsupported gravity value") }
+            if remote.className == "android.widget.EditText", ![.unspecified, .center].contains(gravity.vertical) {
+                throw AyuBridgeFailure.unsupported("EditText vertical gravity")
+            }
+            args[0] = .integer(gravity.rawValue)
         } else if method == "setImageBase64" {
             guard let text = args[0].string, text.utf8.count <= 131_072, let data = Data(base64Encoded: text), let cost = self.imageCost(data) else { throw AyuBridgeFailure("invalid_arguments", "Expected a small bounded PNG or JPEG") }
             let otherCost = self.objects.filter { $0.key != handle && $0.value.owner == owner }.values.reduce(0) { $0 + Int($1.fields["image_cost"]?.number ?? 0) }
@@ -544,12 +637,19 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             return try self.adapterResult(reader(self.adapterContext(owner: owner, generation: session.generation)), owner: owner)
         }
         if remote.kind == "adapter", self.classRegistry.adapters[remote.className]?.readableFields.contains(name) == true { return remote.fields[name] ?? .null }
-        if remote.kind == "layout", Self.layoutFields.contains(name) { return remote.fields[name] ?? .number(0) }
+        if remote.kind == "layout", self.isReadableLayoutField(name, className: remote.className) { return remote.fields[name] ?? .number(0) }
         throw AyuBridgeFailure.unsupported(remote.className + "." + name)
     }
 
+    private func isReadableLayoutField(_ name: String, className: String) -> Bool {
+        Self.layoutFields.contains(name) || (className == "android.widget.LinearLayout$LayoutParams" && name == "weight")
+    }
+
     private func enqueueCallback(owner: String, generation: UUID, callbackID: String, arguments: [AyuBridgeValue], token: String? = nil) {
-        guard self.callbackGate.reserve(owner: owner, generation: generation, limit: self.limits.callbacksPerPlugin) else { return }
+        guard self.callbackGate.reserve(owner: owner, generation: generation, limit: self.limits.callbacksPerPlugin) else {
+            if let token { self.worker.async { self.finishTimer(owner: owner, token: token) } }
+            return
+        }
         self.worker.async {
             guard let session = self.sessions[owner], session.active, session.generation == generation, session.callbackIDs.contains(callbackID) else {
                 self.callbackGate.finish(owner: owner); return
@@ -557,7 +657,11 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             do {
                 try self.validateReferences(.array(arguments), owner: owner, registerCallbacks: false)
                 guard try JSONEncoder().encode(arguments).count <= self.limits.responseBytes else { throw AyuBridgeFailure("resource_limit", "Callback payload exceeds quota") }
-            } catch { self.callbackGate.finish(owner: owner); return }
+            } catch {
+                self.callbackGate.finish(owner: owner)
+                if let token { self.finishTimer(owner: owner, token: token) }
+                return
+            }
             let sink = self.callback
             self.delivery.async {
                 defer { self.callbackGate.finish(owner: owner) }
@@ -569,10 +673,48 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func finishTimer(owner: String, token: String) {
+        self.callbackGate.cancel(token: token, owner: owner)
         self.sessions[owner]?.timers.removeValue(forKey: token)
         if let id = self.sessions[owner]?.timerCallbacks.removeValue(forKey: token),
-           self.sessions[owner]?.timerCallbacks.values.contains(id) != true {
+           self.sessions[owner]?.timerCallbacks.values.contains(id) != true,
+           self.sessions[owner]?.persistentCallbackIDs.contains(id) != true {
             self.sessions[owner]?.callbackIDs.remove(id)
+        }
+    }
+
+    /// Handler adapters use the same bounded worker-owned timer table as the
+    /// scheduler API. The queued main hop retains no adapter context and is
+    /// harmless after generation revocation.
+    private func prepareAdapterCallback(owner: String, generation: UUID, callbackID: String, delayMilliseconds: Int64) throws -> AyuBridgeProviderResult {
+        guard let session = self.sessions[owner], session.active, session.generation == generation,
+              session.callbackIDs.contains(callbackID) else {
+            throw AyuBridgeFailure("callback_expired", "Callback is unavailable")
+        }
+        guard (0...60_000).contains(delayMilliseconds), session.timers.count < self.limits.callbacksPerPlugin else {
+            throw AyuBridgeFailure("resource_limit", "Handler pending callback limit exceeded")
+        }
+        return AyuBridgeProviderResult(.value(.bool(true)), commit: { [weak self] _ in
+            self?.scheduleAdapterCallback(owner: owner, generation: generation, callbackID: callbackID, delayMilliseconds: delayMilliseconds)
+        })
+    }
+
+    private func scheduleAdapterCallback(owner: String, generation: UUID, callbackID: String, delayMilliseconds: Int64) {
+        guard let session = self.sessions[owner], session.active, session.generation == generation,
+              session.callbackIDs.contains(callbackID), session.timers.count < self.limits.callbacksPerPlugin else { return }
+        let token = UUID().uuidString
+        self.callbackGate.register(token: token, owner: owner)
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.sessions[owner]?.generation == generation else { return }
+            DispatchQueue.main.async {
+                self.enqueueCallback(owner: owner, generation: generation, callbackID: callbackID, arguments: [], token: token)
+            }
+        }
+        self.sessions[owner]?.timers[token] = item
+        self.sessions[owner]?.timerCallbacks[token] = callbackID
+        if delayMilliseconds == 0 {
+            self.worker.async(execute: item)
+        } else {
+            self.worker.asyncAfter(deadline: .now() + Double(delayMilliseconds) / 1000.0, execute: item)
         }
     }
 
@@ -674,11 +816,25 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Callback resolution is worker-only") }
             guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("callback_expired", "Callback context generation expired") }
             try self.validateReferences(reference, owner: owner, registerCallbacks: false)
-            guard let id = reference["$callback"].string else { throw AyuBridgeFailure("invalid_arguments", "Expected a declared callback reference") }
+            let id: String
+            if let direct = reference["$callback"].string {
+                id = direct
+            } else {
+                let handle = try self.handle(reference)
+                let remote = try self.remote(handle, owner: owner)
+                guard remote.kind == "proxy", remote.className == "java.lang.Runnable",
+                      let run = remote.fields["run"], let proxyCallback = run["$callback"].string else {
+                    throw AyuBridgeFailure("invalid_arguments", "Expected a declared callback reference")
+                }
+                id = proxyCallback
+            }
+            guard self.sessions[owner]?.callbackIDs.contains(id) == true else {
+                throw AyuBridgeFailure("invalid_arguments", "Expected a declared callback reference")
+            }
             return AyuBridgeNativeCallback(id: id) { [weak self] arguments in
                 self?.enqueueCallback(owner: owner, generation: generation, callbackID: id, arguments: arguments)
             }
-        }) { [weak self] reference in
+        }, resolve: { [weak self] reference in
             guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Adapter context is worker-only") }
             guard self.sessions[owner]?.generation == generation else { throw AyuBridgeFailure("invalid_handle", "Adapter context generation expired") }
             try self.validateReferences(reference, owner: owner, registerCallbacks: false)
@@ -686,7 +842,10 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             let remote = try self.remote(self.handle(reference), owner: owner)
             guard remote.kind == "adapter" || remote.kind == "array" || remote.kind == "proxy" else { throw AyuBridgeFailure.unsupported("adapter state for " + remote.className) }
             return AyuBridgeAdapterSnapshot(className: remote.className, state: remote.fields)
-        }
+        }, schedule: { [weak self] callback, delayMilliseconds in
+            guard let self, DispatchQueue.getSpecific(key: self.workerKey) == true else { throw AyuBridgeFailure("wrong_queue", "Callback scheduling is worker-only") }
+            return try self.prepareAdapterCallback(owner: owner, generation: generation, callbackID: callback.id, delayMilliseconds: delayMilliseconds)
+        })
     }
     private func validateAdapterState(_ fields: [String: AyuBridgeValue], className: String, owner: String, replacing: String? = nil) throws {
         guard let adapter = self.classRegistry.adapters[className] else { throw AyuBridgeFailure.unsupported("adapter state class") }
@@ -718,6 +877,15 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         }
     }
 
+    /// A prepared result has not reached `adapterResult` when enclosing state
+    /// validation fails. Roll back every nested reservation exactly once in
+    /// that pre-commit path; `adapterResult` owns rollback after it starts.
+    private func rollbackPreparedResult(_ result: AyuBridgeAdapterResult) {
+        guard case let .prepared(prepared) = result else { return }
+        prepared.rollback()
+        self.rollbackPreparedResult(prepared.result)
+    }
+
     private func validateAdapterResponse(_ value: AyuBridgeValue) throws {
         // Reserve the largest request id; never commit an unencodable mutation.
         let response = AyuBridgeResponse(id: .string(String(repeating: "9", count: 128)), result: value, error: nil)
@@ -734,6 +902,14 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func settingsKey(_ owner: String) -> String { return "AyuPluginBridge.v1." + owner }
+    private func notifySettingsChanged(owner: String) {
+        guard let generation = self.sessions[owner]?.sdkGeneration else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(name: Self.settingsDidChange, object: self,
+                userInfo: ["pluginID": owner, "generation": generation])
+        }
+    }
     private func settings(_ owner: String) throws -> [String: AyuBridgeValue] {
         guard let data = self.defaults.data(forKey: self.settingsKey(owner)) else { return [:] }
         guard data.count <= self.limits.settingsBytesPerPlugin else { throw AyuBridgeFailure("resource_limit", "Saved settings exceed quota") }
@@ -759,8 +935,13 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return width.intValue * height.intValue * 4
     }
 
-    private let operations = ["runtime.capabilities", "plugin.authorize", "plugin.activate", "plugin.deactivate", "settings.get", "settings.set", "settings.all", "state.get", "state.set", "log.write", "java.member", "java.construct", "java.invoke", "java.get_field", "java.set_field", "java.get_private_field", "java.set_private_field", "java.array", "java.length", "java.get_item", "java.set_item", "java.cast", "java.proxy", "java.release", "scheduler.schedule", "scheduler.cancel", "ui.mount", "ui.transaction", "ui.animate", "host.metrics"]
-    private static let modules = ["base_plugin", "client_utils", "android_utils", "hook_utils", "java", "jarray", "tlrpc", "ui.settings", "ui.alert", "ui.bulletin", "plugin_settings", "requests", "requests.exceptions", "zwylib", "extera_utils"]
+    private let operations = ["runtime.capabilities", "plugin.authorize", "plugin.activate", "plugin.deactivate", "settings.get", "settings.set", "settings.all", "settings.replace", "state.get", "state.set", "log.write", "java.member", "java.construct", "java.invoke", "java.get_field", "java.set_field", "java.get_private_field", "java.set_private_field", "java.array", "java.length", "java.get_item", "java.set_item", "java.cast", "java.proxy", "java.release", "scheduler.schedule", "scheduler.cancel", "ui.mount", "ui.transaction", "ui.animate", "host.metrics"]
+    private static let modules = [
+        "base_plugin", "client_utils", "android_utils", "hook_utils", "java", "jarray", "tlrpc",
+        "ui", "ui.settings", "ui.alert", "ui.bulletin", "plugin_settings", "requests", "requests.exceptions", "zwylib",
+        "log_utils", "markdown_utils", "file_utils", "intents", "extera_utils", "extera_utils.classes",
+        "extera_utils.lifecycle", "extera_utils.text_formatting", "extera_utils.get_caller", "extera_utils.metadata_parser",
+    ]
     private static let proxyInterfaces: [String: [String]] = ["java.lang.Runnable": ["run"], "android.view.View$OnClickListener": ["onClick"], "android.view.View$OnTouchListener": ["onTouch"], "org.telegram.messenger.NotificationCenter$NotificationCenterDelegate": ["didReceivedNotification"]]
     private static let arrayClasses = ["byte": "[B", "short": "[S", "char": "[C", "int": "[I", "long": "[J", "float": "[F", "double": "[D", "boolean": "[Z"]
     static var primitiveArrayClassNames: Set<String> { Set(self.arrayClasses.values) }
@@ -813,21 +994,26 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return String(data: (try? JSONEncoder().encode(manifest)) ?? Data(), encoding: .utf8) ?? "{}"
     }
 
-    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView", "android.widget.EditText"]
+    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView", "android.widget.EditText", "android.widget.ScrollView"]
     private static let layoutFields: Set<String> = ["width", "height", "x", "y"]
     private static let classes: [String: [String: AyuBridgeValue]] = [
         "android.view.View": ["VISIBLE": .number(0), "INVISIBLE": .number(4), "GONE": .number(8)],
+        "android.view.Gravity": [
+            "NO_GRAVITY": .integer(0), "CENTER_HORIZONTAL": .integer(1), "LEFT": .integer(3), "RIGHT": .integer(5),
+            "CENTER_VERTICAL": .integer(16), "TOP": .integer(48), "BOTTOM": .integer(80), "CENTER": .integer(17),
+            "START": .integer(8_388_611), "END": .integer(8_388_613),
+        ],
         "android.view.ViewGroup": [:],
         "android.view.ViewGroup$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "android.widget.FrameLayout": [:], "android.widget.LinearLayout": ["HORIZONTAL": .number(0), "VERTICAL": .number(1)],
-        "android.widget.TextView": [:], "android.widget.ImageView": [:], "android.widget.EditText": [:],
+        "android.widget.TextView": [:], "android.widget.ImageView": [:], "android.widget.EditText": [:], "android.widget.ScrollView": [:],
         "android.widget.FrameLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "android.widget.LinearLayout$LayoutParams": ["MATCH_PARENT": .number(-1), "WRAP_CONTENT": .number(-2)],
         "java.lang.reflect.Method": [:], "[B": [:], "[S": [:], "[C": [:], "[I": [:], "[J": [:], "[F": [:], "[D": [:], "[Z": [:],
         "java.lang.Runnable": [:], "android.view.View$OnClickListener": [:], "android.view.View$OnTouchListener": [:]
     ]
     private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getAlpha", "getTranslationX", "getTranslationY", "getVisibility", "getText", "getChildCount"]
-    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setHint": 1, "setHintTextColor": 1, "setSingleLine": 1, "setMinLines": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
+    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setHint": 1, "setHintTextColor": 1, "setSingleLine": 1, "setMinLines": 1, "setGravity": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
     private static func methods(for name: String) -> Set<String> {
         if name == "java.lang.reflect.Method" { return ["getName"] }
         if name.hasSuffix("$LayoutParams") { return ["getClass"] }
@@ -835,8 +1021,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         var result = self.readMethods.union(self.writeMethods.keys).union(["getClass"])
         if name != "android.widget.TextView" && name != "android.widget.EditText" { result.subtract(["getText", "setText", "setTextSize", "setTextColor", "setHint", "setHintTextColor", "setSingleLine", "setMinLines"]) }
         if name != "android.widget.LinearLayout" { result.remove("setOrientation") }
+        if !["android.widget.TextView", "android.widget.EditText", "android.widget.LinearLayout"].contains(name) { result.remove("setGravity") }
         if name != "android.widget.ImageView" { result.remove("setImageBase64") }
-        if name != "android.widget.FrameLayout" && name != "android.widget.LinearLayout" { result.subtract(["addView", "removeView", "removeAllViews", "getChildCount"]) }
+        if !["android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView"].contains(name) { result.subtract(["addView", "removeView", "removeAllViews", "getChildCount"]) }
         return result
     }
 }

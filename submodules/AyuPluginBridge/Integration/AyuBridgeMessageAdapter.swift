@@ -108,6 +108,91 @@ public protocol AyuBridgeMessageTransport: Sendable {
     func delete(accountID: Int64, chatID: Int64, messageID: Int64) async throws
 }
 
+/// Integer tags emitted by the Python SDK's `HookResult.to_bridge()`.
+public enum AyuBridgeSendHookStrategy: Int64, Sendable {
+    case `default` = 0
+    case cancel = 1
+    case modify = 2
+    case modifyFinal = 3
+}
+
+/// Pure state for the SDK send-message callback chain. The caller owns callback
+/// ordering, generation checks and asynchronous delivery. Only message/caption
+/// strings are mutable; account and destination always come from the app.
+public struct AyuBridgeSendHookChain: Equatable, Sendable {
+    public static let maximumTextBytes = 65_536
+
+    public let accountIndex: Int64
+    public let peerID: Int64
+    public private(set) var message: String?
+    public private(set) var caption: String?
+    public private(set) var isCancelled = false
+    public private(set) var isFinal = false
+
+    public init(message: String?, caption: String?, peerID: Int64, accountIndex: Int64) {
+        self.message = message
+        self.caption = caption
+        self.peerID = peerID
+        self.accountIndex = accountIndex
+    }
+
+    public var isFinished: Bool { self.isCancelled || self.isFinal }
+
+    /// A fresh snapshot for each callback, with exact signed Int64 context.
+    /// Account is a separate callback argument, never a mutable params field.
+    public var arguments: [AyuBridgeValue] {
+        var params: [String: AyuBridgeValue] = ["peer": .integer(self.peerID)]
+        if let message = self.message { params["message"] = .string(message) }
+        if let caption = self.caption { params["caption"] = .string(caption) }
+        return [.integer(self.accountIndex), .object(params)]
+    }
+
+    /// Nil, unknown strategies and malformed changes keep the last valid content.
+    /// CANCEL stops immediately. MODIFY_FINAL stops even if its params are absent
+    /// or malformed, matching Android's final-result behavior. DEFAULT ignores
+    /// params. Missing mutable fields preserve their current values, while null
+    /// cannot remove a present field or inject an absent one. Empty captions are
+    /// valid; an empty text message is not a sendable replacement.
+    public mutating func apply(_ result: AyuBridgeValue?) {
+        guard !self.isFinished, let object = result?.object,
+              let raw = object["strategy"]?.integer,
+              let strategy = AyuBridgeSendHookStrategy(rawValue: raw) else { return }
+        switch strategy {
+        case .default:
+            return
+        case .cancel:
+            self.isCancelled = true
+        case .modify, .modifyFinal:
+            if let params = object["params"]?.object,
+               let replacement = self.validatedReplacement(params) {
+                self.message = replacement.message
+                self.caption = replacement.caption
+            }
+            self.isFinal = strategy == .modifyFinal
+        }
+    }
+
+    private func validatedReplacement(_ params: [String: AyuBridgeValue]) -> (message: String?, caption: String?)? {
+        guard Set(params.keys).isSubset(of: ["peer", "message", "caption"]) else { return nil }
+        if let peer = params["peer"], peer != .integer(self.peerID) { return nil }
+        var message = self.message
+        var caption = self.caption
+        for (key, current) in [("message", self.message), ("caption", self.caption)] {
+            guard let value = params[key] else { continue }
+            // An absent slot remains absent; plugins cannot switch the native
+            // send between a text message and a media caption.
+            if current == nil {
+                guard value == .null else { return nil }
+                continue
+            }
+            guard let text = value.string, text.utf8.count <= Self.maximumTextBytes,
+                  key != "message" || !text.isEmpty else { return nil }
+            if key == "message" { message = text } else { caption = text }
+        }
+        return (message, caption)
+    }
+}
+
 /// Converts Swift `String.CharacterView` offsets to Telegram's UTF-16 offsets.
 /// An entity over an astral-plane emoji (surrogate pair) is +2 UTF-16 units per
 /// code point, which is the correction plugins routinely get wrong.
@@ -147,7 +232,7 @@ public final class AyuBridgeMessageAdapter: Sendable {
         try request.validate(now: now)
         let pre = try self.hooks.publish(.messageSendPre, payload: ["request": AyuBridgeValue.encodable(request)])
         if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "send.cancelled", reason: reason) }
-        let sent = try await self.transport.send(self.decodeRequest(pre.payload))
+        let sent = try await self.transport.send(self.decodeRequest(pre.payload, original: request, now: now))
         _ = try self.hooks.publish(.messageSendPost, payload: ["message": AyuBridgeValue.encodable(sent)])
         return sent
     }
@@ -155,13 +240,13 @@ public final class AyuBridgeMessageAdapter: Sendable {
     public func edit(_ request: AyuBridgeEditMessageRequest) async throws -> AyuBridgeIncomingMessage {
         if let entities = request.entities {
             let content = request.text ?? request.caption ?? ""
-            for (index, entity) in entities.enumerated() where Int(entity.offset) + Int(entity.length) > (content as NSString).length {
+            for (index, entity) in entities.enumerated() where entity.offset < 0 || entity.length < 0 || Int(entity.offset) + Int(entity.length) > (content as NSString).length {
                 throw AyuBridgeMessageError.entityOutOfRange(index: index)
             }
         }
         let pre = try self.hooks.publish(.messageEditPre, payload: ["request": AyuBridgeValue.encodable(request)])
         if let reason = pre.cancelled { throw AyuBridgeMessageError.missingCapability(name: "edit.cancelled", reason: reason) }
-        let edited = try await self.transport.edit(self.decodeEditRequest(pre.payload))
+        let edited = try await self.transport.edit(self.decodeEditRequest(pre.payload, original: request))
         _ = try self.hooks.publish(.messageEditPost, payload: ["message": AyuBridgeValue.encodable(edited)])
         return edited
     }
@@ -172,14 +257,28 @@ public final class AyuBridgeMessageAdapter: Sendable {
         try await self.transport.delete(accountID: accountID, chatID: chatID, messageID: messageID)
     }
 
-    private func decodeRequest(_ payload: [String: AyuBridgeValue]) -> AyuBridgeOutgoingMessage {
-        let data = try? JSONEncoder().encode(payload["request"] ?? .null)
-        return (try? JSONDecoder().decode(AyuBridgeOutgoingMessage.self, from: data ?? Data())) ?? AyuBridgeOutgoingMessage(accountID: 0, chatID: 0, text: "")
+    private func decodeRequest(_ payload: [String: AyuBridgeValue], original: AyuBridgeOutgoingMessage, now: Date) -> AyuBridgeOutgoingMessage {
+        guard let data = try? JSONEncoder().encode(payload["request"] ?? .null),
+              let request = try? JSONDecoder().decode(AyuBridgeOutgoingMessage.self, from: data),
+              request.accountID == original.accountID, request.chatID == original.chatID,
+              Self.boundedText(request.text), Self.boundedText(request.caption),
+              (try? request.validate(now: now)) != nil else { return original }
+        return request
     }
 
-    private func decodeEditRequest(_ payload: [String: AyuBridgeValue]) -> AyuBridgeEditMessageRequest {
-        let data = try? JSONEncoder().encode(payload["request"] ?? .null)
-        return (try? JSONDecoder().decode(AyuBridgeEditMessageRequest.self, from: data ?? Data())) ?? AyuBridgeEditMessageRequest(accountID: 0, chatID: 0, messageID: 0)
+    private func decodeEditRequest(_ payload: [String: AyuBridgeValue], original: AyuBridgeEditMessageRequest) -> AyuBridgeEditMessageRequest {
+        guard let data = try? JSONEncoder().encode(payload["request"] ?? .null),
+              let request = try? JSONDecoder().decode(AyuBridgeEditMessageRequest.self, from: data),
+              request.accountID == original.accountID, request.chatID == original.chatID,
+              request.messageID == original.messageID,
+              Self.boundedText(request.text), Self.boundedText(request.caption) else { return original }
+        let length = ((request.text ?? request.caption ?? "") as NSString).length
+        guard (request.entities ?? []).allSatisfy({ $0.offset >= 0 && $0.length >= 0 && Int($0.offset) + Int($0.length) <= length }) else { return original }
+        return request
+    }
+
+    private static func boundedText(_ text: String?) -> Bool {
+        (text?.utf8.count ?? 0) <= AyuBridgeSendHookChain.maximumTextBytes
     }
 }
 

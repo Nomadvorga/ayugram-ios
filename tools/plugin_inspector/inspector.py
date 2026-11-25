@@ -7,15 +7,21 @@ import hashlib
 import json
 import re
 import sys
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 STATUSES = {"supported", "partial", "unsupported", "unknown"}
-MAX_SOURCE_BYTES = 2 * 1024 * 1024
+MAX_SOURCE_BYTES = 4 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_NODES = 100_000
-JAVA_PREFIXES = ("android.", "androidx.", "java.", "javax.", "org.telegram.", "com.exteragram.")
+JAVA_PREFIXES = ("android.", "androidx.", "java.", "javax.", "org.telegram.", "com.", "de.robv.", "dalvik.", "kotlin.", "okhttp3.", "okio.")
+SDK_ROOTS = frozenset({
+    "base_plugin", "client_utils", "android_utils", "hook_utils", "plugin_settings",
+    "ui", "extera_utils", "elyxcore", "file_utils", "intents", "log_utils",
+    "markdown_utils", "java", "jarray", "tlrpc", "zwylib",
+})
 SENSITIVE = re.compile(r"(?i)(?:api[_-]?key|secret|password|bearer|access[_-]?token|sk-[a-z0-9])")
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*$")
 REFLECTION = {"getClass", "getDeclaredMethod", "getDeclaredMethods", "getMethod", "getMethods", "getDeclaredField", "getDeclaredFields", "getField", "setAccessible", "invoke", "newInstance"}
@@ -116,6 +122,7 @@ class Inspector(ast.NodeVisitor):
         self.constants: list[dict[str, str | None]] = [{}]
         self.phase = "import"
         self.class_base: Ref | None = None
+        self.class_local_members: set[str] = set()
         self.findings: list[dict[str, Any]] = []
         self.seen: set[tuple[Any, ...]] = set()
         self.metadata: dict[str, Any] = {}
@@ -194,6 +201,8 @@ class Inspector(ast.NodeVisitor):
             parent = self.resolve(node.value)
             if parent is None:
                 return None
+            if parent.name == "base_plugin.BasePlugin" and node.attr in self.class_local_members:
+                return Ref("plugin_local", node.attr)
             if parent.kind in {"java_class", "java_instance"}:
                 return Ref("java_member", parent.name + "::" + node.attr)
             if parent.kind == "unresolved_java":
@@ -253,7 +262,7 @@ class Inspector(ast.NodeVisitor):
                 self.require(node, ref, "java_class_import")
                 if any(part in full for part in ("WindowManager", "DexClassLoader", "PathClassLoader", "Runtime")):
                     self.feature(node, "restricted_android_api", "Android system overlay, VM, or code-loading API needs an explicit policy and platform mapping.")
-            elif module in self.manifest.get("modules", {}) or module in {"java", "base_plugin", "client_utils", "hook_utils", "android_utils"} or module.startswith("ui."):
+            elif module in self.manifest.get("modules", {}) or module.split(".")[0] in SDK_ROOTS:
                 self.require(node, ref, "imported_symbol")
 
     def check_import(self, node: ast.AST, module: str) -> None:
@@ -393,13 +402,29 @@ class Inspector(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         previous_base = self.class_base
+        previous_members = self.class_local_members
+        # Calls to plugin-owned helpers and instance attributes are not SDK API
+        # requirements. Do not walk nested classes when collecting this class.
+        local_members = set()
+        pending = list(node.body)
+        while pending:
+            statement = pending.pop()
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                local_members.add(statement.name)
+            if isinstance(statement, ast.ClassDef):
+                continue
+            if isinstance(statement, ast.Attribute) and isinstance(statement.ctx, ast.Store):
+                if isinstance(statement.value, ast.Name) and statement.value.id == "self":
+                    local_members.add(statement.attr)
+            pending.extend(ast.iter_child_nodes(statement))
+        self.class_local_members = local_members
         self.class_base = None
         for base in node.bases:
             self.visit(base)
             ref = self.resolve(base)
             if ref and ref.name == "base_plugin.BasePlugin":
                 self.class_base = ref
-            if ref and ref.name in {"base_plugin.MethodHook", "base_plugin.MethodReplacement"}:
+            if ref and ref.name in {"base_plugin.MethodHook", "base_plugin.MethodReplacement", "base_plugin.BaseHook"}:
                 self.feature(base, "method_hooks", "MethodHook subclasses require explicit host lifecycle or method interception points.")
         for item in node.decorator_list + [kw.value for kw in node.keywords]:
             self.visit(item)
@@ -412,6 +437,7 @@ class Inspector(ast.NodeVisitor):
         self.constants.pop()
         self.scopes.pop()
         self.class_base = previous_base
+        self.class_local_members = previous_members
 
     def merge_branches(self, node: ast.AST, branches: list[list[ast.stmt]]) -> None:
         initial_scopes = [scope.copy() for scope in self.scopes]
@@ -515,8 +541,10 @@ class Inspector(ast.NodeVisitor):
                 self.add(node, "java_class_lookup", java_label(name), "unknown", "Computed or unlisted class names are not evaluated or printed.")
             if name and any(part in name for part in ("WindowManager", "DexClassLoader", "PathClassLoader", "dalvik.", "Runtime")):
                 self.feature(node, "restricted_android_api", "Android system overlay, VM, or code-loading API needs an explicit policy and platform mapping.")
-        elif raw_name == "java.dynamic_proxy":
+        elif raw_name in {"java.dynamic_proxy", "java.static_proxy"}:
             self.feature(node, "dynamic_proxy", "Java interface proxies require a callback mapping with lifetime management.")
+        elif raw_name in {"extera_utils.classes.java_class", "extera_utils.classes.java_subclass", "extera_utils.classes.java_method", "extera_utils.classes.java_constructor", "extera_utils.classes.java_field", "extera_utils.classes.joverride"}:
+            self.feature(node, "java_subclassing", "Java subclass declarations require explicit native inheritance and callback mappings.")
         elif raw_name in DYNAMIC or raw_name in {"builtins.eval", "builtins.exec", "builtins.compile", "builtins.__import__", "importlib.import_module"}:
             self.feature(node, "dynamic_code", "Computed code or imports cannot be inspected from this AST.", True)
         elif raw_name in {"getattr", "setattr", "delattr", "builtins.getattr", "builtins.setattr", "builtins.delattr"}:
@@ -547,7 +575,7 @@ class Inspector(ast.NodeVisitor):
                 self.feature(node, "unresolved_hook_target", "Method objects or constructor overloads need runtime target validation.", True)
         if ref and ref.kind in {"java_class", "java_member"}:
             self.require(node, ref, "java_call")
-        elif ref and (ref.name.startswith(("base_plugin.", "client_utils.", "android_utils.", "hook_utils.", "ui.", "java."))):
+        elif ref and ref.name.split(".")[0] in SDK_ROOTS:
             self.require(node, ref, "bridge_call")
         self.generic_visit(node)
 
@@ -564,7 +592,11 @@ def inspect_source(source: str | bytes, manifest: dict[str, Any] | None = None) 
         report["error"] = {"code": "source_too_large", "line": 0, "column": 0}
         return report
     try:
-        tree = ast.parse(raw, filename="<plugin>")
+        # Parsing can emit SyntaxWarning with source-derived text. Reports and
+        # CLI stderr must never disclose such diagnostics from attachments.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(raw, filename="<plugin>")
         if sum(1 for _ in ast.walk(tree)) > MAX_NODES:
             report["error"] = {"code": "ast_too_large", "line": 0, "column": 0}
             return report

@@ -24,6 +24,9 @@ SDK_FILES = (
     "_ayu_inspection.py", "android_utils.py", "ayu_bridge.py", "base_plugin.py",
     "client_utils.py", "hook_utils.py", "java.py", "plugin_settings.py",
     "requests.py", "ui/__init__.py", "ui/alert.py", "ui/bulletin.py", "ui/settings.py",
+    "jarray.py", "tlrpc.py", "zwylib.py", "log_utils.py", "markdown_utils.py", "file_utils.py", "intents.py",
+    "extera_utils/__init__.py", "extera_utils/classes.py", "extera_utils/lifecycle.py",
+    "extera_utils/text_formatting.py", "extera_utils/get_caller.py", "extera_utils/metadata_parser.py",
 )
 
 

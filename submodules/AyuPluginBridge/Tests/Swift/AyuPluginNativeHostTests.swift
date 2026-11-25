@@ -251,6 +251,334 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(stale["error"]["code"], .string("INVALID_HANDLE"))
     }
 
+    func testGravityConstantsAndViewSettersExposeOnlyTheImplementedSubset() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+
+        let gravity = self.classTarget("android.view.Gravity")
+        let center = try await self.call(host, "java.member", arguments: ["target": gravity, "name": .string("CENTER")])
+        XCTAssertEqual(center["result"], .object(["kind": .string("field"), "value": .integer(17)]))
+        let start = try await self.call(host, "java.get_private_field", arguments: ["target": gravity, "name": .string("START")])
+        XCTAssertEqual(start["result"], .integer(8_388_611))
+        let unsupportedFill = try await self.call(host, "java.member", arguments: ["target": gravity, "name": .string("FILL")])
+        XCTAssertEqual(unsupportedFill["error"]["code"], .string("UNSUPPORTED_API"))
+
+        let text = try await self.construct(host, "android.widget.TextView")
+        let textGravity = try await self.invoke(host, text["result"], "setGravity", [.integer(17)])
+        XCTAssertEqual(textGravity["result"], .null)
+        let invalid = try await self.invoke(host, text["result"], "setGravity", [.integer(112)])
+        XCTAssertEqual(invalid["error"]["code"], .string("INVALID_ARGUMENTS"))
+
+        let linear = try await self.construct(host, "android.widget.LinearLayout")
+        let linearGravity = try await self.invoke(host, linear["result"], "setGravity", [.integer(8_388_611)])
+        XCTAssertEqual(linearGravity["result"], .null)
+
+        let image = try await self.construct(host, "android.widget.ImageView")
+        let wrongClass = try await self.invoke(host, image["result"], "setGravity", [.integer(17)])
+        XCTAssertEqual(wrongClass["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
+    func testLinearLayoutParamsWeightIsTypedBoundedAndParentChecked() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let params = try await self.construct(host, "android.widget.LinearLayout$LayoutParams", [.integer(-1), .integer(0), .number(2)])
+        XCTAssertNotNil(params["result"]["$handle"].string)
+        let weight = try await self.call(host, "java.get_field", arguments: ["target": params["result"], "name": .string("weight")])
+        XCTAssertEqual(weight["result"], .integer(2))
+        let updatedWeight = try await self.call(host, "java.set_field", arguments: ["target": params["result"], "name": .string("weight"), "value": .number(4)])
+        XCTAssertEqual(updatedWeight["result"], .null)
+        let readUpdatedWeight = try await self.call(host, "java.get_private_field", arguments: ["target": params["result"], "name": .string("weight")])
+        XCTAssertEqual(readUpdatedWeight["result"], .integer(4))
+        let negativeWeight = try await self.call(host, "java.set_field", arguments: ["target": params["result"], "name": .string("weight"), "value": .number(-1)])
+        XCTAssertEqual(negativeWeight["error"]["code"], .string("INVALID_ARGUMENTS"))
+
+        let badWeight = try await self.construct(host, "android.widget.LinearLayout$LayoutParams", [.integer(-1), .integer(0), .number(-1)])
+        XCTAssertEqual(badWeight["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let frameParams = try await self.construct(host, "android.widget.FrameLayout$LayoutParams", [.integer(-1), .integer(-1)])
+        let linear = try await self.construct(host, "android.widget.LinearLayout")
+        let child = try await self.construct(host, "android.widget.TextView")
+        let mismatch = try await self.invoke(host, linear["result"], "addView", [child["result"], frameParams["result"]])
+        XCTAssertEqual(mismatch["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let accepted = try await self.invoke(host, linear["result"], "addView", [child["result"], params["result"]])
+        XCTAssertEqual(accepted["result"], .null)
+    }
+
+    func testStandardRegistryIntegratesBoundedBundleAndIntentValueAdapters() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let capabilities = try await self.call(host, "runtime.capabilities")
+        let classes = Set(capabilities["result"]["classes"].array?.compactMap(\.string) ?? [])
+        XCTAssertTrue(classes.contains("android.os.Bundle"))
+        XCTAssertTrue(classes.contains("android.content.Intent"))
+        XCTAssertFalse(classes.contains("android.graphics.Canvas"))
+
+        let bundle = try await self.construct(host, "android.os.Bundle")
+        let stored = try await self.invoke(host, bundle["result"], "putString", [.string("token"), .string("synthetic")])
+        XCTAssertEqual(stored["result"], .null)
+        let value = try await self.invoke(host, bundle["result"], "getString", [.string("token")])
+        XCTAssertEqual(value["result"], .string("synthetic"))
+
+        let intent = try await self.construct(host, "android.content.Intent", [.string("local-only")])
+        let action = try await self.invoke(host, intent["result"], "getAction")
+        XCTAssertEqual(action["result"], .string("local-only"))
+        let launch = try await self.invoke(host, intent["result"], "startActivity")
+        XCTAssertEqual(launch["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
+    func testSameClassAdapterMutatorsReuseTheExistingHandle() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+
+        let intent = try await self.construct(host, "android.content.Intent", [.string("before")])
+        let target = intent["result"]
+        let changed = try await self.invoke(host, target, "setAction", [.string("after")])
+        XCTAssertEqual(changed["result"]["$handle"], target["$handle"])
+        XCTAssertEqual(changed["result"]["$class"], target["$class"])
+        let action = try await self.invoke(host, target, "getAction")
+        XCTAssertEqual(action["result"], .string("after"))
+
+        let flags = try await self.invoke(host, target, "addFlags", [.integer(0x1000_0000)])
+        XCTAssertEqual(flags["result"]["$handle"], target["$handle"])
+        let categories = try await self.invoke(host, target, "addCategory", [.string("android.intent.category.DEFAULT")])
+        XCTAssertEqual(categories["result"]["$handle"], target["$handle"])
+    }
+
+    func testSameClassCopyResultAllocatesNewObjectInsteadOfReplacingReceiver() async throws {
+        let copyable = AyuBridgeClassAdapter(name: "example.Copyable", constructor: { _, _ in ["value": .integer(1)] },
+            methods: [
+                "setValue": { state, args, _ in
+                    guard args.count == 1 else { throw AyuBridgeFailure("invalid_arguments", "Expected one value") }
+                    state["value"] = args[0]
+                    return .instance(className: "example.Copyable", state: state)
+                },
+                "copy": { state, args, _ in
+                    guard args.isEmpty else { throw AyuBridgeFailure("invalid_arguments", "Expected no values") }
+                    return .instance(className: "example.Copyable", state: state)
+                },
+            ], readableFields: ["value"], writableFields: ["value"], receiverMethods: ["setValue"], validateState: { state in
+                guard Set(state.keys) == ["value"], state["value"]?.integer != nil else {
+                    throw AyuBridgeFailure("invalid_arguments", "Invalid copyable state")
+                }
+            })
+        let host = self.host(registry: try .standard.adding([copyable]))
+        try await self.authorize(host)
+
+        let original = try await self.construct(host, "example.Copyable")
+        let changed = try await self.invoke(host, original["result"], "setValue", [.integer(7)])
+        XCTAssertEqual(changed["result"]["$handle"], original["result"]["$handle"])
+        let copied = try await self.invoke(host, original["result"], "copy")
+        XCTAssertNotEqual(copied["result"]["$handle"], original["result"]["$handle"])
+        XCTAssertEqual(copied["result"]["$class"], .string("example.Copyable"))
+        let originalValue = try await self.call(host, "java.get_field", arguments: ["target": original["result"], "name": .string("value")])
+        let copiedValue = try await self.call(host, "java.get_field", arguments: ["target": copied["result"], "name": .string("value")])
+        XCTAssertEqual(originalValue["result"], .integer(7))
+        XCTAssertEqual(copiedValue["result"], .integer(7))
+    }
+
+    func testPreparedAdapterReservationsRollbackOnEnclosingStateValidationFailure() async throws {
+        let reservations = AyuBridgeTestReservationBox()
+        let adapter = AyuBridgeClassAdapter(name: "example.Prepared", constructor: { _, _ in ["value": .integer(1)] },
+            methods: [
+                "invalidSchema": { state, _, _ in
+                    state["value"] = .string("invalid")
+                    return .prepared(AyuBridgeProviderResult(.value(.null), rollback: { reservations.rollback() }, commit: { _ in reservations.commit() }))
+                },
+                "foreignReference": { state, _, _ in
+                    state["value"] = .object(["$handle": .string("foreign"), "$class": .string("example.Prepared")])
+                    return .prepared(AyuBridgeProviderResult(.value(.null), rollback: { reservations.rollback() }, commit: { _ in reservations.commit() }))
+                },
+                "overQuota": { state, _, _ in
+                    state["value"] = .string(String(repeating: "x", count: 512))
+                    return .prepared(AyuBridgeProviderResult(.value(.null), rollback: { reservations.rollback() }, commit: { _ in reservations.commit() }))
+                },
+            ], readableFields: ["value"], validateState: { state in
+                guard Set(state.keys) == ["value"], state["value"]?.integer != nil || state["value"]?.string != nil else {
+                    throw AyuBridgeFailure("invalid_arguments", "Invalid prepared state")
+                }
+                if state["value"]?.string == "invalid" { throw AyuBridgeFailure("invalid_arguments", "Invalid prepared value") }
+            })
+        var limits = AyuPluginBridgeLimits()
+        limits.adapterStateBytesPerPlugin = 128
+        let host = self.host(limits: limits, registry: try .standard.adding([adapter]))
+        try await self.authorize(host)
+        let object = try await self.construct(host, "example.Prepared")
+
+        for method in ["invalidSchema", "foreignReference", "overQuota"] {
+            let before = reservations.rollbackCount
+            let result = try await self.invoke(host, object["result"], method)
+            XCTAssertNotNil(result["error"]["code"].string, method)
+            XCTAssertEqual(reservations.rollbackCount, before + 1, method)
+            let value = try await self.call(host, "java.get_field", arguments: ["target": object["result"], "name": .string("value")])
+            XCTAssertEqual(value["result"], .integer(1), method)
+        }
+        XCTAssertEqual(reservations.commitCount, 0)
+    }
+
+    func testScrollViewAcceptsOnlyOneDirectChildAtATime() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+
+        let scroll = try await self.construct(host, "android.widget.ScrollView")
+        let first = try await self.construct(host, "android.widget.TextView")
+        let second = try await self.construct(host, "android.widget.TextView")
+        let scrollTarget = scroll["result"]
+
+        let mounted = try await self.invoke(host, scrollTarget, "addView", [first["result"]])
+        XCTAssertEqual(mounted["result"], .null)
+        let count = try await self.invoke(host, scrollTarget, "getChildCount")
+        XCTAssertEqual(count["result"], .integer(1))
+
+        let rejected = try await self.invoke(host, scrollTarget, "addView", [second["result"]])
+        XCTAssertEqual(rejected["error"]["code"], .string("INVALID_STATE"))
+
+        let removed = try await self.invoke(host, scrollTarget, "removeView", [first["result"]])
+        XCTAssertEqual(removed["result"], .null)
+        let remounted = try await self.invoke(host, scrollTarget, "addView", [second["result"]])
+        XCTAssertEqual(remounted["result"], .null)
+        let finalCount = try await self.invoke(host, scrollTarget, "getChildCount")
+        XCTAssertEqual(finalCount["result"], .integer(1))
+    }
+
+    func testScrollViewMeasuresWrapContentChildrenAndRelayoutsOnDirectChildResize() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let scroll = try await self.construct(host, "android.widget.ScrollView")
+        let linear = try await self.construct(host, "android.widget.LinearLayout")
+        let layout = try await self.construct(host, "android.widget.FrameLayout$LayoutParams", [.integer(-1), .integer(-2)])
+        _ = try await self.invoke(host, scroll["result"], "addView", [linear["result"], layout["result"]])
+
+        for index in 0..<20 {
+            let row = try await self.construct(host, "android.widget.TextView")
+            _ = try await self.invoke(host, row["result"], "setText", [.string("Scrollable row \(index) with intrinsic height")])
+            _ = try await self.invoke(host, linear["result"], "addView", [row["result"]])
+        }
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 240, height: 180))
+        let attached = XCTestExpectation(description: "mount container attached")
+        host.setMountContainer(container, pluginID: "alpha") { attached.fulfill() }
+        let attachedResult = await XCTWaiter.fulfillment(of: [attached], timeout: 1.0)
+        XCTAssertEqual(attachedResult, .completed)
+        let mounted = try await self.call(host, "ui.mount", arguments: ["target": scroll["result"]])
+        XCTAssertEqual(mounted["result"], .null)
+
+        let intrinsicHeight = try await self.invoke(host, linear["result"], "getHeight")
+        XCTAssertGreaterThan(intrinsicHeight["result"].number ?? 0, 180)
+
+        let fixedTall = try await self.construct(host, "android.widget.FrameLayout$LayoutParams", [.integer(-1), .integer(420)])
+        _ = try await self.invoke(host, linear["result"], "setLayoutParams", [fixedTall["result"]])
+        let tall = try await self.invoke(host, linear["result"], "getHeight")
+        XCTAssertEqual(tall["result"], .integer(420))
+
+        let fixedShort = try await self.construct(host, "android.widget.FrameLayout$LayoutParams", [.integer(-1), .integer(260)])
+        _ = try await self.invoke(host, linear["result"], "setLayoutParams", [fixedShort["result"]])
+        let short = try await self.invoke(host, linear["result"], "getHeight")
+        XCTAssertEqual(short["result"], .integer(260))
+    }
+
+    func testHandlerPostUsesRunnableProxyAndRemoveCallbacksFailsExplicitly() async throws {
+        let callback = XCTestExpectation(description: "handler callback")
+        let callbackAgain = XCTestExpectation(description: "handler callback can be posted again")
+        let callbackOwner = AyuBridgeTestCallbackBox()
+        let host = self.host(callback: { owner, callbackID, arguments in
+            if callbackOwner.store(owner: owner, callbackID: callbackID, arguments: arguments) == 1 {
+                callback.fulfill()
+            } else {
+                callbackAgain.fulfill()
+            }
+        })
+        try await self.authorize(host)
+        _ = try await self.call(host, "plugin.activate", arguments: ["generation": .string("handler-generation")])
+
+        let runnable = try await self.call(host, "java.proxy", arguments: [
+            "interfaces": .array([.string("java.lang.Runnable")]),
+            "callbacks": .object(["run": .object(["$callback": .string("handler-callback")])]),
+        ])
+        let handler = try await self.construct(host, "android.os.Handler")
+        let posted = try await self.invoke(host, handler["result"], "post", [runnable["result"]])
+        XCTAssertEqual(posted["result"], .bool(true))
+        let waitResult = await XCTWaiter.fulfillment(of: [callback], timeout: 1.0)
+        XCTAssertEqual(waitResult, .completed)
+        XCTAssertEqual(callbackOwner.owner, "alpha")
+        XCTAssertEqual(callbackOwner.callbackID, "handler-callback")
+        XCTAssertTrue(callbackOwner.arguments.isEmpty)
+
+        let postedAgain = try await self.invoke(host, handler["result"], "post", [runnable["result"]])
+        XCTAssertEqual(postedAgain["result"], .bool(true))
+        let secondWaitResult = await XCTWaiter.fulfillment(of: [callbackAgain], timeout: 1.0)
+        XCTAssertEqual(secondWaitResult, .completed)
+
+        let cancellation = try await self.invoke(host, handler["result"], "removeCallbacks", [runnable["result"]])
+        XCTAssertEqual(cancellation["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
+    func testHandlerPendingLimitAndUnloadRevokeDelayedCallback() async throws {
+        var limits = AyuPluginBridgeLimits()
+        limits.callbacksPerPlugin = 1
+        let callback = XCTestExpectation(description: "delayed handler callback must be revoked")
+        callback.isInverted = true
+        let host = self.host(limits: limits, callback: { _, _, _ in callback.fulfill() })
+        try await self.authorize(host)
+        _ = try await self.call(host, "plugin.activate", arguments: ["generation": .string("handler-generation")])
+        let runnable = try await self.call(host, "java.proxy", arguments: [
+            "interfaces": .array([.string("java.lang.Runnable")]),
+            "callbacks": .object(["run": .object(["$callback": .string("handler-callback")])]),
+        ])
+        let handler = try await self.construct(host, "android.os.Handler")
+        let invalidDelay = try await self.invoke(host, handler["result"], "postDelayed", [runnable["result"], .integer(-1)])
+        XCTAssertEqual(invalidDelay["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let delayed = try await self.invoke(host, handler["result"], "postDelayed", [runnable["result"], .integer(60_000)])
+        XCTAssertEqual(delayed["result"], .bool(true))
+        let overLimit = try await self.invoke(host, handler["result"], "postDelayed", [runnable["result"], .integer(60_000)])
+        XCTAssertEqual(overLimit["error"]["code"], .string("RESOURCE_LIMIT"))
+
+        _ = try await self.call(host, "plugin.deactivate", arguments: ["generation": .string("handler-generation")])
+        try await self.authorize(host)
+        _ = try await self.call(host, "plugin.activate", arguments: ["generation": .string("new-handler-generation")])
+        let waitResult = await XCTWaiter.fulfillment(of: [callback], timeout: 0.1)
+        XCTAssertEqual(waitResult, .completed)
+    }
+
+    func testSettingsReplacementClearsOnlyOwnerAndPersistsAcrossDetach() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        try await self.authorize(host, owner: "bravo")
+        _ = try await self.call(host, "settings.set", arguments: ["key": .string("old"), "value": .integer(1)])
+        _ = try await self.call(host, "settings.set", owner: "bravo", arguments: ["key": .string("keep"), "value": .integer(2)])
+        let replacement: AyuBridgeValue = .object(["exactID": .integer(Int64.max)])
+        let updated = try await self.call(host, "settings.replace", arguments: ["values": replacement, "reload_settings": .bool(true)])
+        XCTAssertEqual(updated["result"], .null)
+        let read = try await self.call(host, "settings.all")
+        XCTAssertEqual(read["result"], replacement)
+        _ = try await self.call(host, "plugin.deactivate")
+        try await self.authorize(host)
+        let restored = try await self.call(host, "settings.all")
+        XCTAssertEqual(restored["result"], replacement)
+        _ = try await self.call(host, "settings.replace", arguments: ["values": .object([:]), "reload_settings": .bool(false)])
+        let cleared = try await self.call(host, "settings.all")
+        XCTAssertEqual(cleared["result"], .object([:]))
+        let other = try await self.call(host, "settings.all", owner: "bravo")
+        XCTAssertEqual(other["result"], .object(["keep": .integer(2)]))
+    }
+
+    func testRejectedSettingsReplacementKeepsCompletePreviousNamespace() async throws {
+        var limits = AyuPluginBridgeLimits()
+        limits.settingsBytesPerPlugin = 128
+        let host = self.host(limits: limits)
+        try await self.authorize(host)
+        _ = try await self.call(host, "settings.set", arguments: ["key": .string("keep"), "value": .integer(1)])
+        let replacements: [AyuBridgeValue] = [
+            .object(["huge": .string(String(repeating: "x", count: 256))]),
+            .object(["": .integer(1)]),
+            .object(["nested": .object(["$reserved": .string("rejected")])]),
+        ]
+        for values in replacements {
+            let response = try await self.call(host, "settings.replace", arguments: ["values": values, "reload_settings": .bool(false)])
+            XCTAssertNotNil(response["error"]["code"].string)
+            let read = try await self.call(host, "settings.all")
+            XCTAssertEqual(read["result"], .object(["keep": .integer(1)]))
+        }
+    }
+
     func testObjectAndSettingsQuotas() async throws {
         var limits = AyuPluginBridgeLimits()
         limits.objectsPerPlugin = 1
@@ -327,6 +655,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertFalse(gate.enter(owner: "alpha", generation: old, token: "cancelled"))
         gate.revoke(owner: "alpha"); gate.activate(owner: "alpha", generation: new)
         XCTAssertFalse(gate.enter(owner: "alpha", generation: old, token: nil))
+        XCTAssertTrue(gate.reserve(owner: "alpha", generation: new, limit: 1))
     }
 }
 
@@ -337,5 +666,46 @@ private final class AyuBridgeTestContextBox: @unchecked Sendable {
     func storeOnce(_ value: AyuBridgeAdapterContext) {
         self.lock.lock(); defer { self.lock.unlock() }
         if self.context == nil { self.context = value }
+    }
+}
+
+private final class AyuBridgeTestCallbackBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedOwner: String?
+    private var storedCallbackID: String?
+    private var storedArguments: [AyuBridgeValue] = []
+
+    var owner: String? { self.lock.lock(); defer { self.lock.unlock() }; return self.storedOwner }
+    var callbackID: String? { self.lock.lock(); defer { self.lock.unlock() }; return self.storedCallbackID }
+    var arguments: [AyuBridgeValue] { self.lock.lock(); defer { self.lock.unlock() }; return self.storedArguments }
+
+    @discardableResult
+    func store(owner: String, callbackID: String, arguments: [AyuBridgeValue]) -> Int {
+        self.lock.lock(); defer { self.lock.unlock() }
+        self.storedOwner = owner
+        self.storedCallbackID = callbackID
+        self.storedArguments = arguments
+        self.count += 1
+        return self.count
+    }
+    private var count = 0
+}
+
+private final class AyuBridgeTestReservationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedRollbackCount = 0
+    private var storedCommitCount = 0
+
+    var rollbackCount: Int { self.lock.lock(); defer { self.lock.unlock() }; return self.storedRollbackCount }
+    var commitCount: Int { self.lock.lock(); defer { self.lock.unlock() }; return self.storedCommitCount }
+
+    func rollback() {
+        self.lock.lock(); defer { self.lock.unlock() }
+        self.storedRollbackCount += 1
+    }
+
+    func commit() {
+        self.lock.lock(); defer { self.lock.unlock() }
+        self.storedCommitCount += 1
     }
 }

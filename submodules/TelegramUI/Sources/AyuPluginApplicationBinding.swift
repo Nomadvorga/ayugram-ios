@@ -110,6 +110,26 @@ import UIKit
         return self.slots[id]
     }
 
+    /// Pin and later revalidate the real visible root and account identity.
+    /// `screen()` fails closed when the app is locked, inactive or covered.
+    func pluginMenuContext(accountID: AccountRecordId, peerID: PeerId, messageID: Int64) -> AyuPluginMenuContext? {
+        guard messageID > 0, self.active, !self.locked,
+              let accountIndex = self.slots[accountID], let accountIdentity = self.identities[accountID],
+              let dialogID = AyuPluginMessageMenuInvocation.dialogID(for: peerID),
+              let visible = self.screen(), visible.accountIndex == accountIndex, visible.dialogID == dialogID else { return nil }
+        return AyuPluginMenuContext(screenIdentity: visible.identity, accountIdentity: accountIdentity,
+            accountIndex: accountIndex, dialogID: dialogID, messageID: messageID)
+    }
+
+    func isCurrentPluginMenuContext(_ context: AyuPluginMenuContext, accountID: AccountRecordId, peerID: PeerId) -> Bool {
+        guard self.active, !self.locked, self.slots[accountID] == context.accountIndex,
+              self.identities[accountID] == context.accountIdentity,
+              let dialogID = AyuPluginMessageMenuInvocation.dialogID(for: peerID), dialogID == context.dialogID,
+              let visible = self.screen(), visible.identity == context.screenIdentity,
+              visible.accountIndex == context.accountIndex, visible.dialogID == context.dialogID else { return false }
+        return true
+    }
+
     private func visibleController() -> (Int64, UIViewController)? {
         guard self.active, !self.locked, let (id, root) = self.root(), id == self.primaryID,
               let slot = self.slots[id], self.identities[id] != nil else { return nil }

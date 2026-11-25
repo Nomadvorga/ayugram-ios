@@ -107,7 +107,7 @@ class VerifyIPAHelperTests(unittest.TestCase):
         self.assertEqual(result["python_extensions"], "embedded, not startup-linked")
         self.assertEqual(result["device_launch"], "not tested")
         self.assertEqual(result["plugin_runtime_resources"], "verified")
-        self.assertEqual(result["plugin_sdk_files"], 13)
+        self.assertEqual(result["plugin_sdk_files"], len(verify.SDK_FILES))
 
     def test_resource_bundles_can_be_data_only_without_info_plist(self):
         entries = fixture()

@@ -10,10 +10,20 @@ ROOT = BRIDGE.parents[1]
 class ApplicationBridgeWiringTests(unittest.TestCase):
     def test_singleton_installs_real_provider_without_changing_snow_route(self):
         service = (BRIDGE / "Integration/AyuPluginService.swift").read_text()
-        for text in ["let application = AyuPluginApplicationBridge.shared", "provider: application, classRegistry: try application.classRegistry()",
+        for text in ["let application = AyuPluginApplicationBridge.shared",
+                     "let provider = AyuPluginMenuHostProvider(application: application)",
+                     "AyuPluginService(provider: provider, classRegistry: try application.classRegistry())",
                      "if let record = AyuAtmosphericPluginAdapter.record(for: data)", "adapter.enable()",
                      "try await self.prepareRuntime()", "self.runtime.load(source: source, filename: id + \".plugin\", completion: $0)"]:
             self.assertIn(text, service)
+        menu = (BRIDGE / "Integration/AyuPluginMenuBridge.swift").read_text()
+        self.assertIn('"MESSAGE_CONTEXT_MENU"', menu)
+        self.assertIn("self.menus.detach(pluginID: pluginID); self.application.detach(pluginID: pluginID)", menu)
+        binding = (ROOT / "submodules/TelegramUI/Sources/Chat/ChatControllerOpenMessageContextMenu.swift").read_text()
+        self.assertIn("AyuPluginMessageContextMenu.appending(to: actionsSignal", binding)
+        menu_ui = (ROOT / "submodules/TelegramUI/Sources/Chat/AyuPluginMessageContextMenu.swift").read_text()
+        self.assertLess(menu_ui.index("subscriber.putNext(items)"), menu_ui.index("AyuPluginMenuBridge.shared.items"))
+        self.assertIn("invocation.isCurrentMenu()", menu_ui)
 
     def test_app_binding_uses_real_signals_and_explicit_authorized_root(self):
         binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()

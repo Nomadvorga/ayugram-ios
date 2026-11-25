@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import MediaPlayer
 import AVFAudio
 import SGSimpleSettings
@@ -236,35 +237,37 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
             case let .document(file, immediateShare):
                 params.dismissInput()
                 if !immediateShare, let fileName = file.fileName, (fileName as NSString).pathExtension.lowercased() == "plugin" {
-                    let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                    let install: () -> Void = {
-                        let _ = (params.context.engine.resources.data(resource: EngineMediaResource(file.resource), waitUntilFetchStatus: true)
-                        |> deliverOnMainQueue).startStandalone(next: { data in
-                            guard data.isComplete else {
-                                return
+                    let _ = Task { @MainActor in
+                        guard var presenter = params.navigationController?.view.window?.rootViewController else { return }
+                        var depth = 0
+                        while let presented = presenter.presentedViewController, !presented.isBeingDismissed, depth < 8 {
+                            presenter = presented
+                            depth += 1
+                        }
+                        let detail = AyuPluginDetailViewController(fileName: fileName)
+                        let navigationController = UINavigationController(rootViewController: detail)
+                        let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                        navigationController.overrideUserInterfaceStyle = presentationData.theme.overallDarkAppearance ? .dark : .light
+                        navigationController.view.tintColor = presentationData.theme.rootController.navigationBar.accentTextColor
+                        navigationController.modalPresentationStyle = .pageSheet
+                        presenter.present(navigationController, animated: true)
+                        // Preserve the document name: media-cache paths have no .plugin extension.
+                        // Opening an attachment only inspects it; Install belongs to the detail screen.
+                        let requests = DisposableSet()
+                        requests.add((params.context.engine.resources.data(resource: EngineMediaResource(file.resource), waitUntilFetchStatus: true)
+                        |> filter { $0.isComplete }
+                        |> take(1)
+                        |> deliverOnMainQueue).start(next: { [weak detail] data in
+                            let _ = Task { @MainActor [weak detail] in
+                                detail?.loadPlugin(from: URL(fileURLWithPath: data.path))
                             }
-                            let importURL = URL(fileURLWithPath: data.path)
-                            let _ = Task {
-                                do {
-                                    try await AyuPluginService.shared.importPlugin(from: importURL)
-                                    await MainActor.run {
-                                        if let navigationController = params.navigationController {
-                                            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                                            navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.Installed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
-                                        }
-                                    }
-                                } catch {
-                                    await MainActor.run {
-                                        if let navigationController = params.navigationController {
-                                            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                                            navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Plugin.InstallFailed".i18n(presentationData.strings.baseLanguageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return true }))
-                                        }
-                                    }
-                                }
-                            }
-                        })
+                        }))
+                        let reference = FileMediaReference.message(message: MessageReference(params.message), media: file)
+                        requests.add(params.context.engine.resources.fetch(reference: reference.resourceReference(file.resource), userLocation: .peer(params.message.id.peerId), userContentType: MediaResourceUserContentType(file: file)).start(error: { [weak detail] _ in
+                            let _ = Task { @MainActor [weak detail] in detail?.sourceUnavailable() }
+                        }))
+                        detail.cancelSourceRequest = { requests.dispose() }
                     }
-                    params.present(textAlertController(context: params.context, title: "Plugin.InstallTitle".i18n(presentationData.strings.baseLanguageCode), text: fileName, actions: [TextAlertAction(type: .defaultAction, title: "Plugin.InstallAction".i18n(presentationData.strings.baseLanguageCode), action: install), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})]), nil, .window(.root))
                     return true
                 }
                 let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }

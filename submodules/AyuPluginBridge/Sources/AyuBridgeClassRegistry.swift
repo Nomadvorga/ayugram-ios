@@ -15,16 +15,20 @@ public struct AyuBridgeClassAdapter: Sendable {
     public let methods: [String: InstanceMethod]
     public let readableFields: Set<String>
     public let writableFields: Set<String>
+    /// Instance methods whose returned same-class state is the receiver's
+    /// updated state rather than a request to allocate a new object. Other
+    /// `.instance` results remain distinct owned objects.
+    public let receiverMethods: Set<String>
     public let validateState: @Sendable ([String: AyuBridgeValue]) throws -> Void
 
     public init(name: String, constants: [String: AyuBridgeValue] = [:], constructor: Constructor? = nil,
                 staticMethods: [String: StaticMethod] = [:], staticFields: [String: StaticField] = [:], methods: [String: InstanceMethod] = [:],
-                readableFields: Set<String> = [], writableFields: Set<String> = [],
-                validateState: @escaping @Sendable ([String: AyuBridgeValue]) throws -> Void = { _ in }) {
+                 readableFields: Set<String> = [], writableFields: Set<String> = [], receiverMethods: Set<String> = [],
+                 validateState: @escaping @Sendable ([String: AyuBridgeValue]) throws -> Void = { _ in }) {
         self.name = name; self.constants = constants; self.constructor = constructor
         self.staticMethods = staticMethods; self.methods = methods
         self.staticFields = staticFields
-        self.readableFields = readableFields; self.writableFields = writableFields
+        self.readableFields = readableFields; self.writableFields = writableFields; self.receiverMethods = receiverMethods
         self.validateState = validateState
     }
 }
@@ -43,15 +47,23 @@ public struct AyuBridgeAdapterContext: Sendable {
     public let pluginID: String
     private let resolve: @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot
     private let resolveCallback: @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback
+    private let schedule: (@Sendable (AyuBridgeNativeCallback, Int64) throws -> AyuBridgeProviderResult)?
     init(pluginID: String, resolveCallback: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback,
-         resolve: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot) {
-        self.pluginID = pluginID; self.resolve = resolve; self.resolveCallback = resolveCallback
+         resolve: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot,
+         schedule: (@Sendable (AyuBridgeNativeCallback, Int64) throws -> AyuBridgeProviderResult)? = nil) {
+        self.pluginID = pluginID; self.resolve = resolve; self.resolveCallback = resolveCallback; self.schedule = schedule
     }
     public func snapshot(of reference: AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot { try self.resolve(reference) }
     public func state(of reference: AyuBridgeValue) throws -> [String: AyuBridgeValue] { try self.resolve(reference).state }
     /// Resolve on the host worker, then retain only this revocable native sender,
     /// never the context itself. It cannot mint Python callback identities.
     public func callback(_ reference: AyuBridgeValue) throws -> AyuBridgeNativeCallback { try self.resolveCallback(reference) }
+    /// Enqueue a bounded, generation-revocable callback on the host. Adapters
+    /// that do not receive a host scheduler fail explicitly.
+    public func schedule(_ callback: AyuBridgeNativeCallback, delayMilliseconds: Int64 = 0) throws -> AyuBridgeProviderResult {
+        guard let schedule = self.schedule else { throw AyuBridgeFailure.unsupported("adapter scheduling") }
+        return try schedule(callback, delayMilliseconds)
+    }
 }
 
 public struct AyuBridgeNativeCallback: Sendable {
@@ -77,7 +89,8 @@ public struct AyuBridgeClassRegistry: Sendable {
             guard adapter.name.range(of: "^[A-Za-z][A-Za-z0-9_.$]*$", options: .regularExpression) != nil,
                   adapter.name.utf8.count <= 256, result[adapter.name] == nil,
                   !AyuPluginNativeHost.reservedClassNames.contains(adapter.name),
-                  adapter.writableFields.isSubset(of: adapter.readableFields) else {
+                   adapter.writableFields.isSubset(of: adapter.readableFields),
+                   adapter.receiverMethods.isSubset(of: Set(adapter.methods.keys)) else {
                 throw AyuBridgeFailure("invalid_adapter", "Duplicate or invalid class adapter")
             }
             let names = Set(adapter.constants.keys).union(adapter.staticMethods.keys).union(adapter.staticFields.keys).union(adapter.methods.keys).union(adapter.readableFields)
@@ -121,8 +134,11 @@ public struct AyuBridgeClassRegistry: Sendable {
         }
     }
     public static let standard: AyuBridgeClassRegistry = {
-        // Curated immutable definitions; invalid application additions throw in init.
-        do { return try AyuBridgeClassRegistry(AyuBridgeJavaValues.adapters) }
+        // Curated immutable definitions and the non-visual utility adapters
+        // that can coexist with the native-host view registry.
+        do {
+            return try AyuBridgeClassRegistry(AyuBridgeJavaValues.adapters).adding(AyuBridgeJavaRuntime.integratedAdapters)
+        }
         catch { preconditionFailure("Invalid built-in Java value registry") }
     }()
 }

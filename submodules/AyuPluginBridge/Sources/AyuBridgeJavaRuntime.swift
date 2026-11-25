@@ -6,6 +6,15 @@ import Foundation
 /// by the integrator via `AyuBridgeClassRegistry.adding(AyuBridgeJavaRuntime.adapters)`.
 
 enum AyuBridgeJavaRuntime {
+    /// Explicit non-visual utility adapters safe to install alongside the
+    /// native-host view registry and application-owned Toast adapter. Canvas,
+    /// Paint, ScrollView and widget adapter models are deliberately excluded:
+    /// their declarations do not provide corresponding native rendering.
+    static var integratedAdapters: [AyuBridgeClassAdapter] {
+        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.view.MotionEvent", "android.os.Handler"]
+        return self.adapters.filter { enabled.contains($0.name) }
+    }
+
     static var adapters: [AyuBridgeClassAdapter] {
         [bundle, intent, view, layoutConstraints, motionEvent, paint, canvas, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
     }
@@ -304,6 +313,7 @@ enum AyuBridgeJavaRuntime {
                     try Self.arity(args, 1)
                     var updated = state
                     updated["action"] = .string(try Self.string(args[0], "intent action"))
+                    state = updated
                     return Self.instance("android.content.Intent", updated)
                 },
                 "getAction": { state, args, _ in try Self.arity(args, 0); return .value(state["action"] ?? .null) },
@@ -339,6 +349,7 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     let categories = updated["categories"]?.array ?? []
                     updated["categories"] = .array(categories + [.string(try Self.string(args[0], "category"))])
+                    state = updated
                     return Self.instance("android.content.Intent", updated)
                 },
                 "addFlags": { state, args, _ in
@@ -346,10 +357,11 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     let flagBits = try Self.integer(args[0], "flags")
                     updated["flags"] = .integer((updated["flags"]?.integer ?? 0) | flagBits)
+                    state = updated
                     return Self.instance("android.content.Intent", updated)
                 },
                 "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(0)) },
-            ], readableFields: ["action"], writableFields: ["action"],
+            ], readableFields: ["action"], writableFields: ["action"], receiverMethods: ["setAction", "addCategory", "addFlags"],
             validateState: { state in try Self.rejectState(["action", "entries", "categories", "flags"], state: state, className: "android.content.Intent") })
     }
 
@@ -365,6 +377,7 @@ enum AyuBridgeJavaRuntime {
                     guard let value = args[0].integer, [0, 4, 8].contains(value) else { throw Self.unsupported("View.setVisibility") }
                     var updated = state
                     updated["visibility"] = .integer(value)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "getVisibility": { state, args, _ in try Self.arity(args, 0); return .value(state["visibility"] ?? .integer(0)) },
@@ -372,6 +385,7 @@ enum AyuBridgeJavaRuntime {
                     try Self.arity(args, 1)
                     var updated = state
                     updated["enabled"] = .bool(try Self.bool(args[0], "enabled"))
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setAlpha": { state, args, _ in
@@ -379,6 +393,7 @@ enum AyuBridgeJavaRuntime {
                     guard let alpha = args[0].double, (0.0...1.0).contains(alpha) else { throw Self.unsupported("View.setAlpha") }
                     var updated = state
                     updated["alpha"] = .number(alpha)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setTranslationX": { state, args, _ in
@@ -386,6 +401,7 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     updated["translation_x"] = .number(Double(try Self.integer(args[0], "translation")))
                     updated["translation_y"] = updated["translation_y"] ?? .number(0)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setTranslationY": { state, args, _ in
@@ -393,6 +409,7 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     updated["translation_y"] = .number(Double(try Self.integer(args[0], "translation")))
                     updated["translation_x"] = updated["translation_x"] ?? .number(0)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setScaleX": { state, args, _ in
@@ -400,6 +417,7 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     updated["scale_x"] = .number(Double(try Self.integer(args[0], "scale")))
                     updated["scale_y"] = updated["scale_y"] ?? .number(1)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setScaleY": { state, args, _ in
@@ -407,6 +425,7 @@ enum AyuBridgeJavaRuntime {
                     var updated = state
                     updated["scale_y"] = .number(Double(try Self.integer(args[0], "scale")))
                     updated["scale_x"] = updated["scale_x"] ?? .number(1)
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setPadding": { state, args, _ in
@@ -414,6 +433,7 @@ enum AyuBridgeJavaRuntime {
                     let paddings: [AyuBridgeValue] = try args.map { .number(Double(try Self.integer($0, "padding"))) }
                     var updated = state
                     updated["padding"] = .object(["left": paddings[0], "top": paddings[1], "right": paddings[2], "bottom": paddings[3]])
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
                 "setLayoutParams": { state, args, context in
@@ -422,9 +442,10 @@ enum AyuBridgeJavaRuntime {
                     guard snapshot.className == "android.view.ViewGroup.LayoutParams" else { throw Self.unsupported("View.setLayoutParams") }
                     var updated = state
                     updated["layout_params"] = args[0]
+                    state = updated
                     return Self.instance("android.view.View", updated)
                 },
-            ], readableFields: ["visibility"], writableFields: ["visibility"],
+            ], readableFields: ["visibility"], writableFields: ["visibility"], receiverMethods: ["setVisibility", "setEnabled", "setAlpha", "setTranslationX", "setTranslationY", "setScaleX", "setScaleY", "setPadding", "setLayoutParams"],
             validateState: { state in
                 try Self.rejectState(["visibility", "enabled", "alpha", "translation_x", "translation_y", "scale_x", "scale_y", "padding", "layout_params"], state: state, className: "android.view.View")
             })
@@ -445,9 +466,10 @@ enum AyuBridgeJavaRuntime {
                     let margins: [AyuBridgeValue] = try args.map { .number(Double(try Self.integer($0, "margin"))) }
                     var updated = state
                     updated["margins"] = .object(["left": margins[0], "top": margins[1], "right": margins[2], "bottom": margins[3]])
+                    state = updated
                     return Self.instance("android.view.ViewGroup.LayoutParams", updated)
                 },
-            ], readableFields: ["width", "height"], writableFields: ["width", "height"],
+            ], readableFields: ["width", "height"], writableFields: ["width", "height"], receiverMethods: ["setMargins"],
             validateState: { state in
                 try Self.rejectState(["width", "height", "margins"], state: state, className: "android.view.ViewGroup.LayoutParams")
                 for key in ["width", "height"] {
@@ -497,6 +519,7 @@ enum AyuBridgeJavaRuntime {
                     guard let color = args[0].integer, color >= 0, color <= 0xFFFF_FFFF else { throw Self.unsupported("Paint.setColor") }
                     var updated = state
                     updated["color"] = .integer(color)
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setStrokeWidth": { state, args, _ in
@@ -504,6 +527,7 @@ enum AyuBridgeJavaRuntime {
                     guard let width = args[0].double, width >= 0 else { throw Self.unsupported("Paint.setStrokeWidth") }
                     var updated = state
                     updated["stroke_width"] = .number(width)
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setStyle": { state, args, _ in
@@ -511,6 +535,7 @@ enum AyuBridgeJavaRuntime {
                     guard let style = args[0].integer, [0, 1, 2].contains(style) else { throw Self.unsupported("Paint.setStyle") }
                     var updated = state
                     updated["style"] = .integer(style)
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setStrokeCap": { state, args, _ in
@@ -518,12 +543,14 @@ enum AyuBridgeJavaRuntime {
                     guard let cap = args[0].integer, [0, 1, 2].contains(cap) else { throw Self.unsupported("Paint.setStrokeCap") }
                     var updated = state
                     updated["cap"] = .integer(cap)
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setAntiAlias": { state, args, _ in
                     try Self.arity(args, 1)
                     var updated = state
                     updated["anti_alias"] = .bool(try Self.bool(args[0], "anti-alias flag"))
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
                 "setAlpha": { state, args, _ in
@@ -533,9 +560,10 @@ enum AyuBridgeJavaRuntime {
                     var color = updated["color"]?.integer ?? 0xFF00_0000
                     color = (color & 0x00FF_FFFF) | (alpha << 24)
                     updated["color"] = .integer(color)
+                    state = updated
                     return Self.instance("android.graphics.Paint", updated)
                 },
-            ], validateState: { state in
+            ], receiverMethods: ["setColor", "setStrokeWidth", "setStyle", "setStrokeCap", "setAntiAlias", "setAlpha"], validateState: { state in
                 try Self.rejectState(["color", "stroke_width", "style", "cap", "anti_alias"], state: state, className: "android.graphics.Paint")
             })
     }
@@ -598,9 +626,10 @@ enum AyuBridgeJavaRuntime {
                     guard let color = args[0].integer, color >= 0, color <= 0xFFFF_FFFF else { throw Self.unsupported("ColorDrawable.setColor") }
                     var updated = state
                     updated["color"] = .integer(color)
+                    state = updated
                     return Self.instance("android.graphics.drawable.ColorDrawable", updated)
                 },
-            ], validateState: { state in try Self.rejectState(["color"], state: state, className: "android.graphics.drawable.ColorDrawable") })
+            ], receiverMethods: ["setColor"], validateState: { state in try Self.rejectState(["color"], state: state, className: "android.graphics.drawable.ColorDrawable") })
     }
 
     // MARK: Runnable / Handler
@@ -636,8 +665,7 @@ enum AyuBridgeJavaRuntime {
                     let snapshot = try context.snapshot(of: args[0])
                     guard snapshot.className == "java.lang.Runnable" else { throw Self.unsupported("Handler.post") }
                     let callback = try context.callback(args[0])
-                    DispatchQueue.main.async { callback.send([]) }
-                    return .value(.bool(true))
+                    return .prepared(try context.schedule(callback))
                 },
                 "postDelayed": { state, args, context in
                     try Self.arity(args, 2)
@@ -645,12 +673,11 @@ enum AyuBridgeJavaRuntime {
                     guard snapshot.className == "java.lang.Runnable" else { throw Self.unsupported("Handler.postDelayed") }
                     let delay = try Self.integer(args[1], "delay"), callback = try context.callback(args[0])
                     guard delay >= 0, delay <= 60_000 else { throw AyuBridgeFailure("invalid_arguments", "Handler delay out of range") }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay) / 1000.0) { callback.send([]) }
-                    return .value(.bool(true))
+                    return .prepared(try context.schedule(callback, delayMilliseconds: delay))
                 },
                 "removeCallbacks": { state, args, _ in
                     try Self.arity(args, 1)
-                    return .value(.null)
+                    throw Self.unsupported("Handler.removeCallbacks")
                 },
             ], validateState: { state in try Self.rejectState(["pending"], state: state, className: "android.os.Handler") })
     }

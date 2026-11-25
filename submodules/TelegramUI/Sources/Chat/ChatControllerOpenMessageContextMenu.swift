@@ -219,6 +219,18 @@ extension ChatControllerImpl {
                 
                 var disableTransitionAnimations = false
                 var actionsSignal: Signal<ContextController.Items, NoError> = .single(actions)
+                var ayuMenuInvocation: AyuPluginMessageMenuInvocation?
+                if let peerID = self.chatLocation.peerId,
+                   peerID == message.id.peerId,
+                   let dialogID = AyuPluginMessageMenuInvocation.dialogID(for: peerID) {
+                    let messageID = message.id.id._internalGetInt64Value()
+                    if messageID > 0,
+                       let pluginContext = AyuTelegramPluginApplicationBinding.current?.pluginMenuContext(accountID: self.context.account.id, peerID: peerID, messageID: messageID),
+                       pluginContext.dialogID == dialogID {
+                        let invocation = AyuPluginMessageMenuInvocation(chatController: self, context: pluginContext, peerID: peerID, accountID: self.context.account.id)
+                        ayuMenuInvocation = invocation
+                    }
+                }
                 var emojiFileIds: [Int64] = []
                 if let entitiesAttribute = message.textEntitiesAttribute {
                     for entity in entitiesAttribute.entities {
@@ -336,7 +348,11 @@ extension ChatControllerImpl {
                 }
                 
                 let isSecret = self.presentationInterfaceState.copyProtectionEnabled || self.presentationInterfaceState.myCopyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
+                if let ayuMenuInvocation {
+                    actionsSignal = AyuPluginMessageContextMenu.appending(to: actionsSignal, invocation: ayuMenuInvocation)
+                }
                 let controller = makeContextController(presentationData: self.presentationData, source: source, items: actionsSignal, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret, hideReactionPanelTail: hideReactionPanelTail)
+                ayuMenuInvocation?.contextController = controller
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }

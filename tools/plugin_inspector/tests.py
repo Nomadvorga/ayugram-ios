@@ -149,6 +149,29 @@ class P(BasePlugin):
         self.assertTrue(self.findings(report, "feature", "dynamic_code"))
         self.assertNotIn("private shell command", json.dumps(report))
 
+    def test_plugin_owned_helpers_and_attributes_are_not_sdk_calls(self):
+        source = '''from base_plugin import BasePlugin
+class P(BasePlugin):
+    def helper(self): pass
+    def run(self):
+        self.worker = worker
+        self.helper()
+        self.worker()
+        self.get_setting("private")
+'''
+        report = inspect_source(source, fixture_manifest())
+        calls = {item["target"] for item in self.findings(report, "bridge_call")}
+        self.assertEqual(calls, {"base_plugin.BasePlugin.get_setting"})
+
+    def test_sdk_families_and_java_subclass_declarations(self):
+        report = inspect_source(
+            'from extera_utils.classes import java_subclass\n'
+            'from plugin_settings import get_setting\n'
+            'java_subclass(Target)\nget_setting("PRIVATE")\n', fixture_manifest())
+        self.assertTrue(self.findings(report, "feature", "java_subclassing"))
+        self.assertTrue(self.findings(report, "imported_symbol", "plugin_settings.get_setting"))
+        self.assertNotIn("PRIVATE", json.dumps(report))
+
     def test_metadata_and_requirements_do_not_emit_urls_or_keys(self):
         source = '''__id__ = "group_mentions"
 __name__ = "Group Mentions"
@@ -249,6 +272,10 @@ Target.createView()
             self.assertEqual(main([str(source), "--format", "markdown", "--output", str(output)]), 0)
             self.assertIn("Runtime compatibility has not been verified.", output.read_text(encoding="utf-8"))
             self.assertFalse(marker.exists())
+
+
+from .corpus_tests import CorpusTests  # Include corpus contracts in the documented suite.
+from .audit_tests import PinnedAuditTests
 
 
 if __name__ == "__main__":

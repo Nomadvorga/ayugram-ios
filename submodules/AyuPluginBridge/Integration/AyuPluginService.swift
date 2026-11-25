@@ -49,6 +49,9 @@ public struct AyuInstalledPlugin: Codable, Sendable {
     public var error: String?
     /// A source-verified native adapter, not an assertion that Android APIs executed.
     public var nativeAdapter: String?
+    public var author: String? = nil
+    public var description: String? = nil
+    public var requirements: [String]? = nil
     public var status: String {
         if self.isBusy { return "Выполняется операция…" }
         if self.isEnabled { return self.error == nil ? (self.nativeAdapter == nil ? "Включён" : "Включён · нативный адаптер") : "Включён · ошибка" }
@@ -66,10 +69,22 @@ public struct AyuPluginSetting: Sendable {
     public var isSecret: Bool { ["key", "token", "password", "secret"].contains { self.key?.lowercased().contains($0) == true } }
 }
 
+/// Read-only inspection of the exact bytes shown in the installation sheet.
+/// Previewing does not persist, authorize or execute plugin code.
+public struct AyuPluginImportPreview: Sendable {
+    public let plugin: AyuInstalledPlugin
+    public let author: String
+    public let description: String
+    public let requirements: [String]
+    public let sourceSHA256: String
+    public let isUpdate: Bool
+}
+
 @MainActor public final class AyuPluginService {
     public static let shared: AyuPluginService = {
         let application = AyuPluginApplicationBridge.shared
-        do { return AyuPluginService(provider: application, classRegistry: try application.classRegistry()) }
+        let provider = AyuPluginMenuHostProvider(application: application)
+        do { return AyuPluginService(provider: provider, classRegistry: try application.classRegistry()) }
         catch { preconditionFailure("Invalid compiled application adapters") }
     }()
     public static let didChange = Notification.Name("AyuPluginServiceDidChange")
@@ -96,6 +111,7 @@ public struct AyuPluginSetting: Sendable {
     private var appInForeground = false
     private var appIsActive = false
     nonisolated private static let maximumBytes = 1_048_576
+    nonisolated public static let maximumSourceBytes = 4_194_304
 
     public init(defaults: UserDefaults = .standard, provider: AyuPluginHostProvider = AyuUnsupportedPluginHostProvider(), classRegistry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits()) {
         let relay = AyuRuntimeRelay()
@@ -108,11 +124,16 @@ public struct AyuPluginSetting: Sendable {
                   self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return }
             self.update(owner) { $0.error = "Ошибка обработчика Python. Плагин остаётся включённым; его можно выключить." }
         } }
+        AyuPluginMenuBridge.shared.invokeCallback = { [weak self] owner, callbackID, arguments in
+            guard let self else { return nil }
+            return await self.menuCallbackResult(owner, callbackID: callbackID, arguments: arguments)
+        }
     }
 
     public enum Failure: LocalizedError, Sendable {
         case resources, pythonResources, sdkResources, runtimeStartup, sdkStartup, runtimeQueue
         case source, identity, duplicate, storage, inactive, busy, runtime, protocolError, operation(String)
+        case sourceChanged, updateRequiresDisable
         case unsupportedPlugin
         public var errorDescription: String? {
             switch self {
@@ -122,9 +143,11 @@ public struct AyuPluginSetting: Sendable {
             case .runtimeStartup: return "Не удалось запустить встроенный Python. Перезапустите приложение; если ошибка повторится, сообщите номер сборки."
             case .sdkStartup: return "Встроенный Python не смог загрузить SDK плагинов. Сообщите номер сборки."
             case .runtimeQueue: return "Очередь Python заполнена. Дождитесь завершения текущих операций."
-            case .source: return "Нужен обычный UTF-8 файл .plugin размером до 1 МиБ."
+            case .source: return "Нужен обычный UTF-8 файл .plugin размером до 4 МиБ."
             case .identity: return "Неверный идентификатор плагина или метаданные."
             case .duplicate: return "Плагин с таким идентификатором уже установлен. Сначала удалите его."
+            case .sourceChanged: return "Файл изменился после просмотра. Откройте его заново перед установкой."
+            case .updateRequiresDisable: return "Выключите плагин перед обновлением. Его настройки сохранятся."
             case .storage: return "Не удалось безопасно прочитать или сохранить плагин."
             case .inactive: return "Сначала включите плагин."
             case .busy: return "Дождитесь завершения текущей операции."
@@ -151,7 +174,7 @@ public struct AyuPluginSetting: Sendable {
                     // Recheck bytes instead of trusting saved native-adapter metadata.
                     let sourceURL = root.appendingPathComponent(record.id + ".plugin")
                     if record.id == AyuAtmosphericPluginAdapter.pluginID {
-                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumSourceBytes),
                            let verified = AyuAtmosphericPluginAdapter.record(for: source) {
                             record = verified
                         } else {
@@ -159,7 +182,7 @@ public struct AyuPluginSetting: Sendable {
                             record.blockers = ["Нативный адаптер требует исходный Atmospheric Snow 1.0.1 с проверенной контрольной суммой."]
                         }
                     } else if let descriptor = AyuNativePluginCatalog.descriptor(id: record.id) {
-                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumSourceBytes),
                            let verified = descriptor.record(for: source) {
                             record = verified
                         } else {
@@ -169,7 +192,7 @@ public struct AyuPluginSetting: Sendable {
                     } else {
                         record.nativeAdapter = nil
                         record.blockers = []
-                        if let source = try? Self.read(sourceURL, limit: Self.maximumBytes),
+                        if let source = try? Self.read(sourceURL, limit: Self.maximumSourceBytes),
                            String(data: source, encoding: .utf8) != nil {
                             if let verified = Self.pinnedPythonRecord(for: source) { record = verified }
                         } else {
@@ -204,31 +227,86 @@ public struct AyuPluginSetting: Sendable {
         try await task.value
     }
 
-    public func importPlugin(from url: URL) async throws {
+    public func previewPlugin(from url: URL) async throws -> AyuPluginImportPreview {
         try await self.prepare()
-        guard self.plugins.count + self.pendingImportSlots < 64 else { throw Failure.operation("RESOURCE_LIMIT") }
+        let source = try await Self.importSource(from: url)
+        let (record, report) = try await self.inspect(source)
+        let metadata = report["metadata"]
+        return AyuPluginImportPreview(plugin: record,
+            author: record.author ?? String((metadata["__author__"].string ?? "").prefix(256)),
+            description: record.description ?? String((metadata["__description__"].string ?? "").prefix(8192)),
+            requirements: record.requirements ?? [],
+            sourceSHA256: Self.digest(source),
+            isUpdate: self.plugins.contains(where: { $0.id == record.id }))
+    }
+
+    /// Re-inspects the selected bytes before committing. Updating preserves the
+    /// existing settings namespace and always leaves the new version disabled.
+    public func importPlugin(from url: URL, replacingExisting: Bool = false, expectedSHA256: String? = nil) async throws {
+        try await self.prepare()
+        guard self.pendingImportSlots < 64 else { throw Failure.operation("RESOURCE_LIMIT") }
         self.pendingImportSlots += 1
         defer { self.pendingImportSlots -= 1 }
-        let source = try await Task.detached(priority: .utility) {
-            let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
-            guard url.pathExtension.lowercased() == "plugin", let source = String(data: try Self.read(url, limit: Self.maximumBytes), encoding: .utf8) else { throw Failure.source }
-            return source
-        }.value
+        let source = try await Self.importSource(from: url)
+        if let expectedSHA256, Self.digest(source) != expectedSHA256 { throw Failure.sourceChanged }
         let (record, _) = try await self.inspect(source)
-        guard !self.plugins.contains(where: { $0.id == record.id }), self.pending.insert(record.id).inserted else { throw Failure.duplicate }
+        if let existing = self.plugins.first(where: { $0.id == record.id }) {
+            guard replacingExisting else { throw Failure.duplicate }
+            guard !existing.isBusy else { throw Failure.busy }
+            guard !existing.isEnabled else { throw Failure.updateRequiresDisable }
+        } else {
+            guard !replacingExisting else { throw Failure.identity }
+            guard self.plugins.count + self.pendingImportSlots <= 64 else { throw Failure.operation("RESOURCE_LIMIT") }
+        }
+        guard self.pending.insert(record.id).inserted else { throw Failure.busy }
         defer { self.pending.remove(record.id) }
+        if self.plugins.contains(where: { $0.id == record.id }) { try self.begin(record.id) }
+        defer { self.finish(record.id) }
         let root = self.root
         do {
             try await Task.detached(priority: .utility) {
                 let sourceURL = root.appendingPathComponent(record.id + ".plugin"), metadataURL = root.appendingPathComponent(record.id + ".json")
-                guard !FileManager.default.fileExists(atPath: sourceURL.path), !FileManager.default.fileExists(atPath: metadataURL.path) else { throw Failure.duplicate }
+                let oldSource: Data?, oldMetadata: Data?
+                if replacingExisting {
+                    oldSource = try Self.read(sourceURL, limit: Self.maximumSourceBytes)
+                    oldMetadata = try Self.read(metadataURL, limit: 65_536)
+                } else {
+                    guard !FileManager.default.fileExists(atPath: sourceURL.path), !FileManager.default.fileExists(atPath: metadataURL.path) else { throw Failure.duplicate }
+                    oldSource = nil; oldMetadata = nil
+                }
+                let metadata = try JSONEncoder().encode(record)
+                guard metadata.count <= 65_536 else { throw Failure.operation("METADATA_QUOTA") }
                 try Data(source.utf8).write(to: sourceURL, options: .atomic)
-                do { try JSONEncoder().encode(record).write(to: metadataURL, options: .atomic) }
-                catch { try? FileManager.default.removeItem(at: sourceURL); throw Failure.storage }
+                do { try metadata.write(to: metadataURL, options: .atomic) }
+                catch {
+                    // A failed second write must not discard a previously
+                    // installed version. Settings are never touched here.
+                    if let oldSource, let oldMetadata {
+                        try oldSource.write(to: sourceURL, options: .atomic)
+                        try oldMetadata.write(to: metadataURL, options: .atomic)
+                    } else { try FileManager.default.removeItem(at: sourceURL) }
+                    throw Failure.storage
+                }
             }.value
         } catch { throw (error as? Failure) ?? Failure.storage }
-        guard self.plugins.count < 64 else { throw Failure.operation("RESOURCE_LIMIT") }
-        self.plugins.append(record); self.changed()
+        if let index = self.plugins.firstIndex(where: { $0.id == record.id }) {
+            self.plugins[index] = record
+        } else { self.plugins.append(record) }
+        self.plugins.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        self.changed()
+    }
+
+    nonisolated private static func importSource(from url: URL) async throws -> String {
+        try await Task.detached(priority: .utility) {
+            let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
+            guard url.pathExtension.lowercased() == "plugin",
+                  let source = String(data: try Self.read(url, limit: Self.maximumSourceBytes), encoding: .utf8) else { throw Failure.source }
+            return source
+        }.value
+    }
+
+    nonisolated private static func digest(_ source: String) -> String {
+        SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Call only after the user explicitly trusts this installed plugin for this process.
@@ -239,7 +317,7 @@ public struct AyuPluginSetting: Sendable {
         defer { self.finish(id) }
         let url = self.root.appendingPathComponent(id + ".plugin")
         do {
-            let source = try await Task.detached(priority: .utility) { guard let text = String(data: try Self.read(url, limit: Self.maximumBytes), encoding: .utf8) else { throw Failure.source }; return text }.value
+            let source = try await Task.detached(priority: .utility) { guard let text = String(data: try Self.read(url, limit: Self.maximumSourceBytes), encoding: .utf8) else { throw Failure.source }; return text }.value
             let (inspection, _) = try await self.inspect(source)
             guard inspection.id == id else { throw Failure.identity }
             self.update(id) { $0.blockers = inspection.blockers; $0.error = nil; $0.nativeAdapter = inspection.nativeAdapter }
@@ -311,7 +389,7 @@ public struct AyuPluginSetting: Sendable {
         if self.plugins.first(where: { $0.id == id })?.isEnabled == true { try await self.disable(id) }
         try self.begin(id); defer { self.finish(id) }
         let root = self.root
-        do { try await Task.detached(priority: .utility) { for ext in ["plugin", "json"] { let path = root.appendingPathComponent(id + "." + ext); if FileManager.default.fileExists(atPath: path.path) { _ = try Self.read(path, limit: ext == "plugin" ? Self.maximumBytes : 65_536); try FileManager.default.removeItem(at: path) } } }.value }
+        do { try await Task.detached(priority: .utility) { for ext in ["plugin", "json"] { let path = root.appendingPathComponent(id + "." + ext); if FileManager.default.fileExists(atPath: path.path) { _ = try Self.read(path, limit: ext == "plugin" ? Self.maximumSourceBytes : 65_536); try FileManager.default.removeItem(at: path) } } }.value }
         catch { throw Failure.storage }
         self.defaults.removeObject(forKey: "AyuPluginBridge.v1." + id)
         self.plugins.removeAll { $0.id == id }; self.changed()
@@ -357,6 +435,12 @@ public struct AyuPluginSetting: Sendable {
 
     public var hasSendHooks: Bool { self.sendHookSource?.sendHooks().isEmpty == false }
 
+    /// Settings UI drops queued notifications from a previous activation.
+    func shouldReloadSettings(pluginID: String, generation: String) -> Bool {
+        self.pythonGenerations[pluginID] == generation &&
+            self.plugins.contains(where: { $0.id == pluginID && $0.isEnabled && !$0.isBusy })
+    }
+
     /// One callback round trip. `relay.invoke` may complete on the Python
     /// thread, so the result is handed back through a continuation and the
     /// caller stays on its own executor.
@@ -373,30 +457,37 @@ public struct AyuPluginSetting: Sendable {
         }
     }
 
+    /// Menu conditions and clicks use the same generation gate as send hooks;
+    /// Python is invoked only through the serialized runtime relay, never on UI.
+    private func menuCallbackResult(_ owner: String, callbackID: String, arguments: [AyuBridgeValue]) async -> AyuBridgeValue? {
+        guard let generation = self.pythonGenerations[owner], callbackID.hasPrefix(generation + ":"),
+              self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return nil }
+        let result = await self.sendHookResult(owner, callbackID, arguments)
+        guard self.pythonGenerations[owner] == generation,
+              self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return nil }
+        return result
+    }
+
     /// Runs the original plugin `on_send_message_hook` chain before enqueueing.
     /// A plugin result with CANCEL suppresses the send; MODIFY/MODIFY_FINAL
     /// replaces the mutable `message`/`caption` fields. Completion is on main.
     public func applySendHooks(message: String?, caption: String?, peerID: Int64, accountIndex: Int64, completion: @escaping @MainActor (String?, String?, Bool) -> Void) {
         let hooks = self.sendHookSource?.sendHooks() ?? []
         guard !hooks.isEmpty else { completion(message, caption, false); return }
-        var params: [String: AyuBridgeValue] = ["peer": .integer(peerID)]
-        if let message { params["message"] = .string(message) }
-        if let caption { params["caption"] = .string(caption) }
         Task { @MainActor in
-            var values = params
+            var chain = AyuBridgeSendHookChain(message: message, caption: caption, peerID: peerID, accountIndex: accountIndex)
             for hook in hooks {
-                guard let decoded = await self.sendHookResult(hook.pluginID, hook.callbackID, [.integer(accountIndex), .object(values)]),
-                      let result = decoded.object else { continue }
-                let strategy = result["strategy"]?.integer ?? 0
-                if strategy == 1 {
-                    completion(values["message"]?.string, values["caption"]?.string, true)
-                    return
-                }
-                if strategy == 2 || strategy == 3, let updated = result["params"]?.object {
-                    values = updated
-                }
+                guard !chain.isFinished else { break }
+                // A snapshot may outlive a disable/update while awaiting Python.
+                guard let generation = self.pythonGenerations[hook.pluginID],
+                      hook.callbackID.hasPrefix(generation + ":"),
+                      self.plugins.contains(where: { $0.id == hook.pluginID && $0.isEnabled && !$0.isBusy }) else { continue }
+                let result = await self.sendHookResult(hook.pluginID, hook.callbackID, chain.arguments)
+                guard self.pythonGenerations[hook.pluginID] == generation,
+                      self.plugins.contains(where: { $0.id == hook.pluginID && $0.isEnabled && !$0.isBusy }) else { continue }
+                chain.apply(result)
             }
-            completion(values["message"]?.string, values["caption"]?.string, false)
+            completion(chain.message, chain.caption, chain.isCancelled)
         }
     }
 
@@ -497,7 +588,11 @@ public struct AyuPluginSetting: Sendable {
         for key in ["__sdk_version__", "__app_version__", "__min_version__", "sdk_version", "app_version", "min_version"] {
             if metadata.object?[key] != nil { blockers.append("VERSION_POLICY: \(key) требует проверки версии приложением; эта политика пока не реализована.") }
         }
-        return (AyuInstalledPlugin(id: id, name: name, version: version, blockers: blockers, nativeAdapter: nil), report)
+        var record = AyuInstalledPlugin(id: id, name: name, version: version, blockers: blockers, nativeAdapter: nil)
+        record.author = String((metadata["__author__"].string ?? "").prefix(256))
+        record.description = String((metadata["__description__"].string ?? "").prefix(8192))
+        record.requirements = (report["requirements"].array ?? []).prefix(64).compactMap { $0.string.map { String($0.prefix(256)) } }
+        return (record, report)
     }
 
     nonisolated private static func pinnedPythonRecord(for source: Data) -> AyuInstalledPlugin? {

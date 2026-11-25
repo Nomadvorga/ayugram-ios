@@ -114,6 +114,37 @@ Each finding contains the AST line, one-based column, phase, category, API-like 
 
 This is an inventory aid, not a Python interpreter, security scanner, or proof of compatibility. It does not resolve imported plugin-local modules, arbitrary object types, inherited custom class behavior, decorators that execute bodies, monkey patches, interprocedural execution, or all Python dynamic constructs. Method bodies are conservatively inspected even if never called. Branches are not pruned. A function-call expression at module level can execute a user-defined function; the inspector does not infer that function's execution phase. Generator/lambda phase reporting is approximate. Syntax/runtime version and semantic correctness still need testing against the embedded interpreter.
 
-The input read is bounded to 2 MiB plus one byte; ASTs above 100,000 nodes are rejected. Manifests are bounded to 1 MiB with member nesting capped. Analysis is scoped to one file; it does not recursively scan repositories, import libraries, or run network requests. No compiled dependencies, background tasks, or processes are started.
+The input read is bounded to 4 MiB plus one byte; ASTs above 100,000 nodes are rejected. Manifests are bounded to 1 MiB with member nesting capped. Analysis is scoped to one file; it does not recursively scan repositories, import libraries, or run network requests. No compiled dependencies, background tasks, or processes are started. Parser warnings are suppressed so source-derived warning text cannot escape through stderr.
 
 The unit suite uses synthetic snippets, an explicit test-only manifest, and temporary reports. It tests non-execution, credential/source omission, alias/shadowing behavior, exact member matching, reflection/hook detection, native/dynamic requirements, bounds, status propagation and CLI output. Real plugins should also be inspected with the release bridge inventory, then validated in a separately controlled runtime harness.
+
+## Corpus inventory and SDK comparison
+
+```sh
+python3 -B -m tools.plugin_inspector.corpus "$CORPUS_DIR" \
+  --android-sdk "$ANDROID_SDK" --bridge-sdk submodules/AyuPluginBridge/Python \
+  --rank-limit 50 --output /outside/input/directories/inventory.json
+python3 -B -m tools.plugin_inspector.corpus "$CORPUS_DIR" --format markdown
+```
+
+The existing bridge audit entry point also accepts corpus mode with the same options:
+
+```sh
+python3 -B submodules/AyuPluginBridge/Build/audit-plugin-requirements.py \
+  --corpus-dir "$CORPUS_DIR" --android-sdk "$ANDROID_SDK" \
+  --bridge-sdk submodules/AyuPluginBridge/Python --rank-limit 50 --output inventory.json
+```
+
+Corpus mode inspects only immediate `.plugin`, `.elyx`, and `.eaf` files. ZIP Python source members are parsed in memory, independently; they are never extracted, imported, executed or resolved against one another. Bytecode, DEX, native binaries and assets are counted by payload kind. Their contents are not validated. Nested archives are not opened. Unsafe, encrypted and unreadable archive members remain explicit inventory issues. Corpus mode does not use the pinned 19-plugin manifest or import the bridge SDK.
+
+Rankings include imports, imported SDK symbols, SDK calls, Java classes/members, features, lifecycle overrides, declared dependencies and native requirements. `files` measures attachment reach, including archives. `unique_sources` deduplicates exact source bytes and can exceed `files` when an archive contains several relevant modules. `occurrences` measures statically observed sites, including all branches; it is not an execution count. Family features may have several sites per class/import. Rankings sort by descending attachment reach, descending distinct source reach, then API name. Every ranking includes its full distinct-target count and explicit omitted-target count.
+
+The optional SDK directories are read as declarations only, using bounded AST parsing. An API is `declared` only when its exact module or public symbol/member is found. `absent` means absent from the inspected declaration tree; it does not establish runtime unavailability, since inherited/dynamic/generated exports are not resolved. `not_compared` means no SDK directory was supplied. Imported names and guarded declarations are included conservatively. Wildcard re-exports union public declarations from files already inspected in the supplied SDK tree, with a 16-pass bound; `__all__` is not evaluated. The `android_declared_bridge_absent` ranking is computed over all observed SDK targets before truncation. Plugin-owned `self` helpers and assigned attributes are excluded from inherited SDK call requirements. Chaquopy's `java` APIs come from outside Android's Python SDK tree, so their `absent` Android declaration is expected.
+
+Reports contain aggregate counts and bounded API identifiers, with fingerprints for the attachment multiset and SDK declarations. They omit attachment names, archive member names, input paths, identity metadata, arbitrary literals and source excerpts. JSON and Markdown use the same aggregate model. No compatibility or runtime success is inferred from declaration presence; `execution_verified` always remains false. The default support manifest remains unconfigured.
+
+Bounds: 2,048 attachments, 8,192 immediate directory entries, 4 MiB per source, 100,000 AST nodes per source, 8,192 source units, 32 MiB compressed per archive, 4,096 members and 64 MiB declared expansion per archive, and 256 MiB total attachment/source reads. SDK traversal is confined to explicitly supplied directories, at most eight levels, 2,048 Python files and 256 MiB. Symlink inputs are rejected. ZIP64 counts beyond the member bound are rejected before central-directory allocation. Requirement targets are capped at 20,000 across all ranking families; output shows at most 200 per family (default 100). Outputs cannot overwrite input directories, manifests or hard-link aliases.
+
+Exit 0 means a completed inventory with no source/archive errors; 2 means a rejected input/bound/output, or a completed inventory with explicit source/archive issues. Static unsupported/unknown findings alone still exit 0. The documented unit command also includes the corpus suite.
+
+The audit script's separate `--refresh-implementation-hashes --plugin-dir plugins` mode verifies the existing extended catalog against committed source provenance and exact local source bytes, then updates only implementation hashes. Add `--check-refresh` for a dry run. It never imports the SDK, changes plugin requirements or grants runtime support. Run it after implementation edits settle; see the [catalog refresh instructions](../../docs/plugins-corpus-compatibility.md#refreshing-the-extended-pinned-catalog). The documented test command includes synthetic hash/provenance regression tests.

@@ -14,6 +14,7 @@ final class AyuBridgeCallbackGate: @unchecked Sendable {
     func revoke(owner: String) {
         self.lock.lock(); defer { self.lock.unlock() }
         self.generations.removeValue(forKey: owner)
+        self.pending.removeValue(forKey: owner)
         self.tokens = self.tokens.filter { $0.value != owner }
     }
     func register(token: String, owner: String) {

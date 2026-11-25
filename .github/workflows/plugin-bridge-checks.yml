@@ -7,6 +7,8 @@ on:
       - 'submodules/AyuPluginBridge/**'
       - 'tools/plugin_inspector/**'
       - 'third-party/ayu-python/**'
+      - 'Swiftgram/SGSettingsUI/Sources/AyuPluginManagerController.swift'
+      - 'submodules/TelegramUI/Sources/OpenChatMessage.swift'
       - '.github/workflows/plugin-bridge-checks.yml'
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ jobs:
         with:
           python-version: '3.15'
       - name: Test static inspector
-        run: python3 -B -m unittest tools.plugin_inspector.tests -v
+        run: python3 -B -m unittest tools.plugin_inspector.tests tools.plugin_inspector.corpus_tests tools.plugin_inspector.audit_tests -v
       - name: Test SDK contract
         run: python3 -B -m unittest discover -s submodules/AyuPluginBridge/Tests/Python -v
       - name: Test runtime packaging

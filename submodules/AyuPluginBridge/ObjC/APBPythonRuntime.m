@@ -254,12 +254,12 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
 }
 
 - (void)inspectPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
-    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 1048576) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 1 MiB source limit")]; return; }
+    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
     [self invoke:"inspect_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
 }
 
 - (void)preflightPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
-    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 1048576) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 1 MiB source limit")]; return; }
+    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
     [self invoke:"preflight_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
 }
 

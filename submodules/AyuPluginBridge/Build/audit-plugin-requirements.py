@@ -1,7 +1,8 @@
 """Hash-pinned AST audit. NEVER import, compile or execute supplied plugin code.
 
-Reads only files named by the source manifest and publishes API identifiers,
-line counts and hashes, not source text or plugin configuration/credentials.
+Pinned mode reads only files named by the source manifest. Corpus mode accepts
+--corpus-dir DIR --android-sdk DIR --bridge-sdk DIR --output FILE and delegates
+to the bounded, redacted aggregate inspector. Neither mode executes attachments.
 """
 from __future__ import annotations
 
@@ -12,37 +13,229 @@ import json
 from pathlib import Path
 import re
 import sys
+import subprocess
+import warnings
 
 BRIDGE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BRIDGE / "Python"))
-from _ayu_inspection import import_inventory
 
 SOURCE_COMMIT = "a4b6bb472fd657e0f659531dae090e12c02a0aaa"
 SNOW_SHA256 = "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763"
-SDK_MODULES = {"ayu_bridge", "base_plugin", "client_utils", "android_utils", "hook_utils",
-               "plugin_settings", "java", "ui", "ui.settings", "ui.alert", "ui.bulletin"}
 VALUE_CLASSES = {"java.lang.Integer", "java.lang.Long", "java.lang.Boolean", "java.lang.System",
                  "java.util.ArrayList", "java.util.HashMap", "java.util.concurrent.atomic.AtomicLong",
                  "java.util.concurrent.atomic.AtomicBoolean", "int", "long", "boolean", "byte",
                  "short", "char", "float", "double", "void"}
-HOST_CLASSES = {"android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout",
-                "android.widget.TextView", "android.widget.ImageView", "android.widget.FrameLayout$LayoutParams",
-                "android.widget.LinearLayout$LayoutParams", "java.lang.reflect.Method", "[B", "[S", "[C", "[I", "[J", "[F", "[D", "[Z",
-                 "java.lang.Runnable", "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
+HOST_CLASSES = {"android.view.View", "android.view.Gravity", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView",
+                 "android.widget.TextView", "android.widget.ImageView", "android.widget.FrameLayout$LayoutParams",
+                 "android.widget.LinearLayout$LayoutParams", "java.lang.reflect.Method", "[B", "[S", "[C", "[I", "[J", "[F", "[D", "[Z",
+                  "android.os.Bundle", "android.content.Intent", "android.view.MotionEvent", "android.os.Handler",
+                  "java.lang.Runnable", "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
 APPLICATION_CLASSES = {"org.telegram.messenger.UserConfig", "org.telegram.tgnet.TLRPC$User",
-                       "org.telegram.ui.ActionBar.BaseFragment", "android.content.Context", "org.telegram.ui.ActionBar.AlertDialog"}
+                        "org.telegram.ui.ActionBar.BaseFragment", "android.content.Context", "org.telegram.ui.ActionBar.AlertDialog",
+                        "org.telegram.messenger.AccountInstance", "org.telegram.messenger.MessagesController",
+                        "org.telegram.tgnet.TLRPC$Chat", "org.telegram.messenger.NotificationCenter",
+                        "org.telegram.messenger.NotificationCenter$NotificationCenterDelegate",
+                         "android.content.res.Resources", "android.content.res.Configuration",
+                         "android.util.DisplayMetrics", "android.util.TypedValue",
+                        "java.lang.String", "org.telegram.ui.ActionBar.Theme",
+                        "org.telegram.ui.Components.BulletinFactory", "org.telegram.ui.Components.Bulletin",
+                        "org.telegram.ui.PhotoViewer", "android.widget.Toast",
+                        "org.telegram.messenger.ApplicationLoader", "org.telegram.messenger.AndroidUtilities"}
 NATIVE_PREFIXES = ("android.", "androidx.", "java.", "javax.", "org.telegram.", "com.")
 HOOKS = {"hook_method", "hook_all_methods", "hook_all_constructors", "add_hook", "add_on_send_message_hook",
          "add_on_request_hook", "add_on_response_hook", "hook_request", "hook_response"}
 EVENTS = {"on_app_event", "on_send_message_hook", "on_request_hook", "on_response_hook"}
+MAX_BYTES = 4 * 1024 * 1024
+MAX_FILES = 4096
+CATALOG_RELATIVE = "submodules/AyuPluginBridge/Resources/CommonBridge/compatibility.json"
+
+
+class AuditError(ValueError):
+    """Fixed errors only: never disclose inspected source or exception text."""
+
+
+def read_bytes(path, limit=MAX_BYTES):
+    if path.is_symlink() or getattr(path, "is_junction", lambda: False)() or not path.is_file():
+        raise AuditError("Expected a regular bounded input file")
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise AuditError("Input exceeds size bound")
+    return raw
+
+
+def parse_ast(raw):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        tree = ast.parse(raw, filename="<static-input>")
+    if sum(1 for _ in ast.walk(tree)) > 100_000:
+        raise AuditError("AST exceeds node bound")
+    return tree
+
+
+def sdk_modules(bridge=None):
+    """Read the exact SDK_MODULES literal without importing any SDK module."""
+    bridge = BRIDGE if bridge is None else Path(bridge)
+    tree = parse_ast(read_bytes(bridge / "Python/ayu_bridge.py"))
+    values = []
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if not any(isinstance(target, ast.Name) and target.id == "SDK_MODULES" for target in targets):
+            continue
+        value = node.value
+        if isinstance(value, ast.Call):
+            if not (isinstance(value.func, ast.Name) and value.func.id in {"frozenset", "set"}
+                    and len(value.args) == 1 and not value.keywords):
+                raise AuditError("SDK module inventory must be a literal collection")
+            value = value.args[0]
+        if not isinstance(value, (ast.Set, ast.List, ast.Tuple)) or not value.elts:
+            raise AuditError("SDK module inventory must be a literal collection")
+        modules = []
+        for item in value.elts:
+            if not isinstance(item, ast.Constant) or not isinstance(item.value, str) or not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", item.value, re.ASCII):
+                raise AuditError("Invalid SDK module identifier")
+            modules.append(item.value)
+        if len(modules) > 256 or len(set(modules)) != len(modules):
+            raise AuditError("SDK module inventory exceeds bounds or contains duplicates")
+        values.append(frozenset(modules))
+    if len(values) != 1:
+        raise AuditError("SDK module inventory must have exactly one declaration")
+    return values[0]
+
+
+def implementation_hashes(bridge=None):
+    """Hash the entire bundled Python and native implementation, never reports/tests."""
+    bridge = BRIDGE if bridge is None else Path(bridge)
+    paths = []
+    entries = 0
+    total_bytes = 0
+    for folder, suffixes in (
+        ("Python", {".py"}), ("Sources", {".swift"}), ("Integration", {".swift"}),
+        ("ObjC", {".m", ".mm", ".c", ".h"}), ("PublicHeaders", {".h"}),
+    ):
+        directory = bridge / folder
+        if not directory.is_dir():
+            raise AuditError("Implementation source directory missing")
+        pending = [(directory, 0)]
+        while pending:
+            current, depth = pending.pop()
+            if depth > 8:
+                raise AuditError("Implementation nesting exceeds bound")
+            for path in current.iterdir():
+                entries += 1
+                if entries > 16_384 or path.is_symlink() or getattr(path, "is_junction", lambda: False)():
+                    raise AuditError("Implementation tree exceeds bounds or contains links")
+                if path.is_dir():
+                    if path.name != "__pycache__":
+                        pending.append((path, depth + 1))
+                elif path.suffix in suffixes:
+                    paths.append(path)
+                    if len(paths) > MAX_FILES:
+                        raise AuditError("Implementation file count exceeds bound")
+    result = {}
+    for path in sorted(paths):
+        raw = read_bytes(path)
+        total_bytes += len(raw)
+        if total_bytes > 64 * 1024 * 1024:
+            raise AuditError("Implementation total bytes exceed bound")
+        result[path.relative_to(bridge).as_posix()] = hashlib.sha256(raw).hexdigest()
+    return result
+
+
+def source_provenance(catalog):
+    """Immutable source identity only; never treat route/support fields as provenance."""
+    if catalog.get("source_repo") != "Nomadvorga/ayugram-src" or catalog.get("source_commit") != SOURCE_COMMIT:
+        raise AuditError("Catalog source repository or revision changed")
+    plugins = catalog.get("plugins")
+    if not isinstance(plugins, list) or not 19 <= len(plugins) <= 256:
+        raise AuditError("Catalog source count is invalid")
+    records = []
+    for plugin in plugins:
+        if not isinstance(plugin, dict) or not re.fullmatch(r"[a-z][a-z0-9_]*\.plugin", plugin.get("file", "")):
+            raise AuditError("Invalid pinned source name")
+        if not re.fullmatch(r"[0-9a-f]{64}", plugin.get("sha256", "")) or not re.fullmatch(r"[0-9a-f]{40}", plugin.get("blob", "")):
+            raise AuditError("Invalid pinned source digest")
+        if any(type(plugin.get(key)) is not int or plugin[key] <= 0 for key in ("bytes", "lines")):
+            raise AuditError("Invalid pinned source size")
+        records.append(tuple(plugin[key] for key in ("file", "blob", "sha256", "bytes", "lines")) + (plugin.get("provenance"),))
+    if len({record[0] for record in records}) != len(records) or sum(record[4] for record in records) != catalog.get("source_total_lines"):
+        raise AuditError("Catalog source names or line total changed")
+    return sorted(records)
+
+
+def committed_catalog():
+    completed = subprocess.run(["git", "show", "HEAD:" + CATALOG_RELATIVE], cwd=BRIDGE.parents[1],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=False)
+    if completed.returncode or len(completed.stdout) > MAX_BYTES:
+        raise AuditError("Committed catalog provenance unavailable")
+    return json.loads(completed.stdout)
+
+
+def refresh_implementation_hashes(catalog_path, plugin_dir, *, provenance=None, bridge=None, write=True):
+    """Verify catalog identity and exact original bytes, then change only sdk_sha256."""
+    bridge = BRIDGE if bridge is None else Path(bridge)
+    catalog = json.loads(read_bytes(Path(catalog_path)))
+    anchor = committed_catalog() if provenance is None else provenance
+    if source_provenance(catalog) != source_provenance(anchor):
+        raise AuditError("Catalog source provenance differs from trusted baseline")
+    if catalog.get("plugins_runtime_verified") != [] or catalog.get("device_launch_verified") is not False or catalog.get("native_tests_executed") is not False:
+        raise AuditError("Catalog must retain unverified runtime state")
+    if catalog.get("execution_verified", False) is not False or catalog.get("runtime_validation_required", True) is not True:
+        raise AuditError("Catalog cannot claim execution verification")
+    root = Path(plugin_dir).resolve()
+    for plugin in catalog["plugins"]:
+        path = Path(plugin_dir) / plugin["file"]
+        if not path.resolve().is_relative_to(root):
+            raise AuditError("Pinned source escapes source directory")
+        raw = read_bytes(path)
+        blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+        if (len(raw), hashlib.sha256(raw).hexdigest(), blob, len(raw.splitlines())) != (
+                plugin["bytes"], plugin["sha256"], plugin["blob"], plugin["lines"]):
+            raise AuditError("Pinned source bytes do not match catalog provenance")
+    sdk_modules(bridge)  # Validate the current module declaration statically.
+    catalog["sdk_sha256"] = implementation_hashes(bridge)
+    if write:
+        Path(catalog_path).write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    return catalog
+
+
+def pinned_import_inventory(raw, tree, modules):
+    # These are inspector modules, not the SDK: the SDK is read only as AST.
+    sys.path.insert(0, str(BRIDGE.parents[1]))
+    from tools.plugin_inspector.corpus import declaration_state, sdk_inventory
+    from tools.plugin_inspector.inspector import inspect_source
+
+    report = inspect_source(raw, {"schema_version": 1, "modules": {name: {"status": "unknown"} for name in modules}})
+    if "error" in report:
+        raise AuditError("Pinned source cannot be inspected within limits")
+    sdk = sdk_inventory(BRIDGE / "Python")
+    classes = {item["target"] for item in report["findings"]
+               if item["category"] in {"java_class_lookup", "java_class_import"} and not item["target"].startswith("<")}
+    imported, unsupported = {}, {}
+    roots = {name.split(".")[0] for name in modules}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            imported.setdefault(node.module, set()).update(alias.name for alias in node.names)
+            if node.module.split(".")[0] in roots and not node.module.startswith(NATIVE_PREFIXES):
+                for alias in node.names:
+                    if alias.name != "*" and declaration_state(node.module + "." + alias.name, sdk) == "absent":
+                        unsupported.setdefault(node.module, set()).add(alias.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in roots and not alias.name.startswith(NATIVE_PREFIXES) and alias.name not in sdk["modules"]:
+                    unsupported.setdefault(alias.name, set()).add("module_unavailable")
+    return {"classes": sorted(classes), "imported_symbols": {name: sorted(values) for name, values in sorted(imported.items())},
+            "unsupported_sdk_symbols": {name: sorted(values) for name, values in sorted(unsupported.items())},
+            "dynamic_class_lookup_lines": sorted({item["line"] for item in report["findings"]
+                if item["category"] == "java_class_lookup" and item["target"].startswith("<")})}
 
 
 def audit(path, record):
-    data = path.read_bytes()
-    assert hashlib.sha256(data).hexdigest() == record["sha256"], "Source hash mismatch"
-    assert len(data) == record["bytes"], "Source size mismatch"
-    tree = ast.parse(data.decode("utf-8"), filename=record["path"])
-    inventory = import_inventory(tree, SDK_MODULES)
+    modules = sdk_modules()
+    data = read_bytes(path)
+    if hashlib.sha256(data).hexdigest() != record["sha256"] or len(data) != record["bytes"]:
+        raise AuditError("Pinned source hash or size mismatch")
+    tree = parse_ast(data)
+    inventory = pinned_import_inventory(data, tree, modules)
     imports, features, hooks, events = set(), set(), set(), set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -80,11 +273,11 @@ def audit(path, record):
         features.add("client_fragment_adapter")
     if any(name.startswith("ui.alert") or name.startswith("ui.bulletin") for name in imports):
         features.add("native_alert_or_bulletin_presentation")
-    external = sorted(name for name in imports if name not in SDK_MODULES
+    external = sorted(name for name in imports if name not in modules
                       and name.split(".")[0] not in getattr(sys, "stdlib_module_names", ())
                       and not name.startswith(NATIVE_PREFIXES))
     native = record["path"] == "atmospheric_snow.plugin" and record["sha256"] == SNOW_SHA256
-    partial_features = {"account_identity_and_own_profile"} if classes & APPLICATION_CLASSES else set()
+    partial_features = {"account_identity_and_own_profile"} if classes & {"org.telegram.messenger.UserConfig", "org.telegram.tgnet.TLRPC$User"} else set()
     if "client_fragment_adapter" in features:
         partial_features.add("visible_screen_context")
     if "native_alert_or_bulletin_presentation" in features:
@@ -109,32 +302,53 @@ def audit(path, record):
 
 
 def main():
+    if any(value == "--corpus-dir" or value.startswith("--corpus-dir=") for value in sys.argv[1:]):
+        sys.path.insert(0, str(BRIDGE.parents[1]))
+        from tools.plugin_inspector.corpus import main as corpus_main
+
+        forwarded = [value.removeprefix("--corpus-dir=") for value in sys.argv[1:] if value != "--corpus-dir"]
+        return corpus_main(forwarded)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-manifest", type=Path, required=True)
+    parser.add_argument("--source-manifest", type=Path)
     parser.add_argument("--plugin-dir", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--replace-generated", action="store_true", help="Regenerate the two audit outputs for exactly the same pinned sources")
+    parser.add_argument("--refresh-implementation-hashes", action="store_true", help="Verify catalog/committed source provenance and exact source bytes; update sdk_sha256 only")
+    parser.add_argument("--catalog", type=Path, default=BRIDGE / "Resources/CommonBridge/compatibility.json")
+    parser.add_argument("--check-refresh", action="store_true", help="Validate a requested hash refresh and print counts without writing")
     args = parser.parse_args()
-    manifest = json.loads(args.source_manifest.read_text())
-    assert manifest["repo"] == "Nomadvorga/ayugram-src" and manifest["commit"] == SOURCE_COMMIT
-    assert len(manifest["files"]) == 19 and len({item["path"] for item in manifest["files"]}) == 19
+    if args.refresh_implementation_hashes:
+        if args.source_manifest or args.output_dir or args.replace_generated:
+            parser.error("Hash refresh does not regenerate requirements or the README")
+        refreshed = refresh_implementation_hashes(args.catalog, args.plugin_dir, write=not args.check_refresh)
+        print(json.dumps({"mode": "implementation_hashes_only", "written": not args.check_refresh,
+                          "verified_source_count": len(refreshed["plugins"]),
+                          "implementation_files": len(refreshed["sdk_sha256"]),
+                          "execution_verified": False, "runtime_validation_required": True}))
+        return 0
+    if args.check_refresh or not args.source_manifest or not args.output_dir:
+        parser.error("Pinned regeneration requires --source-manifest and --output-dir; use --refresh-implementation-hashes for an existing extended catalog")
+    manifest = json.loads(read_bytes(args.source_manifest))
+    if manifest["repo"] != "Nomadvorga/ayugram-src" or manifest["commit"] != SOURCE_COMMIT:
+        raise AuditError("Invalid original-19 source provenance")
+    if len(manifest["files"]) != 19 or len({item["path"] for item in manifest["files"]}) != 19:
+        raise AuditError("Expected exactly 19 distinct upstream sources")
     for item in manifest["files"]:
-        assert re.fullmatch(r"[a-z][a-z0-9_]*\.plugin", item["path"]), "Only pinned flat plugin filenames are accepted"
-        assert (args.plugin_dir / item["path"]).resolve().is_relative_to(args.plugin_dir.resolve())
+        if not re.fullmatch(r"[a-z][a-z0-9_]*\.plugin", item["path"]) or not (args.plugin_dir / item["path"]).resolve().is_relative_to(args.plugin_dir.resolve()):
+            raise AuditError("Expected flat pinned plugin filenames within source directory")
     plugins = [audit(args.plugin_dir / item["path"], item) for item in sorted(manifest["files"], key=lambda item: item["path"])]
-    assert sum(item["lines"] for item in plugins) == 40_950
-    files = ["Sources/AyuBridgeClassRegistry.swift", "Sources/AyuBridgeJavaValues.swift", "Sources/AyuBridgeProtocol.swift", "Sources/AyuPluginNativeHost.swift",
-              "Integration/AyuPluginApplicationBridge.swift", "Integration/AyuPluginService.swift",
-              "Python/_ayu_inspection.py", "Python/ayu_bridge.py", "Python/android_utils.py", "Python/client_utils.py", "Python/hook_utils.py"]
+    if sum(item["lines"] for item in plugins) != 40_950:
+        raise AuditError("Original-19 source line count changed")
     result = {"schema_version": 1, "source_repo": manifest["repo"], "source_commit": SOURCE_COMMIT,
-              "inspection": "AST-only; supplied plugin code was not imported, compiled or executed",
+               "inspection": "AST-only; supplied plugin code was not imported, compiled or executed",
+               "execution_verified": False, "runtime_validation_required": True,
               "device_launch_verified": False, "native_tests_executed": False, "plugins_runtime_verified": [],
-              "source_total_lines": 40_950, "sdk_sha256": {name: hashlib.sha256((BRIDGE / name).read_bytes()).hexdigest() for name in files},
+               "source_total_lines": 40_950, "sdk_sha256": implementation_hashes(),
               "limitations": ["Declared classes are subsets, not Android runtime parity", "Dynamic names and members require further runtime/API audit",
                                "Application provider supplies only narrow account, visible-context, alert/bulletin and app-lifecycle subsets",
                                "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
                                "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
-                              "AST alias inspection is conservative, not a scope-aware Python resolver"], "plugins": plugins}
+                               "Static AST aliases and SDK public declarations do not establish runtime or semantic compatibility"], "plugins": plugins}
     args.output_dir.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
     rows = ["# Common bridge: pinned 19-plugin compatibility audit", "",
@@ -152,10 +366,11 @@ def main():
         target = args.output_dir / name
         if target.exists():
             if target.read_text() != text:
-                assert args.replace_generated, "Output already exists with different contents; choose a new directory"
-                previous = json.loads((args.output_dir / "compatibility.json").read_text())
-                assert previous["source_commit"] == SOURCE_COMMIT
-                assert {(p["file"], p["sha256"]) for p in previous["plugins"]} == {(p["file"], p["sha256"]) for p in plugins}
+                if not args.replace_generated:
+                    raise AuditError("Different output exists; explicit replacement is required")
+                previous = json.loads(read_bytes(args.output_dir / "compatibility.json"))
+                if previous["source_commit"] != SOURCE_COMMIT or {(p["file"], p["sha256"]) for p in previous["plugins"]} != {(p["file"], p["sha256"]) for p in plugins}:
+                    raise AuditError("Full regeneration cannot replace a different pinned source set")
                 target.write_text(text)
         else:
             with target.open("x") as output:
@@ -165,4 +380,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        raise SystemExit(main())
+    except (AuditError, OSError, ValueError, TypeError, KeyError, SyntaxError, RecursionError, MemoryError, subprocess.SubprocessError):
+        sys.stderr.write("Audit failed: invalid provenance, source, SDK inventory, implementation files or bounds.\n")
+        raise SystemExit(2)

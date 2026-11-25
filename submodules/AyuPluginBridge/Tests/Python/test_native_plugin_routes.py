@@ -248,13 +248,13 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("TextEntitiesMessageAttribute(entities: entities)", controller)
         service = (INTEGRATION / "AyuPluginService.swift").read_text()
         self.assertIn("public func applySendHooks(message: String?, caption: String?", service)
-        self.assertIn("[.integer(accountIndex), .object(values)]", service)
-        # The chain is an async main-actor loop: CANCEL stops it, MODIFY replaces
-        # the mutable params for every later hook.
+        self.assertIn("AyuBridgeSendHookChain(message: message, caption: caption, peerID: peerID, accountIndex: accountIndex)", service)
+        # Wiring only: behavioral strategy/validation tests live in Swift.
         self.assertIn("for hook in hooks {", service)
-        self.assertIn("if strategy == 1 {", service)
-        self.assertIn('completion(values["message"]?.string, values["caption"]?.string, true)', service)
-        self.assertIn("if strategy == 2 || strategy == 3, let updated = result[\"params\"]?.object {", service)
+        self.assertIn("guard !chain.isFinished else { break }", service)
+        self.assertIn("chain.apply(result)", service)
+        self.assertIn("completion(chain.message, chain.caption, chain.isCancelled)", service)
+        self.assertIn("self.pythonGenerations[hook.pluginID] == generation", service)
 
     def test_no_supplied_plugin_sources_are_vendored(self):
         names = {"sand_box.plugin", "ball.plugin", "group_mentions.plugin",

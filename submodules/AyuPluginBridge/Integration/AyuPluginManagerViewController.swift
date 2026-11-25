@@ -12,7 +12,8 @@ import UniformTypeIdentifiers
     required init?(coder: NSCoder) { return nil }
     public override func viewDidLoad() {
         super.viewDidLoad()
-        self.tableView.register(UITableViewCell.self, forCellReuseIdentifier: "plugin")
+        self.tableView.rowHeight = UITableView.automaticDimension
+        self.tableView.estimatedRowHeight = 64
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(self.importPressed))
         NotificationCenter.default.addObserver(self, selector: #selector(self.serviceChanged(_:)), name: AyuPluginService.didChange, object: self.service)
         AyuNativePluginRuntime.shared.feedbackPresenter = { [weak self] in
@@ -49,9 +50,9 @@ import UniformTypeIdentifiers
     }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         switch section {
-        case 0: return "Импорт проверяет доступные API без исполнения кода плагина. Python-плагины включаются только с вашего согласия и не запускаются автоматически. Отсутствие блокировок не гарантирует работоспособность: Android/Xposed API поддерживаются лишь через явно реализованные адаптеры."
-        case 1: return "Пиннированные исходники работают через нативные адаптеры iOS без Python."
-        case 2: return self.service.startupError
+        case 0: return "Выберите файл .plugin, чтобы посмотреть описание, требования и доступные действия. Установка не включает плагин автоматически."
+        case 1: return "Функции этих плагинов обслуживают нативные адаптеры iOS. Python-код и Android-хуки не запускаются."
+        case 2: return self.service.startupError ?? (self.service.plugins.isEmpty ? "Плагинов пока нет. Откройте файл .plugin в чате или импортируйте его здесь." : "Python-плагины включаются только с вашего согласия и не запускаются автоматически.")
         default: return nil
         }
     }
@@ -63,8 +64,16 @@ import UniformTypeIdentifiers
         case 1: plugin = self.nativePlugins[indexPath.row]
         default: plugin = self.pythonPlugins[indexPath.row]
         }
-        cell.textLabel?.text = plugin.name + " · " + plugin.version
-        cell.detailTextLabel?.text = plugin.status
+        cell.textLabel?.text = plugin.name
+        cell.textLabel?.font = .preferredFont(forTextStyle: .headline)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.text = plugin.version + " · " + plugin.status
+        cell.detailTextLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.imageView?.image = UIImage(systemName: "puzzlepiece.extension")
+        cell.imageView?.tintColor = plugin.isEnabled ? .systemGreen : .secondaryLabel
         cell.accessoryType = .disclosureIndicator
         cell.selectionStyle = plugin.isBusy ? .none : .default
         cell.textLabel?.isEnabled = !plugin.isBusy
@@ -74,92 +83,91 @@ import UniformTypeIdentifiers
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 0 { self.importPressed(); return }
         guard let plugin = self.plugin(at: indexPath), !plugin.isBusy else { return }
-        let details = ([plugin.status] + plugin.blockers + [plugin.error].compactMap { $0 }).joined(separator: "\n")
-        let sheet = UIAlertController(title: plugin.name, message: details, preferredStyle: .actionSheet)
-        if plugin.isEnabled {
-            if let title = self.service.nativeActionTitle(for: plugin.id) {
-                sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
-                    guard let self else { return }
-                    do { try self.service.openNativePlugin(plugin.id, from: self) }
-                    catch { self.show(error) }
-                })
-            }
-            sheet.addAction(UIAlertAction(title: "Выключить", style: .default) { [weak self] _ in self?.run { try await self?.service.disable(plugin.id) } })
-            sheet.addAction(UIAlertAction(title: "Настройки", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginSettingsViewController(service: self.service, plugin: plugin)) })
-            if plugin.nativeAdapter == nil {
-                sheet.addAction(UIAlertAction(title: "Предпросмотр интерфейса", style: .default) { [weak self] _ in guard let self else { return }; self.presentChild(AyuPluginPreviewViewController(service: self.service, plugin: plugin)) })
-            }
-        } else if plugin.blockers.isEmpty {
-            sheet.addAction(UIAlertAction(title: "Включить…", style: .default) { [weak self] _ in self?.confirmEnable(plugin) })
-        }
-        sheet.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in self?.confirmDelete(plugin) })
-        sheet.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = tableView.cellForRow(at: indexPath) ?? tableView
-        self.present(sheet, animated: true)
+        self.openDetail(AyuPluginDetailViewController(plugin: plugin, service: self.service))
     }
     @objc private func importPressed() {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType(filenameExtension: "plugin") ?? .data], asCopy: true)
-        picker.allowsMultipleSelection = true; picker.delegate = self; self.present(picker, animated: true)
+        picker.allowsMultipleSelection = false; picker.delegate = self; self.present(picker, animated: true)
     }
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        guard !urls.isEmpty else { return }
-        self.run {
-            for url in urls { try await self.service.importPlugin(from: url) }
+        guard let url = urls.first else { return }
+        // Dismiss the picker before opening the preview; selection never installs code.
+        controller.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.openDetail(AyuPluginDetailViewController(sourceURL: url, service: self.service))
         }
     }
-    private func confirmEnable(_ plugin: AyuInstalledPlugin) {
-        let isNative = plugin.nativeAdapter != nil
-        let message = isNative
-            ? "Исходник проверяется по SHA-256. Функции и настройки обслуживает нативный адаптер iOS: Python и Android-хуки не исполняются. Нативные функции включатся в интерфейсе приложения и выключатся после его перезапуска."
-            : "Плагин запускает Python-код с правами приложения. Это не песочница: код может читать данные приложения и обращаться к сети. Проверка API не гарантирует безопасность или полную совместимость. Включайте только исходники, автору которых доверяете. После перезапуска потребуется включить плагин снова."
-        let alert = UIAlertController(title: isNative ? "Включить нативный адаптер?" : "Доверять коду плагина?", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Доверяю, включить", style: .default) { [weak self] _ in self?.run { try await self?.service.enable(plugin.id) } })
-        self.presentManaged(alert)
-    }
-    private func confirmDelete(_ plugin: AyuInstalledPlugin) {
-        let alert = UIAlertController(title: "Удалить плагин?", message: "Будут удалены локальная копия кода и настройки плагина «\(plugin.name)».", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in self?.run { try await self?.service.delete(plugin.id) } })
-        self.presentManaged(alert)
-    }
-    private func presentChild(_ controller: UIViewController) {
-        controller.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(self.dismissChild))
-        self.presentManaged(UINavigationController(rootViewController: controller))
+    private func openDetail(_ controller: AyuPluginDetailViewController) {
+        if let navigationController = self.navigationController {
+            navigationController.pushViewController(controller, animated: true)
+        } else {
+            let navigationController = UINavigationController(rootViewController: controller)
+            navigationController.overrideUserInterfaceStyle = self.overrideUserInterfaceStyle
+            self.presentManaged(navigationController)
+        }
     }
     private func presentManaged(_ controller: UIViewController) {
         if let current = self.presentedViewController { current.dismiss(animated: true) { [weak self] in self?.present(controller, animated: true) } }
         else { self.present(controller, animated: true) }
     }
-    @objc private func dismissChild() { self.dismiss(animated: true) }
-    private func run(_ work: @escaping @MainActor () async throws -> Void) { Task { do { try await work() } catch { self.show(error) }; self.tableView.reloadData() } }
     private func show(_ error: Error) { self.presentManaged(AyuPluginAlerts.error(error)) }
 }
 
-@MainActor private enum AyuPluginAlerts {
+@MainActor enum AyuPluginAlerts {
+    static func message(_ error: Error) -> String {
+        return (error as? AyuPluginService.Failure)?.localizedDescription ?? "Операция не выполнена. Исходный код и данные плагина не выводятся в ошибку."
+    }
     static func error(_ error: Error) -> UIAlertController {
-        let alert = UIAlertController(title: "Не удалось выполнить действие", message: (error as? AyuPluginService.Failure)?.localizedDescription ?? "Операция не выполнена. Исходный код и данные плагина не выводятся в ошибку.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Не удалось выполнить действие", message: self.message(error), preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); return alert
     }
 }
 
-@MainActor private final class AyuPluginSettingsViewController: UITableViewController {
+@MainActor final class AyuPluginSettingsViewController: UITableViewController {
     private let service: AyuPluginService
     private let plugin: AyuInstalledPlugin
     private let subpageCallback: String?
     private var rows: [AyuPluginSetting] = []
     private var loading = false
+    private var reloadRequested = false
+    private var pendingReloadGeneration: String?
     init(service: AyuPluginService, plugin: AyuInstalledPlugin, subpageCallback: String? = nil, title: String = "Настройки плагина") {
         self.service = service; self.plugin = plugin; self.subpageCallback = subpageCallback
         super.init(style: .insetGrouped); self.title = title
     }
     required init?(coder: NSCoder) { return nil }
+    isolated deinit { NotificationCenter.default.removeObserver(self) }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        self.tableView.rowHeight = UITableView.automaticDimension
+        self.tableView.estimatedRowHeight = 64
+        NotificationCenter.default.addObserver(self, selector: #selector(self.settingsChanged(_:)), name: AyuPluginNativeHost.settingsDidChange, object: self.service.host)
+    }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.reload()
     }
+    @objc private func settingsChanged(_ notification: Notification) {
+        guard let owner = notification.userInfo?["pluginID"] as? String, owner == self.plugin.id,
+              let generation = notification.userInfo?["generation"] as? String,
+              self.service.shouldReloadSettings(pluginID: owner, generation: generation) else { return }
+        self.pendingReloadGeneration = generation
+        self.reload()
+    }
     private func reload() {
-        guard !self.loading else { return }; self.loading = true
+        guard !self.loading else { self.reloadRequested = true; return }
+        // Recheck a queued notification after a save/read: its plugin may have
+        // been disabled or replaced while that operation was suspended.
+        if let generation = self.pendingReloadGeneration {
+            self.pendingReloadGeneration = nil
+            guard self.service.shouldReloadSettings(pluginID: self.plugin.id, generation: generation) else {
+                self.reloadRequested = false
+                return
+            }
+        }
+        self.reloadRequested = false
+        self.loading = true
+        self.tableView.isUserInteractionEnabled = false
         Task {
             do {
                 if let callback = self.subpageCallback {
@@ -168,7 +176,16 @@ import UniformTypeIdentifiers
                     self.rows = try await self.service.settings(self.plugin.id)
                 }
             } catch { self.present(AyuPluginAlerts.error(error), animated: true) }
-            self.loading = false; self.tableView.reloadData()
+            self.finishRowOperation()
+        }
+    }
+    private func finishRowOperation() {
+        self.loading = false
+        self.tableView.isUserInteractionEnabled = true
+        self.tableView.reloadData()
+        if self.reloadRequested {
+            self.reloadRequested = false
+            self.reload()
         }
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { self.rows.count }
@@ -176,6 +193,12 @@ import UniformTypeIdentifiers
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let row = self.rows[indexPath.row], cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = row.text; cell.detailTextLabel?.text = String((row.descriptor["subtext"].string ?? "").prefix(512))
+        cell.textLabel?.numberOfLines = 0; cell.detailTextLabel?.numberOfLines = 0
+        cell.textLabel?.font = .preferredFont(forTextStyle: .body); cell.detailTextLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true; cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.isEnabled = row.descriptor["enabled"] != .bool(false)
+        if row.descriptor["destructive"] == .bool(true) { cell.textLabel?.textColor = .systemRed }
+        else if row.descriptor["accent"] == .bool(true) { cell.textLabel?.textColor = .systemBlue }
         cell.selectionStyle = ["Header", "Divider", "Switch"].contains(row.type) ? .none : .default
         if row.type == "Header" { cell.textLabel?.font = .preferredFont(forTextStyle: .headline) }
         else if row.type == "Switch" {
@@ -191,6 +214,7 @@ import UniformTypeIdentifiers
     @objc private func switchChanged(_ sender: UISwitch) { guard self.rows.indices.contains(sender.tag) else { return }; self.save(sender.tag, .bool(sender.isOn)) }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard !self.loading, self.rows.indices.contains(indexPath.row) else { return }
         let row = self.rows[indexPath.row]; guard row.descriptor["enabled"] != .bool(false), !(row.type == "Input" && row.descriptor["multiline"] == .bool(true)) else { return }
         if let callback = row.descriptor["create_sub_fragment"]["$callback"].string {
             let page = AyuPluginSettingsViewController(service: self.service, plugin: self.plugin, subpageCallback: callback, title: row.text)
@@ -216,11 +240,17 @@ import UniformTypeIdentifiers
         guard self.rows.indices.contains(index), !self.loading else { self.tableView.reloadData(); return }
         self.loading = true; self.tableView.isUserInteractionEnabled = false
         let row = self.rows[index]
-        Task { do { try await self.service.set(row, value: value, pluginID: self.plugin.id); self.rows[index].value = value } catch { self.present(AyuPluginAlerts.error(error), animated: true) }; self.loading = false; self.tableView.isUserInteractionEnabled = true; self.tableView.reloadData() }
+        Task {
+            do {
+                try await self.service.set(row, value: value, pluginID: self.plugin.id)
+                self.rows[index].value = value
+            } catch { self.present(AyuPluginAlerts.error(error), animated: true) }
+            self.finishRowOperation()
+        }
     }
 }
 
-@MainActor private final class AyuPluginPreviewViewController: UIViewController {
+@MainActor final class AyuPluginPreviewViewController: UIViewController {
     private let service: AyuPluginService
     private let plugin: AyuInstalledPlugin
     private let surface = UIView()

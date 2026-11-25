@@ -18,25 +18,65 @@
   ],
   "source_total_lines": 42600,
   "sdk_sha256": {
-    "Integration/AyuPluginApplicationBridge.swift": "828af9f799dea1d2ddeafc54d5973c8dd7cb7d6a159feb8d1e5b41402128f5f5",
-    "Integration/AyuPluginService.swift": "52a7ca14b3b7388c0c1ba2cc7eae8046a914b31dc3adc9111fcb23db0105eaee",
-    "Python/_ayu_inspection.py": "8f8e519f1e40719e9af57fa284160f14b7a8d00ce13760bd1705a9c70cf1a8de",
-    "Python/android_utils.py": "ded9a1efe637422f03ee3cd3d25cdefd01ef9ff67c04adacd9ed4a59e79debc4",
-    "Python/ayu_bridge.py": "d231ffda03b22a90c2bc2a33c340be44ea86001fc01bfe44139254fc7506819a",
-    "Python/client_utils.py": "61cfdac981a4f36275dda7f150fd3140a772efa79e016856bfc21b6ec218726b",
-    "Python/hook_utils.py": "21c8cf032326a67ee7764ee2369c714e955146e3ae2d48346b381b87cc756d91",
+    "Integration/AyuAtmosphericPluginAdapter.swift": "2c8ee6c843fe5509417d80d37671fd90e5cf1dd8937f6b479ae7ef8199546bed",
+    "Integration/AyuAtmosphericRendering.swift": "f4c7d160312fabbfa7dcd433040571cdf73de4b8d4f8878f81e3ec88acd4bfbb",
+    "Integration/AyuBallAdapter.swift": "55af9cc2c985d066fd97e5a9441ee48b02041b251fa3801fd1d5b1e6eb830f3e",
+    "Integration/AyuBridgeMessageAdapter.swift": "57990857774f2e71295e4ddd3e2be9a1585bd090f295e204a41b1b415e56fab6",
+    "Integration/AyuGroupMentionsAdapter.swift": "56c54a4dee5d1147d5cb0e10b2e939c97f7a27854b21acd5803a3807b42ccbd9",
+    "Integration/AyuNativePluginAdapter.swift": "2fdcbc5a7dc55c7c23cab770f5a09a08202edd251cb7eebacc66f7408f16297b",
+    "Integration/AyuPluginApplicationBridge.swift": "2c717c942c2b06085ef6b19f629424979e2100074275d3bc9ad717498b00a8a7",
+    "Integration/AyuPluginDetailViewController.swift": "8ec9fddff6992fe983bfad58d9625ed862395b71281e5d44f361bbac9eba76d2",
+    "Integration/AyuPluginManagerViewController.swift": "5d35808cad64b869cc8a805c2842ba73d3b858f0a4a1e35f555ff56600bf757a",
+    "Integration/AyuPluginMenuBridge.swift": "6bd2df41ff8c931f49a02b528a019a6036d1aa5585b12adda1285a85b75916c1",
+    "Integration/AyuPluginResourceLocator.swift": "fab037821d012f5cd2af18549fc62882ef2e8657e6d5dc934a3192d3a394d0a2",
+    "Integration/AyuPluginService.swift": "aad3ca2adaf60e6ac89e3bf96f0e47c3326b944f0140bd64be05c023d9439d91",
+    "Integration/AyuPremiumDialogCardsAdapter.swift": "35b596164d4083dcb66b6861806439d12945e74f880f68f56d2b2b1d58c88be4",
+    "Integration/AyuPullNextChatAdapter.swift": "6de0506bfbe44fb5863d29bb7b86c8ff4647c0595553b18978a4b0f7d9bbaa27",
+    "Integration/AyuSandBoxAdapter.swift": "8bcdd96213c4f0545116ce7351935f4d0bcb6f311e9eba998418faf757afca07",
+    "Integration/AyuScreenshotPrivacyAdapter.swift": "eaece5badc0ab0101c73966701c90c2c7068332c795ec7c54e28ba00edfeefcd",
+    "ObjC/APBPythonRuntime.m": "dd27842076663e0051f9e12c34b246ead21533bb0cca5c239baf61f04eab429a",
+    "PublicHeaders/AyuPluginPython/APBPythonRuntime.h": "f3f23e9a1916287c9f236a48e73d13d1b273dbf78523040c57c9e403003952c2",
+    "Python/_ayu_inspection.py": "69198833fbfa9757d8dcc12acaf1335d79ec513a1857120ca59a312e9b50e897",
+    "Python/android_utils.py": "064bdd9ea0d38e56221a792e16294086f704ef9676e61575a2479db30b3ea465",
+    "Python/ayu_bridge.py": "205d6bb632a6b6ebba8d204a57c64582f61a8acb6f29c2f53600dd48b0ba5548",
+    "Python/base_plugin.py": "31dd8f8c36da67e106e775c47982d2763df36ee984da57e6f4e1df438f16d34a",
+    "Python/client_utils.py": "b23c4b6085d70e0eeade70d8f43ee6700b8789d02df12dad053a69a42612e38f",
+    "Python/extera_utils/__init__.py": "37333c36548a4964a05f9f273ec42369c35ae2a584a5a2aa1113b30730447903",
+    "Python/extera_utils/classes.py": "a843a5042f786bcb712f494374ba789df7f8a0bcddf9b40eadd19a3dede660ea",
+    "Python/extera_utils/get_caller.py": "3737afe7ab9800532e52056b8927b4f1a5632b15a97e7451baaf27787203509a",
+    "Python/extera_utils/lifecycle.py": "a1e4ad69915b9766978b9ed26a80aaa9c2a330bb4b1865e34c6cba9dc681de08",
+    "Python/extera_utils/metadata_parser.py": "c8cc03045cab62c1b905dd2b2e9c2002e1f83402d14db6a72b3d74e483faf245",
+    "Python/extera_utils/text_formatting.py": "1a5588f7dec3cc7c9efab95c102f798d254995bbb6a8358d94a94f7283381765",
+    "Python/file_utils.py": "3ecde52d56879bd577a48777a0be04be6a0425bea4431c3e266e2092e572997f",
+    "Python/hook_utils.py": "6f7511212de9c7e94ddf12a2d1162781644203c70b6aef6b7f7d45157eb25f60",
+    "Python/intents.py": "52c1950a518699e925e1464187b9aebcf2e7c8f26cc573411fff5123b861fd30",
+    "Python/jarray.py": "12b20cada994c51050a771ddf2163c6dbdac99d227590c5879ff0403ffc89a8b",
+    "Python/java.py": "51ed1c46652c22afbee0927cb551f6aca5bf7f3eb83562d6b862c68ac91286c4",
+    "Python/log_utils.py": "068aaa532113e8b3ed11b3c27bf447da96f906f3a116ad958f5865a3d23443c1",
+    "Python/markdown_utils.py": "d0d61d9d9d7e328beb2fd4e4dc1d19217e0e9cb855b06c9611ae26a853477a20",
+    "Python/plugin_settings.py": "c530b50483b844261096639e5f98b9317c6a53a4bc3684c55f16254a1a8c7b51",
+    "Python/requests.py": "e8c6a7eff8ec5884702008551bbe00f8be979a582cf6490f952827bb569b8d52",
+    "Python/tlrpc.py": "53dd06896f7ced5f1e88fdcc0c3da4a811c65c067d1ae17a67b87a87be8e4ff6",
+    "Python/ui/__init__.py": "ecd939d19053abed1943ca104bfc10aba229d4611102e4857d5aaa33d4267f6c",
+    "Python/ui/alert.py": "d17bea8f932b46aa57847dab1a579e7f59074f11c3e05c57238ccad564bafa84",
+    "Python/ui/bulletin.py": "7538b5467a914c6001b2bfb2349c1a1c6b088ee1a0c3898bb99d8515e81a95f1",
+    "Python/ui/settings.py": "ef1af81e09ae6529f3a682b01845234fdd72bcd11f043686cd47f3cd0295c804",
     "Python/zwylib.py": "5f23ae97726fe7ba0cd9eb61f6ed2e505dbdea67ea87a0386fb49a4b653cdf4a",
-    "Sources/AyuBridgeClassRegistry.swift": "9d917861e5ddab5a05ad0469cc70df757c08ecf1d225311ad99cf127f729a1a9",
+    "Sources/AyuBridgeClassRegistry.swift": "b7fa2873d162a018ad3b37d37e7955ccdb9fde1ad881e5fc991ebc19c95fd8e4",
+    "Sources/AyuBridgeHooks.swift": "672dd56712966d9782b8aa61d7bda7fe4d8c6b2c6dbe8603820bf7161f1b0216",
+    "Sources/AyuBridgeJavaRuntime.swift": "ef29ff8ef61740aa127a6d7ccb30001da9b5573041ab21568fb5f95fa114e16a",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
     "Sources/AyuBridgeProtocol.swift": "fd8aa6f0b3b8c1c7dc19b0ea7c1e6057022e684176090d055e52ffa6a9d68016",
-    "Sources/AyuPluginNativeHost.swift": "fda74e9b65e4db1f664769bad964110b2f41a3bf5294df9dd5197a326119a89f",
-    "Sources/AyuBridgeJavaRuntime.swift": "87f00247087893628e19216918a315c25320f665f2dec9db98c43dfcd86d4549"
+    "Sources/AyuBridgePythonWorker.swift": "8f94e310d8e3a2dc0c48699a9b68f215fbe74180df4a0c2907993d186297bf90",
+    "Sources/AyuBridgeUI.swift": "e246491b557b72181a68b44dd6d0ea0d118d1615f584defab390f00f3422fcd8",
+    "Sources/AyuBridgeValidation.swift": "23edaaea14b3c61eea78189d073156f3cfded7a20d94bab5a859aa943812bfa0",
+    "Sources/AyuPluginNativeHost.swift": "d25dd19f859976560f6fae06fa3655fdb0c022fbe5846b3d4dc09fdb977fde87"
   },
   "limitations": [
     "Declared classes are subsets, not Android runtime parity",
     "Dynamic names and members require further runtime/API audit",
     "Application provider supplies only narrow account, visible-context, alert/bulletin, client-call and app-lifecycle subsets",
-    "Requests/messages, account notifications, hooks, menus, media, subclassing and graphics remain unsupported",
+    "Telegram request/message transport and media are not implemented; only a global activeAccountChanged notification, outgoing text/caption hook, and MESSAGE_CONTEXT_MENU have narrow adapters. Arbitrary hooks, other notification streams and menu types, subclassing and graphics remain unsupported",
     "Required unwired feature families may have partial subsets; consult partially_wired_features, not import success",
     "AST alias inspection is conservative, not a scope-aware Python resolver",
     "General Python import uses AST preflight without executing plugin code; enable repeats inspection and requires explicit trust. Missing APIs, external requirements and unimplemented version policy are blockers. Native adapter IDs remain source-pinned",
@@ -258,6 +298,7 @@
       "partially_wired_features": [
         "account_identity_and_own_profile",
         "basic_alerts_and_bulletins",
+        "clipboard_write",
         "visible_screen_context"
       ],
       "unadapted_classes": [
@@ -279,9 +320,6 @@
         "org.telegram.ui.Components.RadialProgressView"
       ],
       "unsupported_sdk_symbols": {
-        "android_utils": [
-          "copy_to_clipboard"
-        ],
         "ui.settings": [
           "EditText"
         ]
@@ -543,8 +581,7 @@
       ],
       "unsupported_sdk_symbols": {
         "android_utils": [
-          "OnLongClickListener",
-          "copy_to_clipboard"
+          "OnLongClickListener"
         ],
         "client_utils": [
           "NotificationCenterDelegate",

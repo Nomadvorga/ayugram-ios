@@ -12,30 +12,95 @@ Neither successful imports nor an IPA build establish functional compatibility.
   expose only `id`, `first_name`, `last_name`, `username`. Missing profile data fails
   explicitly. No phone, access hash, credentials or native account objects.
 - `client_utils`: `get_selected_account`, `get_user_config`, `get_last_fragment`,
-  `get_messages_controller`. The returned `BaseFragment` provides
+  `get_messages_controller`, `get_account_instance`. `AccountInstance` provides
+  `getInstance(index)`, `getCurrentAccount()`, `getUserConfig()` and
+  `getMessagesController()`; child handles retain the requested account identity,
+  including after switching the selected account, and expire on account removal
+  or replacement. The returned `BaseFragment` provides
   `getCurrentAccount`, `getDialogId` for supported cloud peer chats, and
   `getContext`/`getParentActivity` as an explicit native context descriptor, not
-  an Android Activity. `MessagesController.getChat` resolves only the currently
+  an Android Activity. It also supplies `getAccountInstance`, `getUserConfig` and
+  `getMessagesController`, after checking the visible screen identity.
+  `MessagesController.getInstance(index)` and `getUser(id)` expose only the active
+  account's own public profile; other user ids return a cache miss (`null`).
+  `MessagesController.getChat` resolves only the currently
   visible cloud group/channel and returns bounded `id`/`broadcast`/`megagroup`
   state. Secret/local IDs are not translated. Other client helpers reject with
   `UNSUPPORTED_API`; no empty controllers/results.
 - `ui.alert.AlertDialogBuilder`: title/message, up to 32 items, three named
-  buttons, cancelable dialogs, and plugin-owned custom view trees. Custom views
-  accept the same native `LinearLayout`/`EditText` shims as mounted settings
-  surfaces; undeclared options still reject. Returns an owned dialog with
-  `dismiss`/`isShowing`. Callbacks receive the same owned dialog and the Android
-  button/item index, asynchronously after native dismissal.
+  buttons and cancelable dialogs. Returns an owned dialog with `dismiss` and
+  `isShowing`. Callbacks receive the same owned dialog and the Android
+  button/item index, asynchronously after native dismissal. Custom Android views,
+  progress/spinner dialogs and Android resource providers reject explicitly.
 - Settings components expose `create_sub_fragment`; the settings screen invokes
   the original callback and renders the returned row list as a pushed native
   sub-page. `EditText.getText().toString()`, `Theme.getColor`,
   `TypedValue.applyDimension`, hints, single-line/min-lines flags, text colours
   and layout margins are host shims, not reimplemented plugin logic.
+- The virtual view tree supports a bounded `android.view.Gravity` subset for
+  `TextView.setGravity` and `LinearLayout.setGravity`: horizontal left/right,
+  start/end, center, and vertical top/center/bottom. `LinearLayout` aligns the
+  child group on its main axis and children on the cross axis. Fill/clip flags,
+  per-child gravity and scrollable backing remain unsupported. Relative start/end
+  follow the native view's layout direction. `EditText` supports horizontal
+  gravity and center/unspecified vertical gravity.
+- `LinearLayout.LayoutParams` accepts bounded width/height and an optional
+  nonnegative weight. Positive weights divide only the remaining main-axis space
+  after base child sizes and margins; this is not full Android measurement parity.
+- `ScrollView` accepts one direct child and uses a native vertical `UIScrollView`
+  with bounded content-size calculation. Horizontal scrolling, nested scrolling,
+  fling physics and Android scroll callbacks are unsupported.
+- `Bundle` and `Intent` provide bounded owner-scoped Java value objects only;
+  no Android activity launch or system intent interception is performed.
+  `MotionEvent` constructors provide bounded synthetic snapshots, not live UIKit
+  touch objects. `Handler.post`/`postDelayed` dispatch declared callbacks through
+  the generation-revocable host callback path; Android Loopers, queue selection
+  and callback cancellation are not implemented.
+- `Context.getResources().getDisplayMetrics()` snapshots the explicit presentation
+  window's display scale and dimensions as read-only `density`, `densityDpi`,
+  `widthPixels`, `heightPixels`. Density uses 160 Android dpi per iOS display scale;
+  it is a compatibility conversion, not the panel's physical dpi. `TypedValue`
+  supports PX and DIP only, requires an owned metrics handle from a still-visible
+  screen, and scales DIP using that snapshot. No Android font-scale emulation.
+- `Resources.getConfiguration()` returns an owner-held, read-only
+  `Configuration.orientation` snapshot derived from the bound scene's interface
+  orientation. Only `ORIENTATION_UNDEFINED`, `ORIENTATION_PORTRAIT`, and
+  `ORIENTATION_LANDSCAPE` are exposed; stale screen snapshots and writes reject.
+- `Theme.getColor` accepts exactly the 16 declared, one-based keys and returns
+  signed Android ARGB values from an explicit UIKit semantic-color mapping;
+  `isDarkThemeEnabled` reads the authorized presenter's traits on main. Both fail
+  when no visible presentation context is bound. This is the iOS system-color
+  subset, not Telegram theme/accent management; the last declared key is valid and
+  zero/unknown keys reject.
 - Original `on_send_message_hook` callbacks run before outgoing messages are
   enqueued. `CANCEL` suppresses the send; `MODIFY`/`MODIFY_FINAL` replaces the
   mutable `message` or `caption`. Existing UTF-16 entity ranges are remapped
   after the plugin's replacement. Hooks run in priority/registration order.
-- `BulletinHelper`: simple/success/error text; explicit screen-owned, accessible
-  native overlay, three-second lifetime. Extra Android options reject.
+  Registration reserves quota before returning a token (16 per plugin, 256
+  globally, including pending results); failed result validation rolls back the
+  reservation and unload revokes pending commits.
+- `BulletinHelper`: simple/success/error text, copy feedback, and a bounded
+  text-button bulletin with one-shot callback and 1–10,000 ms lifetime; explicit
+  screen-owned, accessible native overlays. `show_copied_to_clipboard` displays
+  feedback only and does not access the clipboard. Android icons and undo
+  semantics remain unsupported.
+- `android_utils.copy_to_clipboard(text)`: writes a bounded UTF-8 string to the
+  iOS pasteboard only while the captured account/screen is still visible, then
+  presents native copied-to-clipboard feedback. Values over 65,536 bytes and
+  calls without a visible screen reject. This is a clipboard write, not an
+  Android clipboard-manager or clipboard-read API.
+- `BasePlugin.add_menu_item` for `MESSAGE_CONTEXT_MENU`: bounded native rows
+  appear in the chat message context menu. Existing Telegram rows are published
+  immediately; plugin rows are appended after asynchronous Python conditions
+  finish, only while that same chat/menu remains current. Conditions receive
+  only the current account slot, dialog id and message id; click callbacks
+  receive the same values. Rows are ordered by priority then registration order
+  and capped at 16 visible items (32 condition evaluations per query, 4 concurrent Python
+  evaluations, 16 rows per plugin and 256 registrations total). A fixed set of
+  Android icon names maps to SF Symbols. `subtext`, long-click callbacks,
+  Android MVEL condition strings, Java message/fragment objects and the other
+  menu types are explicitly unsupported. Tokens are owner/generation checked
+  and revoked on unregister, disable or unload.
 - `AppEvent`: START after plugin activation, RESUME/PAUSE on native active changes,
   STOP on background transition. Every event carries the exact Python load
   generation. No main-thread wait and no Python startup just to observe lifecycle.
@@ -45,6 +110,9 @@ Neither successful imports nor an IPA build establish functional compatibility.
   the event id, process-stable account slot and an empty argument array. No other
   notification ids, Android account objects or arbitrary listener subclassing are
   exposed.
+  `get_notification_center(account=None)` accepts the SDK's default argument and
+  returns this global center; a concrete account still rejects because account-
+  scoped notification streams have no native binding.
 - Native `TelegramUI` binding reads real account/context/profile signals and the
   authorized root controller, rejects locked/inactive/stale screens, and revokes
   bridge UI on lock/background/account changes. Slots are process-stable and never
@@ -55,8 +123,8 @@ Neither successful imports nor an IPA build establish functional compatibility.
   presentations per plugin, sixteen globally. Unload revokes queued native senders.
 
 `NotificationCenter` beyond the global `activeAccountChanged` observer, theme control,
-message/request interception, menus, arbitrary Android view subclasses, graphics and
-background plugin threads are **not implemented**. The supported view subset is
+message/request interception, other menu types, arbitrary Android view subclasses,
+graphics and background plugin threads are **not implemented**. The supported view subset is
 `View`, `FrameLayout`, `LinearLayout`, `TextView`, `EditText` and `ImageView`.
 START is per Python activation, not a fabricated replay of process launch. STOP is
 not guaranteed at OS termination. Basic UIKit dialogs/bulletins are iOS equivalents,

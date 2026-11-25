@@ -1,5 +1,36 @@
 # Android plugin bridge: implementation and validation ledger
 
+## 2026-11-25 compatibility checkpoint
+
+The current local change set adds a shared installation/detail window for chat
+attachments and document-picker imports, disabled-plugin updates with settings
+preservation and preview-source SHA-256 verification, persistent generic metadata,
+and a coordinated 4 MiB source limit. Installation does not activate Python code.
+
+Portable SDK work covers Android settings/metadata/hook constructors, account-bound
+client helpers and callbacks, generation-owned cleanup, text formatting with UTF-16
+entities, basic alert builder callback/return semantics, log/file/URI helpers, and
+explicit native lookup instead of fabricated TL constructor objects. Atomic
+`settings.replace` and generation-checked settings refresh extend the transport.
+Outgoing send hooks use a validated chain with CANCEL/MODIFY_FINAL semantics and
+reject stale callback results after disable/reload. Application account/context,
+theme-value, display-metrics, bounded clipboard-write and one message-context-menu
+adapter remain documented subsets; all other menu types still require host work.
+
+The [corpus report](plugins-corpus-compatibility.md) supersedes the former
+19-file inventory as the scope assessment: 493 `.plugin` attachments and 21
+archives, 737 source units. Archive inspection is not archive installation.
+Version policy, native method interception, complete controllers/requests, menu
+types beyond `MESSAGE_CONTEXT_MENU`, worker threads and Android graphics/media
+remain independent missing work.
+
+Validation available here is portable Python contracts, static source wiring,
+offline packaging fixtures and corpus analysis. Native compilation, native tests,
+device execution and the [recorded visual acceptance](plugins-installation-validation.md)
+remain pending on macOS/Xcode. Earlier counts below describe historical
+checkpoints, not the result of the current change set. The complete API port and
+the goal that almost all supplied plugins work are **not established**.
+
 Branch: `plugins-test`, based on `85d6da613f08e0a8a95ce3539c0e0d3a56b51243`.
 
 This branch is implementing a compatibility bridge for the supplied Android Python plugins. The objective is source compatibility through explicit SDK/Java/UIKit adapters. The current checkpoint is the runtime/SDK/manager foundation; it is not a claim that the nineteen original plugins execute unchanged or that Android FPS has been matched.

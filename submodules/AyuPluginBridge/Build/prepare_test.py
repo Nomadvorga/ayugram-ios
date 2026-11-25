@@ -110,7 +110,12 @@ class PrepareHelperTests(unittest.TestCase):
             source.mkdir(parents=True)
             outside = root / "outside.txt"
             outside.write_text("outside")
-            (source / "escape.txt").symlink_to(outside)
+            try:
+                (source / "escape.txt").symlink_to(outside)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    self.skipTest("Windows symlink privilege is unavailable; fixture runs in Linux CI")
+                raise
             with self.assertRaises(prepare.PrepareError):
                 prepare.copy_resource_tree(source, root / "out", root / "archive")
 

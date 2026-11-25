@@ -27,9 +27,13 @@ from typing import Any
 from _ayu_inspection import import_inventory
 
 VERSION = 1
-SDK_MODULES = frozenset({"ayu_bridge", "base_plugin", "client_utils", "android_utils",
-                         "hook_utils", "plugin_settings", "zwylib", "extera_utils", "java", "jarray", "tlrpc", "ui", "ui.settings",
-                         "ui.alert", "ui.bulletin"})
+SDK_MODULES = frozenset({
+    "ayu_bridge", "base_plugin", "client_utils", "android_utils", "hook_utils",
+    "plugin_settings", "zwylib", "java", "jarray", "tlrpc", "ui", "ui.settings",
+    "ui.alert", "ui.bulletin", "log_utils", "markdown_utils", "file_utils", "intents",
+    "extera_utils", "extera_utils.classes", "extera_utils.lifecycle",
+    "extera_utils.text_formatting", "extera_utils.get_caller", "extera_utils.metadata_parser",
+})
 UNSUPPORTED_IMPORTS = {
     "threading": "Plugin-created Python threads are unsupported",
     "_thread": "Plugin-created Python threads are unsupported",
@@ -39,6 +43,11 @@ UNSUPPORTED_IMPORTS = {
     "ctypes": "Dynamic native symbol access is unsupported; use explicit host adapters",
 }
 _ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{1,31}$")
+_METADATA_KEYS = frozenset({
+    "__id__", "__name__", "__description__", "__author__", "__version__", "__icon__",
+    "__min_version__", "__requirements__", "__app_version__", "__sdk_version__", "__category__",
+    "__bridge_operations__",
+})
 _current = contextvars.ContextVar("ayu_plugin_scope", default=None)
 
 
@@ -57,6 +66,13 @@ class ProtocolError(BridgeError):
 class UnsupportedAPI(BridgeError):
     def __init__(self, message: str):
         super().__init__("UNSUPPORTED_API", message)
+
+
+def _inventory(tree):
+    try:
+        return import_inventory(tree, SDK_MODULES)
+    except (ValueError, RecursionError, OSError, UnicodeError, SyntaxError) as error:
+        raise BridgeError("LOAD_REJECTED", "Static SDK inventory is invalid or exceeds its limits") from error
 
 
 def _object(pairs):
@@ -496,23 +512,25 @@ class Runtime:
 
     def inspect(self, source, filename="plugin.plugin"):
         self.check_queue()
-        if not isinstance(source, str) or len(source.encode("utf-8")) > 2_000_000:
+        if not isinstance(source, str) or len(source.encode("utf-8")) > 4_194_304:
             raise BridgeError("LOAD_REJECTED", "Plugin source must be bounded UTF-8 text")
         try:
             tree = ast.parse(source, filename=filename)
-        except SyntaxError as error:
+        except (SyntaxError, ValueError, RecursionError) as error:
             raise BridgeError("LOAD_REJECTED", "Plugin source has invalid syntax") from error
+        # Validate the AST budget before literal evaluation or repeated traversal.
+        inventory = _inventory(tree)
         metadata = {}
         for node in tree.body:
             if isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
                 for target in targets:
-                    if isinstance(target, ast.Name) and target.id.startswith("__") and target.id.endswith("__"):
+                    if isinstance(target, ast.Name) and target.id in _METADATA_KEYS:
                         if target.id in metadata:
                             raise BridgeError("LOAD_REJECTED", "Duplicate plugin metadata")
                         try:
                             metadata[target.id] = ast.literal_eval(node.value)
-                        except (ValueError, TypeError):
+                        except (ValueError, TypeError, RecursionError):
                             raise BridgeError("LOAD_REJECTED", "Metadata must be literal")
         plugin_id = metadata.get("__id__")
         if not isinstance(plugin_id, str) or not _ID.fullmatch(plugin_id) or not isinstance(metadata.get("__name__"), str) or not metadata["__name__"].strip():
@@ -535,12 +553,12 @@ class Runtime:
             json.dumps(metadata, allow_nan=False)
         except (TypeError, ValueError, RecursionError) as error:
             raise BridgeError("LOAD_REJECTED", "Metadata must contain finite JSON-compatible literals") from error
-        classes.update(import_inventory(tree, SDK_MODULES)["classes"])
+        classes.update(inventory["classes"])
         return tree, metadata, sorted(imports), sorted(classes)
 
     def inspect_plugin_json(self, source, filename="plugin.plugin"):
         tree, metadata, imports, classes = self.inspect(source, filename)
-        inventory = import_inventory(tree, SDK_MODULES)
+        inventory = _inventory(tree)
         requirements = metadata.get("__requirements__", [])
         if not isinstance(requirements, list) or not all(isinstance(v, str) for v in requirements):
             raise BridgeError("LOAD_REJECTED", "__requirements__ must be a literal string list")
@@ -555,7 +573,8 @@ class Runtime:
                            "python_stdlib_candidates": sorted(getattr(sys, "stdlib_module_names", ())),
                             "unsupported_imports": unsupported,
                             "imported_symbols": inventory["imported_symbols"],
-                            "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
+                             "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
+                             "optional_imports": inventory.get("optional_imports", []),
                             "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
     def preflight_plugin_json(self, source, filename="plugin.plugin"):
@@ -595,7 +614,7 @@ class Runtime:
     def load_plugin(self, source, filename="plugin.plugin", expected_id=None):
         self.check_queue()
         tree, metadata, imports, classes = self.inspect(source, filename)
-        inventory = import_inventory(tree, SDK_MODULES)
+        inventory = _inventory(tree)
         plugin_id = metadata["__id__"]
         if expected_id is not None and expected_id != plugin_id:
             raise BridgeError("LOAD_REJECTED", "Plugin ID does not match trusted expected ID")

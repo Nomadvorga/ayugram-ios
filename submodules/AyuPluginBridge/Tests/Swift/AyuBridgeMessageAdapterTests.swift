@@ -74,73 +74,88 @@ final class AyuBridgeMessageAdapterTests: XCTestCase {
         let events = HookRecorder()
         let hooks = AyuBridgeHookRegistry()
         _ = try hooks.subscribe(pluginID: "p", point: .messageSendPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { payload in
-            await MainActor.run { events.log.append("pre") }
+            events.append("pre")
             return .proceed
         }
         _ = try hooks.subscribe(pluginID: "p", point: .messageSendPost, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { payload in
-            await MainActor.run { events.log.append("post") }
+            events.append("post")
             return .proceed
         }
         let adapter = AyuBridgeMessageAdapter(transport: FixtureTransport(), hooks: hooks)
         let sent = try await adapter.send(self.message())
-        await MainActor.run { XCTAssertEqual(events.log, ["pre", "post"]) }
+        XCTAssertEqual(events.log, ["pre", "post"])
         XCTAssertEqual(sent.messageID, 1)
     }
 
     private final class HookRecorder: @unchecked Sendable {
-        var log: [String] = []
+        private let lock = NSLock()
+        private var values: [String] = []
+        var log: [String] {
+            self.lock.lock(); defer { self.lock.unlock() }
+            return self.values
+        }
+        func append(_ value: String) {
+            self.lock.lock(); defer { self.lock.unlock() }
+            self.values.append(value)
+        }
     }
 
     func testPreHookCancellationBlocksSend() async throws {
         let hooks = AyuBridgeHookRegistry()
         _ = try hooks.subscribe(pluginID: "p", point: .messageSendPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { _ in .cancel("nope") }
         let adapter = AyuBridgeMessageAdapter(transport: FixtureTransport(), hooks: hooks)
-        XCTAssertThrowsError(try await adapter.send(self.message()))
+        do {
+            _ = try await adapter.send(self.message())
+            XCTFail("cancelled send must throw")
+        } catch let error as AyuBridgeMessageError {
+            XCTAssertEqual(error, .missingCapability(name: "send.cancelled", reason: "nope"))
+        }
     }
 
     func testPreHookReplacementReachesTransport() async throws {
         let hooks = AyuBridgeHookRegistry()
-        let seen = ReplacementRecorder()
+        let seen = HookRecorder()
         let transport = FixtureTransport(onSend: { request in
-            await MainActor.run { seen.text = request.text }
+            seen.append(request.text ?? "")
             return AyuBridgeIncomingMessage(accountID: 1, chatID: 2, messageID: 9, senderID: 1, text: request.text, entities: [], date: Date(), isOutgoing: true)
         })
         _ = try hooks.subscribe(pluginID: "p", point: .messageSendPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { payload in
             var updated = payload
-            if case let .object(request) = payload["request"], var text = request["text"]?.string {
-                text = "hooked"
-                updated["request"] = .object([AyuBridgeValue]([]).isEmpty ? .null : request.merging(["text": .string(text)]) { a, _ in a })
+            if case var .object(request) = payload["request"] {
+                request["text"] = .string("hooked")
+                updated["request"] = .object(request)
             }
             return .replace(updated)
         }
         let adapter = AyuBridgeMessageAdapter(transport: transport, hooks: hooks)
         let sent = try await adapter.send(self.message(text: "original"))
-        await MainActor.run { XCTAssertEqual(seen.text, "hooked") }
+        XCTAssertEqual(seen.log, ["hooked"])
         XCTAssertEqual(sent.messageID, 9)
     }
 
-    private final class ReplacementRecorder: @unchecked Sendable {
-        var text: String?
-    }
-
     func testEditKeepsEntitiesWhenNilAndValidatesWhenGiven() async throws {
-        var editedEntities: [AyuBridgeMessageEntity]?
+        let seen = HookRecorder()
         let transport = FixtureTransport(onEdit: { request in
-            editedEntities = request.entities
+            seen.append(request.entities.map { String($0.count) } ?? "nil")
             return AyuBridgeIncomingMessage(accountID: 1, chatID: 2, messageID: 3, senderID: 1, text: request.text ?? "edited", entities: request.entities ?? [], date: Date(), isOutgoing: true)
         })
         let adapter = self.adapter(transport)
         _ = try await adapter.edit(AyuBridgeEditMessageRequest(accountID: 1, chatID: 2, messageID: 3, text: "new text", entities: nil))
-        XCTAssertNil(editedEntities, "nil entities must reach the transport as keep-current")
-        XCTAssertThrowsError(try await adapter.edit(AyuBridgeEditMessageRequest(accountID: 1, chatID: 2, messageID: 3, text: "ab", entities: [AyuBridgeMessageEntity(kind: .bold, offset: 0, length: 99)])))
+        XCTAssertEqual(seen.log, ["nil"], "nil entities must reach the transport as keep-current")
+        do {
+            _ = try await adapter.edit(AyuBridgeEditMessageRequest(accountID: 1, chatID: 2, messageID: 3, text: "ab", entities: [AyuBridgeMessageEntity(kind: .bold, offset: 0, length: 99)]))
+            XCTFail("out-of-range entities must throw")
+        } catch let error as AyuBridgeMessageError {
+            XCTAssertEqual(error, .entityOutOfRange(index: 0))
+        }
         _ = try await adapter.edit(AyuBridgeEditMessageRequest(accountID: 1, chatID: 2, messageID: 3, text: "ab", entities: []))
-        XCTAssertEqual(editedEntities?.count, 0, "empty array clears entities")
+        XCTAssertEqual(seen.log, ["nil", "0"], "empty array clears entities")
     }
 
     func testDeleteGoesThroughPreHookAndTransport() async throws {
-        let deleted = DeletionRecorder()
+        let deleted = HookRecorder()
         let transport = FixtureTransport(onDelete: { account, chat, message in
-            await MainActor.run { deleted.values.append((account, chat, message)) }
+            deleted.append("\(account):\(chat):\(message)")
         })
         let hooks = AyuBridgeHookRegistry()
         _ = try hooks.subscribe(pluginID: "p", point: .messageDeletePre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.mutate")])) { payload in
@@ -149,13 +164,204 @@ final class AyuBridgeMessageAdapterTests: XCTestCase {
         }
         let adapter = AyuBridgeMessageAdapter(transport: transport, hooks: hooks)
         try await adapter.delete(accountID: 1, chatID: 2, messageID: 7)
-        await MainActor.run { XCTAssertEqual(deleted.values, [(1, 2, 7)]) }
-        do { _ = try await adapter.delete(accountID: 1, chatID: 2, messageID: 666); XCTFail("must throw") }
-        catch let error as AyuBridgeMessageError { XCTAssertEqual(error, .missingCapability(name: "delete.cancelled", "protected")) }
-        await MainActor.run { XCTAssertEqual(deleted.values.count, 1) }
+        XCTAssertEqual(deleted.log, ["1:2:7"])
+        do { try await adapter.delete(accountID: 1, chatID: 2, messageID: 666); XCTFail("must throw") }
+        catch let error as AyuBridgeMessageError { XCTAssertEqual(error, .missingCapability(name: "delete.cancelled", reason: "protected")) }
+        XCTAssertEqual(deleted.log.count, 1)
     }
 
-    private final class DeletionRecorder: @unchecked Sendable {
-        var values: [(Int64, Int64, Int64)] = []
+    private func hookResult(_ strategy: Int64, params: AyuBridgeValue = .null) -> AyuBridgeValue {
+        .object(["strategy": .integer(strategy), "params": params])
+    }
+
+    private func chain(message: String? = "original", caption: String? = nil) -> AyuBridgeSendHookChain {
+        AyuBridgeSendHookChain(message: message, caption: caption, peerID: -9_007_199_254_740_993, accountIndex: 9_007_199_254_740_995)
+    }
+
+    func testSendHookStrategyTagsMatchSDK() {
+        XCTAssertEqual(AyuBridgeSendHookStrategy.default.rawValue, 0)
+        XCTAssertEqual(AyuBridgeSendHookStrategy.cancel.rawValue, 1)
+        XCTAssertEqual(AyuBridgeSendHookStrategy.modify.rawValue, 2)
+        XCTAssertEqual(AyuBridgeSendHookStrategy.modifyFinal.rawValue, 3)
+    }
+
+    func testSendHookSnapshotPreservesExactContextAndLatestText() {
+        var chain = self.chain()
+        XCTAssertEqual(chain.arguments, [.integer(chain.accountIndex), .object(["peer": .integer(chain.peerID), "message": .string("original")])])
+        chain.apply(self.hookResult(2, params: .object(["message": .string("first")])) )
+        XCTAssertEqual(chain.arguments[1]["message"], .string("first"))
+        chain.apply(self.hookResult(2, params: .object(["peer": .integer(chain.peerID), "message": .string("second")])) )
+        XCTAssertEqual(chain.message, "second")
+        XCTAssertFalse(chain.isFinished)
+    }
+
+    func testDefaultAndMalformedResultsPreserveLastValidContent() {
+        let results: [AyuBridgeValue?] = [nil, .null, .array([]), .object([:]),
+            .object(["strategy": .bool(true)]), .object(["strategy": .string("MODIFY")]),
+            .object(["strategy": .number(2.5)]), self.hookResult(99),
+            self.hookResult(0, params: .object(["message": .string("ignored")]))]
+        for result in results {
+            var chain = self.chain()
+            chain.apply(self.hookResult(2, params: .object(["message": .string("accepted")])) )
+            let before = chain
+            chain.apply(result)
+            XCTAssertEqual(chain, before)
+        }
+    }
+
+    func testCancelStopsWithoutApplyingParamsOrLaterResults() {
+        var chain = self.chain()
+        chain.apply(self.hookResult(1, params: .object(["message": .string("ignored")])) )
+        XCTAssertTrue(chain.isCancelled)
+        XCTAssertTrue(chain.isFinished)
+        XCTAssertEqual(chain.message, "original")
+        chain.apply(self.hookResult(2, params: .object(["message": .string("late")])) )
+        XCTAssertEqual(chain.message, "original")
+    }
+
+    func testModifyFinalStopsWithoutCancellingSend() {
+        var chain = self.chain()
+        chain.apply(self.hookResult(3, params: .object(["message": .string("final")])) )
+        XCTAssertTrue(chain.isFinal)
+        XCTAssertTrue(chain.isFinished)
+        XCTAssertFalse(chain.isCancelled)
+        chain.apply(self.hookResult(1))
+        chain.apply(self.hookResult(2, params: .object(["message": .string("late")])) )
+        XCTAssertEqual(chain.message, "final")
+        XCTAssertFalse(chain.isCancelled)
+    }
+
+    func testMalformedFinalStillStopsWithLastValidContent() {
+        for params in [AyuBridgeValue.null, .array([]), .object(["message": .integer(12)]), .object(["peer": .integer(0), "message": .string("injected")])] {
+            var chain = self.chain()
+            chain.apply(self.hookResult(2, params: .object(["message": .string("accepted")])) )
+            chain.apply(self.hookResult(3, params: params))
+            XCTAssertEqual(chain.message, "accepted")
+            XCTAssertTrue(chain.isFinal)
+            XCTAssertFalse(chain.isCancelled)
+        }
+    }
+
+    func testReplacementCannotInjectContextOrUnsupportedNativeOptions() {
+        for (key, value) in ["peer": AyuBridgeValue.integer(0), "account": .integer(0), "accountIndex": .integer(0),
+                             "replyToMessageID": .integer(10), "silent": .bool(true), "$handle": .string("fake")] {
+            var chain = self.chain()
+            let before = chain
+            chain.apply(self.hookResult(2, params: .object([key: value, "message": .string("injected")])) )
+            XCTAssertEqual(chain, before, key)
+        }
+        var chain = self.chain()
+        chain.apply(self.hookResult(2, params: .object(["peer": .string(String(chain.peerID)), "message": .string("injected")])) )
+        XCTAssertEqual(chain.message, "original", "peer must remain an exact integer")
+    }
+
+    func testMalformedFieldsRejectTheWholeReplacement() {
+        for value in [AyuBridgeValue.null, .integer(7), .bool(false), .object([:]), .array([])] {
+            var chain = self.chain(message: "text", caption: "caption")
+            let before = chain
+            chain.apply(self.hookResult(2, params: .object(["message": .string("partly applied"), "caption": value])) )
+            XCTAssertEqual(chain, before)
+        }
+    }
+
+    func testMissingFieldsPreserveContentAndMediaCaptionCanBeCleared() {
+        var chain = self.chain(message: nil, caption: "photo caption")
+        chain.apply(self.hookResult(2, params: .object(["peer": .integer(chain.peerID)])))
+        XCTAssertEqual(chain.caption, "photo caption")
+        chain.apply(self.hookResult(2, params: .object(["caption": .string(""), "message": .null])))
+        XCTAssertEqual(chain.caption, "")
+        XCTAssertNil(chain.message)
+        chain.apply(self.hookResult(2, params: .object(["message": .string("wrong slot"), "caption": .string("changed")])) )
+        XCTAssertEqual(chain.caption, "")
+        XCTAssertNil(chain.message)
+        var text = self.chain()
+        text.apply(self.hookResult(2, params: .object(["message": .string("")])))
+        XCTAssertEqual(text.message, "original")
+        text.apply(self.hookResult(2, params: .object(["caption": .string("wrong slot")])) )
+        XCTAssertNil(text.caption)
+    }
+
+    func testStringQuotaCountsUTF8BytesAndPreservesOriginalOnOverflow() {
+        let limit = AyuBridgeSendHookChain.maximumTextBytes
+        var chain = self.chain()
+        let boundary = String(repeating: "😀", count: limit / 4)
+        chain.apply(self.hookResult(2, params: .object(["message": .string(boundary)])))
+        XCTAssertEqual(chain.message, boundary)
+        chain.apply(self.hookResult(2, params: .object(["message": .string(boundary + "x")])))
+        XCTAssertEqual(chain.message, boundary)
+        var caption = self.chain(message: nil, caption: "photo")
+        caption.apply(self.hookResult(2, params: .object(["caption": .string(String(repeating: "a", count: limit + 1))])))
+        XCTAssertEqual(caption.caption, "photo")
+    }
+
+    func testMalformedOrInvalidTypedSendReplacementKeepsOriginalRequest() async throws {
+        let original = self.message(text: "original")
+        var wrongAccount = original
+        wrongAccount.accountID = 0
+        var wrongChat = original
+        wrongChat.chatID = 0
+        var empty = original
+        empty.text = ""
+        var badEntities = original
+        badEntities.entities = [AyuBridgeMessageEntity(kind: .bold, offset: -1, length: 1)]
+        var oversized = original
+        oversized.text = String(repeating: "a", count: AyuBridgeSendHookChain.maximumTextBytes + 1)
+        for replacement in [AyuBridgeValue.null, .object([:]), .encodable(wrongAccount), .encodable(wrongChat), .encodable(empty), .encodable(badEntities), .encodable(oversized)] {
+            let hooks = AyuBridgeHookRegistry()
+            _ = try hooks.subscribe(pluginID: "p", point: .messageSendPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { _ in
+                .replace(["request": replacement])
+            }
+            let transport = FixtureTransport(onSend: { request in
+                XCTAssertEqual(request, original)
+                return AyuBridgeIncomingMessage(accountID: request.accountID, chatID: request.chatID, messageID: 1, senderID: 42, text: request.text, entities: request.entities, date: Date(), isOutgoing: true)
+            })
+            _ = try await AyuBridgeMessageAdapter(transport: transport, hooks: hooks).send(original)
+        }
+    }
+
+    func testMalformedTypedEditReplacementKeepsOriginalIdentityAndEntities() async throws {
+        let original = AyuBridgeEditMessageRequest(accountID: 5, chatID: -8, messageID: 19, text: "original")
+        var wrongAccount = original
+        wrongAccount.accountID = 0
+        var wrongChat = original
+        wrongChat.chatID = 0
+        var wrongMessage = original
+        wrongMessage.messageID = 0
+        var badEntities = original
+        badEntities.entities = [AyuBridgeMessageEntity(kind: .bold, offset: -1, length: 1)]
+        for replacement in [AyuBridgeValue.null, .encodable(wrongAccount), .encodable(wrongChat), .encodable(wrongMessage), .encodable(badEntities)] {
+            let hooks = AyuBridgeHookRegistry()
+            _ = try hooks.subscribe(pluginID: "p", point: .messageEditPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.mutate")])) { _ in
+                .replace(["request": replacement])
+            }
+            let transport = FixtureTransport(onEdit: { request in
+                XCTAssertEqual(request, original)
+                return AyuBridgeIncomingMessage(accountID: request.accountID, chatID: request.chatID, messageID: request.messageID, senderID: 42, text: request.text, entities: [], date: Date(), isOutgoing: true)
+            })
+            _ = try await AyuBridgeMessageAdapter(transport: transport, hooks: hooks).edit(original)
+        }
+    }
+
+    func testSendReplacementScheduleValidationUsesTheSuppliedClock() async throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let original = self.message(text: "original")
+        var replacement = original
+        replacement.text = "scheduled by hook"
+        replacement.scheduleDate = Date(timeIntervalSince1970: 1_001)
+        // Freeze the value before entering @Sendable closures; capturing a
+        // mutable local would introduce a Swift concurrency diagnostic.
+        let replacementValue = AyuBridgeValue.encodable(replacement)
+        let hooks = AyuBridgeHookRegistry()
+        _ = try hooks.subscribe(pluginID: "p", point: .messageSendPre, capabilities: AyuBridgeCapabilitySet([AyuBridgeCapability("messages.send")])) { _ in
+            .replace(["request": replacementValue])
+        }
+        let transport = FixtureTransport(onSend: { request in
+            AyuBridgeIncomingMessage(accountID: request.accountID, chatID: request.chatID, messageID: 1, senderID: 42, text: request.text, entities: [], date: now, isOutgoing: true)
+        })
+        let adapter = AyuBridgeMessageAdapter(transport: transport, hooks: hooks)
+        let futureAtSuppliedClock = try await adapter.send(original, now: now)
+        XCTAssertEqual(futureAtSuppliedClock.text, "scheduled by hook")
+        let pastAtSuppliedClock = try await adapter.send(original, now: Date(timeIntervalSince1970: 1_002))
+        XCTAssertEqual(pastAtSuppliedClock.text, "original")
     }
 }

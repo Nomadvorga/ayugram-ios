@@ -41,8 +41,12 @@ account/profile/application signals and the explicitly authorized root controlle
 unbound, locked, inactive or stale contexts fail closed. Consult
 `Resources/CommonBridge/APPLICATION-BRIDGES.md` for exact members and remaining work
 for all 19 plugins. Do not equate a declared class or shared feature subset with
-full plugin support. Notification observers, hooks, requests, menus and media are
-not provided by this phase.
+full plugin support. Notification observers, the outgoing text hook, clipboard
+writes and one message-context-menu subset are provided; Telegram requests and
+media are not. The menu supports `MESSAGE_CONTEXT_MENU` rows with Python
+conditions/clicks and bounded metadata only. Other menu kinds, MVEL strings,
+long clicks and Java message objects are unsupported. See
+`Resources/CommonBridge/APPLICATION-BRIDGES.md`.
 
 Provider `prepareCall` returns typed results and deferred native effects. Validate
 state/references/response quotas and allocate the host-owned result before commit;
