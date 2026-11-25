@@ -467,7 +467,7 @@ private final class ExteraTakeoutOperation {
             }
         }, error: { [weak self] error in
             guard let self else { return }
-            let text = error.errorDescription
+            let text = error.errorDescription ?? "REQUEST_FAILED"
             if text.hasPrefix("FILE_REFERENCE_") || ["LOCATION_INVALID", "LOCATION_NOT_AVAILABLE", "VERSION_INVALID", "TAKEOUT_FILE_TOO_BIG"].contains(text) { self.completeMedia(reason: text.lowercased()) }
             else { self.fail(ExteraTakeoutError.server(code: error.errorCode, text: text)) }
         }))
