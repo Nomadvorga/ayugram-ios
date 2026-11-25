@@ -134,7 +134,7 @@ public func sgTranslationTargetController(context: AccountContext) -> ViewContro
     let controller = ItemListController(context: context, state: signal)
     controller.alwaysSynchronous = true
     selectLanguageImpl = { [weak controller] _ in
-        (controller?.navigationController as? NavigationController)?.popViewController(animated: true)
+        let _ = (controller?.navigationController as? NavigationController)?.popViewController(animated: true)
     }
     return controller
 }
