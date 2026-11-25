@@ -39,6 +39,7 @@ public final class ExteraSettings {
         case fullName = 1
         case firstName = 2
         case chats = 3
+        case username = 4
     }
 
     /// exteraGram's "Tab title style": folder tabs show text and icons, text only, or icons only.
@@ -198,7 +199,7 @@ public final class ExteraSettings {
         }
     }
 
-    public func chatListTitleText(firstName: String, lastName: String, chatsTitle: String) -> String {
+    public func chatListTitleText(firstName: String, lastName: String, chatsTitle: String, username: String? = nil) -> String {
         switch self.chatListTitle {
         case .ayuGram:
             return "AyuGram"
@@ -209,6 +210,10 @@ public final class ExteraSettings {
             return name.isEmpty ? "AyuGram" : name
         case .firstName:
             return firstName.isEmpty ? "AyuGram" : firstName
+        case .username:
+            if let username, !username.isEmpty { return "@" + username }
+            let name = [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+            return name.isEmpty ? chatsTitle : name
         }
     }
 

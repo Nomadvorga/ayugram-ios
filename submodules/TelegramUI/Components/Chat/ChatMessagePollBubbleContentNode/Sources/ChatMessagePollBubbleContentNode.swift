@@ -1,4 +1,17 @@
 import Foundation
+import SGSimpleSettings
+
+/// Preview only real counts already supplied by Telegram. Unknown answers and
+/// quiz solutions stay hidden; this preference cannot obtain withheld results.
+private func exteraCanPreviewPollResults(_ poll: TelegramMediaPoll) -> Bool {
+    guard ExteraMessageSettings.shared.showPollResultsBeforeVoting,
+          !poll.hideResultsUntilClose, case .poll = poll.kind,
+          let voters = poll.results.voters, poll.results.totalVoters != nil,
+          !poll.options.isEmpty else { return false }
+    return poll.options.allSatisfy { option in
+        voters.contains(where: { $0.opaqueIdentifier == option.opaqueIdentifier && $0.count != nil })
+    }
+}
 import UIKit
 import AsyncDisplayKit
 import Crc32
@@ -2617,9 +2630,16 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
             }
         }
         
-        let canAlwaysViewResults = poll.isCreator
+        let canAlwaysViewResults = poll.isCreator || exteraCanPreviewPollResults(poll)
         if !hasSelection || (canAlwaysViewResults && selectedOpaqueIdentifiers.isEmpty) {
             if !Namespaces.Message.allNonRegular.contains(item.message.id.namespace) {
+                let hasVoted = poll.results.voters?.contains(where: { $0.selected }) == true
+                if exteraCanPreviewPollResults(poll), !hasVoted,
+                   !isPollEffectivelyClosed(message: EngineMessage(item.message), poll: poll) {
+                    self.isPreviewingResults = !self.isPreviewingResults
+                    item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+                    return
+                }
                 switch poll.publicity {
                 case .public:
                     item.controllerInteraction.requestOpenMessagePollResults(item.message.id, pollId)
@@ -2663,7 +2683,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
             }
         }
         
-        let isPreviewingResults = self.isPreviewingResults
+        let isPreviewingResults = self.isPreviewingResults && (self.poll?.isCreator == true || self.poll.map(exteraCanPreviewPollResults) == true)
 
         return { [weak self] item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
@@ -2879,7 +2899,11 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                                 
                 let viewResultsString: String
                 if let poll, let totalVoters = poll.results.totalVoters {
-                    if case .public = poll.publicity {
+                    if isPreviewingResults, exteraCanPreviewPollResults(poll),
+                       poll.results.voters?.contains(where: { $0.selected }) != true,
+                       !isPollEffectivelyClosed(message: EngineMessage(message), poll: poll) {
+                        viewResultsString = item.presentationData.strings.MessagePoll_BackToVote
+                    } else if case .public = poll.publicity {
                         viewResultsString = item.presentationData.strings.MessagePoll_ViewVotes(compactNumericCountString(Int(totalVoters), decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator)).string
                     } else {
                         if isPreviewingResults {
@@ -3579,7 +3603,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
 
         let isClosed = isPollEffectivelyClosed(message: EngineMessage(item.message), poll: poll)
         
-        let canAlwaysViewResults = !poll.hideResultsUntilClose && poll.isCreator
+        let canAlwaysViewResults = !poll.hideResultsUntilClose && (poll.isCreator || exteraCanPreviewPollResults(poll))
         var hasAnyVotes = false
         var hasResults = false
         if isClosed {

@@ -550,6 +550,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var beginMediaRecordingRequestId: Int = 0
     var lockMediaRecordingRequestId: Int?
+    var exteraCameraSelectionVisible = false
     
     var updateSlowmodeStatusDisposable = MetaDisposable()
     var updateSlowmodeStatusTimerValue: Int32?
@@ -1872,6 +1873,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return nil
         }, sgStartMessageEdit: { [weak self] message in
             if let strongSelf = self {
+                if strongSelf.performExteraDoubleTapAction(message) {
+                    return
+                }
                 if canEditMessage(context: strongSelf.context, limitsConfiguration: strongSelf.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) {
                     strongSelf.interfaceInteraction?.setupEditMessage(message.id, { _ in })
                 }
@@ -1906,6 +1910,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.openMessageReactionContextMenu(message: EngineMessage(message), sourceView: sourceView, gesture: gesture, value: value)
         }, updateMessageReaction: { [weak self] initialMessage, reaction, force, sourceView in
             guard let strongSelf = self else {
+                return
+            }
+            // Sticker and other non-bubble messages use the default-reaction entry point.
+            // Explicit reaction-picker selections must always keep their normal behavior.
+            if case .default = reaction, !force, strongSelf.performExteraDoubleTapAction(initialMessage) {
                 return
             }
             guard !strongSelf.presentAccountFrozenInfoIfNeeded() else {
@@ -3942,53 +3951,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }, setupReply: { [weak self] messageId in
             self?.interfaceInteraction?.setupReplyMessage(messageId, nil, { _, f in f() })
         }, canSetupReply: { [weak self] message in
-            if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
-                if !message.flags.contains(.Incoming) {
-                    return .none
-                }
-            } else {
-                if message.adAttribute != nil {
-                    return .none
-                }
-                if !message.flags.contains(.Incoming) {
-                    if !message.flags.intersection([.Failed, .Sending, .Unsent]).isEmpty {
-                        return .none
-                    }
-                }
+            guard let self, ExteraChatSettings.shared.isSwipeToReplyEnabled(incoming: message.effectivelyIncoming(self.context.account.peerId)) else {
+                return .none
             }
-            if let strongSelf = self {
-                if case let .replyThread(replyThreadMessage) = strongSelf.chatLocation, replyThreadMessage.effectiveMessageId == message.id {
-                    return .none
-                }
-                if case let .replyThread(replyThreadMessage) = strongSelf.chatLocation, replyThreadMessage.peerId == strongSelf.context.account.peerId {
-                    if replyThreadMessage.threadId != strongSelf.context.account.peerId.toInt64() {
-                        return .none
-                    }
-                }
-                if case .peer = strongSelf.chatLocation, let channel = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
-                    if message.threadId == nil {
-                        return .none
-                    }
-                }
-                if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject {
-                    switch customChatContents.kind {
-                    case .quickReplyMessageInput, .welcomeMessages:
-                        return .none
-                    case .businessLinkSetup, .hashTagSearch:
-                        break
-                    }
-                }
-                
-                if !canSendMessagesToChat(strongSelf.presentationInterfaceState) && (strongSelf.presentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()) {
-                    return .none
-                }
-                
-                if canReplyInChat(strongSelf.presentationInterfaceState, accountPeerId: strongSelf.context.account.peerId) {
-                    return .reply
-                } else if let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
-                }
-            }
-            return .none
+            return self.exteraReplyAction(for: message)
         }, canSendMessages: { [weak self] in
             guard let self else {
                 return false

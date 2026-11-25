@@ -1,5 +1,6 @@
 import SGSimpleSettings // MARK: Swiftgram
 import SGLogging // MARK: Swiftgram
+import SGGTranslate
 import Foundation
 import UIKit
 import Display
@@ -141,9 +142,6 @@ public var popularTranslationLanguages = [
     "uk"
 ]
 
-@available(iOS 12.0, *)
-private let languageRecognizer = NLLanguageRecognizer()
-
 public func effectiveIgnoredTranslationLanguages(context: AccountContext, ignoredLanguages: [String]?) -> Set<String> {
     var baseLang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
     let rawSuffix = "-raw"
@@ -209,6 +207,7 @@ public func canTranslateText(context: AccountContext, text: String, showTranslat
         let dontTranslateLanguages = effectiveIgnoredTranslationLanguages(context: context, ignoredLanguages: ignoredLanguages)
         
         let text = String(text.prefix(64))
+        let languageRecognizer = NLLanguageRecognizer()
         languageRecognizer.processString(text)
         let hypotheses = languageRecognizer.languageHypotheses(withMaximum: 3)
         languageRecognizer.reset()
@@ -262,6 +261,11 @@ private struct TranslationViewImpl: View {
         Text("ABC")
         .onChange(of: self.externalCondition.shouldInvalidate) { _ in
             let firstTaskLanguagePair = self.taskContainer.with { taskContainer -> (String, String)? in
+                // Reconfiguring a session while it is translating cancels the active
+                // SwiftUI task. Its completion would otherwise strand this queue.
+                guard !taskContainer.isProcessing else {
+                    return nil
+                }
                 if let firstTask = taskContainer.tasks.first {
                     return (firstTask.fromLang, firstTask.toLang)
                 } else {
@@ -286,6 +290,7 @@ private struct TranslationViewImpl: View {
             var task: ExperimentalInternalTranslationServiceImpl.TranslationTask?
             task = self.taskContainer.with { taskContainer -> ExperimentalInternalTranslationServiceImpl.TranslationTask? in
                 if !taskContainer.tasks.isEmpty {
+                    taskContainer.isProcessing = true
                     return taskContainer.tasks.removeFirst()
                 } else {
                     return nil
@@ -306,7 +311,13 @@ private struct TranslationViewImpl: View {
                     return TranslationSession.Request(sourceText: value, clientIdentifier: "\(id)")
                 }
                 
-                let responses = try await session.translations(from: translationRequests)
+                let work = Task {
+                    try await session.translations(from: translationRequests)
+                }
+                task.cancellation.set(ActionDisposable {
+                    work.cancel()
+                })
+                let responses = try await work.value
                 var resultMap: [AnyHashable: String] = [:]
                 for response in responses {
                     if let clientIdentifier = response.clientIdentifier, let originalKey = clientIdentifierMap[clientIdentifier] {
@@ -314,17 +325,22 @@ private struct TranslationViewImpl: View {
                     }
                 }
                 
-                task.completion(resultMap)
+                if !task.isCancelled.with({ $0 }) {
+                    task.completion(resultMap)
+                }
             } catch let e {
                 // MARK: Swiftgram
                 if SGSimpleSettings.shared.translatorLogsEnabled {
                     SGLogger.shared.log("Translate", "[\(SGSimpleSettings.TranslationBackend.system.rawValue)] error translating \(task.texts.values.reduce(0) { $0 + $1.count }) chars\(task.fromLang.isEmpty ? "" : " from '\(task.fromLang)'") to '\(task.toLang)', error: \(e)")
                 }
                 //
-                task.completion(nil)
+                if !task.isCancelled.with({ $0 }) {
+                    task.completion(nil)
+                }
             }
             
             let firstTaskLanguagePair = self.taskContainer.with { taskContainer -> (String, String)? in
+                taskContainer.isProcessing = false
                 if let firstTask = taskContainer.tasks.first {
                     return (firstTask.fromLang, firstTask.toLang)
                 } else {
@@ -356,6 +372,8 @@ public final class ExperimentalInternalTranslationServiceImpl: ExperimentalInter
         let fromLang: String
         let toLang: String
         let completion: ([AnyHashable: String]?) -> Void
+        let isCancelled = Atomic(value: false)
+        let cancellation = MetaDisposable()
         
         init(id: Int, texts: [AnyHashable: String], fromLang: String, toLang: String, completion: @escaping ([AnyHashable: String]?) -> Void) {
             self.id = id
@@ -368,6 +386,7 @@ public final class ExperimentalInternalTranslationServiceImpl: ExperimentalInter
     
     fileprivate final class TranslationTaskContainer {
         var tasks: [TranslationTask] = []
+        var isProcessing = false
         
         init() {
         }
@@ -391,22 +410,21 @@ public final class ExperimentalInternalTranslationServiceImpl: ExperimentalInter
         }
         
         func translate(texts: [AnyHashable: String], fromLang: String, toLang: String, onResult: @escaping ([AnyHashable: String]?) -> Void) -> Disposable {
+            guard !texts.isEmpty else {
+                onResult([:])
+                return EmptyDisposable
+            }
             let id = self.nextId
             self.nextId += 1
+            let task = TranslationTask(id: id, texts: texts, fromLang: fromLang, toLang: toLang, completion: onResult)
             self.taskContainer.with { taskContainer in
-                taskContainer.tasks.append(TranslationTask(
-                    id: id,
-                    texts: texts,
-                    fromLang: fromLang,
-                    toLang: toLang,
-                    completion: { result in
-                        onResult(result)
-                    }
-                ))
+                taskContainer.tasks.append(task)
             }
             self.taskTrigger.shouldInvalidate += 1
             
             return ActionDisposable { [weak self] in
+                _ = task.isCancelled.swap(true)
+                task.cancellation.dispose()
                 Queue.mainQueue().async {
                     guard let self else {
                         return
@@ -434,109 +452,19 @@ public final class ExperimentalInternalTranslationServiceImpl: ExperimentalInter
                 subscriber.putCompletion()
             })
         }
+        // A hosting view that disappears or a stalled language-model download
+        // must eventually release callers so their provider fallback can run.
+        |> timeout(90.0, queue: .mainQueue(), alternate: .single(nil))
     }
 }
 
 func alternativeTranslateText(text: String, fromLang: String?, toLang: String) -> Signal<(String, [MessageTextEntity])?, TelegramCore.TranslationError> {
-    return Signal { subscriber in
-        var task: URLSessionTask?
-        Queue.concurrentDefaultQueue().async {
-            let effectiveFromLang: String
-            if let fromLang {
-                effectiveFromLang = fromLang
-            } else {
-                languageRecognizer.processString(text)
-                let hypotheses = languageRecognizer.languageHypotheses(withMaximum: 3)
-                languageRecognizer.reset()
-                
-                let filteredLanguages = hypotheses.filter { supportedTranslationLanguages.contains(normalizeTranslationLanguage($0.key.rawValue)) }.sorted(by: { $0.value > $1.value })
-                if let language = filteredLanguages.first {
-                    let languageCode = normalizeTranslationLanguage(language.key.rawValue)
-                    effectiveFromLang = languageCode
-                } else {
-                    effectiveFromLang = "en"
-                }
-            }
-            
-            var uri = "https://translate.goo"
-            uri += "gleapis.com/transl"
-            uri += "ate_a"
-            uri += "/singl"
-            uri += "e?client=gtx&sl=\(effectiveFromLang.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-            uri += "&tl=\(toLang.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-            uri += "&dt=t&ie=UTF-8&oe=UTF-8&otf=1&ssel=0&tsel=0&kc=7&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&q="
-            uri += text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            
-            guard let url = URL(string: uri) else {
-                subscriber.putError(.generic)
-                return
-            }
-            
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue(getRandomUserAgent(), forHTTPHeaderField: "User-Agent")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    print("Translation failed: \(error.localizedDescription)")
-                    subscriber.putError(.generic)
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    subscriber.putError(.generic)
-                    return
-                }
-                
-                if httpResponse.statusCode != 200 {
-                    print("Translation failed with status code: \(httpResponse.statusCode)")
-                    let isRateLimit = httpResponse.statusCode == 429
-                    subscriber.putError(isRateLimit ? .limitExceeded : .generic)
-                    return
-                }
-                
-                guard let data = data else {
-                    subscriber.putError(.generic)
-                    return
-                }
-                
-                do {
-                    guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [Any] else {
-                        subscriber.putError(.generic)
-                        return
-                    }
-                    
-                    guard let translationArray = jsonArray.first as? [Any] else {
-                        subscriber.putError(.generic)
-                        return
-                    }
-                    
-                    var result = ""
-                    for element in translationArray {
-                        if let translationBlock = element as? [Any],
-                           translationBlock.count > 0,
-                           let blockText = translationBlock[0] as? String,
-                           blockText != "null" && !blockText.isEmpty {
-                            result += blockText
-                        }
-                    }
-                    
-                    if text.hasPrefix("\n") {
-                        result = "\n" + result
-                    }
-                    
-                    subscriber.putNext((result, []))
-                    subscriber.putCompletion()
-                } catch {
-                    print("JSON parsing error: \(error)")
-                    subscriber.putError(.generic)
-                }
-            }
-            task?.resume()
-        }
-        return ActionDisposable {
-            task?.cancel()
+    return gtranslate(text, toLang, fromLang: fromLang)
+    |> map { text -> (String, [MessageTextEntity])? in (text, []) }
+    |> mapError { error -> TelegramCore.TranslationError in
+        switch error {
+        case .network: return .generic
+        case .limitExceeded: return .limitExceeded
         }
     }
 }

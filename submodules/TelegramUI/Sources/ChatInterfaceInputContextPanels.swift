@@ -5,6 +5,7 @@ import AccountContext
 import ChatPresentationInterfaceState
 import ChatControllerInteraction
 import ChatInputContextPanelNode
+import SGSimpleSettings
 
 private func inputQueryResultPriority(_ result: ChatPresentationInputQueryResult) -> (Int, Bool) {
     switch result {
@@ -41,6 +42,33 @@ private func hasBannedInlineContent(chatPresentationInterfaceState: ChatPresenta
 func textInputContextPanel(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, currentPanel: ChatInputContextPanelNode?) -> ChatInputContextPanelNode? {
     guard let controllerInteraction else {
         return nil
+    }
+    if ExteraMathSettings.shared.inlineResults,
+       !chatPresentationInterfaceState.showCommands,
+       chatPresentationInterfaceState.inputTextPanelState.mediaRecordingState == nil,
+       interfaceInteraction != nil {
+        let inputState = chatPresentationInterfaceState.interfaceState.effectiveInputState
+        let selection = inputState.selectionRange
+        let sourceText = inputState.inputText.string
+        let options = ExteraMathEngine.Options(
+            degrees: ExteraMathSettings.shared.inlineAngleUnit == .degrees,
+            grouping: ExteraMathSettings.shared.inlineDigitGrouping,
+            decimalSeparator: Locale.current.decimalSeparator ?? ".",
+            units: ExteraMathSettings.shared.inlineUnits,
+            currencies: ExteraMathSettings.shared.inlineCurrencies,
+            timeZones: ExteraMathSettings.shared.inlineTimeZones,
+            arithmetic: ExteraMathSettings.shared.inlineMathResult,
+            imperial: ExteraMathSettings.shared.inlineImperial,
+            localCurrency: ExteraMathSettings.shared.resolvedTargetCurrency
+        )
+        // The line must be a complete expression or conversion; @bot queries,
+        // commands and prose cannot steal the existing context-result surface.
+        if selection.isEmpty, let suggestion = ExteraMathEngine.suggestion(in: sourceText, caret: selection.lowerBound, options: options) {
+            let panel = (currentPanel as? ExteraMathChatInputContextPanelNode) ?? ExteraMathChatInputContextPanelNode(context: context, theme: chatPresentationInterfaceState.theme, strings: chatPresentationInterfaceState.strings, fontSize: chatPresentationInterfaceState.fontSize, chatPresentationContext: controllerInteraction.presentationContext)
+            panel.interfaceInteraction = interfaceInteraction
+            panel.update(suggestion: suggestion, sourceText: sourceText, options: options)
+            return panel
+        }
     }
     guard let inputQueryResult = chatPresentationInterfaceState.inputQueryResults.values.sorted(by: { lhs, rhs in
         let (lhsP, lhsHasItems) = inputQueryResultPriority(lhs)

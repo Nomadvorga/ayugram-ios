@@ -4,21 +4,19 @@ import Postbox
 import TelegramCore
 
 
-func sgDoubleTapMessageAction(incoming: Bool, message: Message) -> String {
-    if incoming {
-        return SGSimpleSettings.MessageDoubleTapAction.default.rawValue
-    } else {
-        return SGSimpleSettings.shared.messageDoubleTapActionOutgoing
-    }
+func sgDoubleTapMessageAction(incoming: Bool, message: Message) -> ExteraChatSettings.DoubleTapAction {
+    return ExteraChatSettings.shared.effectiveDoubleTapAction(incoming: incoming)
 }
 
 func sgHandleDoubleTapMessageAction(incoming: Bool, message: Message, editAction: () -> Void, defaultAction: () -> Void) {
     switch sgDoubleTapMessageAction(incoming: incoming, message: message) {
-    case SGSimpleSettings.MessageDoubleTapAction.none.rawValue:
+    case .disabled:
         break
-    case SGSimpleSettings.MessageDoubleTapAction.edit.rawValue:
-        editAction()
-    default:
+    case .inherit, .reaction:
         defaultAction()
+    default:
+        // The legacy edit callback is the controller-owned action entry point. Route custom
+        // gestures through it even when a message cannot receive reactions (e.g. Saved Messages).
+        editAction()
     }
 }

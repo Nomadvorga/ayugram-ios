@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import SwiftSignalKit
@@ -685,7 +686,11 @@ private final class NativePictureInPictureContentImpl: NSObject, AVPictureInPict
         }
         
         public func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {
-            self.node.togglePlayPause()
+            if playing {
+                self.node.play()
+            } else {
+                self.node.pause()
+            }
         }
 
         public func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
@@ -826,7 +831,9 @@ private final class NativePictureInPictureContentImpl: NSObject, AVPictureInPict
             return
         }
         
-        if isCentral {
+        let isRoundVideo = (self.hiddenMedia?.1 as? TelegramMediaFile)?.isInstantVideo ?? false
+        let shouldPause = isRoundVideo ? ExteraMediaSettings.shared.pauseOnMinimizeRound : ExteraMediaSettings.shared.pauseOnMinimizeVideo
+        if isCentral && !shouldPause {
             pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = true
         } else {
             pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = false
@@ -992,6 +999,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private let hasExpandedCaptionPromise = Promise<Bool>()
     private var hideControlsDisposable: Disposable?
     private var automaticPictureInPictureDisposable: Disposable?
+    private var applicationInForegroundDisposable: Disposable?
     
     var playbackCompleted: (() -> Void)?
     
@@ -1197,6 +1205,31 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 strongSelf.updateControlsVisibility(false)
             }
         }).strict()
+
+        self.applicationInForegroundDisposable = (context.sharedContext.applicationBindings.applicationInForeground
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] inForeground in
+            guard let self, !inForeground, self.isCentral == true,
+                  self.context.sharedContext.mediaManager.currentPictureInPictureNode !== self else {
+                return
+            }
+            // Explicit PiP is a request to keep playing outside the gallery. The
+            // pause preference suppresses automatic PiP and pauses full-screen
+            // playback; it must not stop an already retained PiP player.
+            let isRoundVideo: Bool
+            if let content = self.item?.content as? NativeVideoContent {
+                isRoundVideo = content.fileReference.media.isInstantVideo
+            } else if let content = self.item?.content as? HLSVideoContent {
+                isRoundVideo = content.fileReference.media.isInstantVideo
+            } else {
+                isRoundVideo = false
+            }
+            let shouldPause = isRoundVideo ? ExteraMediaSettings.shared.pauseOnMinimizeRound : ExteraMediaSettings.shared.pauseOnMinimizeVideo
+            if shouldPause {
+                self.didPause = true
+                self.videoNode?.pause()
+            }
+        })
     }
     
     deinit {
@@ -1206,6 +1239,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.scrubbingFrameDisposable?.dispose()
         self.hideControlsDisposable?.dispose()
         self.automaticPictureInPictureDisposable?.dispose()
+        self.applicationInForegroundDisposable?.dispose()
     }
     
     override func ready() -> Signal<Void, NoError> {
@@ -1228,10 +1262,11 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         if case let .playback(_, seekable) = self.footerContentNode.content, seekable {
+            let seekDuration = Double(ExteraMediaSettings.shared.doubleTapSeekDuration)
             if location.x >= self.bounds.width * 0.3 {
-                self.footerContentNode.seekForward?(15.0)
+                self.footerContentNode.seekForward?(seekDuration)
             } else {
-                self.footerContentNode.seekBackward?(15.0)
+                self.footerContentNode.seekBackward?(seekDuration)
             }
             return true
         }
@@ -3225,6 +3260,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             })
             
             self.nativePictureInPictureContent = content
+            // PiP is often created after the gallery's initial centrality update.
+            // Apply it now as well, or automatic PiP stays disabled until a swipe.
+            content.updateIsCentral(isCentral: self.isCentral == true)
         }
     }
     

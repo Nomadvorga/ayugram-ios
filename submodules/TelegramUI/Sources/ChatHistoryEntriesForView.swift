@@ -173,12 +173,14 @@ func chatHistoryEntriesForView(
     var ayuHidesReactions = false
     if let channel = chatPeer as? TelegramChannel {
         if case .broadcast = channel.info {
-            ayuHidesReactions = AyuCustomizationSettings.shared.hideChannelReactions
+            ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInChannels
         } else {
-            ayuHidesReactions = AyuCustomizationSettings.shared.hideGroupReactions
+            ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInGroups
         }
     } else if chatPeer is TelegramGroup {
-        ayuHidesReactions = AyuCustomizationSettings.shared.hideGroupReactions
+        ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInGroups
+    } else if chatPeer is TelegramUser || chatPeer is TelegramSecretChat {
+        ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInPrivateChats
     }
     var ayuHiddenAuthors = AyuShadowBan.shared.peerIds
     if AyuCustomizationSettings.shared.hideFromBlocked {
@@ -192,8 +194,8 @@ func chatHistoryEntriesForView(
         if !ayuHiddenAuthors.isEmpty, let authorId = message.author?.id, authorId != message.id.peerId, ayuHiddenAuthors.contains(authorId.toInt64()) {
             continue loop
         }
-        if ayuHidesReactions, message.attributes.contains(where: { $0 is ReactionsMessageAttribute }) {
-            message = message.withUpdatedAttributes(message.attributes.filter { !($0 is ReactionsMessageAttribute) })
+        if ayuHidesReactions, message.attributes.contains(where: { $0 is ReactionsMessageAttribute || $0 is PendingReactionsMessageAttribute }) {
+            message = message.withUpdatedAttributes(message.attributes.filter { !($0 is ReactionsMessageAttribute) && !($0 is PendingReactionsMessageAttribute) })
         }
         //
         var isRead = entry.isRead

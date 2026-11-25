@@ -1,176 +1,142 @@
-import SGLogging
 import Foundation
-import SwiftSignalKit
+import SGLogging
+import SGSimpleSettings
 import Speech
-
-private var sharedRecognizers: [String: NSObject] = [:]
-
-private struct TranscriptionResult {
-    var text: String
-    var confidence: Float
-    var isFinal: Bool
-    var locale: String
-}
-
-private func transcribeAudio(path: String, locale: String) -> Signal<TranscriptionResult?, NoError> {
-    return Signal { subscriber in
-        let disposable = MetaDisposable()
-        
-        if #available(iOS 13.0, *) {
-            SFSpeechRecognizer.requestAuthorization { status in
-                Queue.mainQueue().async {
-                    switch status {
-                    case .notDetermined:
-                        SGLogger.shared.log("LocalTranscription", "Authorization status: notDetermined")
-                        subscriber.putNext(nil)
-                        subscriber.putCompletion()
-                    case .restricted:
-                        SGLogger.shared.log("LocalTranscription", "Authorization status: restricted")
-                        subscriber.putNext(nil)
-                        subscriber.putCompletion()
-                    case .denied:
-                        SGLogger.shared.log("LocalTranscription", "Authorization status: denied")
-                        subscriber.putNext(nil)
-                        subscriber.putCompletion()
-                    case .authorized:
-                        let speechRecognizer: SFSpeechRecognizer
-                        if let sharedRecognizer = sharedRecognizers[locale] as? SFSpeechRecognizer {
-                            speechRecognizer = sharedRecognizer
-                        } else {
-                            guard let speechRecognizerValue = SFSpeechRecognizer(locale: Locale(identifier: locale)), speechRecognizerValue.isAvailable else {
-                                SGLogger.shared.log("LocalTranscription", "Recognizer not available for locale: \(locale)")
-                                subscriber.putNext(nil)
-                                subscriber.putCompletion()
-                                
-                                return
-                            }
-                            speechRecognizerValue.defaultTaskHint = .dictation
-                            sharedRecognizers[locale] = speechRecognizerValue
-                            speechRecognizer = speechRecognizerValue
-                            
-                            if locale == "en-US" {
-                                speechRecognizer.supportsOnDeviceRecognition = true
-                            } else {
-                                speechRecognizer.supportsOnDeviceRecognition = false
-                            }
-                            speechRecognizer.supportsOnDeviceRecognition = true
-                        }
-                        speechRecognizer.defaultTaskHint = .dictation
-                        
-                        let tempFilePath = NSTemporaryDirectory() + "/\(UInt64.random(in: 0 ... UInt64.max)).m4a"
-                        let _ = try? FileManager.default.copyItem(atPath: path, toPath: tempFilePath)
-                        
-                        let request = SFSpeechURLRecognitionRequest(url: URL(fileURLWithPath: tempFilePath))
-                        if #available(iOS 16.0, *) {
-                            request.addsPunctuation = true
-                        }
-                        request.requiresOnDeviceRecognition = speechRecognizer.supportsOnDeviceRecognition
-                        request.shouldReportPartialResults = false
-                        
-                        let task = speechRecognizer.recognitionTask(with: request, resultHandler: { result, error in
-                            if let result = result {
-                                var confidence: Float = 0.0
-                                var segmentsCount = 0
-                                for segment in result.bestTranscription.segments {
-                                    confidence += segment.confidence
-                                    segmentsCount += 1
-                                }
-                                confidence /= Float(result.bestTranscription.segments.count)
-                                subscriber.putNext(TranscriptionResult(text: result.bestTranscription.formattedString, confidence: confidence, isFinal: result.isFinal, locale: locale))
-                                
-                                if result.isFinal {
-                                    SGLogger.shared.log("LocalTranscription", "Transcription finalized. locale: \(locale), segments: \(segmentsCount), confidence: \(confidence)")
-                                    subscriber.putCompletion()
-                                }
-                            } else {
-                                SGLogger.shared.log("LocalTranscription", "Transcription failed. locale: \(locale), error: \(String(describing: error))")
-                                
-                                subscriber.putNext(nil)
-                                subscriber.putCompletion()
-                            }
-                        })
-                        
-                        disposable.set(ActionDisposable {
-                            task.cancel()
-                        })
-                    @unknown default:
-                        SGLogger.shared.log("LocalTranscription", "Unknown authorization status")
-                        subscriber.putNext(nil)
-                        subscriber.putCompletion()
-                    }
-                }
-            }
-        } else {
-            subscriber.putNext(nil)
-            subscriber.putCompletion()
-        }
-        
-        return disposable
-    }
-    |> runOn(.mainQueue())
-}
+import SwiftSignalKit
 
 public struct LocallyTranscribedAudio {
     public var text: String
     public var isFinal: Bool
 }
 
+/// Locale identifiers supported by Apple's Speech framework on this OS.
+/// Availability and on-device model support are checked when recognition starts.
+public func supportedTranscriptionLanguages() -> [String] {
+    return SFSpeechRecognizer.supportedLocales().map { $0.identifier }.sorted()
+}
+
+private func transcriptionLocale(_ identifier: String) -> Locale? {
+    let identifier = identifier.replacingOccurrences(of: "_", with: "-")
+    let supported = SFSpeechRecognizer.supportedLocales().sorted { $0.identifier < $1.identifier }
+    if let exact = supported.first(where: { $0.identifier.replacingOccurrences(of: "_", with: "-").lowercased() == identifier.lowercased() }) {
+        return exact
+    }
+    // Telegram language packs have a -raw suffix; bare language codes need a real
+    // recognizer locale, preferably the same regional variant as the device.
+    let code = identifier.hasSuffix("-raw") ? String(identifier.dropLast(4)) : identifier
+    let language = Locale(identifier: code).languageCode
+    guard let language else {
+        return nil
+    }
+    for preferred in Locale.preferredLanguages + [code] {
+        if Locale(identifier: preferred).languageCode == language,
+           let match = supported.first(where: { $0.identifier.replacingOccurrences(of: "_", with: "-").lowercased() == preferred.replacingOccurrences(of: "_", with: "-").lowercased() }) {
+            return match
+        }
+    }
+    return supported.first { $0.languageCode == language }
+}
+
+/// Transcribe a voice message using the selected Apple speech language, or the app language.
+/// Each subscription owns its recognizer, task and temporary file, and can be cancelled
+/// while the authorization prompt is visible without starting recognition afterwards.
 public func transcribeAudio(path: String, appLocale: String) -> Signal<LocallyTranscribedAudio?, NoError> {
-    var signals: [Signal<TranscriptionResult?, NoError>] = []
-    let locales: [String] = [appLocale]
-    // Device can effectivelly transcribe only one language at a time. So it will be wise to run language recognition once for each popular language, check the confidence, start over with most confident language and output something it has already generated
-//    if !locales.contains(Locale.current.identifier) {
-//        locales.append(Locale.current.identifier)
-//    }
-//    if locales.isEmpty {
-//        locales.append("en-US")
-//    }
-    // Dictionary to hold accumulated transcriptions and confidences for each locale
-    var accumulatedTranscription: [String: (confidence: Float, text: [String])] = [:]
-    for locale in locales {
-        signals.append(transcribeAudio(path: path, locale: locale))
-    }
-    // We need to combine results per-language and compare their total confidence, (instead of outputting everything we have to the signal)
-    // return the one with the most confidence
-    let resultSignal: Signal<[TranscriptionResult?], NoError> = signals.reduce(.single([])) { (accumulator, signal) in
-        return accumulator
-            |> mapToSignal { results in
-                return signal
-                    |> map { next in
-                        return results + [next]
+    let settings = ExteraTranslationSettings.shared
+    let identifier = settings.appleSpeechLocaleIdentifier.isEmpty ? appLocale : settings.appleSpeechLocaleIdentifier
+    let onDeviceOnly = settings.appleSpeechOnDeviceOnly
+    return Signal { subscriber in
+        let cancelled = Atomic(value: false)
+        let disposable = MetaDisposable()
+        guard #available(iOS 13.0, *), let locale = transcriptionLocale(identifier) else {
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+        SFSpeechRecognizer.requestAuthorization { status in
+            // Preparing a long voice message can involve substantial disk I/O.
+            // Each subscription owns its recognizer, so preparation need not block UI.
+            Queue.concurrentDefaultQueue().async {
+                guard !cancelled.with({ $0 }) else {
+                    return
+                }
+                guard status == .authorized,
+                      let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
+                      !onDeviceOnly || recognizer.supportsOnDeviceRecognition else {
+                    SGLogger.shared.log("LocalTranscription", "Recognition unavailable for \(locale.identifier), authorization: \(status.rawValue)")
+                    subscriber.putNext(nil)
+                    subscriber.putCompletion()
+                    return
+                }
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
+                do {
+                    try FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: url)
+                } catch {
+                    SGLogger.shared.log("LocalTranscription", "Unable to prepare audio for recognition")
+                    subscriber.putNext(nil)
+                    subscriber.putCompletion()
+                    return
+                }
+                guard !cancelled.with({ $0 }) else {
+                    try? FileManager.default.removeItem(at: url)
+                    return
+                }
+                let request = SFSpeechURLRecognitionRequest(url: url)
+                request.taskHint = .dictation
+                request.shouldReportPartialResults = true
+                request.requiresOnDeviceRecognition = onDeviceOnly
+                if #available(iOS 16.0, *) {
+                    request.addsPunctuation = true
+                }
+                let finished = Atomic(value: false)
+                let timeoutTimer = SwiftSignalKit.Timer(timeout: 180.0, repeat: false, completion: {
+                    guard !finished.swap(true), !cancelled.with({ $0 }) else {
+                        return
                     }
-            }
-    }
-
-    
-    return resultSignal
-    |> map { results -> LocallyTranscribedAudio? in
-        for result in results {
-            if let result = result {
-                var result = result
-                if result.text.isEmpty {
-                    result.text = "..."
+                    subscriber.putNext(nil)
+                    subscriber.putCompletion()
+                }, queue: .mainQueue())
+                timeoutTimer.start()
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    guard !cancelled.with({ $0 }), !finished.with({ $0 }) else {
+                        return
+                    }
+                    if let result, !result.bestTranscription.formattedString.isEmpty {
+                        // Speech results replace the previous hypothesis; appending them
+                        // duplicates words and entire sentences in the final transcript.
+                        subscriber.putNext(LocallyTranscribedAudio(text: result.bestTranscription.formattedString, isFinal: result.isFinal))
+                        if result.isFinal {
+                            _ = finished.swap(true)
+                            timeoutTimer.invalidate()
+                            try? FileManager.default.removeItem(at: url)
+                            subscriber.putCompletion()
+                            return
+                        }
+                    }
+                    if error != nil || result?.isFinal == true {
+                        _ = finished.swap(true)
+                        timeoutTimer.invalidate()
+                        SGLogger.shared.log("LocalTranscription", "Recognition ended without a final transcript for \(locale.identifier)")
+                        try? FileManager.default.removeItem(at: url)
+                        subscriber.putNext(nil)
+                        subscriber.putCompletion()
+                    }
                 }
-                if var existing = accumulatedTranscription[result.locale] {
-                    existing.text.append(result.text)
-                    existing.confidence += result.confidence
-                    accumulatedTranscription[result.locale] = existing
-                } else {
-                    accumulatedTranscription[result.locale] = (result.confidence, [result.text])
-                }
+                disposable.set(ActionDisposable {
+                    _ = finished.swap(true)
+                    timeoutTimer.invalidate()
+                    // Retain the recognizer for the duration of its task.
+                    withExtendedLifetime(recognizer) {
+                        task.cancel()
+                    }
+                    try? FileManager.default.removeItem(at: url)
+                })
             }
         }
-        
-        // Find the locale with the highest accumulated confidence
-        guard let bestLocale = accumulatedTranscription.max(by: { $0.value.confidence < $1.value.confidence }) else {
-            SGLogger.shared.log("LocalTranscription", "No valid transcription results found")
-            return nil
+        return ActionDisposable {
+            _ = cancelled.swap(true)
+            disposable.dispose()
         }
-        
-        let combinedText = bestLocale.value.text.joined(separator: ". ")
-        // Assume 'isFinal' is true if the last result in 'results' is final. Adjust if needed.
-        let isFinal = results.compactMap({ $0 }).last?.isFinal ?? false
-        return LocallyTranscribedAudio(text: combinedText, isFinal: isFinal)
     }
-
+    |> runOn(.concurrentDefaultQueue())
+    |> deliverOnMainQueue
 }

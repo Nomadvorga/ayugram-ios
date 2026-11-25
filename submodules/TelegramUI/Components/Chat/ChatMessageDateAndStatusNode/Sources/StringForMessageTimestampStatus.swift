@@ -260,6 +260,12 @@ public func stringForMessageTimestampStatus(
     }
     
     // MARK: AyuGram
+    if ExteraMessageSettings.shared.showForwardsCount,
+       let forwards = message.attributes.first(where: { $0 is ForwardCountMessageAttribute }) as? ForwardCountMessageAttribute,
+       forwards.count > 0 {
+        let count = ExteraSettings.shared.disableNumberRounding ? "\(forwards.count)" : compactNumericCountString(forwards.count, decimalSeparator: dateTimeFormat.decimalSeparator)
+        dateText = "↗\u{FE0E} \(count)  \(dateText)"
+    }
     if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }), let mark = AyuCustomizationSettings.shared.deletedMarkPrefix(lang: strings.baseLanguageCode) {
         dateText = "\(mark) \(dateText)"
     }

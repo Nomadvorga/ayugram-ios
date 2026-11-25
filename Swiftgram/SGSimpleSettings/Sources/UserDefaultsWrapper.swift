@@ -21,6 +21,8 @@ public class UserDefault<T> /*where T: AllowedUserDefaultTypes*/ {
     public let key: String
     public let userDefaults: UserDefaults
     private var cachedValue: T?
+    private let cacheLock = NSLock()
+    private let writeLock = NSRecursiveLock()
     
     public init(key: String, userDefaults: UserDefaults = .standard) {
         self.key = key
@@ -33,26 +35,41 @@ public class UserDefault<T> /*where T: AllowedUserDefaultTypes*/ {
             SGtrace("UD.\(key)", what: "GET")
             #endif
             
+            self.cacheLock.lock()
             if let strongCachedValue = cachedValue {
+                self.cacheLock.unlock()
                 #if DEBUG && false
                 SGtrace("UD", what: "CACHED \(key) \(strongCachedValue)")
                 #endif
                 return strongCachedValue
             }
             
-            cachedValue = readFromUserDefaults()
+            let value = readFromUserDefaults()
+            cachedValue = value
+            self.cacheLock.unlock()
             
             #if DEBUG
-            SGtrace("UD.\(key)", what: "EXTRACTED: \(cachedValue!)")
+            SGtrace("UD.\(key)", what: "EXTRACTED: \(value)")
             #endif
-            return cachedValue!
+            return value
         }
         set {
+            // Serialize writers, but release the cache lock before persistence:
+            // a synchronous defaults observer on another queue must be able to
+            // read the published value while this writer waits for that observer.
+            // Recursive write serialization also permits same-thread observers
+            // to set again. Cross-queue observers must not synchronously write the
+            // same preference, since their writer would wait for this write.
+            self.writeLock.lock()
+            self.cacheLock.lock()
             cachedValue = newValue
-            #if DEBUG
-            SGtrace("UD.\(key)", what: "CACHE UPDATED \(cachedValue!)")
-            #endif
+            self.cacheLock.unlock()
             userDefaults.set(newValue, forKey: key)
+            // Do not publish again here: a reentrant setter may have set a newer value.
+            self.writeLock.unlock()
+            #if DEBUG
+            SGtrace("UD.\(key)", what: "CACHE UPDATED \(newValue)")
+            #endif
         }
     }
     
@@ -131,7 +148,7 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
         if threadSafe {
             rwlock.readLock()
         }
-        if container == nil {
+        if !threadSafe && container == nil {
             container = userDefaultsContainer
             #if DEBUG
             SGtrace("UD.\(userDefaultsKey)\(threadSafe ? "-ts" : "")", what: "EXTRACTED: \(container!)")
@@ -156,7 +173,7 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
         if threadSafe {
             rwlock.readLock()
         }
-        if container == nil {
+        if !threadSafe && container == nil {
             container = userDefaultsContainer
             #if DEBUG
             SGtrace("UD.\(userDefaultsKey)\(threadSafe ? "-ts" : "")", what: "EXTRACTED: \(container!)")
@@ -177,6 +194,14 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
         self.userDefaultsKey = userDefaultsKey
         self.userDefaults = userDefaults
         self.threadSafe = threadSafe
+        if threadSafe {
+            // Initialize before publishing this instance. Getters may then share the
+            // read lock without racing to assign the initially empty cache. Keep the
+            // existing lazy behavior for dictionaries whose callers serialize access.
+            rwlock.writeLock()
+            container = userDefaultsContainer
+            rwlock.unlock()
+        }
     }
 
     /// Sets the value for key
@@ -220,7 +245,7 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
         if threadSafe {
             rwlock.readLock()
         }
-        if container == nil {
+        if !threadSafe && container == nil {
             container = userDefaultsContainer
             #if DEBUG
             SGtrace("UD.\(userDefaultsKey)\(threadSafe ? "-ts" : "")", what: "EXTRACTED: \(container!)")
@@ -245,7 +270,7 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
         if threadSafe {
             rwlock.readLock()
         }
-        if container == nil {
+        if !threadSafe && container == nil {
             container = userDefaultsContainer
             #if DEBUG
             SGtrace("UD.\(userDefaultsKey)\(threadSafe ? "-ts" : "")", what: "EXTRACTED: \(container!)")
@@ -357,7 +382,14 @@ public class UserDefaultsBackedDictionary<Key: Hashable, Value> {
     
     private var userDefaultsContainer: [Key: Value] {
         get {
-            return userDefaults.dictionary(forKey: userDefaultsKey) as! [Key: Value]
+            guard let dictionary = userDefaults.dictionary(forKey: userDefaultsKey) else {
+                // Only an absent preference is an empty dictionary. A stored value
+                // of the wrong type must still fail rather than being overwritten
+                // by the next mutation of an apparently empty cache.
+                precondition(userDefaults.object(forKey: userDefaultsKey) == nil, "Expected a dictionary for UserDefaults key \(userDefaultsKey)")
+                return [:]
+            }
+            return dictionary as! [Key: Value]
         }
         set {
             userDefaults.set(newValue, forKey: userDefaultsKey)

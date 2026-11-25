@@ -1,0 +1,103 @@
+name: exteraGram host checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Swiftgram/SGSimpleSettings/**'
+      - 'Swiftgram/SGItemListUI/Sources/SliderPercentageItem.swift'
+      - 'Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings'
+      - 'Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings'
+      - 'Swiftgram/SGSettingsUI/Sources/Extera*.swift'
+      - 'tools/check_extera_localizations.py'
+      - 'submodules/TelegramUI/Sources/ExteraMath*.swift'
+      - 'submodules/TelegramUI/Sources/ExteraLyrics*Parser.swift'
+      - 'submodules/GalleryUI/Sources/ExteraImageSearch*.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ExteraTakeout*.swift'
+      - 'Tests/Extera*/**'
+      - 'docs/validation/**'
+      - '.github/workflows/extera-host-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-models:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - name: Calculator and conversions
+        run: |
+          set -euo pipefail
+          swiftc -parse-as-library \
+            submodules/TelegramUI/Sources/ExteraMathEngine.swift \
+            submodules/TelegramUI/Sources/ExteraMathUnits.swift \
+            submodules/TelegramUI/Sources/ExteraMathTimeZones.swift \
+            submodules/TelegramUI/Sources/ExteraMathCurrencyRates.swift \
+            Tests/ExteraMath/ExteraMathEngineTests.swift \
+            -o "$RUNNER_TEMP/extera-math-tests"
+          "$RUNNER_TEMP/extera-math-tests"
+      - name: Lyrics parsers
+        run: |
+          set -euo pipefail
+          swiftc \
+            submodules/TelegramUI/Sources/ExteraLyricsParser.swift \
+            submodules/TelegramUI/Sources/ExteraLyricsTTMLParser.swift \
+            Tests/ExteraLyrics/main.swift \
+            -o "$RUNNER_TEMP/extera-lyrics-tests"
+          "$RUNNER_TEMP/extera-lyrics-tests"
+      - name: Settings serialization and validators
+        run: |
+          set -euo pipefail
+          python3 docs/validation/check_extera_backup.py
+          python3 tools/check_extera_localizations.py
+          python3 docs/validation/run_extera_backup_validation.py
+          python3 docs/validation/run_ayu_settings_store_validation.py
+      - name: Local feed persistence
+        run: |
+          set -euo pipefail
+          swiftc -swift-version 5 -parse-as-library -warnings-as-errors -g -sanitize=thread \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
+            Tests/ExteraFeed/ExteraFeedSettingsTests.swift \
+            -o "$RUNNER_TEMP/extera-feed-tests"
+          TSAN_OPTIONS=halt_on_error=1 "$RUNNER_TEMP/extera-feed-tests"
+      - name: HTTP pill models
+        run: |
+          set -euo pipefail
+          swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
+            Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
+            Tests/ExteraPills/ExteraPillHostTests.swift \
+            -o "$RUNNER_TEMP/extera-pill-tests"
+          "$RUNNER_TEMP/extera-pill-tests"
+      - name: Sticker settings and geometry
+        run: |
+          set -euo pipefail
+          swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraStickerSettings.swift \
+            Tests/ExteraStickers/ExteraStickerHostTests.swift \
+            -o "$RUNNER_TEMP/extera-sticker-tests"
+          "$RUNNER_TEMP/extera-sticker-tests"
+      - name: Image search protocol
+        run: |
+          set -euo pipefail
+          swiftc -swift-version 5 -parse-as-library -warnings-as-errors \
+            submodules/GalleryUI/Sources/ExteraImageSearchProtocol.swift \
+            Tests/ExteraImageSearch/ExteraImageSearchProtocolTests.swift \
+            -o "$RUNNER_TEMP/extera-image-tests"
+          "$RUNNER_TEMP/extera-image-tests"
+      - name: Takeout serialization and ZIP
+        run: |
+          set -euo pipefail
+          swiftc \
+            submodules/TelegramCore/Sources/TelegramEngine/Messages/ExteraTakeoutModels.swift \
+            submodules/TelegramCore/Sources/TelegramEngine/Messages/ExteraTakeoutWriter.swift \
+            Tests/ExteraTakeout/main.swift \
+            -o "$RUNNER_TEMP/extera-takeout-tests"
+          "$RUNNER_TEMP/extera-takeout-tests" "$RUNNER_TEMP/extera-takeout-fixture.zip"
+          python3 Tests/ExteraTakeout/validate_source.py "$RUNNER_TEMP/extera-takeout-fixture.zip"

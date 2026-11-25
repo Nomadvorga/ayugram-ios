@@ -21,6 +21,8 @@ private extension CGRect {
 
 public enum NativeVideoContentId: Hashable {
     case message(UInt32, MediaId)
+    // Keep original gallery playback separate from an already attached inline HLS player.
+    case messageOriginal(UInt32, MediaId)
     case instantPage(MediaId, MediaId)
     case contextResult(Int64, String)
     case profileVideo(Int64, String?)

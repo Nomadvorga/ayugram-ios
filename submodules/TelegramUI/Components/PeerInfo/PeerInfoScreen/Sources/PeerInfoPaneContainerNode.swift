@@ -23,6 +23,7 @@ import UndoUI
 import HorizontalTabsComponent
 import GlassBackgroundComponent
 import EdgeEffect
+import SGSimpleSettings
 
 final class PeerInfoPaneWrapper {
     let key: PeerInfoPaneKey
@@ -957,7 +958,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         let previousCurrentPaneKey = self.currentPaneKey
         var updateCurrentPaneStatus = false
         
-        if let previousAvailablePanes, !previousAvailablePanes.contains(.stories), availablePanes.contains(.stories) {
+        if let previousAvailablePanes, !previousAvailablePanes.contains(.stories), availablePanes.contains(.stories), ExteraGeneralSettings.shared.defaultProfileTab == .default {
             self.pendingSwitchToPaneKey = .stories
         }
         
@@ -981,7 +982,18 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                 self.pendingSwitchToPaneKey = nil
             }
         } else if self.currentPaneKey == nil {
-            self.pendingSwitchToPaneKey = self.initialPaneKey ?? availablePanes.first
+            // Explicit media/gift links keep their destination. A preferred tab only applies
+            // when the peer actually exposes it; otherwise keep Telegram's first available pane.
+            let preferredPane: PeerInfoPaneKey?
+            switch ExteraGeneralSettings.shared.defaultProfileTab {
+            case .default:
+                preferredPane = nil
+            case .media:
+                preferredPane = .media
+            case .groupsInCommon:
+                preferredPane = .groupsInCommon
+            }
+            self.pendingSwitchToPaneKey = self.initialPaneKey.flatMap { availablePanes.contains($0) ? $0 : nil } ?? preferredPane.flatMap { availablePanes.contains($0) ? $0 : nil } ?? availablePanes.first
         }
         
         let currentIndex: Int?

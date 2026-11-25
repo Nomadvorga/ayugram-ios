@@ -372,7 +372,7 @@ func updatedChatEditInterfaceMessageState(context: AccountContext, state: ChatPr
 
 private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, message: EngineRawMessage, controllerInteraction: ChatControllerInteraction, interfaceInteraction: ChatPanelInterfaceInteraction) -> Signal<ContextController.Items, NoError> {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+    let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || chatPresentationInterfaceState.myCopyProtectionEnabled || message.isCopyProtected()
     let replacementMessage = message.activeEphemeralReplacementMessage
 
     var richMessageInstantPage: InstantPage?
@@ -421,7 +421,8 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
         actions.append(.separator)
         
         let hasCopyableContent = !message.text.isEmpty || richMessageInstantPage != nil || diceEmoji != nil || (resourceAvailable && imageResource != nil)
-        if hasCopyableContent && !isCopyProtected && !isExpired && !isPoll {
+        let isPhotoOnly = message.text.isEmpty && richMessageInstantPage == nil && diceEmoji == nil && imageResource != nil
+        if hasCopyableContent && !isCopyProtected && !isExpired && !isPoll && !isPhotoOnly {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
             }, action: { _, f in
@@ -443,22 +444,12 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
                     })
                 }
 
-                if message.text.isEmpty, richMessageInstantPage == nil, diceEmoji == nil, resourceAvailable, let imageResource {
-                    let _ = (context.engine.resources.data(resource: EngineMediaResource(imageResource), incremental: true)
-                    |> take(1)
-                    |> deliverOnMainQueue).startStandalone(next: { data in
-                        if data.isComplete, let imageData = try? Data(contentsOf: URL(fileURLWithPath: data.path)), let image = UIImage(data: imageData) {
-                            UIPasteboard.general.image = image
-                            Queue.mainQueue().after(0.2, {
-                                controllerInteraction.displayUndo(.copy(text: chatPresentationInterfaceState.strings.Conversation_ImageCopied))
-                            })
-                        }
-                    })
-                } else {
-                    copyText()
-                }
+                copyText()
                 f(.default)
             })))
+        }
+        if !isExpired && !isPoll, let copyPhotoAction = exteraCopyPhotoContextMenuAction(context: context, state: chatPresentationInterfaceState, message: message, interaction: controllerInteraction, resourceAvailable: resourceAvailable) {
+            actions.append(copyPhotoAction)
         }
 
         if let replacementMessage {
@@ -472,11 +463,13 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
                 })))
             }
 
-            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.contextMenu.primaryColor)
-            }, action: { controller, _ in
-                interfaceInteraction.reportMessages([replacementMessage], controller)
-            })))
+            if ExteraMenuSettings.shared.showReportButton {
+                actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.contextMenu.primaryColor)
+                }, action: { controller, _ in
+                    interfaceInteraction.reportMessages([replacementMessage], controller)
+                })))
+            }
         }
 
         let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0)
@@ -1195,7 +1188,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         if !isPinnedMessages, !isReplyThreadHead, data.canReply {
-            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
+            actions.append(.action(ContextMenuActionItem(id: "extera.group.reply", text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
                 interfaceInteraction.setupReplyMessage(messages[0].id, nil, { transition, completed in
@@ -1361,12 +1354,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+        let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || chatPresentationInterfaceState.myCopyProtectionEnabled || message.isCopyProtected()
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
                     if !isCopyProtected {
-                        actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
+                        actions.append(.action(ContextMenuActionItem(id: "extera.group.copy", text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                         }, action: { _, f in
                             if let diceEmoji = diceEmoji {
@@ -1420,47 +1413,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                         controllerInteraction.displayUndo(content)
                                     })
                                 }
-                                if resourceAvailable {
-                                    for media in message.effectiveMedia {
-                                        if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
-                                            let _ = (context.engine.resources.data(resource: EngineMediaResource(largest.resource), incremental: true)
-                                            |> take(1)
-                                            |> deliverOnMainQueue).startStandalone(next: { data in
-                                                if data.isComplete, let imageData = try? Data(contentsOf: URL(fileURLWithPath: data.path)) {
-                                                    if let image = UIImage(data: imageData) {
-                                                        // A rich message is sent with `text: ""`, so `messageText` is
-                                                        // empty even when the bubble is full of content — copying the
-                                                        // bare image would throw the whole document away. Treat a rich
-                                                        // page like non-empty text (`copyTextWithEntities` short-circuits
-                                                        // to the rich clipboard formats). Matches the sibling Copy action
-                                                        // in `chatAnchoredMessageContextMenuItems`, which already gates on
-                                                        // `richMessageInstantPage == nil`.
-                                                        if !messageText.isEmpty || richMessageInstantPage != nil {
-                                                            copyTextWithEntities()
-                                                        } else {
-                                                            UIPasteboard.general.image = image
-                                                            
-                                                            Queue.mainQueue().after(0.2, {
-                                                                let content: UndoOverlayContent = .copy(text: chatPresentationInterfaceState.strings.Conversation_ImageCopied)
-                                                                controllerInteraction.displayUndo(content)
-                                                            })
-                                                        }
-                                                    } else {
-                                                        copyTextWithEntities()
-                                                    }
-                                                } else {
-                                                    copyTextWithEntities()
-                                                }
-                                            })
-                                            break
-                                        } else {
-                                            copyTextWithEntities()
-                                            break
-                                        }
-                                    }
-                                } else {
-                                    copyTextWithEntities()
-                                }
+                                // Photo copying has its own action below; captions and
+                                // rich documents never need to load/decode the image.
+                                copyTextWithEntities()
                             }
                             f(.default)
                         })))
@@ -1596,7 +1551,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if let readUntilAction = ayuMakeReadUntilContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(readUntilAction)
         }
-        if let repeatAction = ayuMakeRepeatMessageContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+        if let repeatAction = exteraRepeatMessageContextMenuAction(context: context, state: chatPresentationInterfaceState, messages: selectAll || isImage ? messages : [message], interaction: controllerInteraction, canForward: data.messageActions.options.contains(.forward)) {
             actions.append(repeatAction)
         }
         if let shadowBanAction = ayuMakeShadowBanContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
@@ -1604,6 +1559,31 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         actions.append(contentsOf: ayuMakeMessageDatesContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, message: message))
         //
+
+        if messageText.isEmpty && richMessageInstantPage == nil && isImage {
+            // Label image-only copying explicitly and honor its visibility.
+            actions.removeAll(where: { item in
+                if case let .action(action) = item {
+                    return action.id == AnyHashable("extera.group.copy")
+                }
+                return false
+            })
+        }
+        if let copyPhotoAction = exteraCopyPhotoContextMenuAction(context: context, state: chatPresentationInterfaceState, message: message, interaction: controllerInteraction, resourceAvailable: resourceAvailable) {
+            actions.append(copyPhotoAction)
+        }
+        if let clearAction = exteraClearMessageCacheContextMenuAction(context: context, state: chatPresentationInterfaceState, message: message, resourceAvailable: resourceAvailable) {
+            actions.append(clearAction)
+        }
+        if !isReplyThreadHead, !isPinnedMessages, let historyAction = exteraAuthorHistoryContextMenuAction(state: chatPresentationInterfaceState, message: message, interaction: interfaceInteraction) {
+            actions.append(historyAction)
+        }
+        if let detailsAction = exteraMessageDetailsContextMenuAction(state: chatPresentationInterfaceState, message: message) {
+            actions.append(detailsAction)
+        }
+        if messages.count == 1, let exportAction = exteraMessageImageExportContextMenuAction(state: chatPresentationInterfaceState, message: message, sourceNode: messageNode, interaction: controllerInteraction, canForward: data.messageActions.options.contains(.forward) && !data.messageActions.isCopyProtected) {
+            actions.append(exportAction)
+        }
         
         var threadId: Int64?
         var threadMessageCount: Int = 0
@@ -1666,7 +1646,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         if data.canEdit && !isPinnedMessages && !isMigrated {
-            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
+            actions.append(.action(ContextMenuActionItem(id: "extera.group.edit", text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, f in
                 if let _ = activeTodo {
@@ -1840,7 +1820,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         if let message = messages.first, let copyLinkKind = chatMessageCopyLinkKind(message: message), let channel = message.peers[message.id.peerId] as? TelegramChannel, !isReplyThreadHead, !isMigrated {
-            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopyLink, icon: { theme in
+            actions.append(.action(ContextMenuActionItem(id: "extera.group.link", text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopyLink, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
                 var threadMessageId: EngineMessage.Id?
@@ -1988,12 +1968,20 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
 
         if data.messageActions.options.contains(.forward) {
             if !isCopyProtected {
-                actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
+                actions.append(.action(ContextMenuActionItem(id: "extera.group.forward", text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], nil)
                     f(.dismissWithoutContent)
                 })))
+                if ExteraMenuSettings.shared.showSaveMessageButton, message.id.peerId != context.account.peerId, !message.containsSecretMedia {
+                    actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SavedMessages, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
+                    }, action: { _, dismiss in
+                        interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], "forwardMessagesToCloud")
+                        dismiss(.dismissWithoutContent)
+                    })))
+                }
             }
         }
         
@@ -2006,7 +1994,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })), at: 0)
         }
         
-        if data.messageActions.options.contains(.report) || context.account.testingEnvironment {
+        if ExteraMenuSettings.shared.showReportButton && (data.messageActions.options.contains(.report) || context.account.testingEnvironment) {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.actionSheet.primaryTextColor)
             }, action: { controller, f in
@@ -2200,7 +2188,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     iconName = "Chat/Context Menu/DeletePaid"
                 }
                 
-                actions.append(.action(ContextMenuActionItem(text: title, textColor: .destructive, icon: { theme in
+                actions.append(.action(ContextMenuActionItem(id: isSending || isEditing ? nil : "extera.group.delete", text: title, textColor: .destructive, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: iconName), color: theme.actionSheet.destructiveActionTextColor)
                 }, action: { controller, f in
                     if isEditing {
@@ -2616,6 +2604,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
+        exteraGroupMessageContextMenuActions(&actions)
         return ContextController.Items(content: .list(actions), tip: nil)
     }
 }

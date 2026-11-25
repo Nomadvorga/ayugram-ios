@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import Postbox
 internal import TelegramApi
 import SwiftSignalKit
@@ -33,6 +34,16 @@ private func managedRecentMedia(postbox: Postbox, network: Network, collectionId
                     }
 
                     return postbox.transaction { transaction -> Void in
+                        // The cloud list has a server-side cap. Retain local history
+                        // beyond that cap only for recent stickers, never favourites/GIFs.
+                        if collectionId == Namespaces.OrderedItemList.CloudRecentStickers, ExteraStickerSettings.shared.unlimitedRecentStickers {
+                            var ids = Set(items.map { $0.id.makeData() })
+                            for item in transaction.getOrderedListItems(collectionId: collectionId) {
+                                if ids.insert(item.id.makeData()).inserted {
+                                    items.append(item)
+                                }
+                            }
+                        }
                         transaction.replaceOrderedItemListItems(collectionId: collectionId, items: items)
                     }
                 } else {

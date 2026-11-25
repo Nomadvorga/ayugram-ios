@@ -23,6 +23,7 @@ import ToastComponent
 import TelegramNotices
 import Markdown
 import TelegramUIPreferences
+import SGSimpleSettings
 import ChatSendMessageActionUI
 import ContextUI
 import EmojiStatusComponent
@@ -827,6 +828,8 @@ final class TextProcessingContentComponent: Component {
             let contentComponent: AnyComponent<Empty>
             switch self.currentMode {
             case .translate:
+                let translationOptions = environment.controller()?.customData as? TranslationScreenOptions
+                self.translateState.initialTargetLanguage = translationOptions?.toLanguage
                 contentExternalState = self.translateState
                 contentComponent = AnyComponent(TextProcessingTranslateContentComponent(
                     context: component.context,
@@ -835,7 +838,7 @@ final class TextProcessingContentComponent: Component {
                     styles: component.styles,
                     externalState: self.translateState,
                     inputText: component.inputText,
-                    mode: .translate(ignoredLanguages: component.ignoredTranslationLanguages),
+                    mode: .translate(ignoredLanguages: translationOptions?.ignoredLanguages ?? component.ignoredTranslationLanguages),
                     appliedPrompt: nil,
                     copyAction: component.copyCurrentResult,
                     displayLanguageSelectionMenu: component.displayLanguageSelectionMenu,
@@ -2205,7 +2208,7 @@ private final class TextProcessingSheetComponent: Component {
     }
 }
 
-public class TextProcessingScreen: ViewControllerComponentContainer {
+public class TextProcessingScreen: ViewControllerComponentContainer, TranslationScreenOptionsConsumer {
     public typealias SendContextActions = TextProcessingScreenSendContextActions
     
     public typealias Mode = TextProcessingScreenMode
@@ -2291,6 +2294,18 @@ public class TextProcessingScreen: ViewControllerComponentContainer {
     }
     
     private let context: AccountContext
+    private var translationOptions: TranslationScreenOptions?
+
+    public override var customData: Any? {
+        if let translationOptions = self.translationOptions {
+            return translationOptions
+        }
+        return super.customData
+    }
+
+    public func setTranslationScreenOptions(_ options: TranslationScreenOptions) {
+        self.translationOptions = options
+    }
 
     public init(
         context: AccountContext,
@@ -2302,7 +2317,27 @@ public class TextProcessingScreen: ViewControllerComponentContainer {
     ) async {
         self.context = context
         
-        let rawStyles = await context.engine.messages.composeAIMessageStyles().get()
+        let usesExternalTranslation: Bool
+        if case .translate = mode {
+            usesExternalTranslation = SGSimpleSettings.shared.translationBackendEnum != .default
+        } else {
+            usesExternalTranslation = false
+        }
+        let rawStyles: [TelegramComposeAIMessageMode.CloudStyle]
+        let usesCustomAI: Bool
+        if case .preview = mode {
+            usesCustomAI = false
+        } else {
+            usesCustomAI = ExteraAISettings.shared.configuration.useForTextProcessing
+        }
+        if usesExternalTranslation || usesCustomAI {
+            // HTTP/System providers do not use Telegram's AI style catalogue.
+            // Loading it first would prevent translation from opening while the
+            // Telegram connection is unavailable, even with a working provider.
+            rawStyles = []
+        } else {
+            rawStyles = await context.engine.messages.composeAIMessageStyles().get()
+        }
         var styles: [Style] = []
         let resolvedEmojiFiles: [Int64: TelegramMediaFile] = await context.engine.stickers.resolveInlineStickersLocal(fileIds: Array(Set(rawStyles.compactMap({ style in
             switch style.content {
@@ -2399,6 +2434,9 @@ public class TextProcessingScreen: ViewControllerComponentContainer {
     }
 
     deinit {
+        if let options = self.customData as? TranslationScreenOptions, let wasDismissed = options.wasDismissed {
+            Queue.mainQueue().async(wasDismissed)
+        }
     }
 
     public func dismissAnimated() {

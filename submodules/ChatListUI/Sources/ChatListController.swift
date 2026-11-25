@@ -3935,20 +3935,65 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
 
             var items: [ContextMenuItem] = []
 
-            items.append(.action(ContextMenuActionItem(text: "Export Chat", icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak sourceController] _, f in
-                f(.default)
-                let _ = sgExportChatJSON(context: context, peerId: peerId, completion: { [weak sourceController] url in
-                    guard let sourceController, let url else {
-                        return
+            let languageCode = strings.baseLanguageCode
+            let cachedExportTitle = languageCode.hasPrefix("ru") ? "Экспорт сохранённого текста чата" : "Export Cached Chat Text"
+            if peerId.namespace != Namespaces.Peer.SecretChat {
+                items.append(.action(ContextMenuActionItem(text: cachedExportTitle, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak sourceController] menuController, dismiss in
+                    let beginExport = { [weak sourceController] in
+                        guard let sourceController, sourceController.view.window != nil else { return }
+                        let task = CachedChatExportTask()
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
+                            task.cancel()
+                        }))
+                        task.progress = progress
+                        sourceController.present(progress, in: .window(.root))
+                        task.disposable.set(sgExportChatJSON(context: context, peerId: peerId, completion: { [weak sourceController, weak task] url in
+                            guard let task, !task.isCancelled else {
+                                if let url { Queue.concurrentDefaultQueue().async { try? FileManager.default.removeItem(at: url) } }
+                                return
+                            }
+                            task.disposable.set(nil)
+                            task.progress?.dismiss()
+                            // OverlayStatusController dismisses asynchronously and
+                            // does not forward its completion until already closed.
+                            Queue.mainQueue().after(0.3) { [weak sourceController] in
+                                guard let sourceController, var presenter = sourceController.view.window?.rootViewController else {
+                                    if let url { Queue.concurrentDefaultQueue().async { try? FileManager.default.removeItem(at: url) } }
+                                    return
+                                }
+                                while let presented = presenter.presentedViewController { presenter = presented }
+                                guard !presenter.isBeingDismissed, !presenter.isBeingPresented else {
+                                    if let url { Queue.concurrentDefaultQueue().async { try? FileManager.default.removeItem(at: url) } }
+                                    return
+                                }
+                                guard let url else {
+                                    let text = languageCode.hasPrefix("ru") ? "Не удалось экспортировать сохранённый текст. Полная история и медиа с сервера в этот файл не загружаются." : "Could not export cached chat text. This export does not download full history or media from the server."
+                                    let alert = UIAlertController(title: cachedExportTitle, message: text, preferredStyle: .alert)
+                                    alert.addAction(UIAlertAction(title: strings.Common_OK, style: .default))
+                                    presenter.present(alert, animated: true)
+                                    return
+                                }
+                                let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                                activityController.popoverPresentationController?.sourceView = presenter.view
+                                activityController.popoverPresentationController?.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1.0, height: 1.0)
+                                activityController.completionWithItemsHandler = { _, _, _, _ in
+                                    Queue.concurrentDefaultQueue().async { try? FileManager.default.removeItem(at: url) }
+                                }
+                                presenter.present(activityController, animated: true)
+                            }
+                        }))
                     }
-                    let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                    DispatchQueue.main.async {
-                        sourceController.view.window?.windowScene?.keyWindow?.rootViewController?.present(activityController, animated: true)
+                    if let menuController {
+                        menuController.dismiss(completion: beginExport)
+                    } else {
+                        dismiss(.default)
+                        Queue.mainQueue().after(0.2, beginExport)
                     }
-                })
-            })))
+                })))
+            }
 
             guard case let .channel(channel) = peer else {
                 return
@@ -6509,6 +6554,22 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             })))
             
+            // Native HTTP pill dashboard; configuration remains in exteraGram settings.
+            items.append(.action(ContextMenuActionItem(text: exteraPillText(strongSelf.presentationData.strings.baseLanguageCode, "HTTP Pills", "HTTP-плашки"), icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "chart.bar.xaxis"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self] c, dismiss in
+                let openDashboard = { [weak self] in
+                    guard let self, let navigationController = self.navigationController as? NavigationController else { return }
+                    navigationController.pushViewController(exteraPillDashboardController(context: self.context))
+                }
+                if let c {
+                    c.dismiss(completion: openDashboard)
+                } else {
+                    dismiss(.default)
+                    Queue.mainQueue().after(0.2, openDashboard)
+                }
+            })))
+
             if strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter != nil {
                 items.append(.separator)
                 
@@ -7104,16 +7165,18 @@ private final class ChatListLocationContext {
                 var status: NetworkStatusTitle.Status?
                 var firstName = ""
                 var lastName = ""
+                var username: String?
                 if case let .user(user) = peer {
                     firstName = user.firstName ?? ""
                     lastName = user.lastName ?? ""
+                    username = user.addressName
                     if let emojiStatus = user.emojiStatus {
                         status = .emoji(emojiStatus)
                     } else if user.isPremium {
                         status = .premium
                     }
                 }
-                return (status, ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title))
+                return (status, ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title, username: username))
             } |> distinctUntilChanged(isEqual: { lhs, rhs in
                 return lhs.status == rhs.status && lhs.nameTitle == rhs.nameTitle
             })

@@ -18,6 +18,7 @@ import UndoUI
 import SettingsUI
 import PromptUI
 import TranslateUI
+import Speech
 
 private enum SGControllerSection: Int32, SGItemListSection {
     case search
@@ -42,6 +43,15 @@ private enum SGControllerSection: Int32, SGItemListSection {
     case stickers
     case profiles
     case stories
+    case media
+    case replies
+    case reactions
+    case messageMenu
+    case camera
+    case speechRecognition
+    case backup
+    case inlineCalculator
+    case browser
 }
 
 private enum SGBoolSetting: String {
@@ -123,6 +133,45 @@ private enum SGBoolSetting: String {
     case filterZalgoText
     case commaAfterMention
     case combinedMediaViewer
+    case hideReactionsInChannels
+    case hideReactionsInGroups
+    case hideReactionsInPrivateChats
+    case removeMessageTail
+    case replyColors
+    case replyEmoji
+    case replyBackground
+    case showForwardsCount
+    case showPollResultsBeforeVoting
+    case hideKeyboardOnScroll
+    case swipeToReplyIncoming
+    case swipeToReplyOutgoing
+    case preferOriginalQuality
+    case pauseOnMinimizeVideo
+    case pauseOnMinimizeVoice
+    case pauseOnMinimizeRound
+    case rememberLastUsedCamera
+    case appleSpeechOnDeviceOnly
+    case showCopyPhotoButton
+    case showSaveMessageButton
+    case showRepeatMessageButton
+    case showClearButton
+    case showHistoryButton
+    case showReportButton
+    case showDetailsButton
+    case showMessageImageExportButton
+    case groupMessageMenu
+    case inlineResults
+    case inlineMathResult
+    case inlineDigitGrouping
+    case adBlockingEnabled
+    case unlimitedRecentStickers
+    case inlineUnits
+    case inlineCurrencies
+    case inlineTimeZones
+    case inlineImperial
+    case preferEmbeddedLyrics
+    case lyricsAutoScroll
+    case lyricsTapToSeek
     // MARK: AyuGram
     case ayuGhostMode
     case ayuDontReadMessages
@@ -145,11 +194,27 @@ private enum SGOneFromManySetting: String {
     case doNotTranslateLanguages
     case showIdAndDc
     case customSavePath
+    case defaultProfileTab
+    case doubleTapIncoming
+    case doubleTapOutgoing
+    case doubleTapSeekDuration
+    case videoMessagesCamera
+    case appleSpeechLocale
+    case transcriptionBackend
+    case inlineAngleUnit
+    case stickerSize
+    case stickerTimeMode
+    case stickerShape
+    case inlineTargetCurrency
+    case lyricsSource
+    case lyricsDisplayMode
+    case lyricsOffset
 }
 
 private enum SGSliderSetting: String {
     case avatarCorners
     case accountColorsSaturation
+    case outgoingPhotoQuality
 }
 
 private enum SGDisclosureLink: String {
@@ -157,13 +222,23 @@ private enum SGDisclosureLink: String {
     case categoryGeneral
     case categoryAppearance
     case categoryChats
+    case categoryMedia
     case categoryOther
+    case upstreamSource
+    case settingsBackup
+    case browserExceptions
+    case aiServices
+    case channelFeed
+    case dataPills
+    case browserFilters
+    case cloudExport
 }
 
 public enum SGSettingsCategory {
     case general
     case appearance
     case chats
+    case media
     case other
 
     fileprivate var sections: Set<SGControllerSection> {
@@ -173,9 +248,11 @@ public enum SGSettingsCategory {
         case .appearance:
             return [.avatarCorners, .appearance, .tabs, .folders, .chatList, .accountColors, .application]
         case .chats:
-            return [.chats, .gestures, .stickers, .sending]
+            return [.chats, .gestures, .stickers, .sending, .replies, .reactions, .messageMenu, .inlineCalculator]
+        case .media:
+            return [.media, .camera, .speechRecognition]
         case .other:
-            return [.profiles, .stories]
+            return [.other, .profiles, .stories, .backup, .browser]
         }
     }
 
@@ -187,6 +264,8 @@ public enum SGSettingsCategory {
             return "Ayu.CategoryAppearance"
         case .chats:
             return "Ayu.CategoryChats"
+        case .media:
+            return "Extera.CategoryMedia"
         case .other:
             return "Ayu.CategoryOther"
         }
@@ -199,6 +278,7 @@ private func chatListTitleOption(_ value: ExteraSettings.ChatListTitle, lang: St
     case .fullName: return i18n("Extera.ActionBarTitleFullName", lang)
     case .firstName: return i18n("Extera.ActionBarTitleName", lang)
     case .chats: return i18n("Extera.ActionBarTitleChats", lang)
+    case .username: return i18n("Extera.ActionBarTitleUsername", lang)
     }
 }
 
@@ -222,6 +302,44 @@ private struct SGSettingsControllerState: Equatable {
     var searchQuery: String?
 }
 
+private func doubleTapActionTitle(_ action: ExteraChatSettings.DoubleTapAction, lang: String) -> String {
+    switch action {
+    case .inherit: return i18n("Extera.DoubleTapAction.Inherit", lang)
+    case .disabled: return i18n("Extera.DoubleTapAction.Disabled", lang)
+    case .reaction: return i18n("Extera.DoubleTapAction.Reaction", lang)
+    case .reply: return i18n("Extera.DoubleTapAction.Reply", lang)
+    case .copy: return i18n("Extera.DoubleTapAction.Copy", lang)
+    case .forward: return i18n("Extera.DoubleTapAction.Forward", lang)
+    case .edit: return i18n("Extera.DoubleTapAction.Edit", lang)
+    case .save: return i18n("Extera.DoubleTapAction.Save", lang)
+    case .repeatMessage: return i18n("Ayu.RepeatMessage", lang)
+    case .delete: return i18n("Extera.DoubleTapAction.Delete", lang)
+    case .translate: return i18n("Extera.DoubleTapAction.Translate", lang)
+    }
+}
+
+private func defaultProfileTabTitle(_ tab: ExteraGeneralSettings.DefaultProfileTab, lang: String) -> String {
+    switch tab {
+    case .default: return i18n("Extera.ProfileTab.Default", lang)
+    case .media: return i18n("Extera.ProfileTab.Media", lang)
+    case .groupsInCommon: return i18n("Extera.ProfileTab.GroupsInCommon", lang)
+    }
+}
+
+private func speechLocaleTitle(_ identifier: String, lang: String) -> String {
+    guard !identifier.isEmpty else { return i18n("Extera.SpeechLocale.Automatic", lang) }
+    let locale = Locale(identifier: lang.replacingOccurrences(of: "-raw", with: ""))
+    return locale.localizedString(forIdentifier: identifier) ?? identifier
+}
+
+private func cameraChoiceKey(_ value: Int) -> String {
+    switch value {
+    case 1: return "Extera.CameraRear"
+    case 2: return "Extera.CameraAsk"
+    default: return "Extera.CameraFront"
+    }
+}
+
 private typealias SGControllerEntry = SGItemListUIEntry<SGControllerSection, SGBoolSetting, SGSliderSetting, SGOneFromManySetting, SGDisclosureLink, AnyHashable>
 
 private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, translationSettings: TranslationSettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String, category: SGSettingsCategory?) -> [SGControllerEntry] {
@@ -242,7 +360,11 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     entries.append(.disclosure(id: id.count, section: .categories, link: .categoryGeneral, text: i18n("Ayu.CategoryGeneral", lang)))
     entries.append(.disclosure(id: id.count, section: .categories, link: .categoryAppearance, text: i18n("Ayu.CategoryAppearance", lang)))
     entries.append(.disclosure(id: id.count, section: .categories, link: .categoryChats, text: i18n("Ayu.CategoryChats", lang)))
+    entries.append(.disclosure(id: id.count, section: .categories, link: .categoryMedia, text: i18n("Extera.CategoryMedia", lang)))
     entries.append(.disclosure(id: id.count, section: .categories, link: .categoryOther, text: i18n("Ayu.CategoryOther", lang)))
+    entries.append(.disclosure(id: id.count, section: .categories, link: .aiServices, text: i18n("Extera.AI", lang)))
+    entries.append(.disclosure(id: id.count, section: .categories, link: .channelFeed, text: i18n("Extera.ChannelFeed", lang)))
+    entries.append(.disclosure(id: id.count, section: .categories, link: .dataPills, text: i18n("Extera.DataPills", lang)))
     return entries
 }
 
@@ -288,6 +410,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.header(id: id.count, section: .profileGeneral, text: i18n("Extera.Profile", lang).uppercased(), badge: nil))
     entries.append(.toggleSubtitle(id: id.count, section: .profileGeneral, settingName: .relativeLastSeen, value: ExteraSettings.shared.relativeLastSeen, text: i18n("Extera.RelativeLastSeen", lang), subtitle: i18n("Extera.RelativeLastSeenInfo", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .profileGeneral, settingName: .hidePhoneNumber, value: settings.hidePhoneInSettings, text: i18n("Extera.HidePhoneNumber", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .profileGeneral, settingName: .defaultProfileTab, text: i18n("Extera.DefaultProfileTab", lang), value: defaultProfileTabTitle(ExteraGeneralSettings.shared.defaultProfileTab, lang: lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .profileGeneral, settingName: .showIdAndDc, text: i18n("Extera.ShowIdAndDc", lang), value: showIdAndDcTitle(ExteraSettings.shared.showIdAndDc, lang: lang), enabled: true))
     entries.append(.notice(id: id.count, section: .profileGeneral, text: i18n("Extera.ShowIdAndDcInfo", lang)))
 
@@ -303,6 +426,8 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.header(id: id.count, section: .sending, text: strings.NetworkUsageSettings_MediaImageDataSection.uppercased(), badge: nil))
     entries.append(.toggle(id: id.count, section: .sending, settingName: .sendLargePhotos, value: settings.sendLargePhotos, text: i18n("Settings.Photo.SendLarge", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .sending, text: i18n("Settings.Photo.SendLarge.Notice", lang)))
+    entries.append(.header(id: id.count, section: .sending, text: i18n("Extera.OutgoingPhotoQuality", lang), badge: nil))
+    entries.append(.percentageSlider(id: id.count, section: .sending, settingName: .outgoingPhotoQuality, value: settings.outgoingPhotoQuality))
     entries.append(.toggle(id: id.count, section: .sending, settingName: .sendWithReturnKey, value: settings.sendWithReturnKey, text: i18n("Settings.SendWithReturnKey", lang), enabled: true))
 
     // Appearance: exteraGram's avatar shape comes before the Chat List section.
@@ -364,28 +489,119 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.header(id: id.count, section: .application, text: i18n("Extera.Application", lang).uppercased(), badge: nil))
     entries.append(.disclosure(id: id.count, section: .application, link: .appIcon, text: strings.Appearance_AppIcon))
 
-    entries.append(.header(id: id.count, section: .other, text: strings.Appearance_Other.uppercased(), badge: nil))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .lyricsInPlayer, value: SGSimpleSettings.shared.lyricsInPlayer, text: i18n("Settings.LyricsInPlayer", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideSponsoredMessages, value: SGSimpleSettings.shared.hideSponsoredMessages, text: i18n("Settings.HideSponsoredMessages", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .commaAfterMention, value: SGSimpleSettings.shared.commaAfterMention, text: i18n("Settings.CommaAfterMention", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .swipeForVideoPIP, value: SGSimpleSettings.shared.videoPIPSwipeDirection == SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue, text: i18n("Settings.swipeForVideoPIP", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .other, text: i18n("Settings.swipeForVideoPIP.Notice", lang)))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .bottomButton, value: !SGSimpleSettings.shared.hideChannelBottomButton, text: i18n("Settings.showChannelBottomButton", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .wideChannelPosts, value: SGSimpleSettings.shared.wideChannelPosts, text: i18n("Settings.wideChannelPosts", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .doubleTapOutgoingEdit, value: SGSimpleSettings.shared.messageDoubleTapActionOutgoing == SGSimpleSettings.MessageDoubleTapAction.edit.rawValue, text: i18n("Settings.messageDoubleTapActionOutgoingEdit", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .recordingButton, value: !SGSimpleSettings.shared.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .snapDeletionEffect, value: !SGSimpleSettings.shared.disableSnapDeletionEffect, text: i18n("Settings.SnapDeletionEffect", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideSendAsPeer, value: !SGSimpleSettings.shared.disableSendAsButton, text: i18n("Settings.SendAsButton", lang, strings.Conversation_SendMesageAs), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideCameraTile, value: !SGSimpleSettings.shared.disableGalleryCamera, text: i18n("Settings.GalleryCamera", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .cameraTilePreview, value: !SGSimpleSettings.shared.disableGalleryCameraPreview, text: i18n("Settings.GalleryCameraPreview", lang), enabled: !SGSimpleSettings.shared.disableGalleryCamera))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .quickTransitions, value: !SGSimpleSettings.shared.disableScrollToNextChannel, text: i18n("Settings.PullToNextChannel", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .quickTransitionsTopics, value: !SGSimpleSettings.shared.disableScrollToNextTopic, text: i18n("Settings.PullToNextTopic", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideReactions, value: SGSimpleSettings.shared.hideReactions, text: i18n("Settings.HideReactions", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .sendWithReturnKey, value: SGSimpleSettings.shared.sendWithReturnKey, text: i18n("Settings.SendWithReturnKey", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .forceEmojiTab, value: SGSimpleSettings.shared.forceEmojiTab, text: i18n("Settings.ForceEmojiTab", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .defaultEmojisFirst, value: SGSimpleSettings.shared.defaultEmojisFirst, text: i18n("Settings.DefaultEmojisFirst", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .other, text: i18n("Settings.DefaultEmojisFirst.Notice", lang)))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideAccountInNotifications, value: SGSimpleSettings.shared.hideAccountInNotifications, text: i18n("Settings.HideAccountInNotifications", lang), enabled: true))
+    entries.append(.header(id: id.count, section: .chats, text: i18n("Ayu.CategoryChats", lang).uppercased(), badge: nil))
+    entries.append(.disclosure(id: id.count, section: .chats, link: .aiServices, text: i18n("Extera.AI", lang)))
+    entries.append(.disclosure(id: id.count, section: .chats, link: .channelFeed, text: i18n("Extera.ChannelFeed", lang)))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .replaceEditedWithIcon, value: ExteraSettings.shared.replaceEditedWithIcon, text: i18n("Extera.ReplaceEditedWithIcon", lang, strings.Conversation_MessageEditedLabel), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideShareButton, value: ExteraSettings.shared.hideShareButton, text: i18n("Extera.HideSideShareButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .disableGreetingSticker, value: ExteraSettings.shared.disableGreetingSticker, text: i18n("Extera.DisableGreetingSticker", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .removeMessageTail, value: ExteraMessageSettings.shared.removeMessageTail, text: i18n("Extera.RemoveMessageTail", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .showForwardsCount, value: ExteraMessageSettings.shared.showForwardsCount, text: i18n("Extera.ShowForwardsCount", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .showPollResultsBeforeVoting, value: ExteraMessageSettings.shared.showPollResultsBeforeVoting, text: i18n("Extera.ShowPollResultsBeforeVoting", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideSponsoredMessages, value: settings.hideSponsoredMessages, text: i18n("Settings.HideSponsoredMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .commaAfterMention, value: ExteraChatSettings.shared.addCommaAfterMention, text: i18n("Settings.CommaAfterMention", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideKeyboardOnScroll, value: ExteraChatSettings.shared.hideKeyboardOnScroll, text: i18n("Extera.HideKeyboardOnScroll", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .bottomButton, value: !settings.hideChannelBottomButton, text: i18n("Settings.showChannelBottomButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .wideChannelPosts, value: settings.wideChannelPosts, text: i18n("Settings.wideChannelPosts", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .recordingButton, value: !settings.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .snapDeletionEffect, value: !settings.disableSnapDeletionEffect, text: i18n("Settings.SnapDeletionEffect", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chats, settingName: .hideSendAsPeer, value: settings.disableSendAsButton, text: i18n("Extera.HideSendAsPeer", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .chats, text: i18n("Extera.HideSendAsPeerInfo", lang)))
+
+    entries.append(.header(id: id.count, section: .inlineCalculator, text: i18n("Extera.InlineCalculator", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineResults, value: ExteraMathSettings.shared.inlineResults, text: i18n("Extera.InlineResults", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineMathResult, value: ExteraMathSettings.shared.inlineMathResult, text: i18n("Extera.InlineMathResult", lang), enabled: ExteraMathSettings.shared.inlineResults))
+    let calculatorEnabled = ExteraMathSettings.shared.inlineResults && ExteraMathSettings.shared.inlineMathResult
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineDigitGrouping, value: ExteraMathSettings.shared.inlineDigitGrouping, text: i18n("Extera.InlineDigitGrouping", lang), enabled: calculatorEnabled))
+    entries.append(.oneFromManySelector(id: id.count, section: .inlineCalculator, settingName: .inlineAngleUnit, text: i18n("Extera.InlineAngleUnit", lang), value: i18n(ExteraMathSettings.shared.inlineAngleUnit == .degrees ? "Extera.AngleUnit.Degrees" : "Extera.AngleUnit.Radians", lang), enabled: calculatorEnabled))
+    entries.append(.notice(id: id.count, section: .inlineCalculator, text: i18n("Extera.InlineCalculatorInfo", lang)))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineUnits, value: ExteraMathSettings.shared.inlineUnits, text: i18n("Extera.InlineUnits", lang), enabled: ExteraMathSettings.shared.inlineResults))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineCurrencies, value: ExteraMathSettings.shared.inlineCurrencies, text: i18n("Extera.InlineCurrencies", lang), enabled: ExteraMathSettings.shared.inlineResults))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineTimeZones, value: ExteraMathSettings.shared.inlineTimeZones, text: i18n("Extera.InlineTimeZones", lang), enabled: ExteraMathSettings.shared.inlineResults))
+    entries.append(.toggle(id: id.count, section: .inlineCalculator, settingName: .inlineImperial, value: ExteraMathSettings.shared.inlineImperial, text: i18n("Extera.InlineImperial", lang), enabled: ExteraMathSettings.shared.inlineResults && ExteraMathSettings.shared.inlineUnits))
+    entries.append(.oneFromManySelector(id: id.count, section: .inlineCalculator, settingName: .inlineTargetCurrency, text: i18n("Extera.InlineTargetCurrency", lang), value: ExteraMathSettings.shared.inlineTargetCurrency, enabled: ExteraMathSettings.shared.inlineResults && ExteraMathSettings.shared.inlineCurrencies))
+
+    entries.append(.header(id: id.count, section: .replies, text: i18n("Extera.Replies", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .replies, settingName: .replyColors, value: ExteraMessageSettings.shared.replyColors, text: i18n("Extera.ReplyColors", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .replies, settingName: .replyEmoji, value: ExteraMessageSettings.shared.replyEmoji, text: i18n("Extera.ReplyEmoji", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .replies, settingName: .replyBackground, value: ExteraMessageSettings.shared.replyBackground, text: i18n("Extera.ReplyBackground", lang), enabled: true))
+
+    entries.append(.header(id: id.count, section: .reactions, text: i18n("Extera.Reactions", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .reactions, settingName: .hideReactionsInChannels, value: ExteraMessageSettings.shared.hideReactionsInChannels, text: i18n("Extera.HideReactionsInChannels", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .reactions, settingName: .hideReactionsInGroups, value: ExteraMessageSettings.shared.hideReactionsInGroups, text: i18n("Extera.HideReactionsInGroups", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .reactions, settingName: .hideReactionsInPrivateChats, value: ExteraMessageSettings.shared.hideReactionsInPrivateChats, text: i18n("Extera.HideReactionsInPrivateChats", lang), enabled: true))
+
+    entries.append(.header(id: id.count, section: .gestures, text: i18n("Extera.Gestures", lang).uppercased(), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .gestures, settingName: .doubleTapIncoming, text: i18n("Extera.DoubleTapIncoming", lang), value: doubleTapActionTitle(ExteraChatSettings.shared.doubleTapIncoming, lang: lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .gestures, settingName: .doubleTapOutgoing, text: i18n("Extera.DoubleTapOutgoing", lang), value: doubleTapActionTitle(ExteraChatSettings.shared.doubleTapOutgoing, lang: lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .gestures, settingName: .swipeToReplyIncoming, value: ExteraChatSettings.shared.swipeToReplyIncoming, text: i18n("Extera.SwipeToReplyIncoming", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .gestures, settingName: .swipeToReplyOutgoing, value: ExteraChatSettings.shared.swipeToReplyOutgoing, text: i18n("Extera.SwipeToReplyOutgoing", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .gestures, settingName: .quickTransitions, value: !settings.disableScrollToNextChannel, text: i18n("Settings.PullToNextChannel", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .gestures, settingName: .quickTransitionsTopics, value: !settings.disableScrollToNextTopic, text: i18n("Settings.PullToNextTopic", lang), enabled: true))
+
+    entries.append(.header(id: id.count, section: .stickers, text: i18n("Extera.StickersAndEmoji", lang).uppercased(), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .stickers, settingName: .stickerSize, text: i18n("Extera.StickerSize", lang), value: "\(Int((Double(ExteraStickerSettings.shared.size) / 12.0 * 100.0).rounded()))%", enabled: true))
+    entries.append(.toggle(id: id.count, section: .stickers, settingName: .unlimitedRecentStickers, value: ExteraStickerSettings.shared.unlimitedRecentStickers, text: i18n("Extera.UnlimitedRecentStickers", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .stickers, settingName: .stickerTimeMode, text: i18n("Settings.Stickers.Timestamp", lang), value: i18n("Extera.StickerTimeMode.\(ExteraStickerSettings.shared.timeMode.rawValue)", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .stickers, settingName: .stickerShape, text: i18n("Extera.StickerShape", lang), value: i18n("Extera.StickerShape.\(ExteraStickerSettings.shared.shape.rawValue)", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .stickers, settingName: .forceEmojiTab, value: settings.forceEmojiTab, text: i18n("Settings.ForceEmojiTab", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .stickers, settingName: .defaultEmojisFirst, value: settings.defaultEmojisFirst, text: i18n("Settings.DefaultEmojisFirst", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .stickers, text: i18n("Settings.DefaultEmojisFirst.Notice", lang)))
+
+    entries.append(.header(id: id.count, section: .media, text: i18n("Extera.CategoryMedia", lang).uppercased(), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .media, settingName: .doubleTapSeekDuration, text: i18n("Extera.DoubleTapSeekDuration", lang), value: i18n("Extera.SeekSeconds", lang, ExteraMediaSettings.shared.doubleTapSeekDuration), enabled: true))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .preferOriginalQuality, value: ExteraMediaSettings.shared.preferOriginalQuality, text: i18n("Extera.PreferOriginalQuality", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .pauseOnMinimizeVideo, value: ExteraMediaSettings.shared.pauseOnMinimizeVideo, text: i18n("Extera.PauseOnMinimizeVideo", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .pauseOnMinimizeVoice, value: ExteraMediaSettings.shared.pauseOnMinimizeVoice, text: i18n("Extera.PauseOnMinimizeVoice", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .pauseOnMinimizeRound, value: ExteraMediaSettings.shared.pauseOnMinimizeRound, text: i18n("Extera.PauseOnMinimizeRound", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .lyricsInPlayer, value: settings.lyricsInPlayer, text: i18n("Settings.LyricsInPlayer", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .media, settingName: .lyricsSource, text: i18n("Extera.LyricsSource", lang), value: i18n("Extera.LyricsSource.\(ExteraPlayerSettings.shared.lyricsSource.rawValue)", lang), enabled: settings.lyricsInPlayer))
+    entries.append(.oneFromManySelector(id: id.count, section: .media, settingName: .lyricsDisplayMode, text: i18n("Extera.LyricsDisplayMode", lang), value: i18n("Extera.LyricsMode.\(ExteraPlayerSettings.shared.lyricsDisplayMode.rawValue)", lang), enabled: settings.lyricsInPlayer))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .preferEmbeddedLyrics, value: ExteraPlayerSettings.shared.preferEmbeddedLyrics, text: i18n("Extera.PreferEmbeddedLyrics", lang), enabled: settings.lyricsInPlayer))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .lyricsAutoScroll, value: ExteraPlayerSettings.shared.lyricsAutoScroll, text: i18n("Extera.LyricsAutoScroll", lang), enabled: settings.lyricsInPlayer))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .lyricsTapToSeek, value: ExteraPlayerSettings.shared.lyricsTapToSeek, text: i18n("Extera.LyricsTapToSeek", lang), enabled: settings.lyricsInPlayer))
+    entries.append(.oneFromManySelector(id: id.count, section: .media, settingName: .lyricsOffset, text: i18n("Extera.LyricsOffset", lang), value: "\(ExteraPlayerSettings.shared.lyricsOffsetMilliseconds) ms", enabled: settings.lyricsInPlayer))
+    entries.append(.toggle(id: id.count, section: .media, settingName: .swipeForVideoPIP, value: settings.videoPIPSwipeDirection == SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue, text: i18n("Settings.swipeForVideoPIP", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .media, text: i18n("Settings.swipeForVideoPIP.Notice", lang)))
+
+    entries.append(.header(id: id.count, section: .camera, text: i18n("Extera.Camera", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .camera, settingName: .hideCameraTile, value: settings.disableGalleryCamera, text: i18n("Extera.HideCameraTile", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .camera, settingName: .cameraTilePreview, value: !settings.disableGalleryCameraPreview, text: i18n("Settings.GalleryCameraPreview", lang), enabled: !settings.disableGalleryCamera))
+    entries.append(.toggle(id: id.count, section: .camera, settingName: .rememberLastUsedCamera, value: ExteraMediaSettings.shared.rememberLastUsedCamera, text: i18n("Extera.RememberLastUsedCamera", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .camera, settingName: .videoMessagesCamera, text: i18n("Extera.VideoMessagesCamera", lang), value: i18n(cameraChoiceKey(ExteraMediaSettings.shared.videoMessagesCamera), lang), enabled: !ExteraMediaSettings.shared.rememberLastUsedCamera))
+
+    entries.append(.header(id: id.count, section: .speechRecognition, text: i18n("Extera.SpeechRecognition", lang).uppercased(), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .transcriptionBackend, text: i18n("Extera.TranscriptionBackend", lang), value: i18n(settings.transcriptionBackendEnum == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .appleSpeechLocale, text: i18n("Extera.SpeechLocale", lang), value: speechLocaleTitle(ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier, lang: lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .speechRecognition, settingName: .appleSpeechOnDeviceOnly, value: ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly, text: i18n("Extera.SpeechOnDeviceOnly", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .speechRecognition, text: i18n("Extera.SpeechRecognitionInfo", lang)))
+
+    entries.append(.header(id: id.count, section: .messageMenu, text: i18n("Extera.MessageMenu", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .groupMessageMenu, value: ExteraMenuSettings.shared.groupMessageMenu, text: i18n("Extera.GroupMessageMenu", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showCopyPhotoButton, value: ExteraMenuSettings.shared.showCopyPhotoButton, text: i18n("Extera.MenuCopyPhoto", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showSaveMessageButton, value: ExteraMenuSettings.shared.showSaveMessageButton, text: i18n("Extera.MenuSaveMessage", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showRepeatMessageButton, value: ExteraMenuSettings.shared.showRepeatMessageButton, text: i18n("Extera.MenuRepeatMessage", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showClearButton, value: ExteraMenuSettings.shared.showClearButton, text: i18n("Extera.MenuClear", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showHistoryButton, value: ExteraMenuSettings.shared.showHistoryButton, text: i18n("Extera.MenuHistory", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showReportButton, value: ExteraMenuSettings.shared.showReportButton, text: i18n("Extera.MenuReport", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showDetailsButton, value: ExteraMenuSettings.shared.showDetailsButton, text: i18n("Extera.MenuDetails", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showMessageImageExportButton, value: ExteraMenuSettings.shared.showMessageImageExportButton, text: i18n("Extera.MenuExportMessageImage", lang), enabled: true))
+
+    entries.append(.header(id: id.count, section: .backup, text: i18n("Extera.SettingsBackup", lang).uppercased(), badge: nil))
+    entries.append(.disclosure(id: id.count, section: .backup, link: .settingsBackup, text: i18n("Extera.SettingsBackup", lang)))
+
+    entries.append(.header(id: id.count, section: .browser, text: i18n("Extera.Browser", lang).uppercased(), badge: nil))
+    entries.append(.toggle(id: id.count, section: .browser, settingName: .adBlockingEnabled, value: ExteraBrowserSettings.shared.adBlockingEnabled, text: i18n("Extera.AdBlockingEnabled", lang), enabled: true))
+    entries.append(.disclosure(id: id.count, section: .browser, link: .browserExceptions, text: i18n("Extera.BrowserExceptions", lang)))
+    entries.append(.disclosure(id: id.count, section: .browser, link: .browserFilters, text: i18n("Extera.BrowserFilters", lang)))
+    entries.append(.notice(id: id.count, section: .browser, text: i18n("Extera.BrowserExceptionsInfo", lang)))
+
+    entries.append(.header(id: id.count, section: .other, text: "AyuGram", badge: nil))
+    entries.append(.disclosure(id: id.count, section: .other, link: .dataPills, text: i18n("Extera.DataPills", lang)))
+    entries.append(.disclosure(id: id.count, section: .other, link: .cloudExport, text: i18n("Extera.Takeout.Title", lang)))
+    entries.append(.notice(id: id.count, section: .other, text: i18n("Extera.ModifiedVersionNotice", lang)))
+    entries.append(.disclosure(id: id.count, section: .other, link: .upstreamSource, text: i18n("Extera.UpstreamSource", lang)))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hideAccountInNotifications, value: settings.hideAccountInNotifications, text: i18n("Settings.HideAccountInNotifications", lang), enabled: true))
     entries.append(.header(id: id.count, section: .profiles, text: i18n("Settings.Profiles.Header", lang), badge: nil))
     entries.append(.toggle(id: id.count, section: .profiles, settingName: .showRegDate, value: settings.showRegDate, text: i18n("Settings.ShowRegDate", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .profiles, text: i18n("Extera.RegDateInfo", lang)))
@@ -495,6 +711,7 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentOneFromManyImpl: ((SGOneFromManySetting, [SGOneFromManyOption]) -> Void)?
     var askForRestart: (() -> Void)?
+    var editBrowserExceptionsImpl: (() -> Void)?
 
     let initialState = SGSettingsControllerState()
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
@@ -707,7 +924,85 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         case .filterZalgoText:
             SGSimpleSettings.shared.filterZalgoText = value
         case .commaAfterMention:
-            SGSimpleSettings.shared.commaAfterMention = value
+            ExteraChatSettings.shared.addCommaAfterMention = value
+        case .hideKeyboardOnScroll:
+            ExteraChatSettings.shared.hideKeyboardOnScroll = value
+        case .swipeToReplyIncoming:
+            ExteraChatSettings.shared.swipeToReplyIncoming = value
+        case .swipeToReplyOutgoing:
+            ExteraChatSettings.shared.swipeToReplyOutgoing = value
+        case .hideReactionsInChannels:
+            ExteraMessageSettings.shared.hideReactionsInChannels = value
+        case .hideReactionsInGroups:
+            ExteraMessageSettings.shared.hideReactionsInGroups = value
+        case .hideReactionsInPrivateChats:
+            ExteraMessageSettings.shared.hideReactionsInPrivateChats = value
+        case .removeMessageTail:
+            ExteraMessageSettings.shared.removeMessageTail = value
+        case .replyColors:
+            ExteraMessageSettings.shared.replyColors = value
+        case .replyEmoji:
+            ExteraMessageSettings.shared.replyEmoji = value
+        case .replyBackground:
+            ExteraMessageSettings.shared.replyBackground = value
+        case .showForwardsCount:
+            ExteraMessageSettings.shared.showForwardsCount = value
+        case .showPollResultsBeforeVoting:
+            ExteraMessageSettings.shared.showPollResultsBeforeVoting = value
+        case .preferOriginalQuality:
+            ExteraMediaSettings.shared.preferOriginalQuality = value
+        case .pauseOnMinimizeVideo:
+            ExteraMediaSettings.shared.pauseOnMinimizeVideo = value
+        case .pauseOnMinimizeVoice:
+            ExteraMediaSettings.shared.pauseOnMinimizeVoice = value
+        case .pauseOnMinimizeRound:
+            ExteraMediaSettings.shared.pauseOnMinimizeRound = value
+        case .rememberLastUsedCamera:
+            ExteraMediaSettings.shared.rememberLastUsedCamera = value
+        case .appleSpeechOnDeviceOnly:
+            ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = value
+        case .showCopyPhotoButton:
+            ExteraMenuSettings.shared.showCopyPhotoButton = value
+        case .showSaveMessageButton:
+            ExteraMenuSettings.shared.showSaveMessageButton = value
+        case .showRepeatMessageButton:
+            ExteraMenuSettings.shared.showRepeatMessageButton = value
+        case .showClearButton:
+            ExteraMenuSettings.shared.showClearButton = value
+        case .showHistoryButton:
+            ExteraMenuSettings.shared.showHistoryButton = value
+        case .showReportButton:
+            ExteraMenuSettings.shared.showReportButton = value
+        case .showDetailsButton:
+            ExteraMenuSettings.shared.showDetailsButton = value
+        case .showMessageImageExportButton:
+            ExteraMenuSettings.shared.showMessageImageExportButton = value
+        case .groupMessageMenu:
+            ExteraMenuSettings.shared.groupMessageMenu = value
+        case .inlineResults:
+            ExteraMathSettings.shared.inlineResults = value
+        case .inlineMathResult:
+            ExteraMathSettings.shared.inlineMathResult = value
+        case .inlineDigitGrouping:
+            ExteraMathSettings.shared.inlineDigitGrouping = value
+        case .adBlockingEnabled:
+            ExteraBrowserSettings.shared.adBlockingEnabled = value
+        case .unlimitedRecentStickers:
+            ExteraStickerSettings.shared.unlimitedRecentStickers = value
+        case .inlineUnits:
+            ExteraMathSettings.shared.inlineUnits = value
+        case .inlineCurrencies:
+            ExteraMathSettings.shared.inlineCurrencies = value
+        case .inlineTimeZones:
+            ExteraMathSettings.shared.inlineTimeZones = value
+        case .inlineImperial:
+            ExteraMathSettings.shared.inlineImperial = value
+        case .preferEmbeddedLyrics:
+            ExteraPlayerSettings.shared.preferEmbeddedLyrics = value
+        case .lyricsAutoScroll:
+            ExteraPlayerSettings.shared.lyricsAutoScroll = value
+        case .lyricsTapToSeek:
+            ExteraPlayerSettings.shared.lyricsTapToSeek = value
         case .ayuGhostMode:
             AyuGhostSettings.shared.setGhostModeActive(value)
         case .ayuDontReadMessages:
@@ -725,6 +1020,7 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         case .ayuSaveMessagesHistory:
             AyuSaveSettings.shared.saveMessagesHistory = value
         }
+        simplePromise.set(true)
     }, updateSliderValue: { setting, value in
         switch setting {
         case .avatarCorners:
@@ -737,12 +1033,132 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
                 SGSimpleSettings.shared.accountColorsSaturation = value
                 simplePromise.set(true)
             }
+        case .outgoingPhotoQuality:
+            SGSimpleSettings.shared.outgoingPhotoQuality = value
+            simplePromise.set(true)
         }
     }, setOneFromManyValue: { setting in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let lang = presentationData.strings.baseLanguageCode
         var options: [SGOneFromManyOption] = []
         switch setting {
+        case .inlineTargetCurrency:
+            let codes = ["auto", "USD", "EUR", "RUB", "GBP", "CNY", "JPY", "INR", "TRY", "UAH", "KZT", "BYN", "CHF", "CAD", "AUD", "BRL", "KRW", "AED", "BTC", "ETH", "SOL", "USDT", "GRAM"]
+            for code in codes {
+                options.append(SGOneFromManyOption(title: code == "auto" ? i18n("Extera.CurrencyAutomatic", lang) : code, isSelected: ExteraMathSettings.shared.inlineTargetCurrency == code, action: {
+                    ExteraMathSettings.shared.inlineTargetCurrency = code
+                    simplePromise.set(true)
+                }))
+            }
+        case .lyricsSource:
+            for source in ExteraPlayerSettings.LyricsSource.allCases {
+                options.append(SGOneFromManyOption(title: i18n("Extera.LyricsSource.\(source.rawValue)", lang), isSelected: ExteraPlayerSettings.shared.lyricsSource == source, action: {
+                    ExteraPlayerSettings.shared.lyricsSource = source
+                    simplePromise.set(true)
+                }))
+            }
+        case .lyricsDisplayMode:
+            for mode in ExteraPlayerSettings.LyricsDisplayMode.allCases {
+                options.append(SGOneFromManyOption(title: i18n("Extera.LyricsMode.\(mode.rawValue)", lang), isSelected: ExteraPlayerSettings.shared.lyricsDisplayMode == mode, action: {
+                    ExteraPlayerSettings.shared.lyricsDisplayMode = mode
+                    simplePromise.set(true)
+                }))
+            }
+        case .lyricsOffset:
+            let prompt = promptController(context: context, text: i18n("Extera.LyricsOffsetPrompt", lang), value: "\(ExteraPlayerSettings.shared.lyricsOffsetMilliseconds)", placeholder: "0", apply: { text in
+                if let text, let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    ExteraPlayerSettings.shared.lyricsOffsetMilliseconds = value
+                    simplePromise.set(true)
+                }
+            })
+            presentControllerImpl?(prompt, nil)
+            return
+        case .stickerSize:
+            for value in 4 ... 20 {
+                let percentage = Int((Double(value) / 12.0 * 100.0).rounded())
+                options.append(SGOneFromManyOption(title: "\(percentage)%" + (value == 12 ? " · " + i18n("Extera.StickerSizeDefault", lang) : ""), isSelected: ExteraStickerSettings.shared.size == value, action: {
+                    ExteraStickerSettings.shared.size = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .stickerTimeMode:
+            for mode in ExteraStickerSettings.TimeMode.allCases {
+                options.append(SGOneFromManyOption(title: i18n("Extera.StickerTimeMode.\(mode.rawValue)", lang), isSelected: ExteraStickerSettings.shared.timeMode == mode, action: {
+                    ExteraStickerSettings.shared.timeMode = mode
+                    simplePromise.set(true)
+                }))
+            }
+        case .stickerShape:
+            for shape in ExteraStickerSettings.Shape.allCases {
+                options.append(SGOneFromManyOption(title: i18n("Extera.StickerShape.\(shape.rawValue)", lang), isSelected: ExteraStickerSettings.shared.shape == shape, action: {
+                    ExteraStickerSettings.shared.shape = shape
+                    simplePromise.set(true)
+                }))
+            }
+        case .inlineAngleUnit:
+            for value in [ExteraMathSettings.AngleUnit.degrees, .radians] {
+                options.append(SGOneFromManyOption(title: i18n(value == .degrees ? "Extera.AngleUnit.Degrees" : "Extera.AngleUnit.Radians", lang), isSelected: ExteraMathSettings.shared.inlineAngleUnit == value, action: {
+                    ExteraMathSettings.shared.inlineAngleUnit = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .defaultProfileTab:
+            for value in ExteraGeneralSettings.DefaultProfileTab.allCases {
+                options.append(SGOneFromManyOption(title: defaultProfileTabTitle(value, lang: lang), isSelected: ExteraGeneralSettings.shared.defaultProfileTab == value, action: {
+                    ExteraGeneralSettings.shared.defaultProfileTab = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .doubleTapIncoming, .doubleTapOutgoing:
+            let incoming = setting == .doubleTapIncoming
+            let current = incoming ? ExteraChatSettings.shared.doubleTapIncoming : ExteraChatSettings.shared.doubleTapOutgoing
+            for value in ExteraChatSettings.DoubleTapAction.allCases {
+                if incoming && (value == .edit || value == .inherit) {
+                    continue
+                }
+                options.append(SGOneFromManyOption(title: doubleTapActionTitle(value, lang: lang), isSelected: current == value, action: {
+                    if incoming {
+                        ExteraChatSettings.shared.doubleTapIncoming = value
+                    } else {
+                        ExteraChatSettings.shared.doubleTapOutgoing = value
+                    }
+                    simplePromise.set(true)
+                }))
+            }
+        case .doubleTapSeekDuration:
+            for value in ExteraMediaSettings.doubleTapSeekDurations {
+                options.append(SGOneFromManyOption(title: i18n("Extera.SeekSeconds", lang, value), isSelected: ExteraMediaSettings.shared.doubleTapSeekDuration == value, action: {
+                    ExteraMediaSettings.shared.doubleTapSeekDuration = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .videoMessagesCamera:
+            for value in [0, 1, 2] {
+                options.append(SGOneFromManyOption(title: i18n(cameraChoiceKey(value), lang), isSelected: ExteraMediaSettings.shared.videoMessagesCamera == value, action: {
+                    ExteraMediaSettings.shared.videoMessagesCamera = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .appleSpeechLocale:
+            let current = ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier
+            var identifiers = SFSpeechRecognizer.supportedLocales().map { $0.identifier }
+            if !current.isEmpty && !identifiers.contains(current) {
+                identifiers.append(current)
+            }
+            identifiers.sort { speechLocaleTitle($0, lang: lang).localizedCaseInsensitiveCompare(speechLocaleTitle($1, lang: lang)) == .orderedAscending }
+            for identifier in [""] + identifiers {
+                options.append(SGOneFromManyOption(title: speechLocaleTitle(identifier, lang: lang), isSelected: current == identifier, action: {
+                    ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier = identifier
+                    simplePromise.set(true)
+                }))
+            }
+        case .transcriptionBackend:
+            for value in SGSimpleSettings.TranscriptionBackend.allCases {
+                options.append(SGOneFromManyOption(title: i18n(value == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), isSelected: SGSimpleSettings.shared.transcriptionBackendEnum == value, action: {
+                    SGSimpleSettings.shared.transcriptionBackend = value.rawValue
+                    simplePromise.set(true)
+                }))
+            }
         case .translationProvider:
             for value in SGSimpleSettings.TranslationBackend.allCases {
                 options.append(SGOneFromManyOption(title: translationProviderTitle(value, lang: lang), isSelected: SGSimpleSettings.shared.translationBackendEnum == value, action: {
@@ -842,8 +1258,26 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             pushControllerImpl?(sgSettingsController(context: context, category: .appearance))
         case .categoryChats:
             pushControllerImpl?(sgSettingsController(context: context, category: .chats))
+        case .categoryMedia:
+            pushControllerImpl?(sgSettingsController(context: context, category: .media))
         case .categoryOther:
             pushControllerImpl?(sgSettingsController(context: context, category: .other))
+        case .settingsBackup:
+            pushControllerImpl?(exteraBackupController(context: context))
+        case .browserExceptions:
+            editBrowserExceptionsImpl?()
+        case .browserFilters:
+            pushControllerImpl?(exteraBrowserFiltersController(context: context))
+        case .cloudExport:
+            pushControllerImpl?(exteraTakeoutController(context: context))
+        case .aiServices:
+            pushControllerImpl?(exteraAISettingsController(context: context))
+        case .channelFeed:
+            pushControllerImpl?(exteraFeedController(context: context))
+        case .dataPills:
+            pushControllerImpl?(exteraPillSettingsController(context: context))
+        case .upstreamSource:
+            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "https://github.com/exteraSquad/exteraGram", forceExternal: true, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
         }
     }, searchInput: { searchQuery in
         updateState { state in
@@ -877,7 +1311,13 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             firstName = ""
             lastName = ""
         }
-        let previewTitle = ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title)
+        let username: String?
+        if let accountPeer, case let .user(user) = accountPeer {
+            username = user.addressName
+        } else {
+            username = nil
+        }
+        let previewTitle = ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title, username: username)
         let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, category: category)
         let title = category.flatMap { i18n($0.titleKey, presentationData.strings.baseLanguageCode) } ?? "exteraGram"
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
@@ -886,6 +1326,39 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
     }
 
     let controller = ItemListController(context: context, state: signal)
+    controller.didAppear = { _ in
+        simplePromise.set(true)
+    }
+    editBrowserExceptionsImpl = { [weak controller] in
+        guard let controller else { return }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let lang = presentationData.strings.baseLanguageCode
+        let alert = UIAlertController(title: i18n("Extera.BrowserExceptions", lang), message: i18n("Extera.BrowserExceptionsEditorInfo", lang), preferredStyle: .alert)
+        alert.addTextField { field in
+            field.text = ExteraBrowserSettings.shared.exceptionHosts.joined(separator: ", ")
+            field.placeholder = "example.com, example.org"
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+            field.keyboardType = .URL
+        }
+        alert.addAction(UIAlertAction(title: presentationData.strings.Common_Cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: presentationData.strings.Common_Done, style: .default, handler: { [weak alert, weak controller] _ in
+            guard let text = alert?.textFields?.first?.text else { return }
+            let inputs = text.components(separatedBy: CharacterSet(charactersIn: ",;\n"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let hosts = inputs.compactMap(ExteraBrowserSettings.normalizedHost)
+            guard hosts.count == inputs.count else {
+                let error = UIAlertController(title: i18n("Extera.BrowserExceptions", lang), message: i18n("Extera.BrowserExceptionsInvalid", lang), preferredStyle: .alert)
+                error.addAction(UIAlertAction(title: presentationData.strings.Common_OK, style: .default))
+                controller?.present(error, animated: true)
+                return
+            }
+            ExteraBrowserSettings.shared.exceptionHosts = hosts
+            simplePromise.set(true)
+        }))
+        controller.present(alert, animated: true)
+    }
     presentOneFromManyImpl = { [weak controller] setting, options in
         guard let controller else {
             return

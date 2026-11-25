@@ -4555,7 +4555,17 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         } else if case .semanticallyMerged = updatedMergedTop {
             forceBackgroundSide = true
         }
-        let mergeType = ChatMessageBackgroundMergeType(top: updatedMergedTop == .fullyMerged, bottom: updatedMergedBottom == .fullyMerged, side: forceBackgroundSide)
+        var mergeType = ChatMessageBackgroundMergeType(top: updatedMergedTop == .fullyMerged, bottom: updatedMergedBottom == .fullyMerged, side: forceBackgroundSide)
+        // Use the existing rounded, tailless artwork only for shapes that draw a tail.
+        // Already tailless merge shapes keep their corner geometry.
+        if ExteraMessageSettings.shared.removeMessageTail {
+            switch mergeType {
+            case .None, .Bottom:
+                mergeType = .Extracted
+            default:
+                break
+            }
+        }
         let backgroundType: ChatMessageBackgroundType
         if hideBackground {
             backgroundType = .none

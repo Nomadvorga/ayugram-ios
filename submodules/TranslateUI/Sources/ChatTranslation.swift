@@ -247,9 +247,6 @@ public func updateChatTranslationStateInteractively(engine: TelegramEngine, peer
 }
 
 
-@available(iOS 12.0, *)
-private let languageRecognizer = NLLanguageRecognizer()
-
 public func translateMessageIds(context: AccountContext, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, viaText: Bool = false, forQuickTranslate: Bool = false) -> Signal<Never, NoError> {
     // MARK: Swiftgram
     let sgBackend = SGSimpleSettings.shared.translationBackendEnum
@@ -301,10 +298,11 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
                         messageIdsToTranslate.append(messageId)
                         messageIdsSet.insert(messageId)
                     }
-                } else if sgUseMessageIds, let audioTranscription = message.attributes.first(where: { $0 is AudioTranscriptionMessageAttribute }) as? AudioTranscriptionMessageAttribute, !audioTranscription.text.isEmpty && !audioTranscription.isPending {
+                } else if let audioTranscription = message.attributes.first(where: { $0 is AudioTranscriptionMessageAttribute }) as? AudioTranscriptionMessageAttribute, !audioTranscription.text.isEmpty && !audioTranscription.isPending {
                     if !messageIdsSet.contains(messageId) {
                         messageIdsToTranslate.append(messageId)
                         messageIdsSet.insert(messageId)
+                        messageDictToTranslate[messageId] = audioTranscription.text
                     }
                 }
             } else if sgUseMessageIds {
@@ -456,6 +454,7 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
                             if loggingEnabled {
                                 Logger.shared.log("ChatTranslation", "Start language recognizing for \(peerId)")
                             }
+                            let languageRecognizer = NLLanguageRecognizer()
                             var fromLangs: [String: Int] = [:]
                             var count = 0
                             for message in messages {
@@ -477,21 +476,21 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
                                             }
                                         }) {
                                             entities = entities.sorted(by: { $0.range.lowerBound > $1.range.lowerBound })
-                                            var ranges: [Range<String.Index>] = []
+                                            var upperBound = text.utf16.count
                                             for entity in entities {
-                                                if entity.range.lowerBound > text.count || entity.range.upperBound > text.count {
-                                                    continue
-                                                }
-                                                ranges.append(text.index(text.startIndex, offsetBy: entity.range.lowerBound) ..< text.index(text.startIndex, offsetBy: entity.range.upperBound))
-                                            }
-                                            for range in ranges {
-                                                if range.upperBound < text.endIndex {
+                                                // Message entities use UTF-16 offsets; String indices
+                                                // count graphemes and can point into the wrong text.
+                                                // Ignore overlapping entities already removed by a
+                                                // preceding range, and compute indices after each edit.
+                                                if entity.range.lowerBound >= 0, entity.range.upperBound <= upperBound,
+                                                   let range = Range(NSRange(location: entity.range.lowerBound, length: entity.range.count), in: text) {
                                                     text.removeSubrange(range)
+                                                    upperBound = entity.range.lowerBound
                                                 }
                                             }
                                         }
                                         
-                                        if message.text.count < 10 {
+                                        if text.count < 10 {
                                             continue
                                         }
                                         

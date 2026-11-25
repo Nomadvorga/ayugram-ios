@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import SwiftSignalKit
 import TelegramCore
@@ -367,6 +368,26 @@ final class SharedMediaPlayer {
         self.playbackStateValueDisposable = (self.playbackState
         |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             self?._playbackStateValue = value
+        })
+
+        self.inForegroundDisposable = (inForeground
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).startStrict(next: { [weak self] inForeground in
+            guard let self, !inForeground, let playbackType = self.stateValue?.item?.playbackData?.type else {
+                return
+            }
+            let shouldPause: Bool
+            switch playbackType {
+            case .voice:
+                shouldPause = ExteraMediaSettings.shared.pauseOnMinimizeVoice
+            case .instantVideo:
+                shouldPause = ExteraMediaSettings.shared.pauseOnMinimizeRound
+            case .music:
+                shouldPause = false
+            }
+            if shouldPause {
+                self.control(.playback(.pause))
+            }
         })
         
         if controlPlaybackWithProximity {

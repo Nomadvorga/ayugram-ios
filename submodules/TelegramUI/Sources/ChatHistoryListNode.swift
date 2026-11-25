@@ -655,6 +655,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private var currentPresentationData: ChatPresentationData
     private var chatPresentationDataPromise: Promise<ChatPresentationData>
     private var presentationDataDisposable: Disposable?
+    private var exteraRenderingSettingsObservers: [NSObjectProtocol] = []
+    private var exteraRenderingSettings: [Int32] = []
+    private var exteraRenderingRefreshScheduled = false
     
     private let historyAppearsClearedPromise = ValuePromise<Bool>(false)
     var historyAppearsCleared: Bool = false {
@@ -1337,10 +1340,19 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         self.listView.scrollGestureHostView.addGestureRecognizer(selectionRecognizer)
 
         self.loadNextGenericReactionEffect(context: context)
+        self.exteraRenderingSettings = self.currentExteraRenderingSettings()
+        for name in [ayuSettingsDidChangeNotification, UserDefaults.didChangeNotification] {
+            self.exteraRenderingSettingsObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.scheduleExteraRenderingRefresh()
+            })
+        }
     }
     
     deinit {
         self.historyDisposable.dispose()
+        for observer in self.exteraRenderingSettingsObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
         if let ayuShadowBanObserver = self.ayuShadowBanObserver { // MARK: AyuGram
             NotificationCenter.default.removeObserver(ayuShadowBanObserver)
         }
@@ -2727,6 +2739,42 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 }
             }
         }).strict()
+    }
+
+    private func currentExteraRenderingSettings() -> [Int32] {
+        let settings = ExteraMessageSettings.shared
+        let flags = [
+            settings.hideReactionsInChannels, settings.hideReactionsInGroups, settings.hideReactionsInPrivateChats,
+            settings.removeMessageTail, settings.replyColors, settings.replyEmoji, settings.replyBackground, settings.showForwardsCount,
+            settings.showPollResultsBeforeVoting,
+            ExteraSettings.shared.disableNumberRounding, ExteraSettings.shared.replaceEditedWithIcon, ExteraSettings.shared.hideShareButton,
+            ExteraSettings.shared.filterZalgo, AyuCustomizationSettings.shared.simpleQuotesAndReplies,
+            SGSimpleSettings.shared.hideReactions, SGSimpleSettings.shared.stickerTimestamp, SGSimpleSettings.shared.secondsInMessages,
+            SGSimpleSettings.shared.wideChannelPosts, SGSimpleSettings.shared.filterZalgoText
+        ]
+        return flags.map { $0 ? Int32(1) : Int32(0) } + [
+            Int32(ExteraStickerSettings.shared.size),
+            Int32(ExteraStickerSettings.shared.timeMode.rawValue),
+            Int32(ExteraStickerSettings.shared.shape.rawValue)
+        ]
+    }
+
+    private func scheduleExteraRenderingRefresh() {
+        guard !self.exteraRenderingRefreshScheduled else { return }
+        self.exteraRenderingRefreshScheduled = true
+        // Import/reset may write many settings in one turn. Rebuild the history once,
+        // and only when a setting affecting message rendering actually changed.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.exteraRenderingRefreshScheduled = false
+            let settings = self.currentExteraRenderingSettings()
+            guard settings != self.exteraRenderingSettings else { return }
+            self.exteraRenderingSettings = settings
+            let current = self.currentPresentationData
+            let updated = ChatPresentationData(theme: current.theme, fontSize: current.fontSize, strings: current.strings, dateTimeFormat: current.dateTimeFormat, nameDisplayOrder: current.nameDisplayOrder, disableAnimations: current.disableAnimations, largeEmoji: current.largeEmoji, chatBubbleCorners: current.chatBubbleCorners, animatedEmojiScale: current.animatedEmojiScale, isPreview: current.isPreview)
+            self.currentPresentationData = updated
+            self.chatPresentationDataPromise.set(.single(updated))
+        }
     }
     
     /// Plays the unseen reactions of messages the caller has just brought on screen (the unseen-reactions jump) and

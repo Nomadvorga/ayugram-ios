@@ -2005,17 +2005,35 @@ public final class ChatListNode: ListViewImpl {
             savedMessagesPeer = .single(nil)
         }
         
-        let hideArchivedFolderByDefault = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.chatArchiveSettings))
+        let exteraArchiveSettings = Signal<(hideFolder: Bool, onPull: Bool, disableSwipe: Bool), NoError> { subscriber in
+            let emit = {
+                subscriber.putNext((ExteraSettings.shared.hideArchiveFolder, ExteraSettings.shared.archiveOnPull, ExteraSettings.shared.disableUnarchiveSwipe))
+            }
+            let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+                emit()
+            }
+            emit()
+            return ActionDisposable {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        } |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs.hideFolder == rhs.hideFolder && lhs.onPull == rhs.onPull && lhs.disableSwipe == rhs.disableSwipe
+        })
+
+        let nativeArchiveSettings = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.chatArchiveSettings))
         |> map { view -> Bool in
             let settings: ChatArchiveSettings = view?.get(ChatArchiveSettings.self) ?? .default
-            // MARK: AyuGram
-            // "Archive on pull" off keeps the archive folder always visible instead of revealing it on pull.
-            if !ExteraSettings.shared.archiveOnPull {
-                return false
-            }
             return settings.isHiddenByDefault
         }
         |> distinctUntilChanged
+
+        // Keep emitting when local archive settings change, including complete folder hiding.
+        // Pull-to-open uses the existing hidden-folder gesture. Native manual hiding still works
+        // when automatic opening is off.
+        let hideArchivedFolderByDefault = combineLatest(nativeArchiveSettings, exteraArchiveSettings)
+        |> map { nativeHidden, settings -> Bool in
+            return (nativeHidden || settings.onPull) && !settings.hideFolder
+        }
         
         let displayArchiveIntro: Signal<Bool, NoError>
         if case .chatList(.archive) = location {
@@ -3301,6 +3319,7 @@ public final class ChatListNode: ListViewImpl {
     
     func revealScrollHiddenItem() {
         var isHiddenItemVisible = false
+        var hasHiddenArchive = false
         self.forEachItemNode({ itemNode in
             if let itemNode = itemNode as? ChatListItemNode, let item = itemNode.item {
                 if case let .peer(peerData) = item.content, let threadInfo = peerData.threadInfo {
@@ -3311,6 +3330,9 @@ public final class ChatListNode: ListViewImpl {
                 if case let .groupReference(groupReference) = item.content {
                     if groupReference.hiddenByDefault {
                         isHiddenItemVisible = true
+                        if groupReference.groupId == .archive {
+                            hasHiddenArchive = true
+                        }
                     }
                 }
             }
@@ -3320,6 +3342,15 @@ public final class ChatListNode: ListViewImpl {
                 self.hapticFeedback = HapticFeedback()
             }
             self.hapticFeedback?.impact(.medium)
+            if hasHiddenArchive && ExteraSettings.shared.archiveOnPull && !ExteraSettings.shared.hideArchiveFolder {
+                DispatchQueue.main.async { [weak self] in
+                    guard ExteraSettings.shared.archiveOnPull && !ExteraSettings.shared.hideArchiveFolder else {
+                        return
+                    }
+                    self?.groupSelected?(.archive)
+                }
+                return
+            }
             self.updateState { state in
                 var state = state
                 state.hiddenItemShouldBeTemporaryRevealed = true

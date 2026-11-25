@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import Display
 import QuickLook
@@ -378,21 +379,24 @@ public func galleryItemForEntry(
                         }
                     }
                     
-                    if isHLS {
-                        // Where the item's player will seek once it owns the content, by the same precedence. A forwarded
-                        // timestamp only for the item the gallery opens on: a neighbour swiped to that already shows its
-                        // video plays from 0, so loading at its timestamp would be wasted, and one that does not seeks.
-                        var startTimestamp = timecode
-                        if startTimestamp == nil && isCentral {
-                            for attribute in message.attributes {
-                                if let attribute = attribute as? ForwardVideoTimestampAttribute {
-                                    startTimestamp = Double(attribute.timestamp)
-                                }
+                    let preferOriginalQuality = ExteraMediaSettings.shared.preferOriginalQuality
+                    // Preload at the eventual seek target for both adaptive and original
+                    // playback. Forwarded timestamps apply only to the initially central item.
+                    var startTimestamp = timecode
+                    if startTimestamp == nil && isCentral {
+                        for attribute in message.attributes {
+                            if let attribute = attribute as? ForwardVideoTimestampAttribute {
+                                startTimestamp = Double(attribute.timestamp)
                             }
                         }
+                    }
+                    if isHLS && !preferOriginalQuality {
                         content = HLSVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), streamVideo: streamVideos, loopVideo: loopVideos, autoFetchFullSizeThumbnail: true, captureProtected: captureProtected, codecConfiguration: HLSCodecConfiguration(context: context), startTimestamp: startTimestamp)
                     } else {
-                        content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: captureProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
+                        let contentId: NativeVideoContentId = isHLS && preferOriginalQuality
+                            ? .messageOriginal(message.stableId, file.fileId)
+                            : .message(message.stableId, file.fileId)
+                        content = NativeVideoContent(id: contentId, userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, startTimestamp: isHLS ? startTimestamp : nil, tempFilePath: tempFilePath, captureProtected: captureProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
                     }
                 } else {
                     content = PlatformVideoContent(id: .message(message.id, message.stableId, file.fileId), userLocation: .peer(message.id.peerId), content: .file(.message(message: MessageReference(message), media: file)), streamVideo: streamVideos, loopVideo: loopVideos)
@@ -1124,14 +1128,19 @@ public class GalleryController: ViewController, StandalonePresentableController,
         }))
         
         self.centralItemAttributesDisposable.add(combineLatest(self.centralItemRightBarButtonItem.get(), self.centralItemRightBarButtonItems.get()).start(next: { [weak self] rightBarButtonItem, rightBarButtonItems in
+            guard let self else { return }
+            var buttons: [UIBarButtonItem] = []
             if let rightBarButtonItem = rightBarButtonItem {
-                self?.navigationItem.rightBarButtonItem = rightBarButtonItem
+                buttons = [rightBarButtonItem]
             } else if let rightBarButtonItems = rightBarButtonItems {
-                self?.navigationItem.rightBarButtonItems = rightBarButtonItems
-            } else {
-                self?.navigationItem.rightBarButtonItem = nil
-                self?.navigationItem.rightBarButtonItems = nil
+                buttons = rightBarButtonItems
             }
+            if !self.exteraImageSearchResources().isEmpty {
+                let button = UIBarButtonItem(image: UIImage(systemName: "magnifyingglass"), style: .plain, target: self, action: #selector(self.exteraImageSearchPressed))
+                button.accessibilityLabel = exteraImageSearchText("Extera.ImageTools", self.presentationData.strings.baseLanguageCode, "Photo Tools")
+                buttons.append(button)
+            }
+            self.navigationItem.rightBarButtonItems = buttons.isEmpty ? nil : buttons
         }))
         
         self.centralItemAttributesDisposable.add(self.centralItemFooterContentNode.get().start(next: { [weak self] footerContentNode, overlayContentNode in
@@ -1981,6 +1990,35 @@ public class GalleryController: ViewController, StandalonePresentableController,
         super.viewDidDisappear(animated)
         
         self.accountInUseDisposable.set(nil)
+    }
+
+    /// Uses the same selected-medium and protection gates as the gallery export actions.
+    /// Computing resource IDs does not fetch or inspect the photo's bytes.
+    private func exteraImageSearchResources() -> [EngineMediaResource.Id] {
+        guard let entry = self.entries.first(where: { $0.stableId == self.centralEntryStableId }) else { return [] }
+        let message = entry.entry.message
+        guard !self.peerIsCopyProtected, !message.isCopyProtected(), !message.containsSecretMedia,
+              message.id.peerId.namespace != Namespaces.Peer.SecretChat,
+              message.minAutoremoveOrClearTimeout != viewOnceTimeout, message.paidContent == nil,
+              message.adAttribute == nil,
+              let media = selectedMediaForMessage(message: message, mediaSubject: entry.mediaSubject) else { return [] }
+        if let image = media as? TelegramMediaImage, image.video == nil {
+            return image.representations.sorted { lhs, rhs in
+                return Int64(lhs.dimensions.width) * Int64(lhs.dimensions.height) > Int64(rhs.dimensions.width) * Int64(rhs.dimensions.height)
+            }.map { EngineMediaResource.Id($0.resource.id) }
+        } else if let file = media as? TelegramMediaFile, file.mimeType.hasPrefix("image/"), !file.isAnimated, !file.isVideo, !file.isSticker {
+            return [EngineMediaResource.Id(file.resource.id)]
+        }
+        return []
+    }
+
+    @objc private func exteraImageSearchPressed() {
+        let resources = self.exteraImageSearchResources()
+        guard !resources.isEmpty, self.presentedViewController == nil else { return }
+        let controller = ExteraImageSearchController(context: self.context, resources: resources)
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.modalPresentationStyle = .formSheet
+        self.present(navigation, animated: true)
     }
     
     override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {

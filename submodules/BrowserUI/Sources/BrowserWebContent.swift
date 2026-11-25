@@ -26,6 +26,7 @@ import AlertComponent
 import UIKitRuntimeUtils
 import AuthConfirmationScreen
 import WalletContext
+import SGSimpleSettings
 
 private final class TonSchemeHandler: NSObject, WKURLSchemeHandler {
     private final class PendingTask {
@@ -207,6 +208,9 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     private var presentationData: PresentationData
     
     let webView: WebView
+    private let adBlocker: BrowserAdBlocker
+    private var adBlockSettingsObserver: NSObjectProtocol?
+    private var adBlockNavigationGeneration: UInt = 0
     var readability: Readability?
     
     private let errorView: ComponentHostView<Empty>
@@ -294,8 +298,8 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
                     let pwaPath = rootPath + "/pwa"
                     let uuidPath = pwaPath + "/uuid_\(host)"
                     let uuid: UUID
-                    if let value = try? String(contentsOf: URL(fileURLWithPath: uuidPath), encoding: .utf8) {
-                        uuid = UUID(uuidString: value)!
+                    if let value = try? String(contentsOf: URL(fileURLWithPath: uuidPath), encoding: .utf8), let storedId = UUID(uuidString: value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        uuid = storedId
                     } else {
                         uuid = UUID()
                         let _ = try? FileManager.default.createDirectory(at: URL(fileURLWithPath: pwaPath), withIntermediateDirectories: true)
@@ -312,6 +316,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         }
                 
         self.webView = WebView(frame: CGRect(), configuration: configuration)
+        self.adBlocker = BrowserAdBlocker(controller: configuration.userContentController)
         self.webView.allowsLinkPreview = true
                 
         if #available(iOS 11.0, *) {
@@ -343,10 +348,6 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         self.backgroundColor = presentationData.theme.list.plainBackgroundColor
         self.webView.backgroundColor = presentationData.theme.list.plainBackgroundColor
         self.webView.alpha = 0.0
-        
-        if let request {
-            self.webView.load(request)
-        }
         
         self.webView.allowsBackForwardNavigationGestures = true
         self.webView.scrollView.delegate = self
@@ -393,6 +394,23 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         handleBlobMessageImpl = { [weak self] message in
             self?.handleBlobRequest(message)
         }
+        self.adBlockSettingsObserver = NotificationCenter.default.addObserver(forName: ExteraBrowserSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            let generation = self?.adBlockNavigationGeneration
+            self?.adBlocker.prepare { [weak self] in
+                guard let self, self.adBlockNavigationGeneration == generation else { return }
+                self.reload()
+            }
+        }
+        // Load cached subscription rules and check expiry without holding up the initial navigation.
+        // Rule publication uses the same observer and generation checks as ordinary settings edits.
+        ExteraBrowserFilterRuntime.shared.start()
+        if let request {
+            let generation = self.adBlockNavigationGeneration
+            self.adBlocker.prepare { [weak self] in
+                guard let self, self.adBlockNavigationGeneration == generation else { return }
+                self.webView.load(request)
+            }
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -400,6 +418,9 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     }
     
     deinit {
+        if let observer = self.adBlockSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         self.webView.removeObserver(self, forKeyPath: #keyPath(WKWebView.title))
         self.webView.removeObserver(self, forKeyPath: #keyPath(WKWebView.url))
         self.webView.removeObserver(self, forKeyPath: #keyPath(WKWebView.estimatedProgress))
@@ -731,23 +752,28 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     }
     
     func stop() {
+        self.adBlockNavigationGeneration &+= 1
         self.webView.stopLoading()
     }
     
     func reload() {
+        self.adBlockNavigationGeneration &+= 1
         self.webView.reload()
     }
     
     func navigateBack() {
+        self.adBlockNavigationGeneration &+= 1
         self.webView.goBack()
     }
     
     func navigateForward() {
+        self.adBlockNavigationGeneration &+= 1
         self.webView.goForward()
     }
     
     func navigateTo(historyItem: BrowserContentState.HistoryItem) {
         if let webItem = historyItem.webItem {
+            self.adBlockNavigationGeneration &+= 1
             self.webView.go(to: webItem)
         }
     }
@@ -757,6 +783,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         guard let url = URL(string: finalUrl) else {
             return
         }
+        self.adBlockNavigationGeneration &+= 1
         self.webView.load(URLRequest(url: url))
     }
     
@@ -962,12 +989,16 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
                         self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: self.presentationData, navigationController: nil, dismissInput: {})
                     } else {
                         self.updatePendingMainFrameUrl(for: navigationAction)
-                        decisionHandler(.allow, preferences)
+                        self.prepareAdBlocking(for: navigationAction) { allow in
+                            decisionHandler(allow ? .allow : .cancel, preferences)
+                        }
                     }
                 }
             } else {
                 self.updatePendingMainFrameUrl(for: navigationAction)
-                decisionHandler(.allow, preferences)
+                self.prepareAdBlocking(for: navigationAction) { allow in
+                    decisionHandler(allow ? .allow : .cancel, preferences)
+                }
             }
         }
     }
@@ -1005,11 +1036,27 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
                 self.openAppUrl(url)
             } else {
                 self.updatePendingMainFrameUrl(for: navigationAction)
-                decisionHandler(.allow)
+                self.prepareAdBlocking(for: navigationAction) { allow in
+                    decisionHandler(allow ? .allow : .cancel)
+                }
             }
         } else {
             self.updatePendingMainFrameUrl(for: navigationAction)
-            decisionHandler(.allow)
+            self.prepareAdBlocking(for: navigationAction) { allow in
+                decisionHandler(allow ? .allow : .cancel)
+            }
+        }
+    }
+
+    private func prepareAdBlocking(for navigationAction: WKNavigationAction, completion: @escaping (Bool) -> Void) {
+        if navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == true {
+            self.adBlockNavigationGeneration &+= 1
+            let generation = self.adBlockNavigationGeneration
+            self.adBlocker.prepare { [weak self] in
+                completion(self?.adBlockNavigationGeneration == generation)
+            }
+        } else {
+            completion(true)
         }
     }
 

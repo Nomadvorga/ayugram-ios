@@ -335,7 +335,9 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             
             let isFrontCamera = controller.cameraState.position == .back
             camera.togglePosition()
-            AyuCameraSettings.shared.roundVideoUsesBackCamera = !isFrontCamera // MARK: AyuGram
+            if ExteraMediaSettings.shared.rememberLastUsedCamera {
+                AyuCameraSettings.shared.roundVideoUsesBackCamera = !isFrontCamera
+            }
                                     
             self.hapticFeedback.impact(.veryLight)
             
@@ -1014,7 +1016,9 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
             let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
-            let isFrontPosition = !AyuCameraSettings.shared.roundVideoUsesBackCamera // MARK: AyuGram
+            let isFrontPosition = controller.initialFrontCamera ?? (ExteraMediaSettings.shared.rememberLastUsedCamera
+                ? !AyuCameraSettings.shared.roundVideoUsesBackCamera
+                : ExteraMediaSettings.shared.videoMessagesCamera != 1)
             
             self.mainPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
             self.additionalPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)
@@ -1905,6 +1909,7 @@ public class VideoMessageCameraScreen: ViewController {
     }
     
     fileprivate weak var chatNode: ASDisplayNode?
+    fileprivate let initialFrontCamera: Bool?
     
     public init(
         context: AccountContext,
@@ -1913,6 +1918,7 @@ public class VideoMessageCameraScreen: ViewController {
         viewOnceAvailable: Bool,
         inputPanelFrame: (CGRect, Bool),
         chatNode: ASDisplayNode?,
+        initialFrontCamera: Bool? = nil,
         completion: @escaping (EnqueueMessage?, Bool?, Int32?, Int32?) -> Void
     ) {
         self.context = context
@@ -1921,6 +1927,7 @@ public class VideoMessageCameraScreen: ViewController {
         self.viewOnceAvailable = viewOnceAvailable
         self.inputPanelFrame = inputPanelFrame
         self.chatNode = chatNode
+        self.initialFrontCamera = initialFrontCamera
         self.completion = completion
         
         self.recordingStatus = RecordingStatus(micLevel: self.micLevelValue.get(), duration: self.durationValue.get())

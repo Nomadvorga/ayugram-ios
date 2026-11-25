@@ -14,6 +14,7 @@ import TooltipComponent
 import Markdown
 import PlainButtonComponent
 import TextFieldComponent
+import SGSimpleSettings
 
 private let languageRecognizer = NLLanguageRecognizer()
 
@@ -62,6 +63,7 @@ final class TextProcessingTranslateContentComponent: Component {
     
     final class ExternalState {
         fileprivate(set) var sourceLanguage: String?
+        var initialTargetLanguage: String?
         fileprivate(set) var sectionHeader: AnyComponentWithIdentity<Empty>?
         fileprivate(set) var sectionFooter: AnyComponentWithIdentity<Empty>?
         fileprivate(set) var promptText: String = ""
@@ -201,6 +203,7 @@ final class TextProcessingTranslateContentComponent: Component {
         private var isUpdating: Bool = false
         
         private var processDisposable: Disposable?
+        private var exteraRequestId: UUID?
         
         override init(frame: CGRect) {
             self.separatorLayer = SimpleLayer()
@@ -227,6 +230,7 @@ final class TextProcessingTranslateContentComponent: Component {
             }
             
             if reset {
+                self.exteraRequestId = nil
                 self.processDisposable?.dispose()
                 self.processDisposable = nil
                 if let result = component.externalState.result {
@@ -279,6 +283,14 @@ final class TextProcessingTranslateContentComponent: Component {
                 
                 if let mappedMode {
                     component.externalState.isProcessing = true
+                    var useCustomAI = ExteraAISettings.shared.configuration.useForTextProcessing
+                    if case .translate = mappedMode, SGSimpleSettings.shared.translationBackendEnum != .default {
+                        useCustomAI = false
+                    }
+                    if useCustomAI {
+                        self.beginExteraAI(mode: mappedMode, language: result.language)
+                        return
+                    }
                     self.processDisposable = (component.context.engine.messages.composeAIMessage(
                         text: component.inputText,
                         mode: mappedMode
@@ -306,6 +318,41 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
             }
         }
+
+        private func beginExteraAI(mode: TelegramComposeAIMessageMode, language: String) {
+            guard let component = self.component else { return }
+            let id = UUID()
+            self.exteraRequestId = id
+            do {
+                let request = try ExteraAITextProcessing.generate(text: component.inputText, mode: mode, styles: component.styles, completion: { [weak self] result in
+                    guard let self, self.exteraRequestId == id, let component = self.component else { return }
+                    self.exteraRequestId = nil
+                    // Leave the completed disposable installed until reset/refresh, matching the
+                    // existing compose flow and preventing automatic retries after an error.
+                    component.externalState.isProcessing = false
+                    switch result {
+                    case let .success(result): component.externalState.result = (language, result.text, result.diffRanges)
+                    case .failure(.cancelled): break
+                    case let .failure(error): self.presentExteraError(error)
+                    }
+                    if !self.isUpdating { self.state?.updated(transition: .spring(duration: 0.4)) }
+                })
+                self.processDisposable = ActionDisposable { request.cancel() }
+            } catch {
+                self.exteraRequestId = nil
+                self.processDisposable = ActionDisposable {}
+                component.externalState.isProcessing = false
+                // Opening a sheet can begin proofreading during its first layout. Present errors
+                // on the next main-queue turn, after that layout has finished.
+                Queue.mainQueue().async { [weak self] in self?.presentExteraError(error) }
+                if !self.isUpdating { self.state?.updated(transition: .spring(duration: 0.4)) }
+            }
+        }
+
+        private func presentExteraError(_ error: Error) {
+            guard let component = self.component else { return }
+            component.present(textAlertController(context: component.context, title: component.strings.baseLanguageCode.hasPrefix("ru") ? "Ошибка ИИ" : "AI Error", text: error.localizedDescription, actions: [TextAlertAction(type: .defaultAction, title: component.strings.Common_OK, action: {})]), nil)
+        }
         
         func scrollStylesToStart() {
             if let styleSelectionView = self.styleSelection.view as? TextProcessingStyleSelectionComponent.View {
@@ -314,6 +361,7 @@ final class TextProcessingTranslateContentComponent: Component {
         }
         
         func refreshResult() {
+            self.exteraRequestId = nil
             if let processDisposable = self.processDisposable {
                 self.processDisposable = nil
                 processDisposable.dispose()
@@ -351,6 +399,13 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
             }
             
+            if let previousComponent, previousComponent.inputText != component.inputText, self.exteraRequestId != nil {
+                self.exteraRequestId = nil
+                self.processDisposable?.dispose()
+                self.processDisposable = nil
+                component.externalState.isProcessing = false
+                component.externalState.result = nil
+            }
             self.component = component
             self.state = state
             
@@ -363,10 +418,10 @@ final class TextProcessingTranslateContentComponent: Component {
                         baseLang = String(baseLang.dropLast(rawSuffix.count))
                     }
                     baseLang = normalizeTranslationLanguage(baseLang) // MARK: Swiftgram
-                    var toLanguage = baseLang
+                    var toLanguage = component.externalState.initialTargetLanguage ?? defaultTranslationTargetLanguage(component.strings.baseLanguageCode)
                     
                     let fromLanguage = component.externalState.sourceLanguage ?? ""
-                    if toLanguage == fromLanguage {
+                    if component.externalState.initialTargetLanguage == nil && normalizeTranslationLanguage(toLanguage) == fromLanguage {
                         if fromLanguage == "en" {
                             var dontTranslateLanguages = Set<String>()
                             if !ignoredLanguages.isEmpty {

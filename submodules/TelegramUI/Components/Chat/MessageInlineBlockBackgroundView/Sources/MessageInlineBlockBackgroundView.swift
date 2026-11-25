@@ -641,7 +641,7 @@ public final class MessageInlineBlockBackgroundView: UIView {
         let previousParams = self.params
         self.params = params
 
-        if previousParams?.primaryColor != params.primaryColor || previousParams?.secondaryColor != params.secondaryColor || previousParams?.backgroundColor != params.backgroundColor {
+        if previousParams?.primaryColor != params.primaryColor || previousParams?.secondaryColor != params.secondaryColor || previousParams?.backgroundColor != params.backgroundColor || previousParams?.isTransparent != params.isTransparent {
             for patternContentLayer in self.patternContentLayers {
                 patternContentLayer.layerTintColor = primaryColor.cgColor
             }
@@ -689,6 +689,9 @@ public final class MessageInlineBlockBackgroundView: UIView {
                     self.patternFileDisposable?.dispose()
                     self.patternFileDisposable = nil
                     self.patternImageDisposable?.dispose()
+                    self.patternImageDisposable = nil
+                    self.patternContentsTarget?.contents = nil
+                    self.updatePatternLayerImages()
                     
                     if let file = pattern.file {
                         self.patternFile = file
@@ -697,7 +700,7 @@ public final class MessageInlineBlockBackgroundView: UIView {
                         let fileId = pattern.fileId
                         self.patternFileDisposable = (pattern.context.engine.stickers.resolveInlineStickers(fileIds: [pattern.fileId])
                         |> deliverOnMainQueue).startStrict(next: { [weak self] files in
-                            guard let self else {
+                            guard let self, self.params?.pattern?.fileId == fileId else {
                                 return
                             }
                             if let file = files[fileId] {
@@ -713,6 +716,8 @@ public final class MessageInlineBlockBackgroundView: UIView {
                 self.patternContentsTarget = nil
                 self.patternFileDisposable?.dispose()
                 self.patternFileDisposable = nil
+                self.patternImageDisposable?.dispose()
+                self.patternImageDisposable = nil
                 self.patternFile = nil
             }
         }

@@ -2147,6 +2147,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
         }
         
+        let ayuMiniAvatarPeer = peer.flatMap { self.senderMiniAvatarPeer(item: item, peer: $0, displayAsMessage: displayAsMessage, peerIsMonoforum: peerIsMonoforum, peerIsCommunity: peerIsCommunity) }
+        if self.ayuHasMiniAvatar && ayuMiniAvatarPeer == nil {
+            // A reused row may stop displaying the sender. Release that peer's
+            // avatar fetch/subscription instead of keeping it alive behind a hidden node.
+            self.miniAvatarNode?.setPeer(context: item.context, theme: item.presentationData.theme, peer: nil)
+        }
         self.ayuHasMiniAvatar = false
         self.miniAvatarNode?.isHidden = true
         self.miniAvatarBackgroundNode?.isHidden = true
@@ -2227,7 +2233,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             // MARK: AyuGram — exteraGram's "Sender mini avatars": a group row shows who wrote last.
-            if let ayuMiniAvatarPeer = self.senderMiniAvatarPeer(item: item, peer: peer, displayAsMessage: displayAsMessage, peerIsMonoforum: peerIsMonoforum, peerIsCommunity: peerIsCommunity) {
+            if let ayuMiniAvatarPeer {
                 let (miniAvatarNode, miniAvatarBackgroundNode) = self.ensureMiniAvatarNodes()
                 self.ayuHasMiniAvatar = true
                 miniAvatarNode.isHidden = false
@@ -6194,6 +6200,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     self.customAnimationInProgress = false
                 }
             case RevealOptionKey.unarchive.rawValue:
+                guard !ExteraSettings.shared.disableUnarchiveSwipe else {
+                    self.setRevealOptionsOpened(false, animated: animated)
+                    self.revealOptionsInteractivelyClosed()
+                    return
+                }
                 item.interaction.updatePeerGrouping(index.messageIndex.id.peerId, false)
                 close = false
                 self.skipFadeout = true

@@ -3,22 +3,30 @@ import SwiftSignalKit
 
 public enum TranslateFetchError {
     case network
+    case limitExceeded
 }
 
-private let sgTranslateSessionConfiguration: URLSessionConfiguration = .ephemeral
+private let sgTranslateSessionConfiguration: URLSessionConfiguration = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.httpMaximumConnectionsPerHost = 2
+    configuration.timeoutIntervalForResource = 60.0
+    return configuration
+}()
 private let sgTranslateSession: URLSession = URLSession(configuration: sgTranslateSessionConfiguration)
 
-public func getTranslateUrl(_ message: String, _ toLang: String) -> String {
-    let sanitizedMessage: String = message
-    var queryCharSet: CharacterSet = .urlQueryAllowed
-    queryCharSet.remove(charactersIn: "+&")
-    var url = "https://translate.goo"
-    url += "gleapis.com/transl"
-    url += "ate_a/sing"
-    url += "le?client=gtx&sl=auto&tl=\(toLang)"
-    url += "&dt=t&ie=UTF-8&oe=UTF-8&otf=1&ssel=0&tsel=0&kc=7&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&q="
-    url += sanitizedMessage.addingPercentEncoding(withAllowedCharacters: queryCharSet) ?? ""
-    return url
+public func getTranslateUrl(_ message: String, _ toLang: String, fromLang: String? = nil) -> String {
+    var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")
+    components?.queryItems = [
+        URLQueryItem(name: "client", value: "gtx"),
+        URLQueryItem(name: "sl", value: fromLang.flatMap { $0.isEmpty || $0.lowercased() == "auto" ? nil : getGTranslateLang($0) } ?? "auto"),
+        URLQueryItem(name: "tl", value: getGTranslateLang(toLang)),
+        URLQueryItem(name: "dt", value: "t"),
+        URLQueryItem(name: "ie", value: "UTF-8"),
+        URLQueryItem(name: "oe", value: "UTF-8"),
+        URLQueryItem(name: "q", value: message)
+    ]
+    // A literal '+' must survive form-style query decoding at the provider.
+    return components?.url?.absoluteString.replacingOccurrences(of: "+", with: "%2B") ?? ""
 }
 
 public func parseTranslateResponse(_ data: String) -> String {
@@ -38,7 +46,13 @@ public func getGTranslateLang(_ userLang: String) -> String {
     if lang.hasSuffix(rawSuffix) {
         lang = String(lang.dropLast(rawSuffix.count))
     }
-    lang = lang.lowercased()
+    lang = lang.replacingOccurrences(of: "_", with: "-").lowercased()
+
+    if lang.hasPrefix("zh-") {
+        return lang.contains("hant") || lang.contains("tw") || lang.contains("hk") || lang.contains("mo") ? "zh-TW" : "zh-CN"
+    }
+
+    lang = lang.components(separatedBy: "-")[0]
 
     switch lang {
     case "zh-hans", "zh":
@@ -47,26 +61,46 @@ public func getGTranslateLang(_ userLang: String) -> String {
         return "zh-TW"
     case "he":
         return "iw"
+    case "nb":
+        return "no"
+    case "fil":
+        return "tl"
     default:
         break
     }
-
-    lang = lang.components(separatedBy: "-")[0].components(separatedBy: "_")[0]
 
     return lang
 }
 
 public func requestTranslateUrl(url: URL) -> Signal<String, TranslateFetchError> {
-    return Signal { subscriber in
+    return sgRequestTranslateUrl(url: url, attempt: 0)
+}
+
+private func sgRequestTranslateUrl(url: URL, attempt: Int) -> Signal<String, TranslateFetchError> {
+    return deferred {
+        sgRequestTranslateUrlAttempt(url: url, attempt: attempt)
+    }
+}
+
+private func sgRequestTranslateUrlAttempt(url: URL, attempt: Int) -> Signal<String, TranslateFetchError> {
+    let retryAfter = Atomic(value: pow(2.0, Double(attempt)))
+    let retryable = Atomic(value: false)
+    let signal = Signal<String, TranslateFetchError> { subscriber in
         let completed: Atomic<Bool> = Atomic(value: false)
         var request: URLRequest = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 30.0
         request.setValue(sgGTranslateUserAgent(), forHTTPHeaderField: "User-Agent")
-        let downloadTask: URLSessionDataTask = sgTranslateSession.dataTask(with: request, completionHandler: { data, response, _ in
+        let downloadTask: URLSessionDataTask = sgTranslateSession.dataTask(with: request, completionHandler: { data, response, error in
             let _ = completed.swap(true)
+            guard error == nil else {
+                _ = retryable.swap(true)
+                subscriber.putError(.network)
+                return
+            }
             if let response: HTTPURLResponse = response as? HTTPURLResponse {
                 if response.statusCode == 200 {
-                    if let data: Data = data {
+                    if let data: Data = data, data.count <= 2 * 1024 * 1024 {
                         if let result: String = String(data: data, encoding: .utf8) {
                             subscriber.putNext(result)
                             subscriber.putCompletion()
@@ -77,7 +111,11 @@ public func requestTranslateUrl(url: URL) -> Signal<String, TranslateFetchError>
                         subscriber.putError(.network)
                     }
                 } else {
-                    subscriber.putError(.network)
+                    _ = retryable.swap(response.statusCode == 429 || response.statusCode == 408 || (500 ..< 600).contains(response.statusCode))
+                    if let header = response.value(forHTTPHeaderField: "Retry-After"), let seconds = Double(header) {
+                        _ = retryAfter.swap(min(30.0, max(1.0, seconds)))
+                    }
+                    subscriber.putError(response.statusCode == 429 ? .limitExceeded : .network)
                 }
             } else {
                 subscriber.putError(.network)
@@ -91,6 +129,15 @@ public func requestTranslateUrl(url: URL) -> Signal<String, TranslateFetchError>
             }
         }
     }
+    return signal |> `catch` { error -> Signal<String, TranslateFetchError> in
+        guard attempt < 2, retryable.with({ $0 }) else {
+            return .fail(error)
+        }
+        let retry: Signal<Void, TranslateFetchError> = .single(Void())
+        return retry
+        |> delay(retryAfter.with({ $0 }), queue: .concurrentDefaultQueue())
+        |> mapToSignal { _ in sgRequestTranslateUrl(url: url, attempt: attempt + 1) }
+    }
 }
 
 private func sgGTranslateUserAgent() -> String {
@@ -101,79 +148,97 @@ private func sgGTranslateUserAgent() -> String {
     return userAgents.randomElement() ?? userAgents[0]
 }
 
-public func gtranslate(_ text: String, _ toLang: String) -> Signal<String, TranslateFetchError> {
+public func gtranslate(_ text: String, _ toLang: String, fromLang: String? = nil) -> Signal<String, TranslateFetchError> {
     let lines: [String] = text.components(separatedBy: "\n")
 
     let translationSignals: [Signal<String, TranslateFetchError>] = lines.map { rawLine in
         let leadingWhitespace: Substring = rawLine.prefix { $0.isWhitespace }
+        let trailingWhitespace: String = String(rawLine.reversed().prefix { $0.isWhitespace }.reversed())
         let core: String = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if core.isEmpty {
             return .single(rawLine)
         }
 
-        return gtranslateSentence(core, toLang)
+        let chunks = gtranslateSplitTextBySentences(core)
+        var signal: Signal<String, TranslateFetchError> = .single("")
+        for chunk in chunks {
+            signal = signal |> mapToSignal { accumulated in
+                let leading = String(chunk.prefix { $0.isWhitespace })
+                let trailing = String(chunk.reversed().prefix { $0.isWhitespace }.reversed())
+                let core = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if core.isEmpty {
+                    return .single(accumulated + chunk)
+                }
+                return gtranslateSentence(core, toLang, fromLang: fromLang)
+                |> map { accumulated + leading + $0 + trailing }
+            }
+        }
+        return signal
         |> map { translatedCore in
-            return String(leadingWhitespace) + translatedCore
+            return String(leadingWhitespace) + translatedCore + trailingWhitespace
         }
     }
 
-    return combineLatest(translationSignals)
+    // Serialize lines as well as long chunks; pasting a long message must not
+    // create hundreds of simultaneous HTTP requests.
+    var signal: Signal<[String], TranslateFetchError> = .single([])
+    for translation in translationSignals {
+        signal = signal |> mapToSignal { accumulated in
+            return translation |> map { accumulated + [$0] }
+        }
+    }
+    return signal
     |> map { results in
         let joined: String = results.joined(separator: "\n")
         return joined.isEmpty ? text : joined
     }
 }
 
-public func gtranslateSentence(_ text: String, _ toLang: String) -> Signal<String, TranslateFetchError> {
-    return Signal { subscriber in
-        let urlString: String = getTranslateUrl(text, getGTranslateLang(toLang))
-        let url: URL = URL(string: urlString)!
-        let translateSignal: Signal<String, TranslateFetchError> = requestTranslateUrl(url: url)
-        var translateDisposable: Disposable?
-
-        translateDisposable = translateSignal.start(next: { translatedHtml in
-            let result: String = parseTranslateResponse(translatedHtml)
-            if result.isEmpty {
-                subscriber.putError(.network)
-            } else {
-                subscriber.putNext(result)
-                subscriber.putCompletion()
-            }
-        }, error: { _ in
-            subscriber.putError(.network)
-        })
-
-        return ActionDisposable {
-            translateDisposable?.dispose()
+public func gtranslateSentence(_ text: String, _ toLang: String, fromLang: String? = nil) -> Signal<String, TranslateFetchError> {
+    guard let url = URL(string: getTranslateUrl(text, toLang, fromLang: fromLang)), url.absoluteString.utf8.count <= 8192 else {
+        return .fail(.network)
+    }
+    return requestTranslateUrl(url: url)
+    |> mapToSignal { response -> Signal<String, TranslateFetchError> in
+        let result = parseTranslateResponse(response)
+        guard !result.isEmpty else {
+            return .fail(.network)
         }
+        return .single(result)
     }
 }
 
 public func gtranslateSplitTextBySentences(_ text: String, maxChunkLength: Int = 1500) -> [String] {
-    if text.count <= maxChunkLength {
+    // Bound the encoded GET URL as well as the text. A single sentence, emoji or
+    // non-Latin text can otherwise exceed HTTP URL limits even below 1500 chars.
+    let maxChunkLength = max(1, maxChunkLength)
+    if text.utf8.count <= maxChunkLength {
         return [text]
     }
     var chunks: [String] = []
-    var currentChunk: String = ""
-
-    text.enumerateSubstrings(in: text.startIndex ..< text.endIndex, options: .bySentences) { substring, _, _, _ in
-        guard let sentence: String = substring else {
-            return
-        }
-
-        if currentChunk.count + sentence.count + 1 < maxChunkLength {
-            currentChunk += sentence + " "
-        } else {
-            if !currentChunk.isEmpty {
-                chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
+    var currentChunk = ""
+    var byteCount = 0
+    for character in text {
+        let count = String(character).utf8.count
+        if !currentChunk.isEmpty && byteCount + count > maxChunkLength {
+            if let boundary = currentChunk.lastIndex(where: { $0.isWhitespace }), currentChunk[currentChunk.index(after: boundary)...].utf8.count + count <= maxChunkLength {
+                let end = currentChunk.index(after: boundary)
+                chunks.append(String(currentChunk[..<end]))
+                currentChunk = String(currentChunk[end...])
+                byteCount = currentChunk.utf8.count
+            } else {
+                chunks.append(currentChunk)
+                currentChunk = ""
+                byteCount = 0
             }
-            currentChunk = sentence + " "
         }
+        currentChunk.append(character)
+        byteCount += count
     }
 
     if !currentChunk.isEmpty {
-        chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
+        chunks.append(currentChunk)
     }
 
     return chunks

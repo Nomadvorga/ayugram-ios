@@ -316,6 +316,21 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
         self.headers = headers
     }
     
+    // These node classes also render dice and large/custom emoji. Scale only real sticker messages;
+    // premium stickers keep native geometry because their separate effect uses that coordinate space.
+    private var exteraStickerSizeCoefficient: Float {
+        for media in self.message.media {
+            if let file = media as? TelegramMediaFile {
+                let isSticker = file.attributes.contains { if case .Sticker = $0 { return true }; return false }
+                let isCustomEmoji = file.attributes.contains { if case .CustomEmoji = $0 { return true }; return false }
+                if (isSticker || file.isVideoSticker), !isCustomEmoji, !file.isPremiumSticker {
+                    return ExteraStickerSettings.shared.sizeCoefficient
+                }
+            }
+        }
+        return 1.0
+    }
+
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         var viewClassName: AnyClass = ChatMessageBubbleItemNode.self
         
@@ -410,13 +425,9 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
                 node.needsQuickTranslateButton = needsQuickTranslateButton
             }
             if let node = node as? ChatMessageStickerItemNode {
-                if !SGSimpleSettings.shared.stickerTimestamp {
-                    node.dateAndStatusNode.isHidden = true
-                }
+                node.sizeCoefficient = self.exteraStickerSizeCoefficient
             } else if let node = node as? ChatMessageAnimatedStickerItemNode {
-                if !SGSimpleSettings.shared.stickerTimestamp {
-                    node.dateAndStatusNode.isHidden = true
-                }
+                node.sizeCoefficient = self.exteraStickerSizeCoefficient
             }
             node.setupItem(self, synchronousLoad: synchronousLoads)
             
@@ -568,6 +579,11 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
     public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             if let nodeValue = node() as? ChatMessageItemView {
+                if let stickerNode = nodeValue as? ChatMessageStickerItemNode {
+                    stickerNode.sizeCoefficient = self.exteraStickerSizeCoefficient
+                } else if let stickerNode = nodeValue as? ChatMessageAnimatedStickerItemNode {
+                    stickerNode.sizeCoefficient = self.exteraStickerSizeCoefficient
+                }
                 nodeValue.setupItem(self, synchronousLoad: false)
                 
                 let nodeLayout = nodeValue.asyncLayout()

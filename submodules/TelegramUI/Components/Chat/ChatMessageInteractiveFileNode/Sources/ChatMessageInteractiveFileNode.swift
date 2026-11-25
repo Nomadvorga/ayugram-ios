@@ -435,9 +435,14 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             if self.transcribeDisposable == nil {
                 self.audioTranscriptionState = .inProgress
                 self.requestUpdateLayout(true)
+                let transcriptionContext = context
+                let transcriptionMessageId = message.id
+                let transcriptionFileId = arguments.file.fileId
+                let transcriptionResourceId = arguments.file.resource.id
                 
                 if context.sharedContext.immediateExperimentalUISettings.localTranscription || !arguments.associatedData.isPremium || SGSimpleSettings.shared.transcriptionBackend == SGSimpleSettings.TranscriptionBackend.apple.rawValue {
                     let appLocale = presentationData.strings.baseLanguageCode
+                    let transcriptionLocale = arguments.controllerInteraction.sgGetChatPredictedLang() ?? appLocale
                     
                     let signal: Signal<LocallyTranscribedAudio?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: message.id))
                     |> mapToSignal { message -> Signal<String?, NoError> in
@@ -469,23 +474,31 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             return .single(nil)
                         }
                         
-                        return transcribeAudio(path: result, appLocale: arguments.controllerInteraction.sgGetChatPredictedLang() ?? appLocale)
+                        return transcribeAudio(path: result, appLocale: transcriptionLocale)
                     }
                     
                     self.transcribeDisposable = (signal
                     |> deliverOnMainQueue).startStrict(next: { [weak self] result in
-                        guard let strongSelf = self, let arguments = strongSelf.arguments else {
+                        guard let strongSelf = self, let arguments = strongSelf.arguments,
+                              arguments.context === transcriptionContext,
+                              arguments.message.id == transcriptionMessageId,
+                              arguments.file.fileId == transcriptionFileId,
+                              arguments.file.resource.id == transcriptionResourceId else {
                             return
                         }
                         
                         if let result = result {
-                            let _ = arguments.context.engine.messages.storeLocallyTranscribedAudio(messageId: arguments.message.id, text: result.text, isFinal: result.isFinal, error: nil).startStandalone()
+                            let _ = transcriptionContext.engine.messages.storeLocallyTranscribedAudio(messageId: transcriptionMessageId, text: result.text, isFinal: result.isFinal, error: nil).startStandalone()
                         } else {
                             strongSelf.audioTranscriptionState = .collapsed
                             strongSelf.requestUpdateLayout(true)
                         }
                     }, completed: { [weak self] in
-                        guard let strongSelf = self else {
+                        guard let strongSelf = self, let arguments = strongSelf.arguments,
+                              arguments.context === transcriptionContext,
+                              arguments.message.id == transcriptionMessageId,
+                              arguments.file.fileId == transcriptionFileId,
+                              arguments.file.resource.id == transcriptionResourceId else {
                             return
                         }
                         strongSelf.transcribeDisposable?.dispose()
@@ -494,7 +507,11 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 } else {
                     self.transcribeDisposable = (context.engine.messages.transcribeAudio(messageId: message.id)
                     |> deliverOnMainQueue).startStrict(next: { [weak self] result in
-                        guard let strongSelf = self else {
+                        guard let strongSelf = self, let current = strongSelf.arguments,
+                              current.context === transcriptionContext,
+                              current.message.id == transcriptionMessageId,
+                              current.file.fileId == transcriptionFileId,
+                              current.file.resource.id == transcriptionResourceId else {
                             return
                         }
                         strongSelf.transcribeDisposable?.dispose()
@@ -502,6 +519,13 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         
                         if let arguments = strongSelf.arguments, !arguments.associatedData.isPremium && !arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
                             Queue.mainQueue().after(0.1, {
+                                guard let current = strongSelf.arguments,
+                                      current.context === transcriptionContext,
+                                      current.message.id == transcriptionMessageId,
+                                      current.file.fileId == transcriptionFileId,
+                                      current.file.resource.id == transcriptionResourceId else {
+                                    return
+                                }
                                 let _ = strongSelf.presentAudioTranscriptionTooltip(finished: true)
                             })
                         }
@@ -588,11 +612,15 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         let statusLayout = self.dateAndStatusNode.asyncLayout()
         
         let currentMessage = self.message
-        let audioTranscriptionState = self.audioTranscriptionState
-        let forcedAudioTranscriptionText = self.forcedAudioTranscriptionText
+        let currentContext = self.context
+        let currentAudioTranscriptionState = self.audioTranscriptionState
+        let currentForcedAudioTranscriptionText = self.forcedAudioTranscriptionText
         
         return { [weak self] arguments in
             return (CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize in
+                let sameTranscriptionSource = currentContext === arguments.context && currentMessage?.id == arguments.message.id && currentFile?.fileId == arguments.file.fileId && currentFile?.resource.id == arguments.file.resource.id
+                let audioTranscriptionState: AudioTranscriptionButtonComponent.TranscriptionState = sameTranscriptionSource ? currentAudioTranscriptionState : .collapsed
+                let forcedAudioTranscriptionText = sameTranscriptionSource ? currentForcedAudioTranscriptionText : nil
                 let titleFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 16.0 / 17.0))
                 let descriptionFont = Font.with(size: floor(arguments.presentationData.fontSize.baseDisplaySize * 13.0 / 17.0), design: .regular, weight: .regular, traits: [.monospacedNumbers])
                 let durationFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
@@ -1102,6 +1130,16 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                     
                     return (fittedLayoutSize, { [weak self] synchronousLoads, animation, info in
                         if let strongSelf = self {
+                            if let previous = strongSelf.arguments,
+                               previous.context !== arguments.context || previous.message.id != arguments.message.id || previous.file.fileId != arguments.file.fileId || previous.file.resource.id != arguments.file.resource.id {
+                                // A file node can be reused while conversion, authorization
+                                // or recognition is pending. Cancel before rebinding it.
+                                strongSelf.transcribeDisposable?.dispose()
+                                strongSelf.transcribeDisposable = nil
+                                strongSelf.audioTranscriptionState = .collapsed
+                                strongSelf.forcedAudioTranscriptionText = nil
+                                strongSelf.isWaitingForCollapse = false
+                            }
                             strongSelf.context = arguments.context
                             strongSelf.presentationData = arguments.presentationData
                             strongSelf.message = arguments.message

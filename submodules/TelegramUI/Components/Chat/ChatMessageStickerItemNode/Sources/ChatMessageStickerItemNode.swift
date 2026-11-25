@@ -29,6 +29,7 @@ import ChatMessageReactionsFooterContentNode
 import ChatSwipeToReplyRecognizer
 import ChatMessageSuggestedPostInfoNode
 import StaticGlassBackground
+import SGSimpleSettings
 
 private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
@@ -88,8 +89,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     private var suggestedPostInfoNode: ChatMessageSuggestedPostInfoNode?
     /// Without bubbles: the author's name and time over the first sticker of a run.
     private var bubblelessHeaderNode: ChatMessageBubblelessHeaderNode?
-    /// Whether the time is hidden because the sticker has no bubble, so that it comes back with bubbles.
-    private var hidesStatusWithoutBubbles = false
+    private var exteraImageMask: CAShapeLayer?
     public var sizeCoefficient: Float = 1.0 // MARK: Swiftgram
     
     private var viaBotNode: TextNode?
@@ -485,6 +485,12 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                 imageSize = CGSize(width: textLayoutAndApply!.0.size.width, height: textLayoutAndApply!.0.size.height)
                 isEmoji = true
             }
+            let stickerFile = item.message.media.compactMap { $0 as? TelegramMediaFile }.first
+            let isSticker = !isEmoji && stickerFile.map { file in
+                file.attributes.contains { if case .Sticker = $0 { return true }; return false } || file.isVideoSticker
+            } == true && !(stickerFile?.attributes.contains { if case .CustomEmoji = $0 { return true }; return false } ?? false)
+            let stickerTimeMode: ExteraStickerSettings.TimeMode = isSticker ? ExteraStickerSettings.shared.timeMode : .default
+            let stickerShape: ExteraStickerSettings.Shape = isSticker && stickerFile?.isPremiumSticker != true ? ExteraStickerSettings.shared.shape : .original
             
             let avatarInset: CGFloat
             var hasAvatar = false
@@ -689,7 +695,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
             // views; who signed a post is in its context menu.
             var bubblelessHeader: (size: CGSize, nameHeight: CGFloat, apply: () -> ChatMessageBubblelessHeaderNode)?
             if isBubbleless && chatMessageBubblelessHeadsRow(isMergedWithPrevious: mergedTop.merged, isChannelPostWithoutProfiles: chatMessageBubblelessIsChannelPostWithoutProfiles(chatPeer: item.message.peers[item.message.id.peerId].flatMap({ EnginePeer($0) })), chatPeerId: item.message.id.peerId), let author = item.message.author ?? item.message.peers[item.message.id.peerId] {
-                let headerDateText = stringForMessageTimestampStatus(context: item.context, message: EngineMessage(item.message), dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: .regular, associatedData: item.associatedData, ignoreAuthor: true)
+                let headerDateText = stickerTimeMode == .hidden ? "" : stringForMessageTimestampStatus(context: item.context, message: EngineMessage(item.message), dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: .regular, associatedData: item.associatedData, ignoreAuthor: true)
                 let column = chatMessageBubblelessColumn(baseWidth: params.width - params.leftInset - params.rightInset, leftInset: params.leftInset, hasAvatarColumn: hasAvatar, inSelection: false, deliveryFailedInset: 0.0, hasSideButtons: false, widthFill: layoutConstants.bubble.maximumWidthFill)
                 bubblelessHeader = (bubblelessHeaderLayout ?? ChatMessageBubblelessHeaderNode.asyncLayout(nil))(item, EnginePeer(author), headerDateText, (item.message.attributes.first(where: { $0 is ViewCountMessageAttribute }) as? ViewCountMessageAttribute)?.count, column.width)
             }
@@ -706,11 +712,11 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                 impressionCount: viewCount,
                 dateText: dateText,
                 type: statusType,
-                layoutInput: .standalone(reactionSettings: shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil),
+                layoutInput: .standalone(reactionSettings: stickerTimeMode == .default && shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil),
                 constrainedSize: CGSize(width: params.width, height: CGFloat.greatestFiniteMagnitude),
                 availableReactions: item.associatedData.availableReactions,
                 savedMessageTags: item.associatedData.savedMessageTags,
-                reactions: dateReactionsAndPeers.reactions,
+                reactions: stickerTimeMode == .default ? dateReactionsAndPeers.reactions : [],
                 reactionPeers: dateReactionsAndPeers.peers,
                 displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                 areReactionsTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId),
@@ -966,7 +972,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
             }
             
             let reactions: ReactionsMessageAttribute
-            if shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) {
+            if stickerTimeMode == .default && shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) {
                 reactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             } else {
                 reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
@@ -1097,6 +1103,13 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     baseShareButtonFrame.origin.y += offset
                 }
             }
+            // Header panels occupy the opposite column. Keep native placement whenever one exists;
+            // otherwise reserve the complete share-button width before accepting a side timestamp.
+            if viaBotApply == nil, replyInfoApply == nil, forwardInfoSizeApply == nil {
+                let sideLayout = ExteraStickerGeometry.statusLayout(mode: isBubbleless ? .default : stickerTimeMode, incoming: incoming, stickerFrame: updatedImageFrame.insetBy(dx: innerImageInset, dy: innerImageInset), defaultStatusFrame: dateAndStatusFrame, shareFrame: needsShareButton ? baseShareButtonFrame : nil, availableMinX: displayLeftInset, availableMaxX: params.width - params.rightInset - layoutConstants.bubble.edgeInset - deliveryFailedInset)
+                dateAndStatusFrame = sideLayout.statusFrame
+                if let shareFrame = sideLayout.shareFrame { baseShareButtonFrame = shareFrame }
+            }
             
             func finishAsyncLayout(_ animation: ListViewItemUpdateAnimation, _ synchronousLoads: Bool) {
                 if let strongSelf = weakSelf.value {
@@ -1179,6 +1192,19 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     strongSelf.enableSynchronousImageApply = true
                     imageApply()
                     strongSelf.enableSynchronousImageApply = false
+                    let stickerRadius = ExteraStickerGeometry.cornerRadius(shape: stickerShape, bubbleRadius: item.presentationData.chatBubbleCorners.mainRadius, size: imageSize)
+                    if stickerRadius > 0 {
+                        let mask = strongSelf.exteraImageMask ?? CAShapeLayer()
+                        strongSelf.exteraImageMask = mask
+                        mask.frame = CGRect(origin: .zero, size: updatedImageFrame.size)
+                        mask.path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: innerImageInset, y: innerImageInset), size: imageSize), cornerRadius: stickerRadius).cgPath
+                        strongSelf.imageNode.layer.mask = mask
+                    } else {
+                        strongSelf.imageNode.layer.mask = nil
+                        strongSelf.exteraImageMask = nil
+                    }
+                    strongSelf.placeholderNode.cornerRadius = stickerRadius
+                    strongSelf.placeholderNode.clipsToBounds = stickerRadius > 0
                     
                     if let immediateThumbnailData = telegramFile?.immediateThumbnailData {
                         if strongSelf.backgroundNode == nil {
@@ -1223,14 +1249,11 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     
                     animation.animator.updateFrame(layer: strongSelf.dateAndStatusNode.layer, frame: dateAndStatusFrame, completion: nil)
                     dateAndStatusApply(animation)
+                    let hidesStickerStatus = stickerTimeMode == .hidden
                     if case .customChatContents = item.associatedData.subject {
                         strongSelf.dateAndStatusNode.isHidden = true
-                    } else if hidesStatusForBubbleless {
-                        strongSelf.hidesStatusWithoutBubbles = true
-                        strongSelf.dateAndStatusNode.isHidden = true
-                    } else if strongSelf.hidesStatusWithoutBubbles {
-                        strongSelf.hidesStatusWithoutBubbles = false
-                        strongSelf.dateAndStatusNode.isHidden = false
+                    } else {
+                        strongSelf.dateAndStatusNode.isHidden = hidesStatusForBubbleless || hidesStickerStatus
                     }
                     
                     if let updatedShareButtonNode = updatedShareButtonNode {

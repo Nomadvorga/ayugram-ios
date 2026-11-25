@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import Postbox
 import SwiftSignalKit
 internal import TelegramApi
@@ -261,7 +262,7 @@ extension ReplayContext {
             }).map({ $0.1 })
             for file in stickerFiles {
                 if let entry = CodableEntry(RecentMediaItem(file)) {
-                    transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudRecentStickers, item: OrderedItemListEntry(id: RecentMediaItemId(file.fileId).rawValue, contents: entry), removeTailIfCountExceeds: 20)
+                    transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudRecentStickers, item: OrderedItemListEntry(id: RecentMediaItemId(file.fileId).rawValue, contents: entry), removeTailIfCountExceeds: ExteraStickerSettings.shared.recentStickersLimit)
                 }
             }
         }

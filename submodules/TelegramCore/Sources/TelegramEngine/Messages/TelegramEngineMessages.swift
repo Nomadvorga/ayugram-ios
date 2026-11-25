@@ -149,6 +149,175 @@ final class StoryViewRefreshContext {
     }
 }
 
+// Each fetch is a separate, bounded Postbox transaction. JSON construction and
+// cursor management belong to the export queue, never the database queue.
+private final class CachedChatTextExport {
+    private struct Snapshot {
+        let title: String
+        let maximumIndex: MessageIndex?
+        let exclusiveUpperBound: MessageIndex
+    }
+
+    private static let pageSize = 256
+    private static let maximumByteCount = 64 * 1024 * 1024
+    private let account: Account
+    private let peerId: PeerId
+    private let subscriber: Subscriber<Data?, NoError>
+    private let queue = Queue(name: "CachedChatTextExport")
+    private let cancelled = Atomic(value: false)
+    private let pageDisposable = MetaDisposable()
+    // Accessed only on queue.
+    private var data = Data()
+    private var hasEntries = false
+    private var finished = false
+
+    init(account: Account, peerId: PeerId, subscriber: Subscriber<Data?, NoError>) {
+        self.account = account
+        self.peerId = peerId
+        self.subscriber = subscriber
+    }
+
+    private static func isAllowed(transaction: Transaction, peerId: PeerId) -> Bool {
+        guard peerId.namespace != Namespaces.Peer.SecretChat, let peer = transaction.getPeer(peerId) else { return false }
+        if let cachedUser = transaction.getPeerCachedData(peerId: peerId) as? CachedUserData,
+           !cachedUser.flags.intersection([.copyProtectionEnabled, .myCopyProtectionEnabled]).isEmpty {
+            return false
+        }
+        if let group = peer as? TelegramGroup, group.flags.contains(.copyProtectionEnabled) { return false }
+        if let channel = peer as? TelegramChannel, channel.flags.contains(.copyProtectionEnabled) { return false }
+        return true
+    }
+
+    func start() {
+        let peerId = self.peerId
+        let cancelled = self.cancelled
+        self.pageDisposable.set((self.account.postbox.transaction { transaction -> Snapshot? in
+            guard !cancelled.with({ $0 }), Self.isAllowed(transaction: transaction, peerId: peerId) else { return nil }
+            let lowerBound = MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud)
+            let upperBound = MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud)
+            let maximumIndex = transaction.getMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, from: upperBound, includeFrom: false, to: lowerBound, limit: 1).first?.index
+            let exclusiveUpperBound: MessageIndex
+            if let maximumIndex {
+                // ValueBox ranges exclude their end. Include the snapshot's last
+                // message without letting later arrivals move the export boundary.
+                if maximumIndex.id.id < Int32.max {
+                    exclusiveUpperBound = maximumIndex.peerLocalSuccessor()
+                } else if maximumIndex.timestamp < Int32.max {
+                    exclusiveUpperBound = MessageIndex(id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 0), timestamp: maximumIndex.timestamp + 1)
+                } else {
+                    return nil
+                }
+            } else {
+                exclusiveUpperBound = upperBound
+            }
+            return Snapshot(title: transaction.getPeer(peerId)?.debugDisplayTitle ?? "", maximumIndex: maximumIndex, exclusiveUpperBound: exclusiveUpperBound)
+        }
+        |> deliverOn(self.queue)).start(next: { [self] snapshot in
+            guard !self.cancelled.with({ $0 }) else { return }
+            guard let snapshot else { self.finish(nil); return }
+            let header: [String: Any] = [
+                "chat": snapshot.title,
+                "peerId": peerId.id._internalGetInt64Value(),
+                "exportedAt": Int64(Date().timeIntervalSince1970),
+                "scope": "cached-cloud-messages",
+                "version": 1,
+            ]
+            guard var headerData = try? JSONSerialization.data(withJSONObject: header, options: [.sortedKeys]), headerData.last == 125 else {
+                self.finish(nil)
+                return
+            }
+            headerData.removeLast()
+            headerData.append(contentsOf: ",\"messages\":[".utf8)
+            guard headerData.count <= Self.maximumByteCount - 2 else { self.finish(nil); return }
+            self.data = headerData
+            if snapshot.maximumIndex == nil {
+                self.completeJSON()
+            } else {
+                self.fetchPage(after: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud), snapshot: snapshot)
+            }
+        }))
+    }
+
+    private func fetchPage(after cursor: MessageIndex, snapshot: Snapshot) {
+        guard !self.finished, !self.cancelled.with({ $0 }) else { return }
+        let peerId = self.peerId
+        let cancelled = self.cancelled
+        self.pageDisposable.set((self.account.postbox.transaction { transaction -> [Message]? in
+            guard !cancelled.with({ $0 }), Self.isAllowed(transaction: transaction, peerId: peerId) else { return nil }
+            return transaction.getMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, from: cursor, includeFrom: false, to: snapshot.exclusiveUpperBound, limit: Self.pageSize)
+        }
+        |> deliverOn(self.queue)).start(next: { [self] page in
+            guard !self.finished, !self.cancelled.with({ $0 }) else { return }
+            guard let page else { self.finish(nil); return }
+            guard !page.isEmpty else { self.completeJSON(); return }
+            let messages = page.sorted(by: { $0.index < $1.index })
+            var lastIndex = cursor
+            for message in messages {
+                guard !self.cancelled.with({ $0 }) else { return }
+                guard message.index > lastIndex, let maximumIndex = snapshot.maximumIndex, message.index <= maximumIndex else {
+                    self.finish(nil)
+                    return
+                }
+                lastIndex = message.index
+                if message.isCopyProtected() || message.containsSecretMedia { continue }
+                // Foundation's temporary JSON objects are released per entry,
+                // rather than accumulating across a very large cached history.
+                let entryData: Data? = autoreleasepool {
+                    var text = message.text
+                    if let rich = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
+                        let page = rich.fullInstantPage ?? rich.instantPage
+                        text = richReplyQuoteFlatText(instantPageQuotableNodes(page.blocks))
+                    }
+                    let entry: [String: Any] = [
+                        "id": message.id.id,
+                        "date": message.timestamp,
+                        "sender": message.effectiveAuthor?.debugDisplayTitle ?? "",
+                        "out": !message.flags.contains(.Incoming),
+                        "text": text,
+                    ]
+                    return try? JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
+                }
+                let separatorCount = self.hasEntries ? 1 : 0
+                guard let entryData, entryData.count <= Self.maximumByteCount - self.data.count - separatorCount - 2 else {
+                    self.finish(nil)
+                    return
+                }
+                if self.hasEntries { self.data.append(44) }
+                self.data.append(entryData)
+                self.hasEntries = true
+            }
+            if lastIndex == snapshot.maximumIndex || page.count < Self.pageSize {
+                self.completeJSON()
+            } else {
+                self.fetchPage(after: lastIndex, snapshot: snapshot)
+            }
+        }))
+    }
+
+    private func completeJSON() {
+        guard !self.cancelled.with({ $0 }) else { return }
+        self.data.append(contentsOf: "]}".utf8)
+        let result = self.data
+        self.data = Data()
+        self.finish(result)
+    }
+
+    private func finish(_ result: Data?) {
+        guard !self.finished, !self.cancelled.with({ $0 }) else { return }
+        self.finished = true
+        self.data = Data()
+        self.pageDisposable.set(nil)
+        self.subscriber.putNext(result)
+        self.subscriber.putCompletion()
+    }
+
+    func cancel() {
+        _ = self.cancelled.swap(true)
+        self.pageDisposable.dispose()
+        self.queue.async { [self] in self.data = Data() }
+    }
+}
+
 public extension TelegramEngine {
     final class Messages {
         // Module-internal rather than private: the MediaPreupload facade lives in its own file and
@@ -164,29 +333,11 @@ public extension TelegramEngine {
         }
 
         public func exportChatJSON(peerId: EnginePeer.Id) -> Signal<Data?, NoError> {
-            return self.account.postbox.transaction { transaction -> Data? in
-                var entries: [[String: Any]] = []
-                transaction.scanMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, tag: MessageTags()) { message -> Bool in
-                    entries.append([
-                        "id": message.id.id,
-                        "date": message.timestamp,
-                        "sender": message.effectiveAuthor?.debugDisplayTitle ?? "",
-                        "out": !message.flags.contains(.Incoming),
-                        "text": message.text
-                    ])
-                    return true
-                }
-                guard !entries.isEmpty else {
-                    return nil
-                }
-                let peer = transaction.getPeer(peerId)
-                let result: [String: Any] = [
-                    "chat": peer?.debugDisplayTitle ?? "",
-                    "peerId": peerId.id._internalGetInt64Value(),
-                    "exportedAt": Int32(Date().timeIntervalSince1970),
-                    "messages": entries
-                ]
-                return try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+            let account = self.account
+            return Signal { subscriber in
+                let export = CachedChatTextExport(account: account, peerId: peerId, subscriber: subscriber)
+                export.start()
+                return ActionDisposable { export.cancel() }
             }
         }
 

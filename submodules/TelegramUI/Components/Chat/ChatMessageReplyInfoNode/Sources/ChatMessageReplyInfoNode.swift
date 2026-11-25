@@ -156,6 +156,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
     private var expiredStoryIconView: UIImageView?
     private var checkLayer: CheckLayer?
     private var giftEmojiLayer: InlineStickerItemLayer?
+    private var giftEmojiFileId: Int64?
     private var skeletonNodes: [ShimmerEffectNode] = []
     private var isSkeleton: Bool = false
     
@@ -265,10 +266,15 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             }
             // MARK: AyuGram
             let ayuSimpleReplies = AyuCustomizationSettings.shared.simpleQuotesAndReplies
-            if ayuSimpleReplies {
+            let replyColors = !ayuSimpleReplies && ExteraMessageSettings.shared.replyColors
+            let replyEmoji = !ayuSimpleReplies && ExteraMessageSettings.shared.replyEmoji
+            let replyBackground = ExteraMessageSettings.shared.replyBackground
+            if !replyColors {
                 authorNameColor = nil
                 dashSecondaryColor = nil
                 dashTertiaryColor = nil
+            }
+            if !replyEmoji {
                 giftEmojiFileId = nil
             }
             //
@@ -958,7 +964,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 node.backgroundView.frame = backgroundFrame
                 
                 var pattern: MessageInlineBlockBackgroundView.Pattern?
-                if !ayuSimpleReplies, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
+                if replyEmoji, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
                     pattern = MessageInlineBlockBackgroundView.Pattern(
                         context: arguments.context,
                         fileId: backgroundEmojiId,
@@ -985,7 +991,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     primaryColor: mainColor,
                     secondaryColor: secondaryColor,
                     thirdColor: tertiaryColor,
-                    backgroundColor: nil,
+                    backgroundColor: replyBackground ? nil : UIColor.clear,
                     pattern: pattern,
                     animation: animation
                 )
@@ -1040,7 +1046,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     let giftLayerFrame = CGRect(origin: CGPoint(x: realSize.width - giftLayerSize.width - 4.0, y: 3.0), size: giftLayerSize)
                     
                     let giftEmojiLayer: InlineStickerItemLayer
-                    if let current = node.giftEmojiLayer, current.file?.fileId.id == giftEmojiFileId {
+                    if let current = node.giftEmojiLayer, node.giftEmojiFileId == giftEmojiFileId {
                         giftEmojiLayer = current
                         animation.animator.updateFrame(layer: giftEmojiLayer, frame: giftLayerFrame, completion: nil)
                     } else {
@@ -1050,6 +1056,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                         }
                         giftEmojiLayer = InlineStickerItemLayer(context: arguments.context, userLocation: .other, attemptSynchronousLoad: true, emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: giftEmojiFileId, file: nil, custom: nil, enableAnimation: true), file: nil, cache: arguments.context.animationCache, renderer: arguments.context.animationRenderer, unique: false, placeholderColor: placeholderColor, pointSize: CGSize(width: giftLayerSize.width * 2.0, height: giftLayerSize.height * 2.0), dynamicColor: nil, loopCount: 2)
                         node.giftEmojiLayer = giftEmojiLayer
+                        node.giftEmojiFileId = giftEmojiFileId
                         node.contentNode.layer.addSublayer(giftEmojiLayer)
                         
                         giftEmojiLayer.frame = giftLayerFrame
@@ -1057,6 +1064,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     
                 } else if let giftEmojiLayer = node.giftEmojiLayer {
                     node.giftEmojiLayer = nil
+                    node.giftEmojiFileId = nil
                     giftEmojiLayer.removeFromSuperlayer()
                 }
                 

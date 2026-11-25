@@ -3,6 +3,7 @@ import UIKit
 import Display
 import TelegramPresentationData
 import ChatMessageItemCommon
+import SGSimpleSettings
 
 public func chatMessageBubbleImageContentCorners(relativeContentPosition position: ChatMessageBubbleContentPosition, normalRadius: CGFloat, mergedRadius: CGFloat, mergedWithAnotherContentRadius: CGFloat, layoutConstants: ChatMessageItemLayoutConstants, chatPresentationData: ChatPresentationData) -> ImageCorners {
     let topLeftCorner: ImageCorner
@@ -161,7 +162,7 @@ public func chatMessageBubbleImageContentCorners(relativeContentPosition positio
     }
     
     // Bubble mode off: nothing has a tail, so media keeps a plain corner where the tail would join.
-    if !chatPresentationData.chatBubbleCorners.bubbleMode {
+    if !chatPresentationData.chatBubbleCorners.bubbleMode || ExteraMessageSettings.shared.removeMessageTail {
         func untailed(_ corner: ImageCorner) -> ImageCorner {
             if case let .Tail(radius, _) = corner {
                 return .Corner(radius)

@@ -28,6 +28,14 @@ are the audit's.
 
 ## File layout
 
+The recent-sticker writes in `ApplyUpdateMessage` and `ReplayContext.finalize` use
+`ExteraStickerSettings.recentStickersLimit`: normally 20, or no local tail trimming
+when unlimited recent stickers is enabled. This changes only the ordered sticker
+list retention, with no change to replay scheduling, message state, or retries.
+`managedRecentMedia` merges the cloud recent-sticker list with local excess items
+in that mode. Explicit remove/clear operations still remove the corresponding local
+entries, and favourites/GIFs continue to replace their lists from the server.
+
 `Sources/State/` (state sync's files only):
 
 - `AccountStateManager.swift`: the public `AccountStateManager` and its `Impl` (ingress, queue helpers,

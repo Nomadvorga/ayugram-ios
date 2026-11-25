@@ -9,6 +9,7 @@ public class SpeechSynthesizerHolder: NSObject, AVSpeechSynthesizerDelegate {
     private var speechSynthesizer: AVSpeechSynthesizer
     
     public var completion: () -> Void = {}
+    private var didComplete = false
     
     init(speechSynthesizer: AVSpeechSynthesizer) {
         self.speechSynthesizer = speechSynthesizer
@@ -27,6 +28,18 @@ public class SpeechSynthesizerHolder: NSObject, AVSpeechSynthesizerDelegate {
     }
     
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        self.complete()
+    }
+
+    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        self.complete()
+    }
+
+    private func complete() {
+        guard !self.didComplete else {
+            return
+        }
+        self.didComplete = true
         self.completion()
     }
 }
@@ -42,17 +55,20 @@ public func supportedSpeakLanguages() -> Set<String> {
     return Set(languages)
 }
 
-public func speakText(text: String) -> SpeechSynthesizerHolder? {
-    guard !text.isEmpty else {
+/// Speak text using an explicit language when supplied, otherwise detect its language.
+public func speakText(text: String, language: String? = nil) -> SpeechSynthesizerHolder? {
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return nil
     }
     
     let speechSynthesizer = AVSpeechSynthesizer()
     let utterance = AVSpeechUtterance(string: text)
-    if #available(iOS 11.0, *), let language = NSLinguisticTagger.dominantLanguage(for: text) {
+    if let language, !language.isEmpty {
+        utterance.voice = AVSpeechSynthesisVoice(language: language.replacingOccurrences(of: "_", with: "-"))
+    } else if #available(iOS 11.0, *), let language = NSLinguisticTagger.dominantLanguage(for: text) {
         utterance.voice = AVSpeechSynthesisVoice(language: language)
     }
+    let holder = SpeechSynthesizerHolder(speechSynthesizer: speechSynthesizer)
     speechSynthesizer.speak(utterance)
-    
-    return SpeechSynthesizerHolder(speechSynthesizer: speechSynthesizer)
+    return holder
 }

@@ -1,4 +1,5 @@
 import SGSimpleSettings
+import SGStrings
 import Foundation
 import UIKit
 import SwiftSignalKit
@@ -147,7 +148,30 @@ extension ChatControllerImpl {
         }
     }
     
-    func requestVideoRecorder() {
+    func requestVideoRecorder(initialFrontCamera: Bool? = nil) {
+        if initialFrontCamera == nil, !ExteraMediaSettings.shared.rememberLastUsedCamera,
+           ExteraMediaSettings.shared.videoMessagesCamera == 2, self.videoRecorderValue == nil {
+            guard !self.exteraCameraSelectionVisible else { return }
+            self.exteraCameraSelectionVisible = true
+            let lang = self.presentationData.strings.baseLanguageCode
+            let alert = UIAlertController(title: i18n("Extera.VideoMessagesCamera", lang), message: nil, preferredStyle: .alert)
+            for front in [true, false] {
+                alert.addAction(UIAlertAction(title: i18n(front ? "Extera.CameraFront" : "Extera.CameraRear", lang), style: .default, handler: { [weak self] _ in
+                    guard let self else { return }
+                    self.exteraCameraSelectionVisible = false
+                    guard self.isNodeLoaded, self.view.window != nil, self.videoRecorderValue == nil, self.audioRecorderValue == nil else { return }
+                    // Choosing a camera is a fresh start action. Lock the recording
+                    // so releasing the original long press cannot send it unseen.
+                    self.lockMediaRecordingRequestId = self.beginMediaRecordingRequestId
+                    self.requestVideoRecorder(initialFrontCamera: front)
+                }))
+            }
+            alert.addAction(UIAlertAction(title: self.presentationData.strings.Common_Cancel, style: .cancel, handler: { [weak self] _ in
+                self?.exteraCameraSelectionVisible = false
+            }))
+            self.present(alert, animated: true)
+            return
+        }
         if self.videoRecorderValue == nil {
             if let currentInputPanelFrame = self.chatDisplayNode.currentInputPanelFrame() {
                 if self.recorderFeedback == nil {
@@ -182,6 +206,7 @@ extension ChatControllerImpl {
                     viewOnceAvailable: viewOnceAvailable,
                     inputPanelFrame: (currentInputPanelFrame, self.chatDisplayNode.inputNode != nil),
                     chatNode: self.chatDisplayNode.historyNode,
+                    initialFrontCamera: initialFrontCamera,
                     completion: { [weak self] message, silentPosting, scheduleTime, repeatPeriod in
                         guard let self, let videoController = self.videoRecorderValue else {
                             return

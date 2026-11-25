@@ -30,6 +30,7 @@ swift_library(
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/OverlayStatusController:OverlayStatusController",
         "//submodules/AccountContext:AccountContext",
+        "//submodules/ChatListUI:ChatListUI",
         "//submodules/AppBundle:AppBundle",
         "//submodules/TelegramUI/Components/Settings/PeerNameColorScreen",
         "//submodules/UndoUI:UndoUI",

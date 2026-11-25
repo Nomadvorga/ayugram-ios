@@ -1298,7 +1298,7 @@ func peerInfoScreenData(
                     let data = manager.with { manager -> PeerInfoStatusData? in
                         if let presence = manager.currentValue {
                             let timestamp = CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970
-                            let (text, isActivity) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(presence), relativeTo: Int32(timestamp), expanded: true)
+                            let (text, isActivity) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(presence), relativeTo: Int32(timestamp), expanded: !ExteraSettings.shared.relativeLastSeen)
                             var isHiddenStatus = false
                             switch presence.status {
                             case .recently(let isHidden), .lastWeek(let isHidden), .lastMonth(let isHidden):
@@ -1380,7 +1380,15 @@ func peerInfoScreenData(
                         notify()
                     }
                 })
-                return disposable
+                let settingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+                    if manager.with({ $0.currentValue != nil }) {
+                        notify()
+                    }
+                }
+                return ActionDisposable {
+                    disposable.dispose()
+                    NotificationCenter.default.removeObserver(settingsObserver)
+                }
             }
             |> distinctUntilChanged
             

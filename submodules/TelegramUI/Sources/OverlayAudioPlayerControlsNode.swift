@@ -187,6 +187,7 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
     private var currentTrackKey: String?
     private let lyricsButton: IconButtonNode
     private let lyricsNode: OverlayAudioPlayerLyricsNode
+    private let lyricsResourceDisposable = MetaDisposable()
     
     let separatorNode: ASDisplayNode
     
@@ -459,11 +460,33 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
                 strongSelf.currentPosition = value.status.timestamp
 
                 if let displayData = displayData, case let .music(title, performer, _, _, _) = displayData {
-                    let trackKey = "\(title ?? "")|\(performer ?? "")"
-                    if trackKey != strongSelf.currentTrackKey {
-                        strongSelf.currentTrackKey = trackKey
-                        strongSelf.lyricsNode.setTrack(title: title, performer: performer)
+                    let durationKey = value.status.duration.isFinite && value.status.duration > 0.0 && value.status.duration < Double(Int32.max) ? Int(value.status.duration.rounded()) : 0
+                    var resource: EngineMediaResource?
+                    if let source = value.item.playbackData?.source, case let .telegramFile(fileReference, _, _) = source {
+                        resource = EngineMediaResource(fileReference.media.resource)
                     }
+                    let resourceId = resource?.id.stringRepresentation ?? String(describing: value.item.stableId)
+                    let keyParts = [title ?? "", performer ?? "", String(durationKey), resourceId]
+                    let trackKey = (try? JSONEncoder().encode(keyParts)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                    if itemUpdated || trackKey != strongSelf.currentTrackKey {
+                        strongSelf.currentTrackKey = trackKey
+                        strongSelf.lyricsResourceDisposable.set(nil)
+                        strongSelf.lyricsNode.setTrack(title: title, performer: performer, duration: value.status.duration, trackId: resourceId)
+                        if let resource {
+                            // Observe caching only: this does not fetch the audio resource.
+                            strongSelf.lyricsResourceDisposable.set((strongSelf.engine.resources.data(resource: resource)
+                            |> filter { $0.complete }
+                            |> take(1)
+                            |> deliverOnMainQueue).start(next: { [weak self] data in
+                                guard let self, self.currentTrackKey == trackKey else { return }
+                                self.lyricsNode.updateCachedFilePath(data.path, trackId: resourceId)
+                            }))
+                        }
+                    }
+                } else if strongSelf.currentTrackKey != nil {
+                    strongSelf.lyricsResourceDisposable.set(nil)
+                    strongSelf.currentTrackKey = nil
+                    strongSelf.lyricsNode.setTrack(title: nil, performer: nil)
                 }
                 strongSelf.lyricsNode.updateStatus(value.status)
             } else {
@@ -472,6 +495,9 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
                 strongSelf.forwardButton.isEnabled = false
                 strongSelf.rateButton.isHidden = true
                 strongSelf.lyricsNode.updateStatus(nil)
+                strongSelf.currentTrackKey = nil
+                strongSelf.lyricsResourceDisposable.set(nil)
+                strongSelf.lyricsNode.setTrack(title: nil, performer: nil)
                 displayData = nil
             }
             
@@ -596,6 +622,7 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
     deinit {
         self.statusDisposable?.dispose()
         self.chapterDisposable?.dispose()
+        self.lyricsResourceDisposable.dispose()
     }
     
     override func didLoad() {
@@ -948,6 +975,7 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         let lyricsFrame = CGRect(origin: CGPoint(x: leftInset, y: buttonsRect.maxY), size: CGSize(width: width - leftInset - rightInset, height: lyricsHeight))
         transition.updateFrame(node: self.lyricsNode, frame: lyricsFrame)
         self.lyricsNode.isHidden = !lyricsDisplayed
+        self.lyricsNode.setDisplayed(lyricsDisplayed)
         if lyricsDisplayed {
             self.lyricsNode.updateLayout(size: lyricsFrame.size, transition: transition)
         }
