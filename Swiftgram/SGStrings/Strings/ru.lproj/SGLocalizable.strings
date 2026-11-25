@@ -837,7 +837,10 @@
 "Extera.SpeechOnDeviceOnly" = "Распознавать только на устройстве";
 "Extera.SpeechRecognitionInfo" = "Apple распознаёт голосовые сообщения на выбранном языке. Для распознавания на устройстве нужна поддерживаемая локальная языковая модель; иначе могут использоваться серверы Apple.";
 "Extera.MessageMenu" = "Меню сообщений";
-"Extera.GroupMessageMenu" = "Дополнительные действия в подменю";
+"Extera.GroupMessageMenu" = "Группировать меню сообщения";
+"Extera.GroupMessageMenuInfo" = "Группировка перемещает основные действия в нижнюю часть меню сообщения.";
+"Extera.DoubleTapPicker.Incoming" = "Входящие сообщения";
+"Extera.DoubleTapPicker.Outgoing" = "Исходящие сообщения";
 "Extera.MenuCopyPhoto" = "Копировать фото";
 "Extera.MenuSaveMessage" = "Сохранить в Избранное";
 "Extera.MenuRepeatMessage" = "Повторить сообщение";

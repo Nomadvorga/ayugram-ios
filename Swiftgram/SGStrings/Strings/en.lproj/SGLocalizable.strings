@@ -849,7 +849,10 @@
 "Extera.SpeechOnDeviceOnly" = "Recognize on Device Only";
 "Extera.SpeechRecognitionInfo" = "Apple recognizes voice messages using the selected language. On-device recognition requires a supported local language model; otherwise recognition may use Apple's servers.";
 "Extera.MessageMenu" = "Message Menu";
-"Extera.GroupMessageMenu" = "Group Extra Actions in a Submenu";
+"Extera.GroupMessageMenu" = "Group Message Menu";
+"Extera.GroupMessageMenuInfo" = "Grouping moves the main actions to the bottom of the message menu.";
+"Extera.DoubleTapPicker.Incoming" = "Incoming Messages";
+"Extera.DoubleTapPicker.Outgoing" = "Outgoing Messages";
 "Extera.MenuCopyPhoto" = "Copy Photo";
 "Extera.MenuSaveMessage" = "Save to Saved Messages";
 "Extera.MenuRepeatMessage" = "Repeat Message";

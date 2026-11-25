@@ -364,8 +364,8 @@ func exteraGroupMessageContextMenuActions(_ items: inout [ContextMenuItem]) {
         if case let .action(action) = item, let id = action.id { return ids.contains(id) }
         return false
     })
-    // Preserve information rows above the action row, as Telegram does for read
-    // receipts and edit dates, and remove separators left empty by extraction.
+    // Reference 56: ordinary actions form the bottom row. Keep informational
+    // content and all other permission-filtered actions above it.
     var normalized: [ContextMenuItem] = []
     for item in items {
         if case .separator = item {
@@ -375,8 +375,8 @@ func exteraGroupMessageContextMenuActions(_ items: inout [ContextMenuItem]) {
         normalized.append(item)
     }
     if let last = normalized.last, case .separator = last { normalized.removeLast() }
-    let index = normalized.firstIndex(where: { if case .action = $0 { return true }; return false }) ?? 0
-    normalized.insert(.custom(ExteraQuickActionsItem(actions: grouped), false), at: index)
+    if !normalized.isEmpty { normalized.append(.separator) }
+    normalized.append(.custom(ExteraQuickActionsItem(actions: grouped), false))
     items = normalized
 }
 

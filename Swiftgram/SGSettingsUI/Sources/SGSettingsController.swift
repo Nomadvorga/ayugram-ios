@@ -696,10 +696,11 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
         (.showClearButton, ExteraMenuSettings.shared.showClearButton, i18n("Extera.MenuClear", lang)),
         (.showHistoryButton, ExteraMenuSettings.shared.showHistoryButton, i18n("Extera.MenuHistory", lang)),
         (.showReportButton, ExteraMenuSettings.shared.showReportButton, i18n("Extera.MenuReport", lang)),
-        (.showDetailsButton, ExteraMenuSettings.shared.showDetailsButton, i18n("Extera.MenuDetails", lang)),
-        (.showMessageImageExportButton, ExteraMenuSettings.shared.showMessageImageExportButton, i18n("Extera.MenuExportMessageImage", lang))
+        (.showDetailsButton, ExteraMenuSettings.shared.showDetailsButton, i18n("Extera.MenuDetails", lang))
     ], state: state)
     entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .groupMessageMenu, value: ExteraMenuSettings.shared.groupMessageMenu, text: i18n("Extera.GroupMessageMenu", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .messageMenu, text: i18n("Extera.GroupMessageMenuInfo", lang)))
+    entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .showMessageImageExportButton, value: ExteraMenuSettings.shared.showMessageImageExportButton, text: i18n("Extera.MenuExportMessageImage", lang), enabled: true))
 
     entries.append(.header(id: id.count, section: .sending, text: strings.NetworkUsageSettings_MediaImageDataSection, badge: nil))
     entries.append(.toggle(id: id.count, section: .sending, settingName: .sendLargePhotos, value: settings.sendLargePhotos, text: i18n("Settings.Photo.SendLarge", lang), enabled: true))
@@ -906,7 +907,6 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
                 ExteraMenuSettings.shared.showHistoryButton = value
                 ExteraMenuSettings.shared.showReportButton = value
                 ExteraMenuSettings.shared.showDetailsButton = value
-                ExteraMenuSettings.shared.showMessageImageExportButton = value
             }
         case .forceSnow:
             ExteraSettings.shared.set(.forceSnow, value)
@@ -1606,7 +1606,20 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         guard let controller else {
             return
         }
-        sgPresentOneFromManySelector(controller: controller, setting: setting, presentationData: context.sharedContext.currentPresentationData.with { $0 }, options: options)
+        if setting == .doubleTapIncoming || setting == .doubleTapOutgoing {
+            let incoming = setting == .doubleTapIncoming
+            let picker = exteraDoubleTapActionPicker(context: context, incoming: incoming, selected: ExteraChatSettings.shared.effectiveDoubleTapAction(incoming: incoming), selectedAction: { value in
+                if incoming {
+                    ExteraChatSettings.shared.doubleTapIncoming = value
+                } else {
+                    ExteraChatSettings.shared.doubleTapOutgoing = value
+                }
+                simplePromise.set(true)
+            })
+            controller.present(picker, animated: true)
+        } else {
+            sgPresentOneFromManySelector(controller: controller, setting: setting, presentationData: context.sharedContext.currentPresentationData.with { $0 }, options: options)
+        }
     }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
