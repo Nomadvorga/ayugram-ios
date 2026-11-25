@@ -1,0 +1,20 @@
+{
+  "Solar-README.md": {
+    "url": "https://api.github.com/repos/480-Design/Solar-Icon-Set/git/blobs/468cf27af72535cf4356a11dfb1dab7f7791d3c4",
+    "gitBlob": "468cf27af72535cf4356a11dfb1dab7f7791d3c4",
+    "sha256": "18bb6e2355933a7649e43156fd8ee437d606ecc66c6a8076a64aea6b1ca00537"
+  },
+  "Remix-License.txt": {
+    "url": "https://api.github.com/repos/Remix-Design/RemixIcon/git/blobs/996917ee688557176a34e369fa1a37a0a4ef77a2",
+    "gitBlob": "996917ee688557176a34e369fa1a37a0a4ef77a2",
+    "sha256": "6f2f21c5f8db34635d31848e9ff831d5dc421bb83ffc9d37f82651364047ae58"
+  },
+  "Solar-CC-BY-4.0.txt": {
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/CC-BY-4.0.txt",
+    "sha256": "d557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744"
+  },
+  "Solar-license-metadata.json": {
+    "url": "https://raw.githubusercontent.com/iconify/icon-sets/master/collections.json",
+    "sha256": "67a0529f7fb3db5efaa4462df0880f61ec0f3d2f3290e75265df89fe3637d02a"
+  }
+}

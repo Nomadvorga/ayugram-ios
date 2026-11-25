@@ -11,7 +11,12 @@ public final class ExteraChatAppearanceSettings: @unchecked Sendable {
 
         public func usesMetricSystem(locale: Locale) -> Bool {
             switch self {
-            case .automatic: return locale.regionCode != "GB" && locale.usesMetricSystem
+            case .automatic:
+                if #available(iOS 16.0, macOS 13.0, *) {
+                    return locale.region?.identifier != "GB" && locale.measurementSystem == .metric
+                } else {
+                    return locale.regionCode != "GB" && locale.usesMetricSystem
+                }
             case .kilometers: return true
             case .miles: return false
             }

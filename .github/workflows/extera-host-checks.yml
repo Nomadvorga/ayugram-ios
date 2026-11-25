@@ -79,6 +79,9 @@ jobs:
           python3 tools/run_extera_xctests.py --warnings-as-errors \
             Swiftgram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift \
             Tests/ExteraNavigation/ExteraNavigationSettingsTests.swift
+      - name: UI icon pack persistence
+        if: ${{ !cancelled() }}
+        run: python3 Tests/ExteraUIIcons/run_host_tests.py
       - name: Camera zoom and volume policy
         if: ${{ !cancelled() }}
         run: |

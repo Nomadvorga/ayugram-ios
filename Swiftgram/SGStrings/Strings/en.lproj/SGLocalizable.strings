@@ -421,6 +421,10 @@
 "Extera.ZoomSlider" = "Zoom Slider";
 "Extera.Overview.Links" = "Links";
 "Extera.SpeechLanguagesAndModels" = "Speech Languages and Models";
+"Extera.UIIcons.Title" = "Icon Packs";
+"Extera.UIIcons.BasePacks" = "Base Packs";
+"Extera.UIIcons.Default" = "Default";
+"Extera.UIIcons.Info" = "Used for supported icons throughout the app. Other icons keep their original appearance.";
 "Extera.ChatAppearance.Microphone.automatic" = "Automatic (iOS)";
 "Extera.ChatAppearance.Microphone.builtin" = "Built-in Microphone";
 "Extera.ChatAppearance.Microphone.headset" = "Headset / External Mic";

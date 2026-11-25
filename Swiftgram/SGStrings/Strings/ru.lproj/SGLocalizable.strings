@@ -406,6 +406,10 @@
 "Extera.ZoomSlider" = "Регулятор масштаба";
 "Extera.Overview.Links" = "Ссылки";
 "Extera.SpeechLanguagesAndModels" = "Языки и модели распознавания речи";
+"Extera.UIIcons.Title" = "Наборы иконок";
+"Extera.UIIcons.BasePacks" = "Базовые наборы";
+"Extera.UIIcons.Default" = "По умолчанию";
+"Extera.UIIcons.Info" = "Используется для поддерживаемых значков в приложении. Остальные значки сохраняют исходный вид.";
 "Extera.ChatAppearance.Microphone.automatic" = "Автоматически (iOS)";
 "Extera.ChatAppearance.Microphone.builtin" = "Встроенный микрофон";
 "Extera.ChatAppearance.Microphone.headset" = "Гарнитура / внешний микрофон";

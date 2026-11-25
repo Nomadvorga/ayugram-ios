@@ -5,7 +5,7 @@ import AppBundle
 
 private let gradientImage = UIImage(bundleImageName: "Item List/Icons/Gradient")
 private let backdropImage = UIImage(bundleImageName: "Item List/Icons/Backdrop")
-public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors: [UIColor]? = nil) -> UIImage? {
+public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors: [UIColor]? = nil, iconImage: UIImage? = nil) -> UIImage? {
     return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
@@ -31,7 +31,7 @@ public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgro
                         
             context.setBlendMode(.normal)
             
-            if let image = UIImage(bundleImageName: name), let maskImage = image.cgImage {
+            if let image = iconImage ?? UIImage(bundleImageName: name), let maskImage = image.cgImage {
                 let imageSize = CGSize(width: image.size.width * scaleFactor, height: image.size.height * scaleFactor)
                 let imageRect = CGRect(origin: CGPoint(x: (bounds.width - imageSize.width) * 0.5, y: (bounds.height - imageSize.height) * 0.5), size: imageSize)
                 
@@ -55,7 +55,7 @@ public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgro
             context.fill(CGRect(origin: .zero, size: size))
             context.restoreGState()
         } else {
-            if let image = UIImage(bundleImageName: name), let cgImage = image.cgImage {
+            if let image = iconImage ?? UIImage(bundleImageName: name), let cgImage = image.cgImage {
                 let imageSize: CGSize
                 if scaleFactor == 1.0 {
                     imageSize = size
@@ -117,24 +117,40 @@ let colorGray = UIColor(rgb: 0x8E8E93)
 let colorViolet = UIColor(rgb: 0x5E5CE6)
 
 public struct PresentationResourcesSettings {
+    private static func packedIcon(_ role: ExteraUIIconRole, color: UIColor, fallback: UIImage?) -> UIImage? {
+        guard let image = ExteraUIIconProvider.current.image(for: role) else { return fallback }
+        return renderSettingsIcon(name: "", backgroundColors: [color], iconImage: image)
+    }
     // MARK: AyuGram
     public static let swiftgram = renderSettingsIcon(name: "AyuGramSettings")
     public static let swiftgramPro = renderSettingsIcon(name: "ExteraGramSettings")
     public static let proxy = renderSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen])
-    public static let savedMessages = renderSettingsIcon(name: "Item List/Icons/SavedMessages", backgroundColors: [colorBlue])
-    public static let recentCalls = renderSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorGreen])
-    public static let contacts = renderSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorViolet])
-    public static let devices = renderSettingsIcon(name: "Item List/Icons/Devices", backgroundColors: [colorOrange])
-    public static let chatFolders = renderSettingsIcon(name: "Item List/Icons/Folder", backgroundColors: [colorLightBlue])
-    public static let stickers = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
-    public static let notifications = renderSettingsIcon(name: "Item List/Icons/Notifications", backgroundColors: [colorRed])
-    public static let security = renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorGray])
-    public static let dataAndStorage = renderSettingsIcon(name: "Item List/Icons/Data", backgroundColors: [colorGreen])
-    public static let appearance = renderSettingsIcon(name: "Item List/Icons/Appearance", backgroundColors: [colorLightBlue])
-    public static let language = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorPurple])
+    private static let nativeSavedMessages = renderSettingsIcon(name: "Item List/Icons/SavedMessages", backgroundColors: [colorBlue])
+    public static var savedMessages: UIImage? { return packedIcon(.saved, color: colorBlue, fallback: nativeSavedMessages) }
+    private static let nativeRecentCalls = renderSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorGreen])
+    public static var recentCalls: UIImage? { return packedIcon(.calls, color: colorGreen, fallback: nativeRecentCalls) }
+    private static let nativeContacts = renderSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorViolet])
+    public static var contacts: UIImage? { return packedIcon(.contacts, color: colorViolet, fallback: nativeContacts) }
+    private static let nativeDevices = renderSettingsIcon(name: "Item List/Icons/Devices", backgroundColors: [colorOrange])
+    public static var devices: UIImage? { return packedIcon(.devices, color: colorOrange, fallback: nativeDevices) }
+    private static let nativeChatFolders = renderSettingsIcon(name: "Item List/Icons/Folder", backgroundColors: [colorLightBlue])
+    public static var chatFolders: UIImage? { return packedIcon(.folders, color: colorLightBlue, fallback: nativeChatFolders) }
+    private static let nativeStickers = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
+    public static var stickers: UIImage? { return packedIcon(.stickers, color: colorOrange, fallback: nativeStickers) }
+    private static let nativeNotifications = renderSettingsIcon(name: "Item List/Icons/Notifications", backgroundColors: [colorRed])
+    public static var notifications: UIImage? { return packedIcon(.notifications, color: colorRed, fallback: nativeNotifications) }
+    private static let nativeSecurity = renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorGray])
+    public static var security: UIImage? { return packedIcon(.privacy, color: colorGray, fallback: nativeSecurity) }
+    private static let nativeDataAndStorage = renderSettingsIcon(name: "Item List/Icons/Data", backgroundColors: [colorGreen])
+    public static var dataAndStorage: UIImage? { return packedIcon(.data, color: colorGreen, fallback: nativeDataAndStorage) }
+    private static let nativeAppearance = renderSettingsIcon(name: "Item List/Icons/Appearance", backgroundColors: [colorLightBlue])
+    public static var appearance: UIImage? { return packedIcon(.appearance, color: colorLightBlue, fallback: nativeAppearance) }
+    private static let nativeLanguage = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorPurple])
+    public static var language: UIImage? { return packedIcon(.language, color: colorPurple, fallback: nativeLanguage) }
     public static let powerSaving = renderSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])
     public static let business = renderSettingsIcon(name: "Item List/Icons/Business", backgroundColors: [UIColor(rgb: 0xA95CE3), UIColor(rgb: 0xF16B80)])
-    public static let myProfile = renderSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
+    private static let nativeMyProfile = renderSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
+    public static var myProfile: UIImage? { return packedIcon(.profile, color: colorRed, fallback: nativeMyProfile) }
     
     public static let birthday = renderSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])
     public static let aiTools = renderSettingsIcon(name: "Item List/Icons/AITools", backgroundColors: [colorPurple])

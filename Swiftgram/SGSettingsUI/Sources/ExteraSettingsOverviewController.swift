@@ -171,8 +171,8 @@ private final class ExteraSettingsOverviewController: ViewController {
         let links: [(String, String, String, String)] = [
             ("Channel", "megaphone", self.ayu ? "@ayugram" : "@exteraGram", self.ayu ? "https://t.me/ayugram" : "https://t.me/exteraGram"),
             ("Chats", "person.2", self.ayu ? "@ayugramchat" : "@exteraForum", self.ayu ? "https://t.me/ayugramchat" : "https://t.me/exteraForum"),
-            ("Translation", "character.bubble", "Crowdin", self.ayu ? "https://crowdin.com/project/ayugram" : "https://crowdin.com/project/exteralocales"),
-            (self.ayu ? "Documentation" : "Website", "globe", self.ayu ? "ayugram.one" : "exteraGram.app", self.ayu ? "https://ayugram.one" : "https://exteragram.app")
+            ("Translation", "character.bubble", "Crowdin", self.ayu ? "https://translate.ayugram.one" : "https://crowdin.com/project/exteralocales"),
+            (self.ayu ? "Documentation" : "Website", "globe", self.ayu ? "ayugram.one" : "exteraGram.app", self.ayu ? "https://docs.ayugram.one" : "https://exteragram.app")
         ]
         self.linkRows = links.map { key, symbol, value, url in
             self.row(i18n("Extera.Overview.\(key)", lang), symbol: symbol, value: value, action: { [weak self] in

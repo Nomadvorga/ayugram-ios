@@ -238,6 +238,7 @@ private enum SGSliderSetting: String {
 }
 
 private enum SGDisclosureLink: String {
+    case uiIconPacks
     case speechRecognition
     case appIcon
     case navigationSettings
@@ -560,6 +561,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     // Application: bundled alternate icons with an explicit preview/confirmation.
     entries.append(.header(id: id.count, section: .application, text: i18n("Extera.Application", lang), badge: nil))
     entries.append(.disclosure(id: id.count, section: .application, link: .appIcon, text: strings.Appearance_AppIcon))
+    entries.append(.disclosureSubtitle(id: id.count, section: .application, link: .uiIconPacks, text: i18n("Extera.UIIcons.Title", lang), subtitle: i18n("Extera.UIIcons.Info", lang), iconName: "square.grid.2x2"))
 
     entries.append(.header(id: id.count, section: .stickerAppearance, text: i18n("Extera.StickersAndEmoji", lang), badge: nil))
     entries.append(.settingsPreview(id: id.count, section: .stickerAppearance, kind: .sticker(SGStickerPreviewConfiguration(size: Int32(ExteraStickerSettings.shared.size), timeMode: ExteraStickerSettings.shared.timeMode.rawValue, shape: ExteraStickerSettings.shared.shape.rawValue, replyColors: ExteraMessageSettings.shared.replyColors, replyEmoji: ExteraMessageSettings.shared.replyEmoji, replyBackground: ExteraMessageSettings.shared.replyBackground, title: i18n("Extera.StickerSize", lang), smallLabel: i18n("Extera.Preview.Small", lang), largeLabel: i18n("Extera.Preview.Large", lang), largeBadge: i18n("Extera.Preview.LargeBadge", lang), timeText: "12:34", replyTitle: i18n("Extera.Preview.Author", lang), replyText: i18n("Extera.Preview.Reply", lang), emoji: "✦", stickerLabel: i18n("Extera.Preview.Sticker", lang))), sliderSetting: .stickerRawSize, selectionSetting: nil))
@@ -1448,6 +1450,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             pushControllerImpl?(sgSpeechRecognitionController(context: context))
         case .appIcon:
             pushControllerImpl?(exteraAppIconController(context: context))
+        case .uiIconPacks:
+            pushControllerImpl?(exteraUIIconPacksController(context: context))
         case .navigationSettings:
             pushControllerImpl?(exteraNavigationSettingsController(context: context))
         case .chatSettings:

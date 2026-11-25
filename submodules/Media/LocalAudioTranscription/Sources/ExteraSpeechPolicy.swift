@@ -2,6 +2,15 @@ import Foundation
 
 /// Testable locale matching; opening a catalogue does not reserve or install anything.
 public enum ExteraSpeechLocalePolicy {
+    private static func languageCode(_ identifier: String) -> String? {
+        let locale = Locale(identifier: identifier)
+        if #available(iOS 16.0, macOS 13.0, *) {
+            return locale.language.languageCode?.identifier
+        } else {
+            return locale.languageCode
+        }
+    }
+
     public static func normalized(_ identifier: String) -> String {
         return identifier.replacingOccurrences(of: "_", with: "-").lowercased()
     }
@@ -14,10 +23,10 @@ public enum ExteraSpeechLocalePolicy {
         // Regional/script selections are explicit. Only bare app/predicted language codes
         // can resolve to a regional model; don't change a selected language silently.
         guard !normalized.contains("-"), !normalized.isEmpty else { return nil }
-        for candidate in preferred where Locale(identifier: candidate).languageCode == normalized {
+        for candidate in preferred where self.languageCode(candidate) == normalized {
             if let exact = supported.first(where: { self.normalized($0) == self.normalized(candidate) }) { return exact }
         }
-        return supported.first(where: { Locale(identifier: $0).languageCode == normalized })
+        return supported.first(where: { self.languageCode($0) == normalized })
     }
 }
 

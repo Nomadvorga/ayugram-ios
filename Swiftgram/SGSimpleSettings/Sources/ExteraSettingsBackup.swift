@@ -360,6 +360,9 @@ public enum ExteraSettingsBackup {
         boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
         boolean("extera.speech.isEnabled", defaultValue: true, read: { ExteraSpeechSettings.shared.isEnabled }, write: { ExteraSpeechSettings.shared.isEnabled = $0 }),
         boolean("extera.speech.useManagedOfflineModel", read: { ExteraSpeechSettings.shared.useManagedOfflineModel }, write: { ExteraSpeechSettings.shared.useManagedOfflineModel = $0 }),
+        Setting(name: ExteraUIIconSettings.storageKey, rule: .string(Set(ExteraUIIconPack.allCases.map(\.rawValue))), defaultValue: .string(ExteraUIIconPack.native.rawValue), read: { .string(ExteraUIIconSettings.shared.pack.rawValue) }, write: {
+            if case let .string(value) = $0 { ExteraUIIconSettings.shared.select(ExteraUIIconPack.normalized(value)) }
+        }),
         boolean("extera.chat.hideKeyboardOnScroll", read: { ExteraChatSettings.shared.hideKeyboardOnScroll }, write: { ExteraChatSettings.shared.hideKeyboardOnScroll = $0 }),
         boolean("extera.feed.widePosts", defaultValue: true, read: { ExteraFeedSettings.shared.widePosts }, write: { ExteraFeedSettings.shared.widePosts = $0 }),
         boolean("extera.feed.showUnreadCounter", defaultValue: true, read: { ExteraFeedSettings.shared.showUnreadCounter }, write: { ExteraFeedSettings.shared.showUnreadCounter = $0 }),
