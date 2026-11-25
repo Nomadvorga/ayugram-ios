@@ -338,7 +338,7 @@ public enum ExteraSettingsBackup {
         boolean("extera.inlineCurrencies", defaultValue: true, read: { ExteraMathSettings.shared.inlineCurrencies }, write: { ExteraMathSettings.shared.inlineCurrencies = $0 }),
         boolean("extera.inlineTimeZones", defaultValue: true, read: { ExteraMathSettings.shared.inlineTimeZones }, write: { ExteraMathSettings.shared.inlineTimeZones = $0 }),
         boolean("extera.inlineImperial", read: { ExteraMathSettings.shared.inlineImperial }, write: { ExteraMathSettings.shared.inlineImperial = $0 }),
-        Setting(name: "extera.inlineTargetCurrency", rule: .string(Set(Locale.commonISOCurrencyCodes + ["auto", "BTC", "ETH", "SOL", "USDT", "GRAM"])), defaultValue: .string("auto"), read: { .string(ExteraMathSettings.shared.inlineTargetCurrency) }, write: {
+        Setting(name: "extera.inlineTargetCurrency", rule: .string(Set(NSLocale.commonISOCurrencyCodes + ["auto", "BTC", "ETH", "SOL", "USDT", "GRAM"])), defaultValue: .string("auto"), read: { .string(ExteraMathSettings.shared.inlineTargetCurrency) }, write: {
             if case let .string(value) = $0 { ExteraMathSettings.shared.inlineTargetCurrency = value }
         }),
         integer("extera.player.lyricsSource", allowed: Set(ExteraPlayerSettings.LyricsSource.allCases.map { $0.rawValue }), defaultValue: 0, read: { ExteraPlayerSettings.shared.lyricsSource.rawValue }, write: {
