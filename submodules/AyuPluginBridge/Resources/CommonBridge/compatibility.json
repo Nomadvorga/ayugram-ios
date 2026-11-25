@@ -64,7 +64,7 @@
     "Python/zwylib.py": "5f23ae97726fe7ba0cd9eb61f6ed2e505dbdea67ea87a0386fb49a4b653cdf4a",
     "Sources/AyuBridgeClassRegistry.swift": "b7fa2873d162a018ad3b37d37e7955ccdb9fde1ad881e5fc991ebc19c95fd8e4",
     "Sources/AyuBridgeHooks.swift": "672dd56712966d9782b8aa61d7bda7fe4d8c6b2c6dbe8603820bf7161f1b0216",
-    "Sources/AyuBridgeJavaRuntime.swift": "0066c6a549a2f2d9b07524d90f7f636e9a68f83052cbbefbc68b0da8c56d2129",
+    "Sources/AyuBridgeJavaRuntime.swift": "06e1ad8db8ce0ad9fe45436453a6cb65a83bd553a7bbbfda592802b65274b89e",
     "Sources/AyuBridgeJavaValues.swift": "769f273dfbdf252df5836bad410c8cd3787d80ac6880d3eb48c4a00bb0447206",
     "Sources/AyuBridgeProtocol.swift": "fd8aa6f0b3b8c1c7dc19b0ea7c1e6057022e684176090d055e52ffa6a9d68016",
     "Sources/AyuBridgePythonWorker.swift": "8f94e310d8e3a2dc0c48699a9b68f215fbe74180df4a0c2907993d186297bf90",

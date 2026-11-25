@@ -10,12 +10,12 @@ enum AyuBridgeJavaRuntime {
     /// Canvas, Paint, ScrollView and widget adapter models remain excluded when
     /// the native-host view registry owns those classes.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
     static var adapters: [AyuBridgeClassAdapter] {
-        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
+        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, color, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
     }
 
     // MARK: android.widget (text/layout surface used by the corpus)
@@ -689,7 +689,96 @@ enum AyuBridgeJavaRuntime {
         throw AyuBridgeFailure("invalid_arguments", "Expected canvas coordinate")
     }
 
-    // MARK: Drawable
+    // MARK: Color / Drawable
+
+    private static func colorComponent(_ value: AyuBridgeValue, _ what: String) throws -> UInt32 {
+        guard let component = value.integer, (0...255).contains(component) else {
+            throw AyuBridgeFailure("invalid_arguments", "Expected \(what)")
+        }
+        return UInt32(component)
+    }
+    private static func packedColor(alpha: UInt32, red: UInt32, green: UInt32, blue: UInt32) -> AyuBridgeValue {
+        let bits = (alpha << 24) | (red << 16) | (green << 8) | blue
+        return .integer(Int64(Int32(bitPattern: bits)))
+    }
+    private static func parsedColor(_ text: String) throws -> AyuBridgeValue {
+        if text.hasPrefix("#") {
+            let digits = String(text.dropFirst())
+            guard digits.count == 6 || digits.count == 8, let value = UInt32(digits, radix: 16) else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid color string")
+            }
+            return digits.count == 6
+                ? Self.packedColor(alpha: 255, red: (value >> 16) & 255, green: (value >> 8) & 255, blue: value & 255)
+                : .integer(Int64(Int32(bitPattern: value)))
+        }
+        let names: [String: UInt32] = [
+            "black": 0xFF00_0000, "darkgray": 0xFF44_4444, "gray": 0xFF88_8888,
+            "lightgray": 0xFFCC_CCCC, "white": 0xFFFF_FFFF, "red": 0xFFFF_0000,
+            "green": 0xFF00_FF00, "blue": 0xFF00_00FF, "yellow": 0xFFFFFF00,
+            "cyan": 0xFF00_FFFF, "aqua": 0xFF00_FFFF, "magenta": 0xFFFF_00FF,
+            "fuchsia": 0xFFFF_00FF, "transparent": 0x0000_0000,
+        ]
+        guard let value = names[text.lowercased()] else { throw AyuBridgeFailure("invalid_arguments", "Invalid color string") }
+        return .integer(Int64(Int32(bitPattern: value)))
+    }
+    private static func hsvColor(_ args: [AyuBridgeValue]) throws -> AyuBridgeValue {
+        let alpha: UInt32
+        let values: [AyuBridgeValue]
+        if args.count == 1 {
+            alpha = 255; values = args[0].array ?? []
+        } else if args.count == 2 {
+            alpha = try Self.colorComponent(args[0], "alpha"); values = args[1].array ?? []
+        } else {
+            throw AyuBridgeFailure("invalid_arguments", "Unsupported HSV overload")
+        }
+        guard values.count == 3,
+              let hue = values[0].number, let saturation = values[1].number, let brightness = values[2].number,
+              hue.isFinite, (0...360).contains(hue), (0...1).contains(saturation), (0...1).contains(brightness) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid HSV color")
+        }
+        if saturation == 0 {
+            let component = UInt32((brightness * 255).rounded())
+            return Self.packedColor(alpha: alpha, red: component, green: component, blue: component)
+        }
+        let scaled = (hue == 360 ? 0 : hue) / 60
+        let sector = Int(scaled.rounded(.down))
+        let fraction = scaled - Double(sector)
+        let p = brightness * (1 - saturation)
+        let q = brightness * (1 - saturation * fraction)
+        let t = brightness * (1 - saturation * (1 - fraction))
+        let rgb: (Double, Double, Double)
+        switch sector {
+        case 0: rgb = (brightness, t, p)
+        case 1: rgb = (q, brightness, p)
+        case 2: rgb = (p, brightness, t)
+        case 3: rgb = (p, q, brightness)
+        case 4: rgb = (t, p, brightness)
+        default: rgb = (brightness, p, q)
+        }
+        return Self.packedColor(alpha: alpha, red: UInt32((rgb.0 * 255).rounded()), green: UInt32((rgb.1 * 255).rounded()), blue: UInt32((rgb.2 * 255).rounded()))
+    }
+    static var color: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.graphics.Color",
+            constants: [
+                "TRANSPARENT": .integer(0), "BLACK": Self.packedColor(alpha: 255, red: 0, green: 0, blue: 0),
+                "DKGRAY": Self.packedColor(alpha: 255, red: 68, green: 68, blue: 68), "GRAY": Self.packedColor(alpha: 255, red: 136, green: 136, blue: 136),
+                "LTGRAY": Self.packedColor(alpha: 255, red: 204, green: 204, blue: 204), "WHITE": Self.packedColor(alpha: 255, red: 255, green: 255, blue: 255),
+                "RED": Self.packedColor(alpha: 255, red: 255, green: 0, blue: 0), "GREEN": Self.packedColor(alpha: 255, red: 0, green: 255, blue: 0),
+                "BLUE": Self.packedColor(alpha: 255, red: 0, green: 0, blue: 255), "YELLOW": Self.packedColor(alpha: 255, red: 255, green: 255, blue: 0),
+                "CYAN": Self.packedColor(alpha: 255, red: 0, green: 255, blue: 255), "MAGENTA": Self.packedColor(alpha: 255, red: 255, green: 0, blue: 255),
+            ], staticMethods: [
+                "argb": { args, _ in
+                    try Self.arity(args, 4)
+                    return .value(Self.packedColor(alpha: try Self.colorComponent(args[0], "alpha"), red: try Self.colorComponent(args[1], "red"), green: try Self.colorComponent(args[2], "green"), blue: try Self.colorComponent(args[3], "blue")))
+                },
+                "rgb": { args, _ in
+                    try Self.arity(args, 3)
+                    return .value(Self.packedColor(alpha: 255, red: try Self.colorComponent(args[0], "red"), green: try Self.colorComponent(args[1], "green"), blue: try Self.colorComponent(args[2], "blue")))
+                },
+                "parseColor": { args, _ in try Self.arity(args, 1); return .value(try Self.parsedColor(try Self.string(args[0], "color string"))) },
+                "HSVToColor": { args, _ in .value(try Self.hsvColor(args)) },
+            ])
+    }
 
     static var colorDrawable: AyuBridgeClassAdapter {
         AyuBridgeClassAdapter(name: "android.graphics.drawable.ColorDrawable",
