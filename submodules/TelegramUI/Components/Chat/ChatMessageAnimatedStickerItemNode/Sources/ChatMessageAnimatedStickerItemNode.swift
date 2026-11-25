@@ -644,7 +644,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
         
         if let telegramFile = self.telegramFile {
             file = telegramFile
-            if !item.context.sharedContext.energyUsageSettings.loopStickers {
+            if !item.context.sharedContext.energyUsageSettings.exteraAllows(emojiFile == nil ? .stickerChat : .emojiChat) {
                 playbackMode = .once
             }
         } else if let emojiFile = self.emojiFile {

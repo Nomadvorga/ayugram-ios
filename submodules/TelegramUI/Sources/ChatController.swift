@@ -6537,7 +6537,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     source = .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: .zero))
                 }
                 
-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: strongSelf.exteraAdminHeaderMenuItems(addingTo: items, peerId: peer.id) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 contextController.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -6568,7 +6568,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             } else if peerId.namespace == Namespaces.Peer.CloudUser {
                 self.openBotForumMoreMenu(sourceView: self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view, gesture: gesture)
             } else {
-                ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view, gesture: gesture)
+                let sourceView = self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view
+                if self.exteraOpenAdminHeaderMoreMenu(peerId: peerId, sourceView: sourceView, gesture: gesture, originalMenu: { [weak self] in
+                    guard let self, self.chatLocation.peerId == peerId else {
+                        return
+                    }
+                    ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: sourceView, gesture: nil)
+                }) {
+                    return
+                }
+                ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: sourceView, gesture: gesture)
             }
         }
         self.moreBarButton.addTarget(self, action: #selector(self.moreButtonPressed), forControlEvents: .touchUpInside)

@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -984,7 +985,7 @@ public final class EmojiTextAttachmentView: UIView {
         super.init(frame: CGRect())
         
         self.layer.addSublayer(self.contentLayer)
-        self.contentLayer.isVisibleForAnimations = context.energyUsageSettings.loopEmoji
+        self.contentLayer.isVisibleForAnimations = context.energyUsageSettings.loopEmoji && ExteraEnergyRuntime.allows(.emojiChat)
     }
     
     required public init?(coder: NSCoder) {

@@ -45,7 +45,7 @@ public final class AyuSnowView: UIView {
         self.isAccessibilityElement = false
         self.clipsToBounds = true
         let center = NotificationCenter.default
-        var notifications = [ayuSettingsDidChangeNotification, UIApplication.didBecomeActiveNotification,
+        var notifications = [ayuSettingsDidChangeNotification, ExteraEnergyRuntime.policyDidChange, UIDevice.batteryLevelDidChangeNotification, UIApplication.didBecomeActiveNotification,
                              UIApplication.willResignActiveNotification, Notification.Name.NSProcessInfoPowerStateDidChange,
                              UIAccessibility.reduceMotionStatusDidChangeNotification,
                              ProcessInfo.thermalStateDidChangeNotification]
@@ -91,7 +91,7 @@ public final class AyuSnowView: UIView {
 
     private func updateEmission() {
         guard self.isActive, self.window != nil, !self.bounds.isEmpty,
-              ExteraSettings.shared.forceSnow, !UIAccessibility.isReduceMotionEnabled,
+              ExteraSettings.shared.forceSnow, ExteraEnergyRuntime.allows(.particles), !UIAccessibility.isReduceMotionEnabled,
               UIApplication.shared.applicationState == .active else {
             self.removeEmitter()
             return

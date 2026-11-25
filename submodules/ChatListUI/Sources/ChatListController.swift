@@ -2499,6 +2499,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        self.chatListDisplayNode.exteraPillHostVisible = true
         self.chatListDisplayNode.ayuSnowIsActive = true
                 
         if self.powerSavingMonitoringDisposable == nil {
@@ -2982,6 +2983,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.chatListDisplayNode.exteraPillHostVisible = false
         
         self.chatListDisplayNode.mainContainerNode.updateEnableAdjacentFilterLoading(false)
         
@@ -6557,8 +6559,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             })))
             
-            // Native HTTP pill dashboard; configuration remains in exteraGram settings.
-            items.append(.action(ContextMenuActionItem(text: exteraPillText(strongSelf.presentationData.strings.baseLanguageCode, "HTTP Pills", "HTTP-плашки"), icon: { theme in
+            // Pill Stack dashboard; endpoint configuration remains in exteraGram settings.
+            items.append(.action(ContextMenuActionItem(text: exteraPillText(strongSelf.presentationData.strings.baseLanguageCode, "Pill Stack", "Плашки"), icon: { theme in
                 return generateTintedImage(image: UIImage(systemName: "chart.bar.xaxis"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] c, dismiss in
                 let openDashboard = { [weak self] in

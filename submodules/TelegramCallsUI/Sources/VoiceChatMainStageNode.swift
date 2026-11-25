@@ -667,7 +667,7 @@ final class VoiceChatMainStageNode: ASDisplayNode {
                         return
                     }
                     
-                    if strongSelf.speakingAudioLevelView == nil, value > 0.0, strongSelf.context.sharedContext.energyUsageSettings.fullTranslucency {
+                    if strongSelf.speakingAudioLevelView == nil, value > 0.0, strongSelf.context.sharedContext.energyUsageSettings.exteraAllows(.calls) {
                         let audioLevelView = VoiceBlobView(
                             frame: blobFrame,
                             maxLevel: 1.5,

@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",

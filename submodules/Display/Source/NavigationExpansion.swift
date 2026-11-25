@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 
@@ -147,7 +148,7 @@ public var defaultNavigationExpansionRenderer: ((_ source: NavigationExpansionSo
 /// it, in a compact, full-screen, non-split stack with Reduce Motion off; otherwise the slide. Read once, when the
 /// transition starts.
 public func navigationTransitionStyle(top: ViewController, bottom: ViewController, operation: NavigationExpansionOperation, isFlat: Bool, layout: ContainerViewLayout, reduceMotion: Bool) -> NavigationTransitionStyle {
-    guard !reduceMotion, !isFlat, !layout.presentedInFormSheet, case .compact = layout.metrics.widthClass else {
+    guard !reduceMotion, ExteraEnergyRuntime.allows(.scale), !isFlat, !layout.presentedInFormSheet, case .compact = layout.metrics.widthClass else {
         return .slide
     }
     guard let destination = top.navigationExpansionDestination(below: bottom, operation: operation), let source = bottom.navigationExpansionSource(above: top, operation: operation), let makeRenderer = defaultNavigationExpansionRenderer, let renderer = makeRenderer(source, destination, operation) else {

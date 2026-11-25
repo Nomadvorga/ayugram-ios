@@ -176,7 +176,7 @@ final class EntityKeyboardAnimationTopPanelComponent: Component {
                     itemLayer.layerTintColor = component.customTintColor?.cgColor ?? color.cgColor
                 }
                 
-                itemLayer.isVisibleForAnimations = itemEnvironment.isContentInFocus && component.context.sharedContext.energyUsageSettings.loopEmoji
+                itemLayer.isVisibleForAnimations = itemEnvironment.isContentInFocus && component.context.sharedContext.energyUsageSettings.exteraAllows(.emojiKeyboard)
             }
             
             if itemEnvironment.isExpanded {

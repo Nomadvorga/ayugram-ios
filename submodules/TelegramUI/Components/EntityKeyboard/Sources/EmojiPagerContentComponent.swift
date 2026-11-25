@@ -244,6 +244,8 @@ public final class EmojiPagerContentComponent: Component {
     
     public final class InputInteractionHolder {
         public var inputInteraction: InputInteraction?
+        /// Reaction menus reuse this pager; their animation choice is independent of the keyboard.
+        public var isReactionSelection = false
         
         public init() {
         }
@@ -4081,9 +4083,9 @@ public final class EmojiPagerContentComponent: Component {
                         
                         let allowPlayback: Bool
                         if case .detailed = component.itemLayoutType {
-                            allowPlayback = component.context.sharedContext.energyUsageSettings.loopStickers
+                            allowPlayback = component.context.sharedContext.energyUsageSettings.exteraAllows(.stickerKeyboard)
                         } else {
-                            allowPlayback = component.context.sharedContext.energyUsageSettings.loopEmoji
+                            allowPlayback = component.context.sharedContext.energyUsageSettings.exteraAllows(component.inputInteractionHolder.isReactionSelection ? .emojiReactions : .emojiKeyboard)
                         }
                         
                         itemLayer.isVisibleForAnimations = keyboardChildEnvironment.isContentInFocus && allowPlayback

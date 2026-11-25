@@ -1031,7 +1031,7 @@ public final class ReactionContextNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        if !self.context.sharedContext.energyUsageSettings.loopEmoji {
+        if !self.context.sharedContext.energyUsageSettings.exteraAllows(.emojiReactions) {
             loopIdle = false
         }
         
@@ -1697,6 +1697,7 @@ public final class ReactionContextNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     private func updateEmojiContent(_ emojiContent: EmojiPagerContentComponent) {
+        emojiContent.inputInteractionHolder.isReactionSelection = true
         guard let emojiContentLayout = self.emojiContentLayout else {
             return
         }

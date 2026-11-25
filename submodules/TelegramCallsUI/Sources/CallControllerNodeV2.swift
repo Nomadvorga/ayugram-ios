@@ -216,7 +216,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             localVideo: nil,
             remoteVideo: nil,
             isRemoteBatteryLow: false,
-            isEnergySavingEnabled: !self.sharedContext.energyUsageSettings.fullTranslucency,
+            isEnergySavingEnabled: !self.sharedContext.energyUsageSettings.exteraAllows(.calls),
             isConferencePossible: false,
             enableVideoSharpening: enableVideoSharpening
         )

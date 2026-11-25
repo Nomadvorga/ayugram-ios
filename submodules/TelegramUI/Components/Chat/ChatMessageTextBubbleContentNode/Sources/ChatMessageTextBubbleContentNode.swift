@@ -1,4 +1,5 @@
 import Foundation
+import TelegramPresentationData
 import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AsyncDisplayKit
@@ -847,7 +848,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                     animation: animation,
                                     spoilerTextColor: messageTheme.primaryTextColor,
                                     spoilerEffectColor: messageTheme.secondaryTextColor,
-                                    areContentAnimationsEnabled: item.context.sharedContext.energyUsageSettings.loopEmoji,
+                                    areContentAnimationsEnabled: item.context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat),
                                     spoilerExpandRect: spoilerExpandRect,
                                     crossfadeContents: { [weak strongSelf] sourceView in
                                         guard let strongSelf else {

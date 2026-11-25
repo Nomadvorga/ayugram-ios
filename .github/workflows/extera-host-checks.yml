@@ -82,12 +82,27 @@ jobs:
       - name: UI icon pack persistence
         if: ${{ !cancelled() }}
         run: python3 Tests/ExteraUIIcons/run_host_tests.py
+      - name: Quick admin header policy and persistence
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/ExteraAdminSettings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift \
+            Tests/ExteraAdmin/ExteraAdminSettingsTests.swift \
+            Tests/ExteraAdmin/ExteraAdminHeaderPolicyTests.swift
       - name: Camera zoom and volume policy
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           python3 Tests/ExteraMedia/verify_integration.py
           python3 Tests/ExteraMedia/run_model_tests.py
+      - name: Energy settings and power policy
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraEnergySettings.swift \
+            Tests/ExteraEnergy/ExteraEnergySettingsTests.swift
       - name: Chat-list gestures and distance units
         if: ${{ !cancelled() }}
         run: |
@@ -119,6 +134,7 @@ jobs:
           swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
             Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
             Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
             Tests/ExteraPills/ExteraPillHostTests.swift \
             -o "$RUNNER_TEMP/extera-pill-tests"
           "$RUNNER_TEMP/extera-pill-tests"

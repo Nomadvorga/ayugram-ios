@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import SwiftSignalKit
 import AsyncDisplayKit
@@ -90,6 +91,7 @@ public class MediaDustLayer: CALayer {
 }
 
 public class MediaDustNode: ASDisplayNode {
+    private let exteraEnergy = ExteraSpoilerEnergy()
     private var currentParams: (size: CGSize, color: UIColor)?
     private var animColor: CGColor?
     private let enableAnimations: Bool
@@ -113,7 +115,7 @@ public class MediaDustNode: ASDisplayNode {
     public var tapped: () -> Void = {}
     
     public init(enableAnimations: Bool) {
-        self.enableAnimations = enableAnimations
+        self.enableAnimations = enableAnimations && ExteraEnergyRuntime.allows(.spoilers)
         
         self.emitterNode = ASDisplayNode()
         self.emitterNode.isUserInteractionEnabled = false
@@ -197,6 +199,7 @@ public class MediaDustNode: ASDisplayNode {
             emitterLayer.setValue(false, forKeyPath: "emitterBehaviors.fingerAttractor.enabled")
             
             self.emitterLayer = emitterLayer
+            self.exteraEnergy.attach(emitterLayer)
             
             self.emitterNode.layer.addSublayer(emitterLayer)
         } else {

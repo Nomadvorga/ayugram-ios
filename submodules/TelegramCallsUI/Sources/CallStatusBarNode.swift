@@ -244,7 +244,7 @@ public class CallStatusBarNodeImpl: CallStatusBarNode {
     public func update(content: Content) {
         if self.currentContent != content {
             self.currentContent = content
-            self.backgroundNode.animationsEnabled = content.sharedContext.energyUsageSettings.fullTranslucency
+            self.backgroundNode.animationsEnabled = content.sharedContext.energyUsageSettings.exteraAllows(.calls)
             if self.isCurrentlyInHierarchy {
                 self.update()
             }

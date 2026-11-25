@@ -30,7 +30,7 @@ public final class ExteraPillRuntime {
     private var pending: [UUID: Pending] = [:]
     private var due: [UUID: Date] = [:]
     private var lastAttempt: [UUID: Date] = [:]
-    private var leases = Set<UUID>()
+    private var leases = ExteraPillRequestLeases()
     private var timer: DispatchSourceTimer?
     private var observer: NSObjectProtocol?
 
@@ -47,10 +47,11 @@ public final class ExteraPillRuntime {
         for item in self.pending.values { item.request.cancel() }
     }
 
-    public func acquire() -> UUID {
+    public func acquire(ids: Set<UUID>? = nil) -> UUID {
         precondition(Thread.isMainThread)
-        let lease = UUID()
-        self.leases.insert(lease)
+        // A search lease approves the current configurations, not arbitrary future URLs under
+        // the same UUID. The explicit HTTP dashboard keeps its original all-enabled behavior.
+        let lease = self.leases.acquire(approved: ids.map { ids in self.specs.filter { ids.contains($0.id) } })
         if self.timer == nil {
             let timer = DispatchSource.makeTimerSource(queue: .main)
             timer.schedule(deadline: .now() + 5.0, repeating: 5.0, leeway: .seconds(1))
@@ -64,8 +65,9 @@ public final class ExteraPillRuntime {
 
     public func release(_ lease: UUID) {
         precondition(Thread.isMainThread)
-        self.leases.remove(lease)
-        guard self.leases.isEmpty else { return }
+        self.leases.release(lease)
+        self.cancelUnobservedRequests()
+        guard self.leases.isEmpty else { self.schedule(); return }
         self.timer?.cancel()
         self.timer = nil
         let requests = self.pending
@@ -91,7 +93,7 @@ public final class ExteraPillRuntime {
     public func refresh(_ id: UUID? = nil) {
         precondition(Thread.isMainThread)
         guard !self.leases.isEmpty else { return }
-        for spec in self.specs where spec.enabled && (id == nil || spec.id == id) {
+        for spec in self.specs where spec.enabled && self.isObserved(spec.id) && (id == nil || spec.id == id) {
             guard self.pending[spec.id] == nil else { continue }
             if let attempted = self.lastAttempt[spec.id], Date().timeIntervalSince(attempted) < 3 { continue }
             self.due[spec.id] = .distantPast
@@ -117,7 +119,7 @@ public final class ExteraPillRuntime {
         let now = Date()
         var started = false
         // Serve never-fetched/oldest-due pills first so slow endpoints cannot starve later rows.
-        let candidates = self.specs.enumerated().filter { $0.element.enabled }.sorted { lhs, rhs in
+        let candidates = self.specs.enumerated().filter { $0.element.enabled && self.isObserved($0.element.id) }.sorted { lhs, rhs in
             let left = self.due[lhs.element.id] ?? .distantPast
             let right = self.due[rhs.element.id] ?? .distantPast
             return left == right ? lhs.offset < rhs.offset : left < right
@@ -159,6 +161,19 @@ public final class ExteraPillRuntime {
 
     private func notify() {
         NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+
+    private func isObserved(_ id: UUID) -> Bool {
+        guard let spec = self.specs.first(where: { $0.id == id }) else { return false }
+        return self.leases.permits(spec)
+    }
+
+    private func cancelUnobservedRequests() {
+        for id in Array(self.pending.keys) where !self.isObserved(id) {
+            self.pending.removeValue(forKey: id)?.request.cancel()
+            self.values[id]?.isRefreshing = false
+            self.due.removeValue(forKey: id)
+        }
     }
 }
 

@@ -148,6 +148,7 @@ private enum SGBoolSetting: String {
     case showOnlineStatus
     case showPollResultsBeforeVoting
     case hideKeyboardOnScroll
+    case quickAdminShortcuts
     case swipeToReplyIncoming
     case swipeToReplyOutgoing
     case preferOriginalQuality
@@ -238,6 +239,7 @@ private enum SGSliderSetting: String {
 }
 
 private enum SGDisclosureLink: String {
+    case energySettings
     case uiIconPacks
     case speechRecognition
     case appIcon
@@ -561,6 +563,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     // Application: bundled alternate icons with an explicit preview/confirmation.
     entries.append(.header(id: id.count, section: .application, text: i18n("Extera.Application", lang), badge: nil))
     entries.append(.disclosure(id: id.count, section: .application, link: .appIcon, text: strings.Appearance_AppIcon))
+    entries.append(.disclosure(id: id.count, section: .application, link: .energySettings, text: strings.PowerSavingScreen_Title))
     entries.append(.disclosureSubtitle(id: id.count, section: .application, link: .uiIconPacks, text: i18n("Extera.UIIcons.Title", lang), subtitle: i18n("Extera.UIIcons.Info", lang), iconName: "square.grid.2x2"))
 
     entries.append(.header(id: id.count, section: .stickerAppearance, text: i18n("Extera.StickersAndEmoji", lang), badge: nil))
@@ -611,6 +614,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     ], state: state)
     entries.append(.toggle(id: id.count, section: .chats, settingName: .disableGreetingSticker, value: ExteraSettings.shared.disableGreetingSticker, text: i18n("Extera.DisableGreetingSticker", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .hideKeyboardOnScroll, value: ExteraChatSettings.shared.hideKeyboardOnScroll, text: i18n("Extera.HideKeyboardOnScroll", lang), enabled: true))
+    entries.append(.toggleSubtitle(id: id.count, section: .chats, settingName: .quickAdminShortcuts, value: ExteraAdminSettings.shared.quickAdminShortcuts, text: i18n("Extera.Admin.QuickShortcuts", lang), subtitle: i18n("Extera.Admin.QuickShortcutsInfo", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .commaAfterMention, value: ExteraChatSettings.shared.addCommaAfterMention, text: i18n("Settings.CommaAfterMention", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chats, settingName: .hideSendAsPeer, value: settings.disableSendAsButton, text: i18n("Extera.HideSendAsPeer", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .chats, text: i18n("Extera.HideSendAsPeerInfo", lang)))
@@ -1107,6 +1111,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraChatSettings.shared.addCommaAfterMention = value
         case .hideKeyboardOnScroll:
             ExteraChatSettings.shared.hideKeyboardOnScroll = value
+        case .quickAdminShortcuts:
+            ExteraAdminSettings.shared.quickAdminShortcuts = value
         case .swipeToReplyIncoming:
             ExteraChatSettings.shared.swipeToReplyIncoming = value
         case .swipeToReplyOutgoing:
@@ -1452,6 +1458,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             pushControllerImpl?(exteraAppIconController(context: context))
         case .uiIconPacks:
             pushControllerImpl?(exteraUIIconPacksController(context: context))
+        case .energySettings:
+            pushControllerImpl?(exteraEnergySettingsController(context: context))
         case .navigationSettings:
             pushControllerImpl?(exteraNavigationSettingsController(context: context))
         case .chatSettings:

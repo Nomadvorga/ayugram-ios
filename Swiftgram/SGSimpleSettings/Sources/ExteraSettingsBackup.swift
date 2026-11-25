@@ -360,6 +360,8 @@ public enum ExteraSettingsBackup {
         boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
         boolean("extera.speech.isEnabled", defaultValue: true, read: { ExteraSpeechSettings.shared.isEnabled }, write: { ExteraSpeechSettings.shared.isEnabled = $0 }),
         boolean("extera.speech.useManagedOfflineModel", read: { ExteraSpeechSettings.shared.useManagedOfflineModel }, write: { ExteraSpeechSettings.shared.useManagedOfflineModel = $0 }),
+        boolean(ExteraAdminSettings.quickAdminShortcutsKey, defaultValue: true, read: { ExteraAdminSettings.shared.quickAdminShortcuts }, write: { ExteraAdminSettings.shared.quickAdminShortcuts = $0 }),
+        boolean(ExteraEnergySettings.followSystemKey, read: { ExteraEnergySettings.shared.followSystem }, write: { ExteraEnergySettings.shared.followSystem = $0 }),
         Setting(name: ExteraUIIconSettings.storageKey, rule: .string(Set(ExteraUIIconPack.allCases.map(\.rawValue))), defaultValue: .string(ExteraUIIconPack.native.rawValue), read: { .string(ExteraUIIconSettings.shared.pack.rawValue) }, write: {
             if case let .string(value) = $0 { ExteraUIIconSettings.shared.select(ExteraUIIconPack.normalized(value)) }
         }),
@@ -451,7 +453,9 @@ public enum ExteraSettingsBackup {
         Setting(name: "extera.browser.exceptionHosts", rule: .exactHosts, defaultValue: .strings([]), read: { .strings(ExteraBrowserSettings.shared.exceptionHosts) }, write: {
             if case let .strings(hosts) = $0 { ExteraBrowserSettings.shared.exceptionHosts = hosts }
         }),
-    ]
+    ] + ExteraEnergySettings.Feature.allCases.map { feature in
+        boolean(ExteraEnergySettings.key(for: feature), defaultValue: true, read: { ExteraEnergySettings.shared.isEnabled(feature) }, write: { ExteraEnergySettings.shared.setEnabled(feature, $0) })
+    }
 
     private static let settingsByName: [String: Setting] = Dictionary(uniqueKeysWithValues: ExteraSettingsBackup.settings.map { ($0.name, $0) })
 

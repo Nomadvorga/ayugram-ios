@@ -6,6 +6,7 @@ import AsyncDisplayKit
 import Display
 import AppBundle
 import LegacyComponents
+import SGSimpleSettings
 
 struct ArbitraryRandomNumberGenerator : RandomNumberGenerator {
     init(seed: Int) { srand48(seed) }
@@ -40,6 +41,7 @@ func generateMaskImage(size originalSize: CGSize, position: CGPoint, inverse: Bo
 }
 
 public class InvisibleInkDustView: UIView {
+    private let exteraEnergy = ExteraSpoilerEnergy()
     private var currentParams: (size: CGSize, color: UIColor, textColor: UIColor, rects: [CGRect], wordRects: [CGRect])?
     private var animColor: CGColor?
     private let enableAnimations: Bool
@@ -63,7 +65,7 @@ public class InvisibleInkDustView: UIView {
     
     public init(textNode: ASDisplayNode?, enableAnimations: Bool) {
         self.textNode = textNode
-        self.enableAnimations = enableAnimations
+        self.enableAnimations = enableAnimations && ExteraEnergyRuntime.allows(.spoilers)
         
         self.emitterNode = ASDisplayNode()
         self.emitterNode.isUserInteractionEnabled = false
@@ -140,6 +142,7 @@ public class InvisibleInkDustView: UIView {
             emitterLayer.setValue(false, forKeyPath: "emitterBehaviors.fingerAttractor.enabled")
             
             self.emitterLayer = emitterLayer
+            self.exteraEnergy.attach(emitterLayer)
             
             self.emitterNode.layer.addSublayer(emitterLayer)
         } else {
@@ -360,6 +363,7 @@ public class InvisibleInkDustView: UIView {
 }
 
 public class InvisibleInkDustNode: ASDisplayNode {
+    private let exteraEnergy = ExteraSpoilerEnergy()
     private var currentParams: (size: CGSize, color: UIColor, textColor: UIColor, rects: [CGRect], wordRects: [CGRect])?
     private var animColor: CGColor?
     private let enableAnimations: Bool
@@ -383,7 +387,7 @@ public class InvisibleInkDustNode: ASDisplayNode {
     
     public init(textNode: ASDisplayNode?, enableAnimations: Bool) {
         self.textNode = textNode
-        self.enableAnimations = enableAnimations
+        self.enableAnimations = enableAnimations && ExteraEnergyRuntime.allows(.spoilers)
         
         self.emitterNode = ASDisplayNode()
         self.emitterNode.isUserInteractionEnabled = false
@@ -456,6 +460,7 @@ public class InvisibleInkDustNode: ASDisplayNode {
             emitterLayer.setValue(false, forKeyPath: "emitterBehaviors.fingerAttractor.enabled")
             
             self.emitterLayer = emitterLayer
+            self.exteraEnergy.attach(emitterLayer)
             
             self.emitterNode.layer.addSublayer(emitterLayer)
         } else {

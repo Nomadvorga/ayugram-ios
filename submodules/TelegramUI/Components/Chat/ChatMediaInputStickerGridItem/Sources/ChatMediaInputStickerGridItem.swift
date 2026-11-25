@@ -427,7 +427,7 @@ public final class ChatMediaInputStickerGridItemNode: GridItemNode {
         guard let item = self.item else {
             return
         }
-        let isPlaying = self.isPanelVisible && self.isVisibleInGrid && (item.context.sharedContext.energyUsageSettings.loopStickers)
+        let isPlaying = self.isPanelVisible && self.isVisibleInGrid && item.context.sharedContext.energyUsageSettings.exteraAllows(.stickerKeyboard)
         if self.isPlaying != isPlaying {
             self.isPlaying = isPlaying
             self.animationNode?.visibility = isPlaying

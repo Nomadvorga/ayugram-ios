@@ -1,7 +1,7 @@
 import Foundation
 
 // Only the preferences adapter is replaced. Compile the production ExteraPillSettings.swift and
-// ExteraPillStrings.swift alongside this file: no copied path/format/import implementation.
+// ExteraPillStrings.swift and ExteraPillStackSettings.swift alongside this file: no copied model.
 final class AyuSettingsStore: @unchecked Sendable {
     static let suiteName = "ExteraPillHostTests.\(UUID().uuidString)"
     static let shared = AyuSettingsStore()
@@ -34,7 +34,11 @@ private enum ExteraPillHostTests {
         try self.validation()
         try self.documentsAndPersistence()
         try self.localization()
-        print("PASS: \(self.assertions) production pill path/format/validation/import/persistence/localization assertions")
+        try self.stackPersistence()
+        try self.stackOrdering()
+        try self.providers()
+        try self.requestScopes()
+        print("PASS: \(self.assertions) production pill path/format/validation/import/persistence/localization/stack/provider assertions")
     }
 
     private static func paths() throws {
@@ -182,5 +186,143 @@ private enum ExteraPillHostTests {
         }
         try self.expect(exteraPillErrorDescription(.network, languageCode: "ru").contains("Ошибка"), "Localized runtime errors")
         try self.expect(exteraPillErrorDescription(.httpStatus(429), languageCode: "ru") == "HTTP 429", "HTTP status remains numeric")
+    }
+
+    private static func stackPersistence() throws {
+        let defaults = AyuSettingsStore.shared.userDefaults
+        let store = ExteraPillStackSettings(userDefaults: defaults)
+        // Literal old v1 document: this fixture must remain readable without stack/provider fields.
+        let fixture = Data(#"{"version":1,"pills":[{"id":"00000000-0000-0000-0000-000000000031","enabled":true,"label":"Legacy","url":"https://example.com/value?token=private","jsonPath":"data.value","refresh":300,"format":"number","decimals":2,"prefix":"","suffix":" USD"}]}"#.utf8)
+        let custom = try ExteraPillSettings.decode(fixture)
+        let id = ExteraPillStackLayout.customId(custom[0].id)
+        let initial = store.layout.normalized(custom: custom)
+        try self.expect(initial.visible.isEmpty && initial.infiniteScrolling, "Reference default: all hidden, infinite enabled")
+        try self.expect(initial.hidden == ExteraBuiltinPill.allCases.map { $0.id } + [id], "Exact seven-item inventory followed by hidden legacy custom IDs")
+        try self.expect(!store.allowed("weather", account: 1) && !store.allowed("rates", account: 1) && !store.allowsCustom(custom[0], account: 1), "Migration never grants remote requests")
+        store.update(custom: custom) { state in
+            state.setVisible("builtin.proxy", true); state.setVisible(id, true)
+            state.infiniteScrolling = false; state.selected = id
+        }
+        let reopened = ExteraPillStackSettings(userDefaults: defaults)
+        try self.expect(reopened.layout == store.layout, "Reopening preserves selection, order, hidden list and infinite flag")
+        try self.expect(reopened.layout.renderedIds(custom: custom) == ["builtin.proxy", id], "Renderer uses persisted order")
+        var disabled = custom; disabled[0].enabled = false
+        try self.expect(reopened.layout.renderedIds(custom: disabled) == ["builtin.proxy"], "Disabled HTTP widget never enters renderer")
+        try self.expect(reopened.layout.visible.contains(id), "HTTP disabled state does not erase stack position")
+        store.allow("weather", account: 1, value: true); store.allow("rates", account: 2, value: true)
+        store.allowCustom(custom[0], account: 1, value: true)
+        try self.expect(reopened.allowed("weather", account: 1) && !reopened.allowed("weather", account: 2), "Weather consent is per-account and persisted")
+        try self.expect(!reopened.allowsWeather(source: "izweatherbot", account: 1), "Generic weather grant cannot silently approve a new bot")
+        store.allowWeather(source: "izweatherbot", account: 1, value: true)
+        try self.expect(reopened.allowsWeather(source: "izweatherbot", account: 1) && !reopened.allowsWeather(source: "otherbot", account: 1) && !reopened.allowsWeather(source: "izweatherbot", account: 2), "Weather grant binds bot source and account")
+        reopened.allowWeather(source: "izweatherbot", account: 1, value: false)
+        try self.expect(!store.allowsWeather(source: "izweatherbot", account: 1), "Weather revocation removes source grant")
+        try self.expect(!reopened.allowed("rates", account: 1) && reopened.allowed("rates", account: 2), "Rates consent cannot bleed across accounts")
+        var changedEndpoint = custom[0]; changedEndpoint.url = "https://other.example/value"
+        try self.expect(!reopened.allowsCustom(changedEndpoint, account: 1), "Same UUID with replaced URL requires fresh consent")
+        try self.expect(reopened.allowsCustom(custom[0], account: 1) && !reopened.allowsCustom(custom[0], account: 2), "Custom consent binds URL and account")
+        reopened.allowCustom(custom[0], account: 1, value: false)
+        try self.expect(!store.allowsCustom(custom[0], account: 1), "Explicit revocation persists")
+        store.setCurrency("EUR", account: 1); store.setCurrency("RUB", account: 2); store.setCurrency("bad!", account: 1)
+        try self.expect(reopened.currency(account: 1) == "EUR" && reopened.currency(account: 2) == "RUB", "Independent target currencies; malformed code rejected")
+        try ExteraPillSettings.shared.replace(custom)
+        let oldDocument = try ExteraPillSettings.shared.exportData()
+        try self.expect(try ExteraPillSettings.decode(oldDocument) == custom, "Stack updates do not change HTTP import/export schema or credentials")
+        store.update(custom: []) { _ in }
+        try self.expect(!store.layout.visible.contains(id) && store.layout.selected == nil, "Deleted custom IDs and selection are sanitized")
+        store.update(custom: custom) { _ in }
+        try self.expect(!store.layout.visible.contains(id) && store.layout.hidden.contains(id), "Reimported custom item remains hidden")
+    }
+
+    private static func stackOrdering() throws {
+        var state = ExteraPillStackLayout()
+        let original = state
+        state.move("stale", visible: true, before: nil); state.setVisible("stale", true)
+        try self.expect(state == original, "Stale identity is a no-op")
+        state.setVisible("builtin.weather", true); state.setVisible("builtin.proxy", true); state.setVisible("builtin.storage", true)
+        state.move("builtin.storage", visible: true, before: "builtin.weather")
+        try self.expect(state.visible == ["builtin.storage", "builtin.weather", "builtin.proxy"], "Upward identity move")
+        state.move("builtin.storage", visible: true, before: nil)
+        try self.expect(state.visible == ["builtin.weather", "builtin.proxy", "builtin.storage"], "Move to end")
+        state.move("builtin.weather", visible: true, before: "builtin.storage")
+        try self.expect(state.visible == ["builtin.proxy", "builtin.weather", "builtin.storage"], "Downward insertion has no index shift error")
+        state.move("builtin.btc", visible: true, before: "builtin.weather")
+        try self.expect(state.visible == ["builtin.proxy", "builtin.btc", "builtin.weather", "builtin.storage"] && !state.hidden.contains("builtin.btc"), "Cross-section move toggles visibility")
+        state.selected = "builtin.btc"; state.setVisible("builtin.btc", false)
+        try self.expect(state.selected == nil && state.hidden.last == "builtin.btc", "Hiding selection clears it and appends to hidden order")
+        let before = state
+        state.move("builtin.proxy", visible: true, before: "stale")
+        try self.expect(state == before, "Stale target cannot erase or relocate item")
+        state.visible += ["builtin.proxy", "unknown"]
+        state.hidden += ["builtin.proxy", "builtin.weather"]
+        state = state.normalized(custom: [])
+        try self.expect(Set(state.visible + state.hidden).count == 7 && state.visible.count + state.hidden.count == 7, "Corrupt/old layout normalization deduplicates and preserves complete inventory")
+        let ids = state.renderedIds(custom: [])
+        try self.expect(state.next(from: ids.last, direction: 1, ids: ids) == ids.first, "Infinite wraps last to first")
+        try self.expect(state.next(from: ids.first, direction: -1, ids: ids) == ids.last, "Infinite wraps first to last")
+        state.infiniteScrolling = false
+        try self.expect(state.next(from: ids.last, direction: 1, ids: ids) == ids.last, "Finite stops at last")
+        try self.expect(state.next(from: ids.first, direction: -1, ids: ids) == ids.first, "Finite stops at first")
+        try self.expect(state.next(from: "deleted", direction: 1, ids: ids) == ids.first, "Missing current selection falls back")
+        try self.expect(state.next(from: nil, direction: 1, ids: []) == nil, "Empty stack is inert")
+        try self.expect(state.next(from: "one", direction: -1, ids: ["one"]) == "one", "Single-item finite stack is stable")
+    }
+
+    private static func providers() throws {
+        var gate = ExteraPillProviderGeneration()
+        let weather = gate.begin("builtin.weather")
+        try self.expect(gate.accepts(weather), "Active provider completion is accepted")
+        let btc = gate.begin("builtin.btc")
+        try self.expect(!gate.accepts(weather) && gate.accepts(btc), "Provider order switch rejects previous completion")
+        let weatherAgain = gate.begin("builtin.weather")
+        try self.expect(!gate.accepts(weather) && !gate.accepts(btc) && gate.accepts(weatherAgain), "A-B-A cannot accept an old A response")
+        gate.cancel()
+        try self.expect(!gate.accepts(weatherAgain), "Hide/background/navigation cancellation rejects completion")
+        let resumed = gate.begin("builtin.weather")
+        try self.expect(gate.accepts(resumed) && !gate.accepts(weatherAgain), "Resumption only accepts new generation")
+        let rates = Data(#"{"data":{"currency":"USD","rates":{"USD":"1","TON":"0.5","BTC":"0.00002","EUR":"0.9","RUB":"90"}}}"#.utf8)
+        let locale = Locale(identifier: "en_US_POSIX")
+        try self.expect(try ExteraPillExchangeRate.value(data: rates, base: "TON", target: "EUR", locale: locale) == "1.8 EUR", "GRAM uses real TON cross-rate, never hardcoded balance")
+        try self.expect(try ExteraPillExchangeRate.value(data: rates, base: "BTC", target: "USD", locale: locale) == "50,000 USD", "BTC reciprocal units per USD")
+        try self.expect(try ExteraPillExchangeRate.value(data: rates, base: "USD", target: "RUB", locale: locale) == "90 RUB", "USD respects selected target")
+        try self.expectThrows("Unsupported target produces unavailable") { _ = try ExteraPillExchangeRate.value(data: rates, base: "TON", target: "ZZZ") }
+        for fixture in [#"{"data":{"currency":"EUR","rates":{"USD":"1"}}}"#, #"{"data":{"currency":"USD","rates":{"USD":"1","TON":"0"}}}"#, #"{"data":{"currency":"USD","rates":{"USD":"1","TON":"NaN"}}}"#, #"{"data":{"currency":"USD","rates":{"USD":"1","TON":"-1"}}}"#, "{"] {
+            try self.expectThrows("Invalid remote data never becomes a price") { _ = try ExteraPillExchangeRate.value(data: Data(fixture.utf8), base: "TON", target: "USD") }
+        }
+        try self.expectThrows("Provider response cap before parsing") { _ = try ExteraPillExchangeRate.value(data: Data(repeating: 32, count: 512 * 1024 + 1), base: "TON", target: "USD") }
+    }
+
+    private static func requestScopes() throws {
+        let selected = ExteraPillSpec(label: "Selected", url: "https://example.com/a")
+        let hidden = ExteraPillSpec(label: "Hidden", url: "https://example.com/b")
+        var leases = ExteraPillRequestLeases()
+        try self.expect(leases.isEmpty && !leases.permits(selected), "No visible host means no HTTP requests")
+        let search = leases.acquire(approved: [selected])
+        try self.expect(leases.permits(selected) && !leases.permits(hidden), "Search lease cannot request hidden endpoints")
+        var disabled = selected; disabled.enabled = false
+        try self.expect(!leases.permits(disabled), "Disabling a configuration invalidates its previous search lease")
+        var reformatted = selected; reformatted.jsonPath = "new.value"
+        try self.expect(!leases.permits(reformatted), "Configuration edits invalidate the exact approved snapshot")
+        var replacement = selected; replacement.url = hidden.url
+        try self.expect(!leases.permits(replacement), "Same UUID with imported replacement URL is outside an existing lease")
+        let otherHost = leases.acquire(approved: [hidden])
+        try self.expect(leases.permits(selected) && leases.permits(hidden), "Independent hosts observe their own selected configurations")
+        leases.release(search)
+        try self.expect(!leases.permits(selected) && leases.permits(hidden), "Closing one host narrows scope without stopping the other")
+        let dashboard = leases.acquire(approved: nil)
+        try self.expect(leases.permits(selected) && leases.permits(replacement), "Explicit HTTP dashboard retains live configuration behavior")
+        leases.release(dashboard)
+        try self.expect(!leases.permits(selected) && !leases.permits(replacement) && leases.permits(hidden), "Closing dashboard cancels work that surviving search hosts did not approve")
+        leases.release(otherHost)
+        try self.expect(leases.isEmpty && !leases.permits(hidden), "Last host removal cancels all scopes")
+        let empty = leases.acquire(approved: [])
+        try self.expect(!leases.permits(selected) && !leases.permits(hidden), "Empty search selection does not mean all endpoints")
+        leases.release(empty)
+        let minimal = try JSONDecoder().decode(ExteraPillStackLayout.self, from: Data(#"{"visible":["builtin.proxy"]}"#.utf8))
+        try self.expect(minimal.infiniteScrolling && minimal.normalized(custom: []).visible == ["builtin.proxy"], "Missing optional layout fields migrate without erasing order")
+        let defaults = AyuSettingsStore.shared.userDefaults
+        defaults.set(Data("{".utf8), forKey: ExteraPillStackSettings.key)
+        try self.expect(ExteraPillStackSettings(userDefaults: defaults).layout == ExteraPillStackLayout(), "Malformed layout safely defaults without granting visibility")
+        defaults.removeObject(forKey: ExteraPillStackSettings.key)
     }
 }

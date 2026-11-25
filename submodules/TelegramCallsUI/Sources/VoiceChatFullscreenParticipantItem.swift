@@ -681,7 +681,7 @@ class VoiceChatFullscreenParticipantItemNode: ItemListRevealOptionsItemNode {
                                 
                                 strongSelf.highlightNode.updateLevel(CGFloat(value))
                                 
-                                if strongSelf.audioLevelView == nil, value > 0.0, item.context.sharedContext.energyUsageSettings.fullTranslucency {
+                                if strongSelf.audioLevelView == nil, value > 0.0, item.context.sharedContext.energyUsageSettings.exteraAllows(.calls) {
                                     let audioLevelView = VoiceBlobView(
                                         frame: blobFrame,
                                         maxLevel: 1.5,

@@ -404,7 +404,7 @@ extension ChatControllerImpl {
                 items.append(selectItem)
             }
 
-            let contextController = makeContextController(presentationData: self.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            let contextController = makeContextController(presentationData: self.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero)), items: self.exteraAdminHeaderMenuItems(addingTo: .single(items), peerId: peerId) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
             self.presentInGlobalOverlay(contextController)
         })
     }

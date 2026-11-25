@@ -21,6 +21,7 @@ import ChatEmptyNode
 import ChatMediaInputStickerGridItem
 import AccountContext
 import ChatInputAccessoryPanel
+import SGSimpleSettings
 
 /// The eased progress `animation` will be at when the frame this runloop turn is composing hits the
 /// screen — 0.0 for one that has not started yet.
@@ -787,7 +788,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                 })
                 self.containerNode.layer.animatePosition(from: CGPoint(x: sourceAbsoluteRect.minX - targetAbsoluteRect.minX, y: 0.0), to: CGPoint(), duration: textHorizontalDuration, delay: delay, timingFunction: horizontalCurve.timingFunction, mediaTimingFunction: horizontalCurve.mediaTimingFunction, additive: true)
 
-                if self.parameters.textScaleDip {
+                if self.parameters.textScaleDip && ExteraEnergyRuntime.allows(.scale) {
                     // Squash-and-pop scale on two springs: the bubble leaves the input field at 100%, shrinks to
                     // `scaleDipScale` during the first `scaleDipFraction` of the transition and springs back to 100%
                     // by its end. Both phases are additive on `transform.scale` (the model value stays 1.0, the two

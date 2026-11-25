@@ -25,7 +25,7 @@ public final class ChatLoadingNode: ASDisplayNode {
     private let offset: CGPoint
     
     public init(context: AccountContext, theme: PresentationTheme, chatWallpaper: TelegramWallpaper, bubbleCorners: PresentationChatBubbleCorners) {
-        self.backgroundNode = NavigationBackgroundNode(color: selectDateFillStaticColor(theme: theme, wallpaper: chatWallpaper), enableBlur: context.sharedContext.energyUsageSettings.fullTranslucency && dateFillNeedsBlur(theme: theme, wallpaper: chatWallpaper))
+        self.backgroundNode = NavigationBackgroundNode(color: selectDateFillStaticColor(theme: theme, wallpaper: chatWallpaper), enableBlur: context.sharedContext.energyUsageSettings.exteraAllows(.blur) && dateFillNeedsBlur(theme: theme, wallpaper: chatWallpaper))
         
         let serviceColor = serviceMessageColorComponents(theme: theme, wallpaper: chatWallpaper)
         self.activityIndicator = ActivityIndicator(type: .custom(serviceColor.primaryText, 22.0, 2.0, false), speed: .regular)

@@ -1,0 +1,32 @@
+diff --git a/submodules/TelegramUI/Sources/ChatController.swift b/submodules/TelegramUI/Sources/ChatController.swift
+--- a/submodules/TelegramUI/Sources/ChatController.swift
++++ b/submodules/TelegramUI/Sources/ChatController.swift
+@@ -6540,4 +6540,4 @@
+-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
++                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: strongSelf.exteraAdminHeaderMenuItems(addingTo: items, peerId: peer.id) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                 contextController.dismissed = { [weak self] in
+                     self?.canReadHistory.set(true)
+                 }
+@@ -6569,4 +6569,13 @@
+                 self.openBotForumMoreMenu(sourceView: self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view, gesture: gesture)
+             } else {
+-                ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view, gesture: gesture)
++                let sourceView = self.navigationBar?.navigationButtonContextContainer(sourceView: sourceNode.view) ?? sourceNode.view
++                if self.exteraOpenAdminHeaderMoreMenu(peerId: peerId, sourceView: sourceView, gesture: gesture, originalMenu: { [weak self] in
++                    guard let self, self.chatLocation.peerId == peerId else {
++                        return
++                    }
++                    ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: sourceView, gesture: nil)
++                }) {
++                    return
++                }
++                ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: sourceView, gesture: gesture)
+             }
+diff --git a/submodules/TelegramUI/Sources/Chat/ChatControllerSideList.swift b/submodules/TelegramUI/Sources/Chat/ChatControllerSideList.swift
+--- a/submodules/TelegramUI/Sources/Chat/ChatControllerSideList.swift
++++ b/submodules/TelegramUI/Sources/Chat/ChatControllerSideList.swift
+@@ -407,3 +407,3 @@
+-            let contextController = makeContextController(presentationData: self.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
++            let contextController = makeContextController(presentationData: self.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero)), items: self.exteraAdminHeaderMenuItems(addingTo: .single(items), peerId: peerId) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+             self.presentInGlobalOverlay(contextController)
+         })

@@ -135,7 +135,7 @@ public func exteraChatAppearanceSettingsController(context: AccountContext) -> V
         case .browser:
             pushImpl?(webBrowserSettingsController(context: context))
         case .animations:
-            pushImpl?(energySavingSettingsScreen(context: context))
+            pushImpl?(exteraEnergySettingsController(context: context))
         case .stickers:
             pushImpl?(context.sharedContext.makeInstalledStickerPacksController(context: context, mode: .general, forceTheme: nil))
         case .microphonePermission:

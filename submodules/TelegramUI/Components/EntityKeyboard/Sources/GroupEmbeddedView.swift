@@ -155,7 +155,7 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
                 let itemFrame = itemLayout.frame(at: index)
                 itemLayer.frame = itemFrame
                 
-                itemLayer.isVisibleForAnimations = self.isStickers ? context.sharedContext.energyUsageSettings.loopStickers : context.sharedContext.energyUsageSettings.loopEmoji
+                itemLayer.isVisibleForAnimations = context.sharedContext.energyUsageSettings.exteraAllows(self.isStickers ? .stickerKeyboard : .emojiKeyboard)
             }
         }
         

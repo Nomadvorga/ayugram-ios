@@ -6,6 +6,7 @@ import ComponentDisplayAdapters
 import UIKitRuntimeUtils
 import CoreImage
 import AppBundle
+import SGSimpleSettings
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -588,6 +589,9 @@ public class GlassBackgroundView: UIView {
     public private(set) var params: Params?
 
     public static var useCustomGlassImpl: Bool = false
+    private var exteraGlassAllowed: Bool?
+    private var exteraObservation: ExteraEnergyObservation?
+    private var exteraLayout: (size: CGSize, shape: Shape, isDark: Bool, tint: TintColor, interactive: Bool, visible: Bool)?
 
     /// The backdrop luminance native glass sees (`EffectSettingsContainerView`'s limits, applied to every luma UIKit
     /// reports by the `backdropLayer:didChangeLuma:` override in UIKitRuntimeUtils): the whole range on the theme's
@@ -678,6 +682,10 @@ public class GlassBackgroundView: UIView {
         if let legacyHighlightContainerView = self.legacyHighlightContainerView {
             self.addSubview(legacyHighlightContainerView)
         }
+        self.exteraObservation = ExteraEnergyObservation { [weak self] in
+            guard let self, let layout = self.exteraLayout else { return }
+            self.update(size: layout.size, shape: layout.shape, isDark: layout.isDark, tintColor: layout.tint, isInteractive: layout.interactive, isVisible: layout.visible, transition: .immediate)
+        }
     }
     
     required public init?(coder: NSCoder) {
@@ -720,6 +728,14 @@ public class GlassBackgroundView: UIView {
     }
 
     func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+        self.exteraLayout = (size, shape, isDark, tintColor, isInteractive, isVisible)
+        let glassAllowed = ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
+        if self.exteraGlassAllowed != glassAllowed {
+            self.exteraGlassAllowed = glassAllowed
+            // Rebuild the effect when energy/accessibility changes with identical geometry/tint.
+            self.params = nil
+        }
+        let isInteractive = isInteractive && glassAllowed && !UIAccessibility.isReduceMotionEnabled
         
         if let glassHighlightRecognizer = self.glassHighlightRecognizer {
             glassHighlightRecognizer.isEnabled = isInteractive
@@ -761,6 +777,7 @@ public class GlassBackgroundView: UIView {
                 }
             }
             legacyView.update(size: size, shape: shape, style: style, transition: transition)
+            legacyView.backgroundColor = glassAllowed ? .clear : UIColor(white: isDark ? 0.12 : 0.96, alpha: 1.0)
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
             transition.setAlpha(view: legacyView, alpha: isVisible ? 1.0 : 0.0)
             
@@ -865,7 +882,7 @@ public class GlassBackgroundView: UIView {
                     if #available(iOS 26.0, *) {
                         var glassEffect: UIGlassEffect?
                         
-                        if isVisible {
+                        if isVisible && glassAllowed {
                             let nativeTint = tintColor.nativeEffect(isDark: isDark)
                             let glassEffectValue = UIGlassEffect(style: nativeTint.isClear ? .clear : .regular)
                             glassEffectValue.tintColor = nativeTint.color
@@ -922,6 +939,12 @@ public class GlassBackgroundView: UIView {
             transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
+        if let nativeView = self.nativeView {
+            if !glassAllowed {
+                nativeView.effect = nil
+            }
+            nativeView.backgroundColor = glassAllowed || !isVisible ? .clear : UIColor(white: isDark ? 0.12 : 0.96, alpha: 1.0)
+        }
     }
     
     override public func willMove(toWindow newWindow: UIWindow?) {

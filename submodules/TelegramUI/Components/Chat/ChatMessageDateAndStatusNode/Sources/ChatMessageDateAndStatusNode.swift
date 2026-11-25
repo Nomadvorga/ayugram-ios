@@ -563,7 +563,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 let serviceColor = serviceMessageColorComponents(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper)
                 dateColor = serviceColor.primaryText
                 
-                blurredBackgroundColor = (selectDateFillStaticColor(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper), arguments.context.sharedContext.energyUsageSettings.fullTranslucency && dateFillNeedsBlur(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper))
+                blurredBackgroundColor = (selectDateFillStaticColor(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper), arguments.context.sharedContext.energyUsageSettings.exteraAllows(.blur) && dateFillNeedsBlur(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper))
                 leftInset = 0.0
                 loadedCheckFullImage = PresentationResourcesChat.chatFreeFullCheck(arguments.presentationData.theme.theme, size: checkSize, isDefaultWallpaper: isDefaultWallpaper)
                 loadedCheckPartialImage = PresentationResourcesChat.chatFreePartialCheck(arguments.presentationData.theme.theme, size: checkSize, isDefaultWallpaper: isDefaultWallpaper)
@@ -586,7 +586,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 let serviceColor = serviceMessageColorComponents(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper)
                 dateColor = serviceColor.primaryText
                 outgoingStatus = status
-                blurredBackgroundColor = (selectDateFillStaticColor(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper), arguments.context.sharedContext.energyUsageSettings.fullTranslucency && dateFillNeedsBlur(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper))
+                blurredBackgroundColor = (selectDateFillStaticColor(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper), arguments.context.sharedContext.energyUsageSettings.exteraAllows(.blur) && dateFillNeedsBlur(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper))
                 leftInset = 0.0
                 loadedCheckFullImage = PresentationResourcesChat.chatFreeFullCheck(arguments.presentationData.theme.theme, size: checkSize, isDefaultWallpaper: isDefaultWallpaper)
                 loadedCheckPartialImage = PresentationResourcesChat.chatFreePartialCheck(arguments.presentationData.theme.theme, size: checkSize, isDefaultWallpaper: isDefaultWallpaper)

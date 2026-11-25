@@ -191,7 +191,7 @@ private final class StickerSearchPackTopPanelItemComponent: Component {
                 let iconFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - iconSize.width) / 2.0), y: floor((iconFitSize.height - iconSize.height) / 2.0)), size: iconSize)
                 transition.setPosition(layer: itemLayer, position: CGPoint(x: iconFrame.midX, y: iconFrame.midY))
                 transition.setBounds(layer: itemLayer, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
-                itemLayer.isVisibleForAnimations = itemEnvironment.isContentInFocus && component.context.sharedContext.energyUsageSettings.loopStickers
+                itemLayer.isVisibleForAnimations = itemEnvironment.isContentInFocus && component.context.sharedContext.energyUsageSettings.exteraAllows(.stickerKeyboard)
             }
 
             if itemEnvironment.isExpanded {

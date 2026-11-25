@@ -2,6 +2,7 @@ import Foundation
 import TelegramCore
 import AccountContext
 import ChatPresentationInterfaceState
+import TelegramPresentationData
 
 /// The side list this chat shows its sidebar button for, or nil. The navigation buttons and the topics strips both ask
 /// this, so the button and the strip never show together.
@@ -44,6 +45,6 @@ func chatSideListKindForChatPresentationInterfaceState(_ state: ChatPresentation
         isMonoforum: isMonoforum,
         isAdminMonoforum: isAdminMonoforum,
         isSidebarBot: isSidebarBot,
-        enabled: context.usesChatSideList
+        enabled: context.usesChatSideList && context.sharedContext.energyUsageSettings.exteraAllows(.topicSidebar)
     )
 }

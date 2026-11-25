@@ -50,7 +50,7 @@ final class EmptySearchResultsView: UIView {
                     animationCache: context.animationCache,
                     animationRenderer: context.animationRenderer,
                     content: .animation(content: .file(file: file), size: CGSize(width: 32.0, height: 32.0), placeholderColor: titleColor, themeColor: nil, loopMode: .forever),
-                    isVisibleForAnimations: context.sharedContext.energyUsageSettings.loopEmoji,
+                    isVisibleForAnimations: context.sharedContext.energyUsageSettings.exteraAllows(.emojiKeyboard),
                     action: nil
                 )),
                 environment: {},

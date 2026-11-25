@@ -206,7 +206,7 @@ public final class ReactionIconView: PortalSourceView {
         }
         self.isPaused = isPaused
         
-        let isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.loopEmoji
+        let isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
         if isVisibleForAnimations != animationLayer.isVisibleForAnimations {
             if isPaused {
                 animationLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false, completion: { [weak animationLayer] _ in
@@ -218,7 +218,7 @@ public final class ReactionIconView: PortalSourceView {
                     animationLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.12)
                 }
             } else {
-                animationLayer.isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.loopEmoji
+                animationLayer.isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
             }
         }
     }
@@ -274,7 +274,7 @@ public final class ReactionIconView: PortalSourceView {
         
         animationLayer.frame = CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
         
-        animationLayer.isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.loopEmoji
+        animationLayer.isVisibleForAnimations = !self.isPaused && animateIdle && context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
         self.updateTintColor()
     }
     
@@ -1230,7 +1230,7 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
             glassView.removeFromSuperview()
         }
         
-        if case .stars = layout.spec.component.reaction.value {
+        if case .stars = layout.spec.component.reaction.value, layout.spec.component.context.sharedContext.energyUsageSettings.exteraAllows(.particles) {
             let starsEffectLayer: StarsButtonEffectLayer
             if let current = self.starsEffectLayer {
                 starsEffectLayer = current

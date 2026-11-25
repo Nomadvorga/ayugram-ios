@@ -3,6 +3,7 @@ import UIKit
 import Display
 import ComponentFlow
 import MeshTransform
+import SGSimpleSettings
 
 private let backdropLayerClass: NSObject? = {
     let name = ("CA" as NSString).appendingFormat("BackdropLayer")
@@ -99,6 +100,7 @@ final class LegacyGlassView: UIView {
     }
     
     private var params: Params?
+    private var exteraGlassAllowed: Bool?
     private var maskLayer: CAShapeLayer?
     
     private let backdropLayer: CALayer?
@@ -131,6 +133,13 @@ final class LegacyGlassView: UIView {
     }
 
     func update(size: CGSize, shape: GlassBackgroundView.Shape, style: Style, transition: ComponentTransition) {
+        let glassAllowed = ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
+        if self.exteraGlassAllowed != glassAllowed {
+            self.exteraGlassAllowed = glassAllowed
+            self.params = nil
+        }
+        self.backdropLayer?.isHidden = !glassAllowed
+        if !glassAllowed { self.backdropLayer?.filters = nil }
         let params = Params(size: size, shape: shape, style: style)
         let previousParams = self.params
         if self.params == params {

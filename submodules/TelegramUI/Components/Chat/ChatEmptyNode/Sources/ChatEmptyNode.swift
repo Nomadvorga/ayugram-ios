@@ -1644,7 +1644,7 @@ public final class ChatEmptyNode: ASDisplayNode {
             self.currentTheme = interfaceState.theme
             self.currentStrings = interfaceState.strings
 
-            self.backgroundNode.updateColor(color: selectDateFillStaticColor(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper), enableBlur: self.context.sharedContext.energyUsageSettings.fullTranslucency && dateFillNeedsBlur(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper), transition: .immediate)
+            self.backgroundNode.updateColor(color: selectDateFillStaticColor(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper), enableBlur: self.context.sharedContext.energyUsageSettings.exteraAllows(.blur) && dateFillNeedsBlur(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper), transition: .immediate)
         }
     
         var isScheduledMessages = false

@@ -1,4 +1,5 @@
 import Foundation
+import TelegramPresentationData
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -288,7 +289,7 @@ public final class InteractiveTextNodeWithEntities {
         animation: ListViewItemUpdateAnimation,
         applyArguments: InteractiveTextNode.ApplyArguments
     ) {
-        self.enableLooping = context.sharedContext.energyUsageSettings.loopEmoji
+        self.enableLooping = context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
         
         var displayContentsUnderSpoilers = false
         if let textLayout {

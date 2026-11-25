@@ -1063,6 +1063,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
 
     private var validLayout: (CGSize, WallpaperDisplayMode)?
     private var wallpaper: TelegramWallpaper?
+    private var exteraObservation: ExteraEnergyObservation?
     private var starGift: StarGift?
     private var modelRectIndex: Int32?
     
@@ -1260,6 +1261,14 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         self.layer.addSublayer(self.patternImageLayer)
         
         self.layer.addSublayer(self.dimLayer)
+        self.exteraObservation = ExteraEnergyObservation { [weak self] in
+            guard let self else { return }
+            let allowed = ExteraEnergyRuntime.allows(.wallpaper)
+            self.motionEnabled = (self.wallpaper?.settings?.motion ?? false) && allowed
+            if allowed && self.isLooping && !self.isAnimating {
+                self.animateEvent(transition: .animated(duration: 0.7, curve: .linear), extendAnimation: false)
+            }
+        }
     }
 
     deinit {
@@ -1383,7 +1392,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 self.layer.insertSublayer(self.patternImageLayer, above: self.contentNode.layer)
             }
 
-            self.motionEnabled = wallpaper.settings?.motion ?? false
+            self.motionEnabled = (wallpaper.settings?.motion ?? false) && ExteraEnergyRuntime.allows(.wallpaper)
 
             if gradientColors.count >= 2 {
                 self.contentNode.backgroundColor = nil
@@ -1871,6 +1880,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     private var isLooping = false
     
     public func animateEvent(transition: ContainedViewLayoutTransition, extendAnimation: Bool) {
+        guard ExteraEnergyRuntime.allows(.wallpaper) else { return }
         guard !(self.isLooping && self.isAnimating) else {
             return
         }

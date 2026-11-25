@@ -1286,6 +1286,38 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
 }
 
 final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
+    // MARK: exteraGram Pill Stack — owned by the actual header and controller lifecycle.
+    var exteraPillHostVisible = false {
+        didSet { self.updateExteraPillVisibility() }
+    }
+    private lazy var exteraPillStack: ExteraPillStackView = {
+        let stack = ExteraPillStackView(context: self.context)
+        stack.inventoryChanged = { [weak self] in self?.controller?.requestLayout(transition: .immediate) }
+        return stack
+    }()
+    private var exteraPillSearchAccessibility: ExteraPillSearchAccessibilityElement?
+    private var exteraPillsInSearch: Bool {
+        if case .chatList(.root) = self.location { return self.exteraPillStack.hasItems }
+        return false
+    }
+    private func updateExteraPillVisibility(transition: ContainedViewLayoutTransition = .immediate) {
+        let search = (self.navigationBarView.view as? ChatListNavigationBar.View)?.searchContentNode
+        let stack = self.exteraPillStack
+        // Match the existing placeholder's fade while the header collapses. The parent owns
+        // the widget frame, including every scroll update; the widget lays out only its label.
+        let fieldHeight = max(1, search?.placeholderNode.bounds.height ?? 44)
+        let progress = max(0, min(1, ((search?.height ?? 0) - (navigationBarSearchContentHeight - fieldHeight)) / fieldHeight))
+        transition.updateAlpha(view: stack, alpha: max(0, min(1, (progress - 0.77) / 0.23)))
+        stack.isHidden = !self.exteraPillsInSearch || self.isSearchDisplayControllerActive != nil || (search?.placeholderNode.bounds.width ?? 0) < 180
+        stack.accessibilityElementsHidden = progress <= 0.77
+        if let placeholder = search?.placeholderNode, stack.superview === placeholder.view {
+            let width = min(180.0, floor(placeholder.bounds.width * 0.5))
+            transition.updateFrame(view: stack, frame: CGRect(x: placeholder.bounds.width - width - 6, y: (fieldHeight * progress - 28) / 2, width: width, height: 28))
+            self.exteraPillSearchAccessibility?.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: max(0, stack.frame.minX), height: placeholder.bounds.height)
+        }
+        stack.isUserInteractionEnabled = progress > 0.99 && !stack.isHidden
+        stack.hostVisible = self.exteraPillHostVisible && !stack.isHidden && progress > 0.77 && !ExteraSettings.shared.hideDialogsSearchBar && (search?.alpha ?? 0) > 0.01
+    }
     private let ayuHeaderSnowView = AyuSnowView(style: .header)
     var ayuSnowIsActive = false {
         didSet { self.ayuHeaderSnowView.isActive = self.ayuSnowIsActive }
@@ -1882,7 +1914,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 leftInset: layout.safeInsets.left,
                 rightInset: layout.safeInsets.right,
                 trailingButtonsInset: layout.navigationBarTrailingButtonsInset,
-                search: ExteraSettings.shared.hideDialogsSearchBar ? nil : ChatListNavigationBar.Search(isEnabled: true), // MARK: AyuGram
+                search: ExteraSettings.shared.hideDialogsSearchBar ? nil : ChatListNavigationBar.Search(isEnabled: true, alignPlaceholderToLeftWhenInactive: self.exteraPillsInSearch), // MARK: AyuGram
                 activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,
                 secondaryContent: headerContent?.secondaryContent,
@@ -1941,6 +1973,35 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             containerSize: layout.size
         )
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
+            // Keep both the search control and the actual stack inside the existing header geometry.
+            if self.exteraPillsInSearch, let search = navigationBarComponentView.searchContentNode {
+                let placeholder = search.placeholderNode
+                let stack = self.exteraPillStack
+                let width = min(180.0, floor(placeholder.bounds.width * 0.5))
+                placeholder.maximumPlaceholderWidth = max(0, placeholder.bounds.width - width - 64)
+                if stack.superview !== placeholder.view { placeholder.view.addSubview(stack) }
+                stack.frame = CGRect(x: placeholder.bounds.width - width - 6, y: (placeholder.bounds.height - 28) / 2, width: width, height: 28)
+                stack.apply(theme: self.presentationData.theme, language: self.presentationData.strings.baseLanguageCode)
+                stack.isHidden = self.isSearchDisplayControllerActive != nil || placeholder.bounds.width < 180
+                self.updateExteraPillVisibility(transition: transition.containedViewLayoutTransition)
+                let accessibility = self.exteraPillSearchAccessibility ?? ExteraPillSearchAccessibilityElement(accessibilityContainer: placeholder.view)
+                self.exteraPillSearchAccessibility = accessibility
+                accessibility.accessibilityLabel = self.presentationData.strings.Common_Search
+                accessibility.accessibilityTraits = .button
+                accessibility.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: max(0, stack.frame.minX), height: placeholder.bounds.height)
+                accessibility.activate = { [weak search] in search?.placeholderNode.activate?() }
+                placeholder.isAccessibilityElement = false
+                placeholder.view.accessibilityElements = [accessibility, stack]
+            } else {
+                self.exteraPillStack.hostVisible = false
+                self.exteraPillStack.removeFromSuperview()
+                if let placeholder = navigationBarComponentView.searchContentNode?.placeholderNode {
+                    placeholder.maximumPlaceholderWidth = nil
+                    placeholder.isAccessibilityElement = true
+                    placeholder.view.accessibilityElements = nil
+                }
+                self.exteraPillSearchAccessibility = nil
+            }
             if deferScrollApplication {
                 navigationBarComponentView.deferScrollApplication = true
             }
@@ -2020,6 +2081,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 disableStoriesAnimations: self.tempDisableStoriesAnimations,
                 crossfadeStoryPeers: false
             )))
+            self.updateExteraPillVisibility(transition: transition)
         }
         
         let mainDelta: CGFloat
@@ -2401,6 +2463,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             }
             
             strongSelf.isSearchDisplayControllerActive = ChatListNavigationBar.ActiveSearch(isExternal: placeholderNode == nil)
+            strongSelf.updateExteraPillVisibility()
             
             strongSelf.searchDisplayController?.containerLayoutUpdated(containerLayout, navigationBarHeight: cleanNavigationBarHeight, transition: .immediate)
             strongSelf.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in
@@ -2462,6 +2525,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     func willScrollToTop() {
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
             navigationBarComponentView.applyScroll(offset: 0.0, allowAvatarsExpansion: false, transition: ComponentTransition(animation: .curve(duration: 0.3, curve: .slide)))
+            self.updateExteraPillVisibility(transition: .animated(duration: 0.3, curve: .slide))
         }
     }
     

@@ -6,9 +6,9 @@ import SwiftSignalKit
 import TelegramPresentationData
 import UIKit
 
-/// Standalone live pill display. Keeping this out of the chat list's custom header preserves its
-/// story/search/folder geometry. The settings module supplies the configuration editor.
-public func exteraPillDashboardController(context: AccountContext, edit: ((ViewController, ExteraPillSpec?) -> Void)? = nil, transfer: ((ViewController) -> Void)? = nil) -> ViewController {
+/// Explicit HTTP dashboard: observes all enabled HTTP configurations while visible.
+/// The Stack editor links here; search uses separate, selected-configuration leases.
+public func exteraHTTPPillDashboardController(context: AccountContext, edit: ((ViewController, ExteraPillSpec?) -> Void)? = nil, transfer: ((ViewController) -> Void)? = nil) -> ViewController {
     return ExteraPillDashboardController(context: context, edit: edit, transfer: transfer)
 }
 

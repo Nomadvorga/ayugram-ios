@@ -1,4 +1,5 @@
 import Foundation
+import TelegramPresentationData
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -262,7 +263,7 @@ public final class TextNodeWithEntities {
     }
     
     private func updateInlineStickers(context: AccountContext, cache: AnimationCache, renderer: MultiAnimationRenderer, textLayout: TextNodeLayout?, placeholderColor: UIColor, attemptSynchronousLoad: Bool, emojiOffset: CGPoint, fontSizeNorm: CGFloat) {
-        self.energySavingEnableLooping = context.sharedContext.energyUsageSettings.loopEmoji
+        self.energySavingEnableLooping = context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
         
         var nextIndexById: [Int64: Int] = [:]
         var validIds: [InlineStickerItemLayer.Key] = []
@@ -578,7 +579,7 @@ public class ImmediateTextNodeWithEntities: TextNode {
         var enableAnimations = true
         if let arguments = self.arguments {
             self.updateInlineStickers(context: arguments.context, cache: arguments.cache, renderer: arguments.renderer, textLayout: layout, placeholderColor: arguments.placeholderColor, fontSizeNorm: arguments.fontSizeNorm)
-            enableAnimations = arguments.context.sharedContext.energyUsageSettings.fullTranslucency
+            enableAnimations = arguments.context.sharedContext.energyUsageSettings.exteraAllows(.spoilers)
         }
         self.updateSpoilers(enableAnimations: enableAnimations, textLayout: layout)
         
@@ -591,7 +592,7 @@ public class ImmediateTextNodeWithEntities: TextNode {
     }
     
     private func updateInlineStickers(context: AccountContext, cache: AnimationCache, renderer: MultiAnimationRenderer, textLayout: TextNodeLayout?, placeholderColor: UIColor, fontSizeNorm: CGFloat) {
-        self.energySavingEnableLooping = context.sharedContext.energyUsageSettings.loopEmoji
+        self.energySavingEnableLooping = context.sharedContext.energyUsageSettings.exteraAllows(.emojiChat)
         
         var nextIndexById: [Int64: Int] = [:]
         var validIds: [InlineStickerItemLayer.Key] = []
@@ -684,7 +685,7 @@ public class ImmediateTextNodeWithEntities: TextNode {
         var enableAnimations = true
         if let arguments = self.arguments {
             self.updateInlineStickers(context: arguments.context, cache: arguments.cache, renderer: arguments.renderer, textLayout: layout, placeholderColor: arguments.placeholderColor, fontSizeNorm: arguments.fontSizeNorm)
-            enableAnimations = arguments.context.sharedContext.energyUsageSettings.fullTranslucency
+            enableAnimations = arguments.context.sharedContext.energyUsageSettings.exteraAllows(.spoilers)
         }
         self.updateSpoilers(enableAnimations: enableAnimations, textLayout: layout)
         

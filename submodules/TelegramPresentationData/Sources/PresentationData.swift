@@ -9,6 +9,7 @@ import TelegramUIPreferences
 import AppBundle
 import Sunrise
 import PresentationStrings
+import SGSimpleSettings
 
 public struct PresentationDateTimeFormat: Equatable {
     public let timeFormat: PresentationTimeFormat
@@ -336,6 +337,7 @@ public func currentPresentationDataAndSettings(accountManager: AccountManager<Te
         } else {
             themeSettings = PresentationThemeSettings.defaultSettings
         }
+        ExteraEnergyRuntime.updateNativeReduceMotion(themeSettings.reduceMotion)
         
         let automaticMediaDownloadSettings: MediaAutoDownloadSettings
         if let value = internalData.automaticMediaDownloadSettings?.get(MediaAutoDownloadSettings.self) {
@@ -546,40 +548,14 @@ private func automaticThemeShouldSwitch(_ settings: AutomaticThemeSwitchSetting,
 }
 
 public func automaticEnergyUsageShouldBeOnNow(settings: MediaAutoDownloadSettings) -> Bool {
-    if settings.energyUsageSettings.activationThreshold <= 4 {
-        return false
-    } else if settings.energyUsageSettings.activationThreshold >= 96 {
-        return true
-    } else {
-        let batteryLevel = UIDevice.current.batteryLevel
-        if batteryLevel < 0.0 {
-            return false
-        } else {
-            return batteryLevel <= Float(settings.energyUsageSettings.activationThreshold) / 100.0
-        }
-    }
+    ExteraEnergyRuntime.updateNativeThreshold(settings.energyUsageSettings.activationThreshold)
+    return ExteraEnergyRuntime.savingActive
 }
 
 public func automaticEnergyUsageShouldBeOn(settings: MediaAutoDownloadSettings) -> Signal<Bool, NoError> {
-    if settings.energyUsageSettings.activationThreshold <= 4 {
-        return .single(false)
-    } else if settings.energyUsageSettings.activationThreshold >= 96 {
-        return .single(true)
-    } else {
-        return Signal { subscriber in
-            subscriber.putNext(automaticEnergyUsageShouldBeOnNow(settings: settings))
-            
-            let observer = NotificationCenter.default.addObserver(forName: UIDevice.batteryLevelDidChangeNotification, object: nil, queue: OperationQueue.main, using: { _ in
-                subscriber.putNext(automaticEnergyUsageShouldBeOnNow(settings: settings))
-            })
-            
-            return ActionDisposable {
-                NotificationCenter.default.removeObserver(observer)
-            }
-        }
-        |> runOn(Queue.mainQueue())
-        |> distinctUntilChanged
-    }
+    return exteraEnergyEnvironmentChanges()
+    |> map { _ in automaticEnergyUsageShouldBeOnNow(settings: settings) }
+    |> distinctUntilChanged
 }
 
 private func serviceColor(for data: Signal<MediaResourceData, NoError>) -> Signal<UIColor, NoError> {
@@ -748,6 +724,7 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
         } else {
             themeSettings = PresentationThemeSettings.defaultSettings
         }
+        ExteraEnergyRuntime.updateNativeReduceMotion(themeSettings.reduceMotion)
         
         let contactSettings: ContactSynchronizationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
         
