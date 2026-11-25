@@ -47,7 +47,7 @@ enum ExteraMathTimeZones {
             ("America/Sao_Paulo", "сан-паулу|sao paulo"), ("America/Argentina/Buenos_Aires", "буэнос-айрес|буэнос-айресе|buenos aires")
         ]
         for (zone, words) in groups {
-            for word in words.split(separator: "|") { result[self.normalize(String(word))] = zone }
+            for word in words.split(separator: "|") { result[ExteraMathTimeZones.normalize(String(word))] = zone }
         }
         return result
     }()
