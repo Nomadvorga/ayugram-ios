@@ -62,6 +62,11 @@ Neither successful imports nor an IPA build establish functional compatibility.
   it is a compatibility conversion, not the panel's physical dpi. `TypedValue`
   supports PX and DIP only, requires an owned metrics handle from a still-visible
   screen, and scales DIP using that snapshot. No Android font-scale emulation.
+- `AndroidUtilities.runOnUIThread(Runnable[, delayMs])` accepts the owned
+  `java.lang.Runnable` proxy and an optional 0–60,000 ms delay. It schedules a
+  one-shot, generation-revocable callback onto the serial Python queue; it does
+  not execute plugin Python on UIKit's main thread. `cancelRunOnUIThread` and
+  arbitrary Android queue/Looper semantics remain unsupported.
 - `Resources.getConfiguration()` returns an owner-held, read-only
   `Configuration.orientation` snapshot derived from the bound scene's interface
   orientation. Only `ORIENTATION_UNDEFINED`, `ORIENTATION_PORTRAIT`, and

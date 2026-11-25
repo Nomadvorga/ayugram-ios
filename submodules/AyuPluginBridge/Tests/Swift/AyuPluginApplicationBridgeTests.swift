@@ -52,6 +52,45 @@ import UIKit
         }
     }
 
+    func testAndroidUtilitiesRunOnUIThreadSchedulesOwnedRunnable() async throws {
+        let provider = AyuPluginApplicationBridge()
+        let delivered = XCTestExpectation(description: "AndroidUtilities runnable callbacks")
+        delivered.expectedFulfillmentCount = 2
+        delivered.assertForOverFulfill = true
+        let host = self.host(provider, registry: try provider.classRegistry(), callback: { owner, callbackID, arguments in
+            XCTAssertEqual(owner, "alpha")
+            XCTAssertEqual(callbackID, "android-utilities-run")
+            XCTAssertTrue(arguments.isEmpty)
+            delivered.fulfill()
+        })
+        try await self.authorize(host)
+        _ = try await self.call(host, "plugin.activate", ["generation": .string("android-utilities-generation")])
+
+        let runnable = try await self.call(host, "java.proxy", [
+            "interfaces": .array([.string("java.lang.Runnable")]),
+            "callbacks": .object(["run": .object(["$callback": .string("android-utilities-run")])])
+        ])
+        let utilities: AyuBridgeValue = .object(["class_name": .string("org.telegram.messenger.AndroidUtilities")])
+
+        let invalidDelay = try await self.invoke(host, utilities, "runOnUIThread", args: [runnable["result"], .integer(-1)])
+        XCTAssertEqual(invalidDelay["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let excessiveDelay = try await self.invoke(host, utilities, "runOnUIThread", args: [runnable["result"], .integer(60_001)])
+        XCTAssertEqual(excessiveDelay["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let badCallback = try await self.invoke(host, utilities, "runOnUIThread", args: [.integer(1)])
+        XCTAssertEqual(badCallback["error"]["code"], .string("INVALID_ARGUMENTS"))
+
+        let immediate = try await self.invoke(host, utilities, "runOnUIThread", args: [runnable["result"]])
+        XCTAssertEqual(immediate["result"], .null)
+        let delayed = try await self.invoke(host, utilities, "runOnUIThread", args: [runnable["result"], .integer(5)])
+        XCTAssertEqual(delayed["result"], .null)
+        let waitResult = await XCTWaiter.fulfillment(of: [delivered], timeout: 1.0)
+        XCTAssertEqual(waitResult, .completed)
+
+        let unsupportedCancellation = try await self.invoke(host, utilities, "cancelRunOnUIThread", args: [runnable["result"]])
+        XCTAssertEqual(unsupportedCancellation["error"]["code"], .string("UNSUPPORTED_API"))
+        _ = try await self.call(host, "plugin.deactivate", ["generation": .string("android-utilities-generation")])
+    }
+
     func testFeedbackFactoriesRejectWrongTypesAndPreserveCreationScreen() async throws {
         let provider = AyuPluginApplicationBridge()
         provider.updateAccounts([AyuPluginAccountSnapshot(index: 0, identity: UUID(), userID: 12)], selected: 0)

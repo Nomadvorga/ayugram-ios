@@ -48,7 +48,8 @@ Implemented **subsets**, not complete Java classes:
 | System | currentTimeMillis, monotonic nanoTime |
 | Resources / Configuration | `Resources.getConfiguration()` returns an owned, read-only visible-screen snapshot; `Configuration.orientation` and `ORIENTATION_UNDEFINED`, `ORIENTATION_PORTRAIT`, `ORIENTATION_LANDSCAPE` only |
 | Gravity / TextView / LinearLayout / ScrollView | `Gravity` exposes a bounded subset of left/right/start/end/center/top/bottom constants. `TextView.setGravity` aligns text; `LinearLayout.setGravity` aligns its child group and cross-axis children; basic positive `LinearLayout.LayoutParams` weights divide remaining main-axis space. `ScrollView` owns one direct child in a bounded vertical `UIScrollView` backing. Fill/clip flags and per-child gravity are unsupported. |
-| Bundle / Intent / MotionEvent / Handler | Bounded local `Bundle` and `Intent` value containers, synthetic `MotionEvent` value snapshots, and `Handler.post`/`postDelayed` delivery through revocable callbacks. `Intent` does not launch OS activities; handler cancellation and Android queue/looper parity are unsupported. |
+| Bundle / Intent / Uri / MotionEvent / Handler | Bounded local `Bundle` and `Intent` value containers, `Uri.parse` plus common read-only URI components, synthetic `MotionEvent` value snapshots, and `Handler.post`/`postDelayed` delivery through revocable callbacks. `Intent` does not launch OS activities; URI parsing does not open links or access the network; handler cancellation and Android queue/looper parity are unsupported. |
+| AndroidUtilities | `runOnUIThread(Runnable[, delayMs])` schedules a one-shot callback on the serial Python queue with an optional 0–60,000 ms delay. Cancellation and Looper/thread affinity are unsupported; Python never runs on UIKit's main thread. |
 
 Primitive descriptors: byte, short, int, long, char, boolean, float, double, void.
 Arrays support the eight non-void primitives, bounded by the existing transaction

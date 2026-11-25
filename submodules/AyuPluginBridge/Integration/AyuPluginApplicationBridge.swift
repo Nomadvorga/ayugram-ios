@@ -540,7 +540,26 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                 return .value(.number(value * Self.screenScale(main: true)))
             },
             "dpRatio": { args, _ in guard args.isEmpty else { throw Self.invalid() }; return .value(.number(Self.screenScale(main: true))) },
-            "getPx": { args, _ in throw AyuBridgeFailure.unsupported("AndroidUtilities.getPx") }
+            "getPx": { args, _ in throw AyuBridgeFailure.unsupported("AndroidUtilities.getPx") },
+            "runOnUIThread": { args, context in
+                guard args.count == 1 || args.count == 2 else { throw Self.invalid() }
+                let runnable = try context.snapshot(of: args[0])
+                guard runnable.className == "java.lang.Runnable" else {
+                    throw AyuBridgeFailure.unsupported("AndroidUtilities.runOnUIThread callback")
+                }
+                let delay: Int64
+                if args.count == 2 {
+                    guard let value = args[1].integer, (0...60_000).contains(value) else {
+                        throw AyuBridgeFailure("invalid_arguments", "AndroidUtilities delay is out of range")
+                    }
+                    delay = value
+                } else {
+                    delay = 0
+                }
+                let callback = try context.callback(args[0])
+                let reservation = try context.schedule(callback, delayMilliseconds: delay)
+                return .prepared(AyuBridgeProviderResult(.value(.null), rollback: reservation.rollback, commit: reservation.commit))
+            }
         ])
         let applicationLoaderAdapter = AyuBridgeClassAdapter(name: Self.applicationLoader,
             staticFields: ["applicationContext": { _ in

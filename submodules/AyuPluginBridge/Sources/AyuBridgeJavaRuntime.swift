@@ -11,12 +11,12 @@ enum AyuBridgeJavaRuntime {
     /// Paint, ScrollView and widget adapter models are deliberately excluded:
     /// their declarations do not provide corresponding native rendering.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.view.MotionEvent", "android.os.Handler"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.view.MotionEvent", "android.os.Handler"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
     static var adapters: [AyuBridgeClassAdapter] {
-        [bundle, intent, view, layoutConstraints, motionEvent, paint, canvas, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
+        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
     }
 
     // MARK: android.widget (text/layout surface used by the corpus)
@@ -363,6 +363,79 @@ enum AyuBridgeJavaRuntime {
                 "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(0)) },
             ], readableFields: ["action"], writableFields: ["action"], receiverMethods: ["setAction", "addCategory", "addFlags"],
             validateState: { state in try Self.rejectState(["action", "entries", "categories", "flags"], state: state, className: "android.content.Intent") })
+    }
+
+    static var uri: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.net.Uri",
+            staticMethods: ["parse": { args, _ in
+                guard args.count == 1, let value = args[0].string, value.utf8.count <= 8_192,
+                      URLComponents(string: value) != nil else {
+                    throw AyuBridgeFailure("invalid_arguments", "Invalid or oversized URI")
+                }
+                return .instance(className: "android.net.Uri", state: ["value": .string(value)])
+            }], methods: [
+                "toString": { state, args, _ in
+                    try Self.arity(args, 0)
+                    return .value(.string(try Self.uriString(state)))
+                },
+                "getScheme": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let scheme = try Self.uriComponents(state).scheme
+                    return .value(scheme.map { .string($0) } ?? .null)
+                },
+                "getHost": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let host = try Self.uriComponents(state).host
+                    return .value(host.map { .string($0) } ?? .null)
+                },
+                "getPort": { state, args, _ in
+                    try Self.arity(args, 0)
+                    return .value(try Self.uriComponents(state).port.map { .integer(Int64($0)) } ?? .null)
+                },
+                "getPath": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let components = try Self.uriComponents(state)
+                    return .value(components.percentEncodedPath.isEmpty ? .null : .string(components.path))
+                },
+                "getEncodedPath": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let components = try Self.uriComponents(state)
+                    return .value(components.percentEncodedPath.isEmpty ? .null : .string(components.percentEncodedPath))
+                },
+                "getLastPathSegment": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let components = try Self.uriComponents(state)
+                    return .value(components.path.split(separator: "/").last.map { .string(String($0)) } ?? .null)
+                },
+                "getQueryParameter": { state, args, _ in
+                    guard args.count == 1, let name = args[0].string, !name.isEmpty, name.utf8.count <= 256 else {
+                        throw AyuBridgeFailure("invalid_arguments", "Invalid URI query parameter name")
+                    }
+                    let item = try Self.uriComponents(state).queryItems?.first(where: { $0.name == name })
+                    return .value(item?.value.map { .string($0) } ?? .null)
+                },
+                "getFragment": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let fragment = try Self.uriComponents(state).fragment
+                    return .value(fragment.map { .string($0) } ?? .null)
+                },
+            ], validateState: { state in
+                guard Set(state.keys) == ["value"] else { throw Self.invalid() }
+                _ = try Self.uriString(state)
+                _ = try Self.uriComponents(state)
+            })
+    }
+
+    private static func uriString(_ state: [String: AyuBridgeValue]) throws -> String {
+        guard let value = state["value"]?.string, value.utf8.count <= 8_192 else { throw Self.invalid() }
+        return value
+    }
+
+    private static func uriComponents(_ state: [String: AyuBridgeValue]) throws -> URLComponents {
+        guard let components = URLComponents(string: try Self.uriString(state)) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid URI")
+        }
+        return components
     }
 
     // MARK: View

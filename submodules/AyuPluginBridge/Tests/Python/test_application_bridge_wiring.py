@@ -68,6 +68,14 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         self.assertNotIn('"access_hash":', app)
         self.assertNotIn('"phone":', app)
 
+    def test_android_utilities_callback_uses_bounded_host_scheduler(self):
+        app = (BRIDGE / "Integration/AyuPluginApplicationBridge.swift").read_text()
+        self.assertIn('"runOnUIThread": { args, context in', app)
+        self.assertIn('runnable.className == "java.lang.Runnable"', app)
+        self.assertIn('(0...60_000).contains(value)', app)
+        self.assertIn('context.schedule(callback, delayMilliseconds: delay)', app)
+        self.assertIn('"cancelRunOnUIThread"', (BRIDGE / "Tests/Swift/AyuPluginApplicationBridgeTests.swift").read_text())
+
     def test_event_transport_has_generation_and_never_starts_python_on_lifecycle(self):
         service = (BRIDGE / "Integration/AyuPluginService.swift").read_text()
         self.assertIn('let generation: String; let name = "app"', service)

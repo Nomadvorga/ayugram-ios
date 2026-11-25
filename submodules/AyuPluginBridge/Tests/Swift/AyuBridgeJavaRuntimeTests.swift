@@ -56,6 +56,39 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try adapter.methods["putExtra"]?(&state, [.string("k"), .string("v"), .integer(3)], context()))
     }
 
+    // Uri
+
+    func testUriParseAndReadCommonComponentsWithoutOpeningIt() throws {
+        let adapter = self.runtimeAdapter("android.net.Uri")
+        let parse = try XCTUnwrap(adapter.staticMethods["parse"])
+        guard case let .instance(className, state) = try parse([.string("https://example.com/a%20b/caf%C3%A9?item=first&item=second#details")], context()) else {
+            return XCTFail("Uri.parse should return an owned value descriptor")
+        }
+        XCTAssertEqual(className, "android.net.Uri")
+        XCTAssertEqual(try adapter.methods["toString"]?(state, [], context()), .value(.string("https://example.com/a%20b/caf%C3%A9?item=first&item=second#details")))
+        XCTAssertEqual(try adapter.methods["getScheme"]?(state, [], context()), .value(.string("https")))
+        XCTAssertEqual(try adapter.methods["getHost"]?(state, [], context()), .value(.string("example.com")))
+        XCTAssertEqual(try adapter.methods["getPath"]?(state, [], context()), .value(.string("/a b/café")))
+        XCTAssertEqual(try adapter.methods["getEncodedPath"]?(state, [], context()), .value(.string("/a%20b/caf%C3%A9")))
+        XCTAssertEqual(try adapter.methods["getLastPathSegment"]?(state, [], context()), .value(.string("café")))
+        XCTAssertEqual(try adapter.methods["getQueryParameter"]?(state, [.string("item")], context()), .value(.string("first")))
+        XCTAssertEqual(try adapter.methods["getQueryParameter"]?(state, [.string("missing")], context()), .value(.null))
+        XCTAssertEqual(try adapter.methods["getFragment"]?(state, [], context()), .value(.string("details")))
+    }
+
+    func testUriRejectsUnsupportedOverloadsAndOversizedValues() throws {
+        let adapter = self.runtimeAdapter("android.net.Uri")
+        let parse = try XCTUnwrap(adapter.staticMethods["parse"])
+        XCTAssertThrowsError(try parse([], context()))
+        XCTAssertThrowsError(try parse([.integer(5)], context()))
+        XCTAssertThrowsError(try parse([.string(String(repeating: "x", count: 8_193))], context()))
+        guard case let .instance(_, state) = try parse([.string("relative/path")], context()) else {
+            return XCTFail("Relative URIs are valid values")
+        }
+        XCTAssertThrowsError(try adapter.methods["getQueryParameter"]?(state, [], context()))
+        XCTAssertThrowsError(try adapter.methods["getQueryParameter"]?(state, [.string("")], context()))
+    }
+
     // View
 
     func testViewVisibilityAndTransforms() throws {
@@ -122,7 +155,7 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
 
     func testRegistryValidatesRuntimeAdapters() {
         XCTAssertFalse(self.registry.adapters.isEmpty)
-        for name in ["android.os.Bundle", "android.content.Intent", "android.view.MotionEvent", "android.os.Handler"] {
+        for name in ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.view.MotionEvent", "android.os.Handler"] {
             XCTAssertNotNil(self.registry.adapters[name], name)
         }
         for name in ["android.graphics.Canvas", "android.graphics.Paint", "android.widget.ScrollView", "android.widget.CheckBox"] {
