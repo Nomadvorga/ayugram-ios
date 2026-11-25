@@ -1512,11 +1512,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     var avatarTimerBadge: AvatarBadgeView?
     private var starView: StarView?
     var avatarLiveBadge: (outline: UIImageView, foreground: UIImageView)?
-    // MARK: AyuGram — exteraGram's "Sender mini avatars".
-    private let miniAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
-    private let miniAvatarBackgroundNode = ASDisplayNode()
+    // MARK: AyuGram — exteraGram's "Sender mini avatars". Created on demand, so rows cost nothing while the option is off.
+    private var miniAvatarNode: AvatarNode?
+    private var miniAvatarBackgroundNode: ASDisplayNode?
     private var ayuSenderMiniAvatarsObserver: NSObjectProtocol?
     private var ayuSenderMiniAvatarsValue: Bool?
+    private var ayuHasMiniAvatar = false
     let pinnedIconNode: ASImageNode
     var secretIconNode: ASImageNode?
     var verifiedIconView: ComponentHostView<Empty>?
@@ -1896,15 +1897,6 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.avatarContainerNode.addSubnode(self.communityAvatarShadowNode)
         self.avatarContainerNode.addSubnode(self.avatarNode)
 
-        // MARK: AyuGram — sender mini avatar, drawn over the row's avatar.
-        self.miniAvatarBackgroundNode.isLayerBacked = true
-        self.miniAvatarBackgroundNode.isHidden = true
-        self.miniAvatarBackgroundNode.isUserInteractionEnabled = false
-        self.miniAvatarNode.isHidden = true
-        self.miniAvatarNode.isUserInteractionEnabled = false
-        self.avatarContainerNode.addSubnode(self.miniAvatarBackgroundNode)
-        self.avatarContainerNode.addSubnode(self.miniAvatarNode)
-
         self.contextContainer.addSubnode(self.avatarContainerNode)
         self.avatarNode.addSubnode(self.onlineNode)
 
@@ -2155,8 +2147,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
         }
         
-        self.miniAvatarNode.isHidden = true
-        self.miniAvatarBackgroundNode.isHidden = true
+        self.ayuHasMiniAvatar = false
+        self.miniAvatarNode?.isHidden = true
+        self.miniAvatarBackgroundNode?.isHidden = true
         if let peer = peer {
             let avatarPeer: EnginePeer
             if case let .peer(peerData) = item.content, let avatarMainPeer = peerData.avatarPeer?.chatOrMonoforumMainPeer {
@@ -2234,28 +2227,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             // MARK: AyuGram — exteraGram's "Sender mini avatars": a group row shows who wrote last.
-            var ayuMiniAvatarPeer: EnginePeer?
-            if ExteraSettings.shared.senderMiniAvatars && !displayAsMessage && !peerIsMonoforum && !peerIsCommunity && !item.useCommunityViewLayout && !item.isSideListCompactPeerRow {
-                var isGroupChat = false
-                switch peer {
-                case .group:
-                    isGroupChat = true
-                case let .channel(channel):
-                    if case .group = channel.info {
-                        isGroupChat = true
-                    }
-                default:
-                    break
-                }
-                if isGroupChat, case let .peer(peerData) = item.content, let lastMessage = peerData.messages.last, let author = lastMessage.author, author.id != peer.id {
-                    ayuMiniAvatarPeer = author
-                }
-            }
-            if let ayuMiniAvatarPeer {
-                self.miniAvatarNode.isHidden = false
-                self.miniAvatarBackgroundNode.isHidden = false
+            if let ayuMiniAvatarPeer = self.senderMiniAvatarPeer(item: item, peer: peer, displayAsMessage: displayAsMessage, peerIsMonoforum: peerIsMonoforum, peerIsCommunity: peerIsCommunity) {
+                let (miniAvatarNode, miniAvatarBackgroundNode) = self.ensureMiniAvatarNodes()
+                self.ayuHasMiniAvatar = true
+                miniAvatarNode.isHidden = false
+                miniAvatarBackgroundNode.isHidden = false
                 let miniDiameter = max(14.0, floor(avatarDiameter * 0.42))
-                self.miniAvatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: ayuMiniAvatarPeer, overrideImage: nil, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: miniDiameter, height: miniDiameter))
+                miniAvatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: ayuMiniAvatarPeer, overrideImage: nil, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: miniDiameter, height: miniDiameter))
             }
 
             if peer.isPremium && peer.id != item.context.account.peerId {
@@ -4621,20 +4599,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     transition.updateBounds(node: strongSelf.avatarNode, bounds: CGRect(origin: CGPoint(), size: avatarFrame.size))
                     transition.updateTransformScale(node: strongSelf.avatarNode, scale: avatarScale)
                     strongSelf.avatarNode.updateSize(size: avatarFrame.size)
-                    // MARK: AyuGram — sender mini avatar sits inside the avatar's bottom-right corner.
-                    let showsMiniAvatar = !strongSelf.miniAvatarNode.isHidden && !onlineIsVoiceChat
-                    strongSelf.miniAvatarNode.isHidden = !showsMiniAvatar
-                    strongSelf.miniAvatarBackgroundNode.isHidden = !showsMiniAvatar
-                    if showsMiniAvatar {
-                        let miniDiameter = max(14.0, floor(avatarFrame.width * 0.42))
-                        let miniFrame = CGRect(origin: CGPoint(x: floor(avatarFrame.width - miniDiameter - 2.0), y: floor(avatarFrame.height - miniDiameter - 2.0)), size: CGSize(width: miniDiameter, height: miniDiameter))
-                        transition.updateFrame(node: strongSelf.miniAvatarNode, frame: miniFrame)
-                        strongSelf.miniAvatarNode.updateSize(size: miniFrame.size)
-                        let ringFrame = miniFrame.insetBy(dx: -1.5, dy: -1.5)
-                        transition.updateFrame(node: strongSelf.miniAvatarBackgroundNode, frame: ringFrame)
-                        strongSelf.miniAvatarBackgroundNode.cornerRadius = ringFrame.width * 0.5
-                        strongSelf.miniAvatarBackgroundNode.backgroundColor = item.isPinned ? theme.chatList.pinnedItemBackgroundColor : theme.chatList.itemBackgroundColor
-                    }
+                    strongSelf.updateMiniAvatarLayout(avatarFrame: avatarFrame, onlineIsVoiceChat: onlineIsVoiceChat, theme: item.presentationData.theme, isPinned: item.isPinned, transition: transition) // MARK: AyuGram
                     strongSelf.updateVideoVisibility()
                     
                     var itemPeerId: EnginePeer.Id?
@@ -6025,6 +5990,68 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         }
     }
     
+    // MARK: AyuGram — the last message author a group row shows next to its avatar.
+    private func senderMiniAvatarPeer(item: ChatListItem, peer: EnginePeer, displayAsMessage: Bool, peerIsMonoforum: Bool, peerIsCommunity: Bool) -> EnginePeer? {
+        guard ExteraSettings.shared.senderMiniAvatars, !displayAsMessage, !peerIsMonoforum, !peerIsCommunity, !item.useCommunityViewLayout, !item.isSideListCompactPeerRow else {
+            return nil
+        }
+        var isGroupChat = false
+        switch peer {
+        case .legacyGroup:
+            isGroupChat = true
+        case let .channel(channel):
+            if case .group = channel.info {
+                isGroupChat = true
+            }
+        default:
+            break
+        }
+        guard isGroupChat, case let .peer(peerData) = item.content, let lastMessage = peerData.messages.last, let author = lastMessage.author, author.id != peer.id else {
+            return nil
+        }
+        return author
+    }
+
+    // MARK: AyuGram — creates the sender mini avatar nodes the first time they are needed.
+    private func ensureMiniAvatarNodes() -> (AvatarNode, ASDisplayNode) {
+        if let miniAvatarNode = self.miniAvatarNode, let miniAvatarBackgroundNode = self.miniAvatarBackgroundNode {
+            return (miniAvatarNode, miniAvatarBackgroundNode)
+        }
+        let miniAvatarBackgroundNode = ASDisplayNode()
+        miniAvatarBackgroundNode.isLayerBacked = true
+        miniAvatarBackgroundNode.isHidden = true
+        miniAvatarBackgroundNode.isUserInteractionEnabled = false
+        let miniAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
+        miniAvatarNode.isHidden = true
+        miniAvatarNode.isUserInteractionEnabled = false
+        self.avatarContainerNode.addSubnode(miniAvatarBackgroundNode)
+        self.avatarContainerNode.addSubnode(miniAvatarNode)
+        self.miniAvatarNode = miniAvatarNode
+        self.miniAvatarBackgroundNode = miniAvatarBackgroundNode
+        return (miniAvatarNode, miniAvatarBackgroundNode)
+    }
+
+    // MARK: AyuGram — sender mini avatar sits inside the avatar's bottom-right corner.
+    private func updateMiniAvatarLayout(avatarFrame: CGRect, onlineIsVoiceChat: Bool, theme: PresentationTheme, isPinned: Bool, transition: ContainedViewLayoutTransition) {
+        guard let miniAvatarNode = self.miniAvatarNode, let miniAvatarBackgroundNode = self.miniAvatarBackgroundNode else {
+            return
+        }
+        let showsMiniAvatar = self.ayuHasMiniAvatar && !onlineIsVoiceChat
+        miniAvatarNode.isHidden = !showsMiniAvatar
+        miniAvatarBackgroundNode.isHidden = !showsMiniAvatar
+        guard showsMiniAvatar else {
+            return
+        }
+        let miniDiameter = max(14.0, floor(avatarFrame.width * 0.42))
+        let miniFrame = CGRect(origin: CGPoint(x: floor(avatarFrame.width - miniDiameter - 2.0), y: floor(avatarFrame.height - miniDiameter - 2.0)), size: CGSize(width: miniDiameter, height: miniDiameter))
+        transition.updateFrame(node: miniAvatarNode, frame: miniFrame)
+        miniAvatarNode.updateSize(size: miniFrame.size)
+        let ringFrame = miniFrame.insetBy(dx: -1.5, dy: -1.5)
+        transition.updateFrame(node: miniAvatarBackgroundNode, frame: ringFrame)
+        miniAvatarBackgroundNode.cornerRadius = ringFrame.width * 0.5
+        miniAvatarBackgroundNode.backgroundColor = isPinned ? theme.chatList.pinnedItemBackgroundColor : theme.chatList.itemBackgroundColor
+    }
+
     private func updateVideoVisibility() {
         let isVisible = self.visibilityStatus && self.trackingIsInHierarchy
         self.avatarVideoNode?.updateVisibility(isVisible)

@@ -100,23 +100,23 @@ private func ayuFolderTabTitle(_ title: ChatFolderTitle) -> ChatFolderTitle {
     }
     var kept: [unichar] = []
     kept.reserveCapacity(ns.length)
-    var map: [Int] = []
-    map.reserveCapacity(ns.length + 1)
+    var indexMap: [Int] = []
+    indexMap.reserveCapacity(ns.length + 1)
     for index in 0 ..< ns.length {
-        map.append(kept.count)
+        indexMap.append(kept.count)
         let keep = style == .iconsOnly ? isIcon(index) : !isIcon(index)
         if keep {
             kept.append(ns.character(at: index))
         }
     }
-    map.append(kept.count)
+    indexMap.append(kept.count)
     let newText = String(decoding: kept, as: UTF16.self)
     var newEntities: [MessageTextEntity] = []
     for entity in title.entities {
         let lower = min(max(0, entity.range.lowerBound), ns.length)
         let upper = min(max(lower, entity.range.upperBound), ns.length)
-        let newLower = map[lower]
-        let newUpper = map[upper]
+        let newLower = indexMap[lower]
+        let newUpper = indexMap[upper]
         if newUpper > newLower {
             newEntities.append(MessageTextEntity(range: newLower ..< newUpper, type: entity.type))
         }
