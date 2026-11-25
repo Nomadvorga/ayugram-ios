@@ -8,17 +8,18 @@ identifier; the tests never access real account or app-group preferences.
 Run from the repository root on macOS with Xcode's Swift toolchain:
 
 ```sh
-OUT="$(mktemp -d)"
-xcrun swiftc -swift-version 5 -parse-as-library -warnings-as-errors -g -sanitize=thread \
+TSAN_OPTIONS=halt_on_error=1 python3 tools/run_extera_xctests.py --sanitize=thread --warnings-as-errors \
   Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
   Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
-  Tests/ExteraFeed/ExteraFeedSettingsTests.swift \
-  -o "$OUT/ExteraFeedSettingsTests"
-TSAN_OPTIONS=halt_on_error=1 "$OUT/ExteraFeedSettingsTests"
+  Tests/ExteraFeed/ExteraFeedSettingsTests.swift
 ```
 
-On another host with Swift and XCTest, replace `xcrun swiftc` with `swiftc` and omit
-`-sanitize=thread` if its runtime is unavailable.
+The runner copies these sources unchanged into a temporary Swift 5.9 package and runs
+`swift test` in Swift 5 language mode with debug information, warnings as errors, and
+Thread Sanitizer. SwiftPM discovers every XCTest method and supplies Xcode's XCTest
+paths; the standalone `XCTMain` entry point is excluded in package builds because macOS
+XCTest does not provide it. Build, test, and sanitizer failures fail the runner, and the
+temporary package is removed when it exits. CI runs this same sanitizer command.
 
 Coverage includes reopening persisted state, account isolation, cursor monotonicity,
 per-channel read marks, shared read marks across categories, independent category and

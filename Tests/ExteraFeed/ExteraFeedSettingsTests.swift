@@ -193,9 +193,11 @@ final class ExteraFeedSettingsTests: XCTestCase {
     ]
 }
 
+#if !SWIFT_PACKAGE
 @main
 private enum ExteraFeedSettingsTestRunner {
     static func main() {
         XCTMain([testCase(ExteraFeedSettingsTests.allTests)])
     }
 }
+#endif

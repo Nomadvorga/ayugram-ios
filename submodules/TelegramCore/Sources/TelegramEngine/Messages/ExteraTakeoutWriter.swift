@@ -162,6 +162,11 @@ enum ExteraTakeoutArchive {
     }
 
     static func create(directory: URL, destination: URL, cancelled: () -> Bool) throws {
+        // Foundation may enumerate /var through its /private/var alias on macOS.
+        // Compare canonical path components so aliases and trailing slashes do not
+        // reject ordinary files or become part of their relative ZIP names.
+        let root = directory.resolvingSymlinksInPath().standardizedFileURL
+        let rootComponents = root.pathComponents
         guard FileManager.default.createFile(atPath: destination.path, contents: nil, attributes: [.posixPermissions: 0o600]) else { throw ExteraTakeoutError.io }
         let output = try FileHandle(forWritingTo: destination)
         defer { try? output.close() }
@@ -172,16 +177,16 @@ enum ExteraTakeoutArchive {
             try output.write(contentsOf: data)
             offset += UInt64(data.count)
         }
-        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { throw ExteraTakeoutError.io }
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { throw ExteraTakeoutError.io }
         var entries: [Entry] = []
         for case let url as URL in enumerator {
             let attributes = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
             guard attributes.isSymbolicLink != true else { throw ExteraTakeoutError.io }
             guard attributes.isRegularFile == true else { continue }
             guard entries.count < 60000, let fileSize = attributes.fileSize, fileSize >= 0, UInt64(fileSize) < UInt64(UInt32.max) else { throw ExteraTakeoutError.outputLimit }
-            let prefix = directory.path + "/"
-            guard url.path.hasPrefix(prefix) else { throw ExteraTakeoutError.io }
-            let name = Data(url.path.dropFirst(prefix.count).utf8)
+            let components = url.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+            guard components.count > rootComponents.count, components.starts(with: rootComponents) else { throw ExteraTakeoutError.io }
+            let name = Data(components.dropFirst(rootComponents.count).joined(separator: "/").utf8)
             guard name.count < 65536 else { throw ExteraTakeoutError.outputLimit }
             let start = UInt32(offset)
             // Bit 3: CRC/sizes follow data; bit 11: names are UTF-8.

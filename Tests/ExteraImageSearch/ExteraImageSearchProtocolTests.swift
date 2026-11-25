@@ -67,7 +67,9 @@ final class ExteraImageSearchProtocolTests: XCTestCase {
     ]
 }
 
+#if !SWIFT_PACKAGE
 @main
 private enum ExteraImageSearchTestRunner {
     static func main() { XCTMain([testCase(ExteraImageSearchProtocolTests.allTests)]) }
 }
+#endif

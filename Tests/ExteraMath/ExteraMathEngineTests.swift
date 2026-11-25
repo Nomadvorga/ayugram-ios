@@ -243,9 +243,11 @@ final class ExteraMathEngineTests: XCTestCase {
     }
 }
 
+#if !SWIFT_PACKAGE
 @main
 enum ExteraMathTestRunner {
     static func main() {
         XCTMain([testCase(ExteraMathEngineTests.allTests)])
     }
 }
+#endif

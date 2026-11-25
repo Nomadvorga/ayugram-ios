@@ -1,20 +1,23 @@
 # Local inline calculator checks
 
-The XCTest executable compiles the exact production engine with Foundation and XCTest,
+The SwiftPM test target compiles the exact production engine with Foundation and XCTest,
 without the iOS app, Telegram presentation strings, a simulator, or codesigning.
 Run from the repository root on a macOS host with Xcode's Swift toolchain:
 
 ```sh
-OUT="$(mktemp -d)"
-xcrun swiftc -parse-as-library \
+python3 tools/run_extera_xctests.py \
   submodules/TelegramUI/Sources/ExteraMathEngine.swift \
   submodules/TelegramUI/Sources/ExteraMathUnits.swift \
   submodules/TelegramUI/Sources/ExteraMathTimeZones.swift \
   submodules/TelegramUI/Sources/ExteraMathCurrencyRates.swift \
-  Tests/ExteraMath/ExteraMathEngineTests.swift \
-  -o "$OUT/ExteraMathTests"
-"$OUT/ExteraMathTests"
+  Tests/ExteraMath/ExteraMathEngineTests.swift
 ```
+
+The runner copies these sources unchanged into a temporary Swift 5.9 package and runs
+`swift test` in Swift 5 language mode. SwiftPM discovers every XCTest method and supplies
+Xcode's XCTest paths; the standalone `XCTMain` entry point is excluded in package builds
+because macOS XCTest does not provide it. Build or test failures fail the runner, and
+the temporary package is removed when it exits.
 
 The tests cover precedence, relative percentages, angle units, functions, formatting,
 base conversion and exact-integer limits, dimension-aware units, temperature offsets,
