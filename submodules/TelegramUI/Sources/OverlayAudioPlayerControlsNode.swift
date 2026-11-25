@@ -475,7 +475,7 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
                         if let resource {
                             // Observe caching only: this does not fetch the audio resource.
                             strongSelf.lyricsResourceDisposable.set((strongSelf.engine.resources.data(resource: resource)
-                            |> filter { $0.complete }
+                            |> filter { $0.isComplete }
                             |> take(1)
                             |> deliverOnMainQueue).start(next: { [weak self] data in
                                 guard let self, self.currentTrackKey == trackKey else { return }

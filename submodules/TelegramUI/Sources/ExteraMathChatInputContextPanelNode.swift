@@ -7,6 +7,7 @@ import TelegramUIPreferences
 import AccountContext
 import ChatPresentationInterfaceState
 import ChatInputContextPanelNode
+import ChatControllerInteraction
 import SGStrings
 
 /// A native result row hosted by the composer's existing input-context surface.

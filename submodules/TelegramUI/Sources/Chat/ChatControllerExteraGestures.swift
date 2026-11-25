@@ -2,6 +2,7 @@ import Foundation
 import AccountContext
 import ChatControllerInteraction
 import ChatMessageItemCommon
+import ChatPresentationInterfaceState
 import SGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
