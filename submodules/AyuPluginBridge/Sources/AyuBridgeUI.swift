@@ -267,7 +267,25 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "setVisibility":
             view.visibility = Int(number(0)); view.isHidden = view.visibility != 0
             view.invalidateBridgeLayout()
-        case "setBackgroundColor": view.backgroundColor = AyuBridgeUI.color(args[0].number ?? 0)
+        case "setBackgroundColor":
+            view.backgroundColor = AyuBridgeUI.color(args[0].number ?? 0)
+            view.backgroundShape = 0
+            view.backgroundCornerRadius = 0
+            view.backgroundStrokeWidth = 0
+            view.backgroundStrokeColor = nil
+            view.updateBackgroundStyle()
+        case "setBackgroundStyle":
+            let style = args[0].object ?? [:]
+            view.backgroundColor = AyuBridgeUI.color(style["color"]?.number ?? 0)
+            view.backgroundShape = Int(style["shape"]?.number ?? 0)
+            view.backgroundCornerRadius = CGFloat(style["corner_radius"]?.number ?? 0)
+            view.backgroundStrokeWidth = CGFloat(style["stroke_width"]?.number ?? 0)
+            if let strokeColor = style["stroke_color"]?.number {
+                view.backgroundStrokeColor = AyuBridgeUI.color(strokeColor).cgColor
+            } else {
+                view.backgroundStrokeColor = nil
+            }
+            view.updateBackgroundStyle()
         case "setText":
             view.label?.text = args[0].string; view.textField?.text = args[0].string; view.invalidateBridgeLayout()
         case "setTextColor":
@@ -542,6 +560,10 @@ private final class AyuBridgeView: UIView {
     var translationY: CGFloat = 0
     var scaleX: CGFloat = 1
     var scaleY: CGFloat = 1
+    var backgroundShape = 0
+    var backgroundCornerRadius: CGFloat = 0
+    var backgroundStrokeWidth: CGFloat = 0
+    var backgroundStrokeColor: CGColor?
     var clickCallback: String?
     var touchCallback: String?
     var callback: ((String, [AyuBridgeValue]) -> Void)?
@@ -585,6 +607,13 @@ private final class AyuBridgeView: UIView {
 
     @MainActor func updateTransform() {
         self.transform = CGAffineTransform(translationX: self.translationX, y: self.translationY).scaledBy(x: self.scaleX, y: self.scaleY)
+    }
+
+    @MainActor func updateBackgroundStyle() {
+        let radius = self.backgroundShape == 1 ? min(self.bounds.width, self.bounds.height) / 2 : self.backgroundCornerRadius
+        self.layer.cornerRadius = max(0, radius)
+        self.layer.borderWidth = self.backgroundStrokeWidth
+        self.layer.borderColor = self.backgroundStrokeWidth > 0 ? self.backgroundStrokeColor : nil
     }
 
     @MainActor func updateRecognizers() {
@@ -691,6 +720,7 @@ private final class AyuBridgeView: UIView {
     }
     override func layoutSubviews() {
         super.layoutSubviews()
+        self.updateBackgroundStyle()
         let content = self.bounds.inset(by: self.padding)
         self.label?.frame = content
         self.textField?.frame = content

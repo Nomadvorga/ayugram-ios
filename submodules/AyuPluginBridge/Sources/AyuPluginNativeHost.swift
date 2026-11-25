@@ -595,13 +595,17 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 args[0] = .integer(0)
             } else {
                 let drawable = try self.remote(self.handle(args[0]), owner: owner)
-                guard drawable.kind == "adapter", drawable.className == "android.graphics.drawable.ColorDrawable",
-                      let color = drawable.fields["color"]?.integer else {
+                guard drawable.kind == "adapter" else { throw AyuBridgeFailure.unsupported("View.setBackground drawable") }
+                if drawable.className == "android.graphics.drawable.ColorDrawable", let color = drawable.fields["color"]?.integer {
+                    args[0] = .integer(color)
+                } else if drawable.className == "android.graphics.drawable.GradientDrawable" {
+                    args[0] = .object(drawable.fields)
+                    nativeMethod = "setBackgroundStyle"
+                } else {
                     throw AyuBridgeFailure.unsupported("View.setBackground drawable")
                 }
-                args[0] = .integer(color)
             }
-            nativeMethod = "setBackgroundColor"
+            if nativeMethod == method { nativeMethod = "setBackgroundColor" }
         } else if method == "setOnClickListener" || method == "setOnTouchListener" {
             if args[0] != .null { args[0] = .object(["$callback": .string(try self.callbackID(args[0], owner: owner, method: method == "setOnClickListener" ? "onClick" : "onTouch"))]) }
         } else if method == "setText" {

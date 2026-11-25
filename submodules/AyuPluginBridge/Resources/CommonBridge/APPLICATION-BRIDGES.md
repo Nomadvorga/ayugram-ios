@@ -44,10 +44,11 @@ Neither successful imports nor an IPA build establish functional compatibility.
   per-child gravity and scrollable backing remain unsupported. Relative start/end
   follow the native view's layout direction. `EditText` supports horizontal
   gravity and center/unspecified vertical gravity.
-- `View.setBackground` accepts only an owned
-  `android.graphics.drawable.ColorDrawable` or `null`, mapped to a UIKit
-  background color. Other drawable/resource/image forms and Android Canvas
-  rendering remain unsupported.
+- `View.setBackground` accepts an owned `ColorDrawable`, a solid rectangle/oval
+  `GradientDrawable` with one corner radius and optional uniform stroke, or
+  `null`, mapped to UIKit background/layer styling. Gradients, per-corner
+  radii, ripple/layer/resource/image drawables and Android Canvas rendering
+  remain unsupported.
 - `LinearLayout.LayoutParams` accepts bounded width/height and an optional
   nonnegative weight. Positive weights divide only the remaining main-axis space
   after base child sizes and margins; this is not full Android measurement parity.

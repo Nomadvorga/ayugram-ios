@@ -554,6 +554,20 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(cleared["result"], .null)
     }
 
+    func testViewBackgroundAcceptsSolidGradientDrawableSubset() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let textView = try await self.construct(host, "android.widget.TextView")
+        let gradient = try await self.construct(host, "android.graphics.drawable.GradientDrawable")
+        XCTAssertEqual((try await self.invoke(host, gradient["result"], "setColor", [.integer(-65_536)]))["result"], gradient["result"])
+        XCTAssertEqual((try await self.invoke(host, gradient["result"], "setCornerRadius", [.number(12.5)]))["result"], gradient["result"])
+        XCTAssertEqual((try await self.invoke(host, gradient["result"], "setStroke", [.integer(2), .integer(-1)]))["result"], gradient["result"])
+        XCTAssertEqual((try await self.invoke(host, textView["result"], "setBackground", [gradient["result"]]))["result"], .null)
+
+        let unsupportedShape = try await self.invoke(host, gradient["result"], "setShape", [.integer(2)])
+        XCTAssertEqual(unsupportedShape["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
     func testSettingsReplacementClearsOnlyOwnerAndPersistsAcrossDetach() async throws {
         let host = self.host()
         try await self.authorize(host)

@@ -111,6 +111,21 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try adapter.staticMethods["parseColor"]?([.string("#12345")], context()))
     }
 
+    func testGradientDrawableKeepsOnlyNativeRenderableStyles() throws {
+        let adapter = self.runtimeAdapter("android.graphics.drawable.GradientDrawable")
+        var state = try self.constructor(adapter)
+        _ = try adapter.methods["setColor"]?(&state, [.integer(-65_536)], context())
+        _ = try adapter.methods["setCornerRadius"]?(&state, [.number(12.5)], context())
+        _ = try adapter.methods["setShape"]?(&state, [.integer(1)], context())
+        _ = try adapter.methods["setStroke"]?(&state, [.integer(2), .integer(-1)], context())
+        XCTAssertEqual(state["color"], .integer(-65_536))
+        XCTAssertEqual(state["corner_radius"], .number(12.5))
+        XCTAssertEqual(state["shape"], .integer(1))
+        XCTAssertEqual(state["stroke_width"], .number(2))
+        XCTAssertThrowsError(try adapter.methods["setShape"]?(&state, [.integer(2)], context()))
+        XCTAssertThrowsError(try adapter.methods["setCornerRadius"]?(&state, [.number(-1)], context()))
+    }
+
     // View
 
     func testViewVisibilityAndTransforms() throws {
@@ -177,7 +192,7 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
 
     func testRegistryValidatesRuntimeAdapters() {
         XCTAssertFalse(self.registry.adapters.isEmpty)
-        for name in ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"] {
+        for name in ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.view.MotionEvent", "android.os.Handler"] {
             XCTAssertNotNil(self.registry.adapters[name], name)
         }
         for name in ["android.graphics.Canvas", "android.graphics.Paint", "android.widget.ScrollView", "android.widget.CheckBox"] {

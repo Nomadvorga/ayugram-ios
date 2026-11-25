@@ -10,12 +10,12 @@ enum AyuBridgeJavaRuntime {
     /// Canvas, Paint, ScrollView and widget adapter models remain excluded when
     /// the native-host view registry owns those classes.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.view.MotionEvent", "android.os.Handler"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
     static var adapters: [AyuBridgeClassAdapter] {
-        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, color, colorDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
+        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, color, colorDrawable, gradientDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
     }
 
     // MARK: android.widget (text/layout surface used by the corpus)
@@ -797,7 +797,54 @@ enum AyuBridgeJavaRuntime {
                     state = updated
                     return Self.instance("android.graphics.drawable.ColorDrawable", updated)
                 },
-            ], receiverMethods: ["setColor"], validateState: { state in try Self.rejectState(["color"], state: state, className: "android.graphics.drawable.ColorDrawable") })
+             ], receiverMethods: ["setColor"], validateState: { state in try Self.rejectState(["color"], state: state, className: "android.graphics.drawable.ColorDrawable") })
+    }
+
+    static var gradientDrawable: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.graphics.drawable.GradientDrawable",
+            constructor: { args, _ in
+                try Self.arity(args, 0)
+                return ["color": .integer(0), "shape": .integer(0), "corner_radius": .number(0), "stroke_width": .number(0), "stroke_color": .integer(0)]
+            },
+            constants: ["RECTANGLE": .integer(0), "OVAL": .integer(1)],
+            methods: [
+                "setColor": { state, args, _ in
+                    try Self.arity(args, 1)
+                    var updated = state; updated["color"] = .integer(try Self.colorInteger(args[0], "ARGB color")); state = updated
+                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
+                },
+                "setCornerRadius": { state, args, _ in
+                    try Self.arity(args, 1)
+                    let radius = try Self.doubleArgument(args[0])
+                    guard radius >= 0, radius <= 100_000 else { throw Self.unsupported("GradientDrawable.setCornerRadius") }
+                    var updated = state; updated["corner_radius"] = .number(radius); state = updated
+                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
+                },
+                "setShape": { state, args, _ in
+                    try Self.arity(args, 1)
+                    guard let shape = args[0].integer, [0, 1].contains(shape) else { throw Self.unsupported("GradientDrawable.setShape") }
+                    var updated = state; updated["shape"] = .integer(shape); state = updated
+                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
+                },
+                "setStroke": { state, args, _ in
+                    try Self.arity(args, 2)
+                    let width = try Self.doubleArgument(args[0])
+                    guard width >= 0, width <= 100_000 else { throw Self.unsupported("GradientDrawable.setStroke") }
+                    var updated = state
+                    updated["stroke_width"] = .number(width)
+                    updated["stroke_color"] = .integer(try Self.colorInteger(args[1], "stroke ARGB color"))
+                    state = updated
+                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
+                },
+            ], receiverMethods: ["setColor", "setCornerRadius", "setShape", "setStroke"], validateState: { state in
+                try Self.rejectState(["color", "shape", "corner_radius", "stroke_width", "stroke_color"], state: state, className: "android.graphics.drawable.GradientDrawable")
+                guard let color = state["color"], let shape = state["shape"]?.integer,
+                      let radius = state["corner_radius"]?.number, let width = state["stroke_width"]?.number,
+                      let stroke = state["stroke_color"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid GradientDrawable state") }
+                _ = try Self.colorInteger(color, "ARGB color")
+                guard [0, 1].contains(shape), radius >= 0, radius <= 100_000, width >= 0, width <= 100_000 else { throw AyuBridgeFailure("invalid_arguments", "Invalid GradientDrawable state") }
+                _ = try Self.colorInteger(stroke, "stroke ARGB color")
+            })
     }
 
     // MARK: Runnable / Handler
