@@ -244,7 +244,6 @@ final class OverlayAudioPlayerLyricsNode: ASDisplayNode {
             let attributedString = NSAttributedString(string: noLyricsString, font: Font.regular(15.0), textColor: self.presentationTheme.list.itemSecondaryTextColor, paragraphAlignment: .center)
             let textNode = TextNode()
             textNode.displaysAsynchronously = false
-            textNode.maximumNumberOfLines = 0
             let makeLayout = TextNode.asyncLayout(textNode)
             let (textLayout, textApply) = makeLayout(TextNodeLayoutArguments(attributedString: attributedString, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: size.width - 48.0, height: .greatestFiniteMagnitude), alignment: .center))
             textNode.frame = CGRect(origin: CGPoint(x: 24.0, y: size.height / 2.0 - textLayout.size.height / 2.0), size: textLayout.size)
@@ -265,7 +264,6 @@ final class OverlayAudioPlayerLyricsNode: ASDisplayNode {
             } else {
                 textNode = TextNode()
                 textNode.displaysAsynchronously = false
-                textNode.maximumNumberOfLines = 3
                 self.lines[index].textNode = textNode
                 self.contentNode.addSubnode(textNode)
             }

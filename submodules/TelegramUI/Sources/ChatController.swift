@@ -4651,7 +4651,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             if #available(iOS 18.0, *) {
                                 useSystemTranslation = true
                             }
-                        case .gtranslate:
+                        case .gtranslate, .microsoft, .yandex:
                             useSystemTranslation = false
                         case .default:
                             break
