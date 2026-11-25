@@ -205,7 +205,7 @@ private final class SpeechRecognitionPage {
             } catch { failure = error }
             let models = await manager.catalogue()
             let wasCancelled = Task.isCancelled || failure is CancellationError
-            await MainActor.run { [weak self] in
+            await MainActor.run { [weak self, failure] in
                 guard let self else { return }
                 if wasCancelled {
                     self.message = self.text("Request cancelled. Refresh to check Apple's current asset state.", "Запрос отменён. Обновите список для проверки состояния ресурсов Apple.")

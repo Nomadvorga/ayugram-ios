@@ -486,7 +486,7 @@ private final class ExteraAppIconController: ViewController, UIScrollViewDelegat
                 self.applying = false
                 self.updateSelection()
                 let controller = self.context.sharedContext.makePremiumIntroController(context: self.context, source: .appIcons, forceDark: false, dismissed: nil)
-                self.push(controller)
+                self.pushIconController(controller)
                 return
             }
             // The binding owns UIApplication and its callback chain, including extensions' behavior.
@@ -511,7 +511,7 @@ private final class ExteraAppIconController: ViewController, UIScrollViewDelegat
         }))
     }
 
-    private func push(_ controller: ViewController) {
+    private func pushIconController(_ controller: ViewController) {
         (self.navigationController as? NavigationController)?.pushViewController(controller)
     }
 

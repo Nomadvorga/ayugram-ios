@@ -62,7 +62,7 @@ public func ayuReadHistoryController(context: AccountContext, peerId: EnginePeer
     }
     let signal = combineLatest(context.sharedContext.presentationData, status, context.account.network.connectionStatus, context.account.loggedOut, actions.submission.get(), actions.notice.get())
     |> deliverOnMainQueue
-    |> map { presentationData, statusAndNames, connection, loggedOut, submission, notice -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { [actions] presentationData, statusAndNames, connection, loggedOut, submission, notice -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (snapshot, names) = statusAndNames
         actions.active = !loggedOut && !snapshot.closed && snapshot.ownerIdValue == context.account.peerId.toInt64()
         let lang = presentationData.strings.baseLanguageCode

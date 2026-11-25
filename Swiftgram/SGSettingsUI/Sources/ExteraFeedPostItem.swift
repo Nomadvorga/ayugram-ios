@@ -67,7 +67,7 @@ private final class ExteraFeedPostItemNode: ListViewItemNode {
     private let reactionButton = UIButton(type: .system)
     private var item: ExteraFeedPostItem?
     private var observers: [NSObjectProtocol] = []
-    private var inHierarchy = false
+    private var feedNodeIsInHierarchy = false
     private var pageVisible = false
     private let visibilityDisposable = MetaDisposable()
 
@@ -106,19 +106,19 @@ private final class ExteraFeedPostItemNode: ListViewItemNode {
 
     override func didEnterHierarchy() {
         super.didEnterHierarchy()
-        self.inHierarchy = true
+        self.feedNodeIsInHierarchy = true
         self.updateMediaVisibility()
     }
 
     override func didExitHierarchy() {
         super.didExitHierarchy()
-        self.inHierarchy = false
+        self.feedNodeIsInHierarchy = false
         self.updateMediaVisibility()
     }
 
     private func updateMediaVisibility(forceHidden: Bool = false) {
         guard let bubble = self.bubble else { return }
-        guard !forceHidden, self.pageVisible, self.inHierarchy, UIApplication.shared.applicationState == .active else {
+        guard !forceHidden, self.pageVisible, self.feedNodeIsInHierarchy, UIApplication.shared.applicationState == .active else {
             bubble.visibility = .none
             return
         }
