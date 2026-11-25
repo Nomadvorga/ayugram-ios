@@ -228,7 +228,7 @@ private final class ExteraBrowserCustomFilterController: ViewController {
     @objc private func save() {
         let text = self.editor.text ?? ""
         self.saveButton.isEnabled = false
-        DispatchQueue.global(qos: .utility).async {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = Result { try ExteraBrowserABPConverter.convert(text, limit: ExteraBrowserFilters.maximumCustomRules) }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }

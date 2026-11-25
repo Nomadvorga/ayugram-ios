@@ -181,7 +181,7 @@ private final class ExteraAIList {
             }
             rows.append(.action(.options, page.text("Add Service", "Добавить сервис"), .generic, {
                 page.choose(title: page.text("Provider", "Провайдер"), options: ExteraAIService.presets.map { service in
-                    (service.name, { [weak page] in page?.openService(ExteraAIServiceDraft(service: service, key: "", existing: false)) })
+                    (service.name, { [weak page = page] in page?.openService(ExteraAIServiceDraft(service: service, key: "", existing: false)) })
                 })
             }))
             rows.append(.notice(.options, page.text("Choose a service to edit its endpoint, model and API key or make it active. Custom services must support OpenAI Chat Completions or Responses. Empty API keys are permitted for servers that do not require authentication.", "Выберите сервис, чтобы изменить адрес, модель, ключ API или сделать его активным. Пользовательские сервисы должны поддерживать OpenAI Chat Completions или Responses. Для серверов без авторизации ключ может быть пустым.")))
