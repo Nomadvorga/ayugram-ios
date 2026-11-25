@@ -470,3 +470,12 @@
 "Extera.Application" = "Приложение";
 "Extera.HideActionBarStatus" = "Скрыть статус в заголовке";
 "Extera.HideDialogsSearchBar" = "Скрыть строку поиска в списке чатов";
+"Extera.SenderMiniAvatars" = "Мини-аватарки отправителей";
+"Extera.TabTitleStyle" = "Заголовки папок";
+"Extera.TabTitleStyle.TextWithIcons" = "Название и иконка";
+"Extera.TabTitleStyle.TextOnly" = "Только название";
+"Extera.TabTitleStyle.IconsOnly" = "Только иконка";
+"Extera.TabCounter" = "Счётчик уведомлений";
+"Extera.TabCounter.AllChats" = "Все чаты";
+"Extera.TabCounter.Unmuted" = "Только со звуком";
+"Extera.TabCounter.Off" = "Откл.";

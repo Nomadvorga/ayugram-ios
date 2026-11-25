@@ -485,3 +485,12 @@
 "Extera.Application" = "Application";
 "Extera.HideActionBarStatus" = "Hide Status in Header";
 "Extera.HideDialogsSearchBar" = "Hide Search Bar in Chat List";
+"Extera.SenderMiniAvatars" = "Sender Mini Avatars";
+"Extera.TabTitleStyle" = "Folder Tab Titles";
+"Extera.TabTitleStyle.TextWithIcons" = "Text and Icon";
+"Extera.TabTitleStyle.TextOnly" = "Text Only";
+"Extera.TabTitleStyle.IconsOnly" = "Icon Only";
+"Extera.TabCounter" = "Notification Counters";
+"Extera.TabCounter.AllChats" = "All Chats";
+"Extera.TabCounter.Unmuted" = "Unmuted Only";
+"Extera.TabCounter.Off" = "Off";

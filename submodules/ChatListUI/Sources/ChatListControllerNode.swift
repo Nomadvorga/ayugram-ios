@@ -56,6 +56,78 @@ public enum ChatListContainerNodeFilter: Equatable {
     }
 }
 
+// MARK: AyuGram
+// exteraGram's "Tab title style": folder tabs keep the title's text, its custom emoji icons, or only the icons.
+private func ayuTrimmedFolderTabTitle(_ text: String, entities: [MessageTextEntity], enableAnimations: Bool) -> ChatFolderTitle {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed == text {
+        return ChatFolderTitle(text: text, entities: entities, enableAnimations: enableAnimations)
+    }
+    let ns = text as NSString
+    let trimmedNS = trimmed as NSString
+    let leading = trimmedNS.length == 0 ? 0 : ns.range(of: trimmed).location
+    var newEntities: [MessageTextEntity] = []
+    for entity in entities {
+        let lower = max(entity.range.lowerBound, leading)
+        let upper = min(entity.range.upperBound, leading + trimmedNS.length)
+        if upper > lower {
+            newEntities.append(MessageTextEntity(range: (lower - leading) ..< (upper - leading), type: entity.type))
+        }
+    }
+    return ChatFolderTitle(text: trimmed, entities: newEntities, enableAnimations: enableAnimations)
+}
+
+private func ayuFolderTabTitle(_ title: ChatFolderTitle) -> ChatFolderTitle {
+    let style = ExteraSettings.shared.tabTitleStyle
+    if style == .textWithIcons {
+        return title
+    }
+    let ns = title.text as NSString
+    let iconRanges = title.entities.compactMap { entity -> Range<Int>? in
+        if case .CustomEmoji = entity.type, entity.range.lowerBound >= 0, entity.range.upperBound <= ns.length, !entity.range.isEmpty {
+            return entity.range
+        }
+        return nil
+    }
+    if style == .iconsOnly && iconRanges.isEmpty {
+        return title
+    }
+    func isIcon(_ index: Int) -> Bool {
+        for range in iconRanges where range.contains(index) {
+            return true
+        }
+        return false
+    }
+    var kept: [unichar] = []
+    kept.reserveCapacity(ns.length)
+    var map: [Int] = []
+    map.reserveCapacity(ns.length + 1)
+    for index in 0 ..< ns.length {
+        map.append(kept.count)
+        let keep = style == .iconsOnly ? isIcon(index) : !isIcon(index)
+        if keep {
+            kept.append(ns.character(at: index))
+        }
+    }
+    map.append(kept.count)
+    let newText = String(decoding: kept, as: UTF16.self)
+    var newEntities: [MessageTextEntity] = []
+    for entity in title.entities {
+        let lower = min(max(0, entity.range.lowerBound), ns.length)
+        let upper = min(max(lower, entity.range.upperBound), ns.length)
+        let newLower = map[lower]
+        let newUpper = map[upper]
+        if newUpper > newLower {
+            newEntities.append(MessageTextEntity(range: newLower ..< newUpper, type: entity.type))
+        }
+    }
+    let result = ayuTrimmedFolderTabTitle(newText, entities: newEntities, enableAnimations: title.enableAnimations)
+    if result.text.isEmpty {
+        return title
+    }
+    return result
+}
+
 public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private let context: AccountContext
     private weak var controller: ChatListControllerImpl?
@@ -1630,8 +1702,18 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                             isMainTab = true
                         case let .filter(idValue, text, unread):
                             id = AnyHashable(idValue)
-                            title = HorizontalTabsComponent.Tab.Title(text: text.text, entities: text.entities, enableAnimations: text.enableAnimations)
-                            if unread.value != 0 {
+                            let tabTitle = ayuFolderTabTitle(text) // MARK: AyuGram
+                            title = HorizontalTabsComponent.Tab.Title(text: tabTitle.text, entities: tabTitle.entities, enableAnimations: tabTitle.enableAnimations)
+                            let showsBadge: Bool
+                            switch ExteraSettings.shared.tabCounterMode { // MARK: AyuGram
+                            case .allChats:
+                                showsBadge = unread.value != 0
+                            case .unmuted:
+                                showsBadge = unread.hasUnmuted && unread.value != 0
+                            case .off:
+                                showsBadge = false
+                            }
+                            if showsBadge {
                                 badge = HorizontalTabsComponent.Tab.Badge(
                                     title: "\(unread.value)",
                                     isAccent: unread.hasUnmuted

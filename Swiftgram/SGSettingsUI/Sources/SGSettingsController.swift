@@ -71,6 +71,7 @@ private enum SGBoolSetting: String {
     case hideActionBarStatus
     case hideFloatingButton
     case hideDialogsSearchBar
+    case senderMiniAvatars
     case showNavigationBar
     case hideNavigationBarLabels
     case showContactsTab
@@ -137,6 +138,8 @@ private enum SGOneFromManySetting: String {
     case chatListTitle
     case downloadSpeedBoost
     case allChatsTitle
+    case tabTitleStyle
+    case tabCounterMode
     case translationProvider
     case translationTargetLanguage
     case doNotTranslateLanguages
@@ -196,6 +199,22 @@ private func chatListTitleOption(_ value: ExteraSettings.ChatListTitle, lang: St
     case .fullName: return i18n("Extera.ActionBarTitleFullName", lang)
     case .firstName: return i18n("Extera.ActionBarTitleName", lang)
     case .chats: return i18n("Extera.ActionBarTitleChats", lang)
+    }
+}
+
+private func tabTitleStyleTitle(_ value: ExteraSettings.TabTitleStyle, lang: String) -> String {
+    switch value {
+    case .textWithIcons: return i18n("Extera.TabTitleStyle.TextWithIcons", lang)
+    case .textOnly: return i18n("Extera.TabTitleStyle.TextOnly", lang)
+    case .iconsOnly: return i18n("Extera.TabTitleStyle.IconsOnly", lang)
+    }
+}
+
+private func tabCounterModeTitle(_ value: ExteraSettings.TabCounterMode, lang: String) -> String {
+    switch value {
+    case .allChats: return i18n("Extera.TabCounter.AllChats", lang)
+    case .unmuted: return i18n("Extera.TabCounter.Unmuted", lang)
+    case .off: return i18n("Extera.TabCounter.Off", lang)
     }
 }
 
@@ -302,7 +321,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideFloatingButton, value: ExteraSettings.shared.hideFloatingButton, text: i18n("Extera.HideFloatingButton", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.HideFloatingButtonInfo", lang)))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideDialogsSearchBar, value: ExteraSettings.shared.hideDialogsSearchBar, text: i18n("Extera.HideDialogsSearchBar", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .senderMiniAvatars, value: ExteraSettings.shared.senderMiniAvatars, text: i18n("Extera.SenderMiniAvatars", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .chatList, settingName: .chatListTitle, text: i18n("Extera.ActionBarTitle", lang), value: chatListTitleOption(ExteraSettings.shared.chatListTitle, lang: lang), enabled: true))
 
@@ -316,6 +335,9 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.notice(id: id.count, section: .tabs, text: i18n("Settings.Tabs.WideTabBar.Notice", lang)))
 
     entries.append(.header(id: id.count, section: .folders, text: strings.Settings_ChatFolders.uppercased(), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabTitleStyle, text: i18n("Extera.TabTitleStyle", lang), value: tabTitleStyleTitle(ExteraSettings.shared.tabTitleStyle, lang: lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabCounterMode, text: i18n("Extera.TabCounter", lang), value: tabCounterModeTitle(ExteraSettings.shared.tabCounterMode, lang: lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .folders, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .foldersAtBottom, value: experimentalUISettings.foldersTabAtBottom, text: i18n("Settings.Folders.BottomTab", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .compactFolderNames, value: settings.compactFolderNames, text: i18n("Settings.Folders.CompactNames", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .allChatsTitle, text: i18n("Settings.Folders.AllChatsTitle", lang), value: i18n("Settings.Folders.AllChatsTitle.\(settings.allChatsTitleLengthOverride)", lang), enabled: true))
@@ -517,6 +539,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraSettings.shared.set(.hideFloatingButton, value)
         case .hideDialogsSearchBar:
             ExteraSettings.shared.set(.hideDialogsSearchBar, value)
+        case .senderMiniAvatars:
+            ExteraSettings.shared.set(.senderMiniAvatars, value)
         case .hidePhoneNumber:
             settings.hidePhoneInSettings = value
             askForRestart?()
@@ -774,6 +798,20 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
                             askForRestart?()
                         }
                     })
+                }))
+            }
+        case .tabTitleStyle:
+            for value in ExteraSettings.TabTitleStyle.allCases {
+                options.append(SGOneFromManyOption(title: tabTitleStyleTitle(value, lang: lang), isSelected: ExteraSettings.shared.tabTitleStyle == value, action: {
+                    ExteraSettings.shared.tabTitleStyle = value
+                    simplePromise.set(true)
+                }))
+            }
+        case .tabCounterMode:
+            for value in ExteraSettings.TabCounterMode.allCases {
+                options.append(SGOneFromManyOption(title: tabCounterModeTitle(value, lang: lang), isSelected: ExteraSettings.shared.tabCounterMode == value, action: {
+                    ExteraSettings.shared.tabCounterMode = value
+                    simplePromise.set(true)
                 }))
             }
         case .allChatsTitle:

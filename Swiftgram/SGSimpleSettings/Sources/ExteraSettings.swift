@@ -17,6 +17,9 @@ public final class ExteraSettings {
         case hideActionBarStatus
         case hideFloatingButton
         case hideDialogsSearchBar
+        case senderMiniAvatars
+        case tabTitleStyle
+        case tabCounterMode
         case singleCornerRadius
         case avatarCorners
         case chatListTitle
@@ -36,6 +39,20 @@ public final class ExteraSettings {
         case fullName = 1
         case firstName = 2
         case chats = 3
+    }
+
+    /// exteraGram's "Tab title style": folder tabs show text and icons, text only, or icons only.
+    public enum TabTitleStyle: Int, CaseIterable {
+        case textWithIcons = 0
+        case textOnly = 1
+        case iconsOnly = 2
+    }
+
+    /// exteraGram's "Tab counter": all chats, unmuted chats only, or off.
+    public enum TabCounterMode: Int, CaseIterable {
+        case allChats = 0
+        case unmuted = 1
+        case off = 2
     }
 
     /// exteraGram's "Show ID and DC": 0 hides it, 1 prints Telegram API ids, 2 prints Bot API ids.
@@ -64,6 +81,9 @@ public final class ExteraSettings {
             ExteraSettings.key(.hideActionBarStatus): false,
             ExteraSettings.key(.hideFloatingButton): false,
             ExteraSettings.key(.hideDialogsSearchBar): false,
+            ExteraSettings.key(.senderMiniAvatars): false,
+            ExteraSettings.key(.tabTitleStyle): TabTitleStyle.textWithIcons.rawValue,
+            ExteraSettings.key(.tabCounterMode): TabCounterMode.allChats.rawValue,
             ExteraSettings.key(.singleCornerRadius): false,
             ExteraSettings.key(.avatarCorners): 28,
             ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
@@ -122,6 +142,29 @@ public final class ExteraSettings {
     /// exteraGram's "Hide dialogs search bar": the chat list's inline search field is not created.
     public var hideDialogsSearchBar: Bool {
         return self.value(.hideDialogsSearchBar)
+    }
+
+    /// exteraGram's "Sender mini avatars": a group row shows the last message author's avatar.
+    public var senderMiniAvatars: Bool {
+        return self.value(.senderMiniAvatars)
+    }
+
+    public var tabTitleStyle: TabTitleStyle {
+        get { return TabTitleStyle(rawValue: self.store.int(ExteraSettings.key(.tabTitleStyle))) ?? .textWithIcons }
+        set {
+            if newValue != self.tabTitleStyle {
+                self.store.setInt(newValue.rawValue, ExteraSettings.key(.tabTitleStyle))
+            }
+        }
+    }
+
+    public var tabCounterMode: TabCounterMode {
+        get { return TabCounterMode(rawValue: self.store.int(ExteraSettings.key(.tabCounterMode))) ?? .allChats }
+        set {
+            if newValue != self.tabCounterMode {
+                self.store.setInt(newValue.rawValue, ExteraSettings.key(.tabCounterMode))
+            }
+        }
     }
 
     public var singleCornerRadius: Bool {
