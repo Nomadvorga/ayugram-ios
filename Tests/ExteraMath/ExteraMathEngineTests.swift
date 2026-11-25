@@ -103,6 +103,9 @@ final class ExteraMathEngineTests: XCTestCase {
     }
 
     func testUnitsTemperatureAndDimensionRules() {
+        XCTAssertEqual(ExteraMathUnits.measure("фунтах")?.code, "lb")
+        XCTAssertEqual(ExteraMathUnits.measure("футах")?.code, "ft")
+        XCTAssertEqual(ExteraMathEngine.evaluate("1 m в футах", options: self.plain)?.formatted, "3.28\u{00a0}ft")
         for (expression, expected) in [("5 kg to lb", "11.02\u{00a0}lb"), ("100 km/h to mph", "62.14\u{00a0}mph"), ("1 gal to l", "3.79\u{00a0}l"), ("1 fl oz to ml", "29.57\u{00a0}ml"), ("1 m² to ft2", "10.76\u{00a0}ft²"), ("32°F to °C", "0\u{00a0}°C"), ("0°C to kelvin", "273.15\u{00a0}K"), ("-40 °C to °F", "-40\u{00a0}°F"), ("1 km + 500 m", "1.5\u{00a0}km"), ("5 kg * 2", "10\u{00a0}kg"), ("5 kg / 500 g", "10"), ("5 кг в фунтах", "11.02\u{00a0}lb"), ("200 kg + 10%", "220\u{00a0}kg"), ("12% of 10 kg", "1.2\u{00a0}kg")] {
             XCTAssertEqual(ExteraMathEngine.evaluate(expression, options: self.plain)?.formatted, expected, expression)
         }

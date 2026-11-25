@@ -44,7 +44,7 @@ enum ExteraMathUnits {
         c.add("kg", "kg", "кг", .mass, 1, "lb", "kg|кг|килограмм|килограмма|килограммов|килограммах|kilogram|kilograms|kilo|kilos")
         c.add("t", "t", "т", .mass, 1000, "lb", "t|т|тонна|тонны|тонн|тоннах|tonne|tonnes")
         c.add("oz", "oz", "oz", .mass, 0.028349523125, "g", "oz|ounce|ounces|унция|унции|унций|унциях")
-        c.add("lb", "lb", "lb", .mass, 0.45359237, "kg", "lb|lbs|pound|pounds|фунт|фунта|фунтов|футах")
+        c.add("lb", "lb", "lb", .mass, 0.45359237, "kg", "lb|lbs|pound|pounds|фунт|фунта|фунтов|фунтах")
         c.add("ml", "ml", "мл", .volume, 0.001, "floz", "ml|мл|миллилитр|миллилитра|миллилитров|миллилитрах|milliliter|milliliters|millilitre|millilitres")
         c.add("l", "l", "л", .volume, 1, "gal", "l|л|литр|литра|литров|литрах|liter|liters|litre|litres")
         c.add("floz", "fl oz", "fl oz", .volume, 0.0295735295625, "ml", "floz|fl oz")
