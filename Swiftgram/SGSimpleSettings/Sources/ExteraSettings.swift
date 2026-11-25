@@ -14,6 +14,8 @@ public final class ExteraSettings {
         case filterZalgo
         case forceSnow
         case centerTitle
+        case hideActionBarStatus
+        case hideFloatingButton
         case singleCornerRadius
         case avatarCorners
         case chatListTitle
@@ -58,6 +60,8 @@ public final class ExteraSettings {
             ExteraSettings.key(.filterZalgo): false,
             ExteraSettings.key(.forceSnow): false,
             ExteraSettings.key(.centerTitle): false,
+            ExteraSettings.key(.hideActionBarStatus): false,
+            ExteraSettings.key(.hideFloatingButton): false,
             ExteraSettings.key(.singleCornerRadius): false,
             ExteraSettings.key(.avatarCorners): 28,
             ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
@@ -101,6 +105,16 @@ public final class ExteraSettings {
 
     public var centerTitle: Bool {
         return self.value(.centerTitle)
+    }
+
+    /// exteraGram's "Hide action bar status": drops the presence line under the chat list title.
+    public var hideActionBarStatus: Bool {
+        return self.value(.hideActionBarStatus)
+    }
+
+    /// exteraGram's "Hide floating button": on iOS the compose action lives in the chat list header.
+    public var hideFloatingButton: Bool {
+        return self.value(.hideFloatingButton)
     }
 
     public var singleCornerRadius: Bool {

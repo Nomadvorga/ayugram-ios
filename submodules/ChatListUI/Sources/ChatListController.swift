@@ -415,16 +415,18 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         }
                     )
                     
-                    self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
-                        content: .icon(imageName: "Chat List/ComposeIcon"),
-                        // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
-                        tint: .generic,
-                        requiresOwnSection: true,
-                        //
-                        action: { [weak self] _ in
-                            self?.composePressed()
-                        }
-                    )
+                    if !ExteraSettings.shared.hideFloatingButton { // MARK: AyuGram
+                        self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
+                            content: .icon(imageName: "Chat List/ComposeIcon"),
+                            // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
+                            tint: .generic,
+                            requiresOwnSection: true,
+                            //
+                            action: { [weak self] _ in
+                                self?.composePressed()
+                            }
+                        )
+                    }
                     
                     //let backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.DialogList_Title, style: .plain, target: nil, action: nil)
                     //backBarButtonItem.accessibilityLabel = self.presentationData.strings.Common_Back
@@ -7070,6 +7072,8 @@ private final class ChatListLocationContext {
         
         // MARK: Swiftgram
         let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
+        // MARK: AyuGram — cheap notification-driven value, so the header reacts without polling.
+        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus })
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()
@@ -7158,7 +7162,7 @@ private final class ChatListLocationContext {
         case .chatList:
             if !hideNetworkActivityStatus {
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
-                    hideStoriesSignal, // MARK: Swiftgram
+                    headerSettingsSignal, // MARK: Swiftgram / AyuGram
                     networkState,
                     hasProxy,
                     passcode,
@@ -7167,14 +7171,16 @@ private final class ChatListLocationContext {
                     peerTitle,
                     parentController.updatedPresentationData.1,
                     storyPostingAvailable
-                ).startStrict(next: { [weak self] hideStoriesAndGhostStatus, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerTitle, presentationData, storyPostingAvailable in
+                ).startStrict(next: { [weak self] headerSettings, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerTitle, presentationData, storyPostingAvailable in
                     guard let self else {
                         return
                     }
-                    self.ayuShowsGhostStatus = hideStoriesAndGhostStatus.1 // MARK: AyuGram
+                    self.ayuShowsGhostStatus = headerSettings.0.1 // MARK: AyuGram
                     
                     self.updateChatList(
-                        hideStories: hideStoriesAndGhostStatus.0, // MARK: Swiftgram
+                        hideStories: headerSettings.0.0, // MARK: Swiftgram
+                        hideFloatingButton: headerSettings.1, // MARK: AyuGram
+                        hideActionBarStatus: headerSettings.2, // MARK: AyuGram
                         networkState: networkState,
                         proxy: proxy,
                         passcode: passcode,
@@ -7448,6 +7454,8 @@ private final class ChatListLocationContext {
     
     private func updateChatList(
         hideStories: Bool, // MARK: Swiftgram
+        hideFloatingButton: Bool, // MARK: AyuGram
+        hideActionBarStatus: Bool, // MARK: AyuGram
         networkState: AccountNetworkState,
         proxy: (Bool, Bool),
         passcode: (Bool, Bool),
@@ -7489,7 +7497,7 @@ private final class ChatListLocationContext {
                     animated = true
                 }
             }
-            titleContent = NetworkStatusTitle(text: title, activity: false, hasProxy: false, connectsViaProxy: false, isPasscodeSet: false, isManuallyLocked: false, peerStatus: peerStatus)
+            titleContent = NetworkStatusTitle(text: title, activity: false, hasProxy: false, connectsViaProxy: false, isPasscodeSet: false, isManuallyLocked: false, peerStatus: hideActionBarStatus ? nil : peerStatus)
             let _ = animated
         } else if isReorderingTabs {
             if case .chatList(.root) = self.location {
@@ -7508,18 +7516,18 @@ private final class ChatListLocationContext {
             
             switch networkState {
             case .waitingForNetwork:
-                titleContent = NetworkStatusTitle(text: presentationData.strings.State_WaitingForNetwork, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: presentationData.strings.State_WaitingForNetwork, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case let .connecting(proxy):
                 let text = presentationData.strings.State_Connecting
                 let _ = proxy
                 /*if let layout = strongSelf.validLayout, proxy != nil && layout.metrics.widthClass != .regular && layout.size.width > 320.0 {
                     text = self.presentationData.strings.State_ConnectingToProxy
                 }*/
-                titleContent = NetworkStatusTitle(text: text, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: text, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case .updating:
-                titleContent = NetworkStatusTitle(text: presentationData.strings.State_Updating, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: presentationData.strings.State_Updating, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case .online:
-                titleContent = NetworkStatusTitle(text: defaultTitle, activity: false, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: defaultTitle, activity: false, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: false, isManuallyLocked: false, peerStatus: hideActionBarStatus ? nil : peerStatus)
             }
         } else {
             var isRoot = false
@@ -7533,6 +7541,8 @@ private final class ChatListLocationContext {
                             self?.parentController?.editPressed()
                         }
                     )
+                } else if hideFloatingButton {
+                    self.rightButton = nil
                 } else {
                     self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
@@ -7636,18 +7646,18 @@ private final class ChatListLocationContext {
             var checkProxy = false
             switch networkState {
             case .waitingForNetwork:
-                titleContent = NetworkStatusTitle(text: presentationData.strings.State_WaitingForNetwork, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: presentationData.strings.State_WaitingForNetwork, activity: true, hasProxy: false, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case let .connecting(proxy):
                 let text = presentationData.strings.State_Connecting
                 if let proxy = proxy, proxy.hasConnectionIssues {
                     checkProxy = true
                 }
-                titleContent = NetworkStatusTitle(text: text, activity: true, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: text, activity: true, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case .updating:
-                titleContent = NetworkStatusTitle(text: presentationData.strings.State_Updating, activity: true, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: presentationData.strings.State_Updating, activity: true, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: hideActionBarStatus ? nil : peerStatus)
             case .online:
                 let ayuTitle = isRoot && self.ayuShowsGhostStatus ? "👻 \(defaultTitle)" : defaultTitle // MARK: AyuGram
-                titleContent = NetworkStatusTitle(text: ayuTitle, activity: false, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: peerStatus)
+                titleContent = NetworkStatusTitle(text: ayuTitle, activity: false, hasProxy: isRoot && hasProxy, connectsViaProxy: connectsViaProxy, isPasscodeSet: isRoot && isPasscodeSet, isManuallyLocked: isRoot && isManuallyLocked, peerStatus: hideActionBarStatus ? nil : peerStatus)
             }
             
             if titleContent.hasProxy {

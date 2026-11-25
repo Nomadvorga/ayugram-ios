@@ -35,6 +35,7 @@ private enum SGControllerSection: Int32, SGItemListSection {
     case folders
     case chatList
     case accountColors
+    case application
     case other
     case chats
     case gestures
@@ -67,6 +68,8 @@ private enum SGBoolSetting: String {
     case centerTitle
     case singleCornerRadius
     case hideStories
+    case hideActionBarStatus
+    case hideFloatingButton
     case showNavigationBar
     case hideNavigationBarLabels
     case showContactsTab
@@ -146,6 +149,7 @@ private enum SGSliderSetting: String {
 }
 
 private enum SGDisclosureLink: String {
+    case appIcon
     case categoryGeneral
     case categoryAppearance
     case categoryChats
@@ -163,7 +167,7 @@ public enum SGSettingsCategory {
         case .general:
             return [.translation, .general, .speedBoost, .storage, .profileGeneral, .archive]
         case .appearance:
-            return [.avatarCorners, .appearance, .tabs, .folders, .chatList, .accountColors]
+            return [.avatarCorners, .appearance, .tabs, .folders, .chatList, .accountColors, .application]
         case .chats:
             return [.chats, .gestures, .stickers, .sending]
         case .other:
@@ -247,7 +251,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .general, settingName: .inAppVibration, value: ExteraSettings.shared.inAppVibration, text: i18n("Extera.InAppVibration", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .general, settingName: .disableNotificationDelay, value: ExteraSettings.shared.disableNotificationDelay, text: i18n("Extera.DisableNotificationDelay", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .general, settingName: .filterZalgo, value: ExteraSettings.shared.filterZalgo, text: i18n("Extera.FilterZalgo", lang), enabled: true))
-    entries.append(.notice(id: id.count, section: .general, text: i18n("Extera.FilterZalgoInfo", lang, ExteraSettings.shared.filteredText("Z̷͍͌ā̸̜l̸̞̂g̷͍̝o̶̩̓", force: true))))
+    entries.append(.notice(id: id.count, section: .general, text: i18n("Extera.FilterZalgoInfo", lang, ExteraSettings.shared.filteredText("Z̷͍͌ā̸̜l̸̞̂g̷͍̝o̶̩̓"))))
 
     // Download speed boost.
     entries.append(.header(id: id.count, section: .speedBoost, text: i18n("Extera.DownloadSpeedBoost", lang).uppercased(), badge: nil))
@@ -291,8 +295,11 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.appearancePreview(id: id.count, section: .chatList, kind: .chatList(title: previewTitle, centered: ExteraSettings.shared.centerTitle, snow: ExteraSettings.shared.forceSnow), settingName: nil))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .forceSnow, value: ExteraSettings.shared.forceSnow, text: i18n("Extera.ForceSnow", lang, "Force Snow"), enabled: true))
     entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.ForceSnowInfo", lang)))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideActionBarStatus, value: ExteraSettings.shared.hideActionBarStatus, text: i18n("Extera.HideActionBarStatus", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .centerTitle, value: ExteraSettings.shared.centerTitle, text: i18n("Extera.CenterTitle", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideStories, value: settings.hideStories, text: i18n("Extera.HideStories", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideFloatingButton, value: ExteraSettings.shared.hideFloatingButton, text: i18n("Extera.HideFloatingButton", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .chatList, text: i18n("Extera.HideFloatingButtonInfo", lang)))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
     entries.append(.toggle(id: id.count, section: .chatList, settingName: .compactChatList, value: settings.compactChatList, text: i18n("Settings.CompactChatList", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .chatList, settingName: .chatListTitle, text: i18n("Extera.ActionBarTitle", lang), value: chatListTitleOption(ExteraSettings.shared.chatListTitle, lang: lang), enabled: true))
@@ -328,6 +335,10 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
         }
     }
     entries.append(.notice(id: id.count, section: .accountColors, text: i18n("Settings.CustomColors.Saturation.Notice", lang)))
+
+    // Application: exteraGram's app icon entry maps to Telegram's icon picker in Themes.
+    entries.append(.header(id: id.count, section: .application, text: i18n("Extera.Application", lang).uppercased(), badge: nil))
+    entries.append(.disclosure(id: id.count, section: .application, link: .appIcon, text: strings.Appearance_AppIcon))
 
     entries.append(.header(id: id.count, section: .other, text: strings.Appearance_Other.uppercased(), badge: nil))
     entries.append(.toggle(id: id.count, section: .other, settingName: .lyricsInPlayer, value: SGSimpleSettings.shared.lyricsInPlayer, text: i18n("Settings.LyricsInPlayer", lang), enabled: true))
@@ -496,6 +507,12 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraSettings.shared.set(.disableGreetingSticker, value)
         case .filterZalgo:
             ExteraSettings.shared.set(.filterZalgo, value)
+            // The example under the toggle is rebuilt from the new value.
+            simplePromise.set(true)
+        case .hideActionBarStatus:
+            ExteraSettings.shared.set(.hideActionBarStatus, value)
+        case .hideFloatingButton:
+            ExteraSettings.shared.set(.hideFloatingButton, value)
         case .hidePhoneNumber:
             settings.hidePhoneInSettings = value
             askForRestart?()
@@ -775,6 +792,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         presentOneFromManyImpl?(setting, options)
     }, openDisclosureLink: { link in
         switch link {
+        case .appIcon:
+            pushControllerImpl?(themeSettingsController(context: context, focusOnItemTag: .icon))
         case .categoryGeneral:
             pushControllerImpl?(sgSettingsController(context: context, category: .general))
         case .categoryAppearance:

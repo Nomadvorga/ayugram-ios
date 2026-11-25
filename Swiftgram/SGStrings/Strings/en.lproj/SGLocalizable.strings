@@ -480,3 +480,7 @@
 "Extera.ArchiveOnPull" = "Open Archive on Pull";
 "Extera.DisableUnarchiveSwipe" = "Disable \"Unarchive\" Gesture";
 "Extera.DisableUnarchiveSwipeInfo" = "Swiping left will no longer remove chats from the archive.";
+"Extera.HideFloatingButton" = "Hide Compose Button";
+"Extera.HideFloatingButtonInfo" = "Removes the compose button from the chat list header.";
+"Extera.Application" = "Application";
+"Extera.HideActionBarStatus" = "Hide Status in Header";

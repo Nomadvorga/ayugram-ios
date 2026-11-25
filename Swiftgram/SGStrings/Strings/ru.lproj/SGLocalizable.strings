@@ -465,3 +465,7 @@
 "Extera.ArchiveOnPull" = "Открывать архив при вытягивании";
 "Extera.DisableUnarchiveSwipe" = "Отключить жест \"Вернуть\"";
 "Extera.DisableUnarchiveSwipeInfo" = "Свайп влево не будет убирать чаты из архива.";
+"Extera.HideFloatingButton" = "Скрыть кнопку «Написать»";
+"Extera.HideFloatingButtonInfo" = "Убирает кнопку создания сообщения из верхней панели списка чатов.";
+"Extera.Application" = "Приложение";
+"Extera.HideActionBarStatus" = "Скрыть статус в заголовке";
