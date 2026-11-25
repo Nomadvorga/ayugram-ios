@@ -48,7 +48,7 @@ public struct ExteraMathCurrencySnapshot {
 /// The same public USD endpoint as exteraGram Android. The request contains no
 /// draft, amount, account or currency query. Cache lifetime matches InlineRates.kt.
 /// Call on the main queue; each row owns and cancels its request on edit/dismissal.
-final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+public final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private static let lock = NSLock()
     private static var snapshot: ExteraMathCurrencySnapshot?
     private static var lastFailure: Date?
@@ -58,21 +58,21 @@ final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchec
     private var rejectedResponse = false
     private var completion: ((ExteraMathCurrencySnapshot?) -> Void)?
 
-    static func cached(now: Date = Date()) -> ExteraMathCurrencySnapshot? {
+    public static func cached(now: Date = Date()) -> ExteraMathCurrencySnapshot? {
         self.lock.lock()
         defer { self.lock.unlock() }
         guard let snapshot = self.snapshot, snapshot.rate(from: "USD", to: "USD", now: now) != nil else { return nil }
         return snapshot
     }
 
-    static func shouldRefresh(now: Date = Date()) -> Bool {
+    public static func shouldRefresh(now: Date = Date()) -> Bool {
         self.lock.lock()
         defer { self.lock.unlock() }
         if let failure = self.lastFailure, now.timeIntervalSince(failure) < 30 { return false }
         return self.snapshot.map { now.timeIntervalSince($0.date) >= 300 } ?? true
     }
 
-    init(configuration: URLSessionConfiguration = .ephemeral, completion: @escaping (ExteraMathCurrencySnapshot?) -> Void) {
+    public init(configuration: URLSessionConfiguration = .ephemeral, completion: @escaping (ExteraMathCurrencySnapshot?) -> Void) {
         self.completion = completion
         super.init()
         configuration.timeoutIntervalForRequest = 10
@@ -87,7 +87,7 @@ final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchec
         self.task?.resume()
     }
 
-    func cancel() {
+    public func cancel() {
         // This and delivery run on main; a response already queued cannot update
         // an edited/dismissed row after this clears its completion.
         self.completion = nil
@@ -97,7 +97,7 @@ final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchec
         self.task = nil
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         guard let response = response as? HTTPURLResponse, response.statusCode == 200,
               response.expectedContentLength <= 1_048_576 else {
             self.rejectedResponse = true
@@ -107,7 +107,7 @@ final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchec
         completionHandler(.allow)
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard self.buffer.count + data.count <= 1_048_576 else {
             self.rejectedResponse = true
             dataTask.cancel()
@@ -116,7 +116,7 @@ final class ExteraMathCurrencyRequest: NSObject, URLSessionDataDelegate, @unchec
         self.buffer.append(data)
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         let snapshot = error == nil ? ExteraMathCurrencySnapshot.parse(self.buffer, date: Date()) : nil
         self.buffer = Data()
         session.finishTasksAndInvalidate()

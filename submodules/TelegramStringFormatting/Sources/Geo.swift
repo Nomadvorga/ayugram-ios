@@ -1,9 +1,28 @@
 import Foundation
 import MapKit
 import TelegramPresentationData
+import SGSimpleSettings
+
+/// Shared by map labels and the proximity-radius picker. Wire units here, never change metres
+/// sent to TelegramEngine or locale-dependent number spelling.
+public func usesMetricDistanceUnits(strings: PresentationStrings) -> Bool {
+    return ExteraChatAppearanceSettings.shared.distanceUnit.usesMetricSystem(locale: localeWithStrings(strings))
+}
+
+private func applyDistanceUnits(_ formatter: MKDistanceFormatter) {
+    switch ExteraChatAppearanceSettings.shared.distanceUnit {
+    case .automatic: formatter.units = .default
+    case .kilometers: formatter.units = .metric
+    case .miles: formatter.units = .imperial
+    }
+}
+
+private let distanceFormatterLock = NSLock()
 
 private var sharedShortDistanceFormatter: MKDistanceFormatter?
 public func shortStringForDistance(strings: PresentationStrings, distance: Int32) -> String {
+    distanceFormatterLock.lock()
+    defer { distanceFormatterLock.unlock() }
     let distanceFormatter: MKDistanceFormatter
     if let currentDistanceFormatter = sharedShortDistanceFormatter {
         distanceFormatter = currentDistanceFormatter
@@ -18,6 +37,7 @@ public func shortStringForDistance(strings: PresentationStrings, distance: Int32
         distanceFormatter.locale = locale
     }
     
+    applyDistanceUnits(distanceFormatter)
     let distance = max(1, distance)
     var result = distanceFormatter.string(fromDistance: Double(distance))
     if result.hasPrefix("0 ") {
@@ -28,6 +48,8 @@ public func shortStringForDistance(strings: PresentationStrings, distance: Int32
 
 private var sharedDistanceFormatter: MKDistanceFormatter?
 public func stringForDistance(strings: PresentationStrings, distance: CLLocationDistance) -> String {
+    distanceFormatterLock.lock()
+    defer { distanceFormatterLock.unlock() }
     let distanceFormatter: MKDistanceFormatter
     if let currentDistanceFormatter = sharedDistanceFormatter {
         distanceFormatter = currentDistanceFormatter
@@ -42,6 +64,7 @@ public func stringForDistance(strings: PresentationStrings, distance: CLLocation
         distanceFormatter.locale = locale
     }
     
+    applyDistanceUnits(distanceFormatter)
     return distanceFormatter.string(fromDistance: distance)
 }
 

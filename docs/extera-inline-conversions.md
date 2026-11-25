@@ -31,7 +31,7 @@ let options = ExteraMathEngine.Options(
     currencies: settings.inlineCurrencies,
     timeZones: settings.inlineTimeZones,
     arithmetic: settings.inlineMathResult,
-    imperial: settings.inlineImperial,
+    imperial: settings.resolvedImperial,
     localCurrency: settings.resolvedTargetCurrency
 )
 ```
@@ -46,8 +46,21 @@ cap received data at 1 MiB. Snapshots refresh after five minutes, expire after
 The row displays the fetch timestamp. A failed/unavailable response leaves a
 disabled row and never invents a conversion. Copy/insertion excludes the date.
 
-The engine, units, zones, rates and panel sources are picked up by TelegramUI's
-existing `Sources/**/*.swift` glob; no BUILD change is needed.
+The four Foundation-only engine/unit/zone/rate files remain at their existing
+paths. `//submodules/TelegramUI:ExteraMathSources` supplies them to the static
+`//Swiftgram/SGMath` module; TelegramUI excludes those four from its own source
+glob and imports SGMath. SGSettingsUI also imports SGMath, so the standalone
+`exteraInlineSettingsController(context:)` runs its help examples with the same
+parser and rate cache as the composer. `Options(settings:preview:)` centralizes
+preference resolution. The preview flag enables disabled functions for help only;
+it retains the user's angle, grouping, currency and measurement choices.
+
+SGMath has no UI dependencies. The graph is TelegramUI → SGSettingsUI → SGMath →
+SGSimpleSettings (and TelegramUI → SGMath), without a cycle. SGMath's sources
+filegroup is not a dependency on the TelegramUI library. It links inside the
+existing TelegramUIFramework. The framework's export-rule CcInfo traversal
+includes transitive static archives, so this adds neither a new framework client
+nor a new `provided_by_frameworks` entry.
 
 ## Settings UI / backup integration needed by their owning sessions
 
@@ -61,6 +74,16 @@ to the backup allowlist/schema and expose their public properties in settings:
 | `extera.inlineTimeZones` | `inlineTimeZones` | Bool / true |
 | `extera.inlineImperial` | `inlineImperial` | Bool / false |
 | `extera.inlineTargetCurrency` | `inlineTargetCurrency` | String / `auto` |
+| `extera.inlineMeasureSystem` | `inlineMeasureSystem` | String / `auto`, `metric`, `imperial` |
+
+The new measurement key wins over the legacy boolean. On first initialization,
+an explicitly stored old true becomes imperial and an explicitly stored false
+becomes metric. A fresh installation becomes auto; auto uses the device region's
+measurement region: US/LR/MM use imperial, other regions metric, matching Android
+`InlineResults.isImperial()` (the UK remains metric). `inlineImperial` remains a source-compatible facade: reads
+resolve the new preference and writes select an explicit system. New-system
+writes also persist the corresponding old boolean for older clients. Backup
+allowlist/schema integration for the new key belongs to the root settings owner.
 
 `resolvedTargetCurrency` resolves `auto` using the current device locale and USD
 fallback. Other values are ISO codes, or BTC/ETH/SOL/USDT/GRAM. The setter accepts

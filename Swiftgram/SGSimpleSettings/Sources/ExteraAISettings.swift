@@ -76,6 +76,15 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     public var saveHistory: Bool = true
     public var responseStreaming: Bool = true
     public var temperature: Double = 1.0
+    /// Android AiConfig defaults. These affect presentation/insertion, never the provider prompt.
+    public var showResponseOnly: Bool = false
+    public var insertAsQuote: Bool = true
+    /// Nil retains Android's account-dependent default: replace for non-Premium.
+    public var replaceTelegramSummaries: Bool?
+
+    public func replacesTelegramSummaries(isPremium: Bool) -> Bool {
+        return self.replaceTelegramSummaries ?? !isPremium
+    }
     /// Feature visibility and execution are independent of the editor's backend routing.
     public var showEditor: Bool = true
     public var showSummaries: Bool = true
@@ -87,6 +96,7 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case services, roles, selectedServiceId, selectedRoleId, saveHistory, responseStreaming, temperature, useForTextProcessing
         case showEditor, showSummaries, showInstantViewSummaries
+        case showResponseOnly, insertAsQuote, replaceTelegramSummaries
     }
 
     public init(from decoder: Decoder) throws {
@@ -98,6 +108,9 @@ public struct ExteraAIConfiguration: Codable, Equatable {
         self.saveHistory = try values.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
         self.responseStreaming = try values.decodeIfPresent(Bool.self, forKey: .responseStreaming) ?? true
         self.temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? 1.0
+        self.showResponseOnly = try values.decodeIfPresent(Bool.self, forKey: .showResponseOnly) ?? false
+        self.insertAsQuote = try values.decodeIfPresent(Bool.self, forKey: .insertAsQuote) ?? true
+        self.replaceTelegramSummaries = try values.decodeIfPresent(Bool.self, forKey: .replaceTelegramSummaries)
         self.showEditor = try values.decodeIfPresent(Bool.self, forKey: .showEditor) ?? true
         self.showSummaries = try values.decodeIfPresent(Bool.self, forKey: .showSummaries) ?? true
         self.showInstantViewSummaries = try values.decodeIfPresent(Bool.self, forKey: .showInstantViewSummaries) ?? true
@@ -151,16 +164,21 @@ public final class ExteraAISettings {
     private let store = AyuSettingsStore.shared
     private let configurationKey = "extera.ai.configuration.v1"
     private let keychainService = (Bundle.main.bundleIdentifier ?? "exteragram") + ".custom-ai"
+    private var cachedConfiguration: ExteraAIConfiguration?
 
     private init() {}
 
     public var configuration: ExteraAIConfiguration {
         self.lock.lock()
         defer { self.lock.unlock() }
+        if let value = self.cachedConfiguration { return value }
         guard let data = self.store.string(self.configurationKey).data(using: .utf8),
               let value = try? JSONDecoder().decode(ExteraAIConfiguration.self, from: data) else {
-            return ExteraAIConfiguration()
+            let value = ExteraAIConfiguration()
+            self.cachedConfiguration = value
+            return value
         }
+        self.cachedConfiguration = value
         return value
     }
 
@@ -180,6 +198,9 @@ public final class ExteraAISettings {
             guard data.count <= 1024 * 1024, let json = String(data: data, encoding: .utf8) else {
                 throw ExteraAIError.configuration("AI preferences are too large.")
             }
+            // All configuration writes use this wrapper. Publish only after validation/encoding
+            // succeeds, before the nonthrowing store write so synchronous readers see the new value.
+            self.cachedConfiguration = value
             self.store.setString(json, self.configurationKey)
         }
     }

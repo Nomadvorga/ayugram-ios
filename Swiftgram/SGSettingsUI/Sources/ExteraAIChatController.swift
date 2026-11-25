@@ -3,6 +3,7 @@ import Display
 import Foundation
 import SGSimpleSettings
 import SwiftSignalKit
+import TelegramCore
 import TelegramPresentationData
 import UIKit
 
@@ -44,10 +45,20 @@ public func exteraAIChatController(context: AccountContext, initialPrompt: Strin
     return ExteraAIChatController(context: context, initialPrompt: initialPrompt, action: nil, apply: nil)
 }
 
-/// Push from a composer/message action. Apply returns the successful response to the caller.
+/// Push from a composer/message action. Apply returns the formatted successful result to the caller.
 /// The caller remains responsible for preserving drafts/entities and checking write permission.
 public func exteraAITextProcessingController(context: AccountContext, text: String, action: ExteraAITextAction, apply: ((String) -> Void)? = nil) -> ViewController {
-    return ExteraAIChatController(context: context, initialPrompt: text, action: action, apply: apply)
+    return ExteraAIChatController(context: context, initialPrompt: text, action: action, apply: apply.map { callback in { result in callback(result.markdownText) } })
+}
+
+/// Entity-aware insertion for composer callers. It preserves native Telegram quote
+/// formatting; this callback is invoked only when the user presses Apply.
+/// Throw when the draft or write permissions changed; the result stays open to copy.
+public func exteraAITextProcessingController(context: AccountContext, text: String, action: ExteraAITextAction, applyResult: @escaping (ComposedRichMessage) throws -> Void) -> ViewController {
+    return ExteraAIChatController(context: context, initialPrompt: text, action: action, apply: { result in
+        let entities = result.quoteRange.map { [MessageTextEntity(range: $0, type: .BlockQuote(isCollapsed: false))] } ?? []
+        try applyResult(.plain(text: result.text, entities: entities))
+    })
 }
 
 /// Native multiline editor shared by role prompts and individual history messages.
@@ -55,10 +66,10 @@ func exteraAITextEditorController(context: AccountContext, title: String, text: 
     return ExteraAITextEditorController(context: context, title: title, text: text, save: save)
 }
 
-private class ExteraAINativeController: ViewController {
+class ExteraAINativeController: ViewController {
     let context: AccountContext
     let contentView = UIView()
-    private let contentScrollView = UIScrollView()
+    let contentScrollView = UIScrollView()
     private var presentationDisposable: Disposable?
 
     init(context: AccountContext, title: String) {
@@ -78,7 +89,7 @@ private class ExteraAINativeController: ViewController {
     deinit { self.presentationDisposable?.dispose() }
 
     func text(_ english: String, _ russian: String) -> String {
-        return self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.hasPrefix("ru") ? russian : english
+        return ExteraAIStrings.text(english, russian, language: self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode)
     }
 
     override func loadDisplayNode() {
@@ -192,7 +203,7 @@ private final class ExteraAITextEditorController: ExteraAINativeController {
 private final class ExteraAIChatController: ExteraAINativeController, UITextViewDelegate {
     private let accountId: String
     private let action: ExteraAITextAction?
-    private let apply: ((String) -> Void)?
+    private let apply: ((ExteraAIResponsePresentation) throws -> Void)?
     private let initialPrompt: String
     private let statusLabel = UILabel()
     private let output = UITextView()
@@ -207,8 +218,11 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
     private var resultText: String?
     private var activePrompt = ""
     private var historyBeforeRequest: [ExteraAIMessage] = []
+    private var lastPartial: String?
+    private var savedResponseId: String?
+    private var requestStatus: String?
 
-    init(context: AccountContext, initialPrompt: String, action: ExteraAITextAction?, apply: ((String) -> Void)?) {
+    init(context: AccountContext, initialPrompt: String, action: ExteraAITextAction?, apply: ((ExteraAIResponsePresentation) throws -> Void)?) {
         self.accountId = String(context.account.id.int64)
         self.action = action
         self.apply = apply
@@ -219,7 +233,7 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
             guard let self, self.isViewLoaded, self.requestId == nil else { return }
             self.refreshStatus()
             self.updateButtons()
-            if self.action == nil { self.showTranscript() }
+            self.showTranscript()
         })
     }
 
@@ -233,6 +247,7 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         // The screen owns generation. Leaving it cancels network work and suppresses stale callbacks.
+        if self.requestId != nil { self.requestStatus = self.text("Generation stopped.", "Генерация остановлена.") }
         self.requestId = nil
         self.request?.cancel()
         self.request = nil
@@ -241,7 +256,7 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if self.isViewLoaded { self.refreshStatus(); self.updateButtons() }
+        if self.isViewLoaded { self.refreshStatus(); self.updateButtons(); self.showTranscript() }
     }
 
     override func buildContent() {
@@ -307,10 +322,10 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
     }
 
     private func showTranscript(partial: String? = nil) {
-        let messages = self.requestId == nil ? ExteraAISettings.shared.history(accountId: self.accountId) : self.historyBeforeRequest
-        var sections = self.action == nil ? messages.map { ($0.role == .user ? self.text("You", "Вы") : "AI") + ":\n" + $0.content } : []
-        if self.requestId != nil { sections.append(self.text("You", "Вы") + ":\n" + self.activePrompt) }
-        if let partial { sections.append("AI:\n" + partial) }
+        if let partial { self.lastPartial = partial }
+        let showOnly = ExteraAISettings.shared.configuration.showResponseOnly
+        let messages = self.action != nil ? [] : self.requestId == nil ? ExteraAISettings.shared.history(accountId: self.accountId) : self.historyBeforeRequest
+        var sections = ExteraAITranscriptPresentation.sections(history: messages, prompt: self.activePrompt, response: self.resultText ?? self.lastPartial, status: self.requestStatus, savedResponseId: self.savedResponseId, showResponseOnly: showOnly, userLabel: self.text("You", "Вы"), assistantLabel: "AI")
         if sections.isEmpty { sections = [self.text("Write a message below. Only the text you send and enabled conversation history are shared with your selected AI service.", "Введите сообщение ниже. Выбранному сервису ИИ передаются только отправленный текст и включённая история диалога.")] }
         let wasAtBottom = self.output.contentOffset.y + self.output.bounds.height >= self.output.contentSize.height - 44
         self.output.text = sections.joined(separator: "\n\n")
@@ -332,34 +347,44 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
         self.activePrompt = prompt
         self.historyBeforeRequest = self.action == nil ? ExteraAISettings.shared.history(accountId: self.accountId) : []
         self.resultText = nil
-        self.showTranscript(partial: self.text("Generating…", "Генерация…"))
+        self.lastPartial = nil
+        self.savedResponseId = nil
+        self.requestStatus = self.text("Generating…", "Генерация…")
+        self.showTranscript()
         self.updateButtons()
         do {
             let key = try ExteraAISettings.shared.apiKey(serviceId: service.id)
             self.request = try ExteraAIClient.generate(service: service, apiKey: key, role: self.action?.role ?? config.selectedRole, prompt: prompt, history: history, temperature: config.temperature, stream: config.responseStreaming, update: { [weak self] text in
                 guard let self, self.requestId == id else { return }
+                self.requestStatus = nil
                 self.showTranscript(partial: text)
             }, completion: { [weak self] result in
                 guard let self, self.requestId == id else { return }
                 self.request = nil
+                self.requestStatus = nil
                 switch result {
                 case let .success(text):
                     self.resultText = text
-                    // Render the complete result before changing request state to avoid duplicate history.
-                    self.showTranscript(partial: text)
-                    self.requestId = nil
                     if saveHistory {
-                        do { try ExteraAISettings.shared.appendTurn(prompt: prompt, response: text, accountId: self.accountId) } catch { self.showError(error) }
+                        do {
+                            try ExteraAISettings.shared.appendTurn(prompt: prompt, response: text, accountId: self.accountId)
+                            let saved = ExteraAISettings.shared.history(accountId: self.accountId).last
+                            if saved?.role == .assistant && saved?.content == text { self.savedResponseId = saved?.id }
+                        } catch { self.showError(error) }
                     }
+                    self.requestId = nil
+                    self.showTranscript(partial: text)
                     if self.action == nil { self.input.text = "" }
                     self.refreshStatus()
                 case .failure(.cancelled):
-                    self.showTranscript(partial: self.text("Generation stopped.", "Генерация остановлена."))
                     self.requestId = nil
+                    self.requestStatus = self.text("Generation stopped.", "Генерация остановлена.")
+                    self.showTranscript()
                     self.refreshStatus()
                 case let .failure(error):
-                    self.showTranscript(partial: self.text("Request failed. Your message is kept below so you can retry.", "Ошибка запроса. Сообщение сохранено ниже для повторной отправки."))
                     self.requestId = nil
+                    self.requestStatus = self.text("Request failed. Your message is kept below so you can retry.", "Ошибка запроса. Сообщение сохранено ниже для повторной отправки.")
+                    self.showTranscript()
                     self.refreshStatus()
                     self.showError(error)
                 }
@@ -369,6 +394,7 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
         } catch {
             self.requestId = nil
             self.request = nil
+            self.requestStatus = self.text("Request failed. Your message is kept below so you can retry.", "Ошибка запроса. Сообщение сохранено ниже для повторной отправки.")
             self.showTranscript()
             self.updateButtons()
             self.showError(error)
@@ -377,11 +403,19 @@ private final class ExteraAIChatController: ExteraAINativeController, UITextView
 
     @objc private func stopPressed() { self.request?.cancel() }
 
-    @objc private func copyPressed() { if let result = self.resultText { UIPasteboard.general.string = result } }
+    @objc private func copyPressed() {
+        guard let result = self.resultText, self.requestId == nil else { return }
+        let config = ExteraAISettings.shared.configuration
+        UIPasteboard.general.string = ExteraAIResponsePresentation(prompt: self.activePrompt, response: result, showResponseOnly: config.showResponseOnly, insertAsQuote: false).text
+        UIAccessibility.post(notification: .announcement, argument: self.text("Copied", "Скопировано"))
+    }
 
     @objc private func applyPressed() {
         guard let result = self.resultText, let apply = self.apply, self.requestId == nil else { return }
-        apply(result)
-        self.pop()
+        let config = ExteraAISettings.shared.configuration
+        do {
+            try apply(ExteraAIResponsePresentation(prompt: self.activePrompt, response: result, showResponseOnly: config.showResponseOnly, insertAsQuote: config.insertAsQuote))
+            self.pop()
+        } catch { self.showError(error) }
     }
 }

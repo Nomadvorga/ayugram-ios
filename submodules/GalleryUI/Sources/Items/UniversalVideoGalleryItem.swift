@@ -22,6 +22,7 @@ import UndoUI
 import TelegramUIPreferences
 import OpenInExternalAppUI
 import AVKit
+import AVFoundation
 import TextFormat
 import SliderContextItem
 import Pasteboard
@@ -1000,6 +1001,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private var hideControlsDisposable: Disposable?
     private var automaticPictureInPictureDisposable: Disposable?
     private var applicationInForegroundDisposable: Disposable?
+    private var volumeObservation: NSKeyValueObservation?
+    private var volumeObservationGeneration = 0
+    private var volumeObservationInForeground = true
     
     var playbackCompleted: (() -> Void)?
     
@@ -1209,7 +1213,10 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.applicationInForegroundDisposable = (context.sharedContext.applicationBindings.applicationInForeground
         |> distinctUntilChanged
         |> deliverOnMainQueue).start(next: { [weak self] inForeground in
-            guard let self, !inForeground, self.isCentral == true,
+            guard let self else { return }
+            self.volumeObservationInForeground = inForeground
+            self.updateVolumeObservation()
+            guard !inForeground, self.isCentral == true,
                   self.context.sharedContext.mediaManager.currentPictureInPictureNode !== self else {
                 return
             }
@@ -1240,6 +1247,56 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.hideControlsDisposable?.dispose()
         self.automaticPictureInPictureDisposable?.dispose()
         self.applicationInForegroundDisposable?.dispose()
+        self.volumeObservation?.invalidate()
+    }
+
+    private func updateVolumeObservation() {
+        self.volumeObservationGeneration += 1
+        self.volumeObservation?.invalidate()
+        self.volumeObservation = nil
+        guard self.volumeObservationInForeground, self.isCentral == true, self._isVisible == true, self.item?.isSecret == false else { return }
+        let generation = self.volumeObservationGeneration
+        // outputVolume is documented as KVO-observable. It does not expose the source of
+        // the change or allow consuming hardware keys; leave the user's system volume alone.
+        self.volumeObservation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.old, .new]) { [weak self] _, change in
+            guard let previous = change.oldValue, let volume = change.newValue,
+                  ExteraMediaSettings.shouldUnmuteVideo(previousVolume: previous, volume: volume) else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.volumeObservationGeneration else { return }
+                self.unmuteVideoForVolumeChange()
+            }
+        }
+    }
+
+    private func unmuteVideoForVolumeChange() {
+        guard ExteraMediaSettings.shared.unmuteWithVolumeButtons,
+              self.volumeObservationInForeground, UIApplication.shared.applicationState == .active, self.isNodeLoaded, self.view.window != nil,
+              self.isCentral == true, self._isVisible == true, !self.isAnimatingOut,
+              self.item?.isSecret == false, !self.isLivePhoto,
+              self.context.sharedContext.mediaManager.currentPictureInPictureNode !== self,
+              let videoNode = self.videoNode, videoNode.ownsContentNode,
+              let status = self.playerStatusValue else { return }
+        let canPlaySound: Bool
+        let startsMuted: Bool
+        if let content = self.item?.content as? NativeVideoContent {
+            canPlaySound = !content.fileReference.media.isAnimated
+            startsMuted = content.soundMuted
+        } else if let content = self.item?.content as? HLSVideoContent {
+            canPlaySound = !content.fileReference.media.isAnimated
+            startsMuted = false
+        } else {
+            canPlaySound = false
+            startsMuted = false
+        }
+        guard canPlaySound, !status.soundEnabled || startsMuted else { return }
+        switch status.status {
+        case .playing, .buffering(_, true, _, _):
+            // Preserve the playhead, rate and pause state; never restart a paused video.
+            videoNode.setSoundMuted(soundMuted: false)
+            if !status.soundEnabled { videoNode.setSoundEnabled(true) }
+        default:
+            break
+        }
     }
     
     override func ready() -> Signal<Void, NoError> {
@@ -1415,6 +1472,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
 
     func setupItem(_ item: UniversalVideoGalleryItem) {
         if self.item?.content.id != item.content.id {            
+            // A replacement node must receive its own status before volume can unmute it.
+            self.playerStatusValue = nil
             var chapters = parseMediaPlayerChapters(item.caption)
             if chapters.isEmpty, let description = item.description {
                 chapters = parseMediaPlayerChapters(description)
@@ -2080,6 +2139,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         self.item = item
+        self.updateVolumeObservation()
 
         if let _ = item.content as? NativeVideoContent {
             self.playbackRate = item.playbackRate()
@@ -2280,6 +2340,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         
         if self.isCentral != isCentral {
             self.isCentral = isCentral
+            self.updateVolumeObservation()
             
             if let videoNode = self.videoNode {
                 if isCentral {
@@ -2339,6 +2400,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         if self._isVisible != isVisible {
             let hadPreviousValue = self._isVisible != nil
             self._isVisible = isVisible
+            self.updateVolumeObservation()
             
             if let item = self.item, let videoNode = self.videoNode {
                 if hadPreviousValue {

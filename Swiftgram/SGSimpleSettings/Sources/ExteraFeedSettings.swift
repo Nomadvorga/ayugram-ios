@@ -60,12 +60,26 @@ public final class ExteraFeedSettings {
             return self.selectedCategory?.channelIds ?? self.channelIds
         }
 
+        /// Tabs keep persisted order while hidden categories remain available to the editor.
+        public var visibleCategories: [Category] {
+            return self.categories.filter { !$0.isHidden }
+        }
+
+        /// Moves by stable identity, so a stale drag cannot rename, drop or duplicate a category.
+        public mutating func moveCategory(id: String, before destinationId: String?) {
+            guard id != destinationId, let source = self.categories.firstIndex(where: { $0.id == id }),
+                  destinationId == nil || self.categories.contains(where: { $0.id == destinationId }) else { return }
+            let category = self.categories.remove(at: source)
+            let destination = destinationId.flatMap { id in self.categories.firstIndex(where: { $0.id == id }) } ?? self.categories.endIndex
+            self.categories.insert(category, at: destination)
+        }
+
         public func isUnread(channelId: Int64, messageId: Int32) -> Bool {
             return messageId > (self.readMaxIds[String(channelId)] ?? 0)
         }
 
         /// Replaces a selection explicitly, including clearing channels outside a search result.
-        /// Selecting all is not truncated: the loader reports its separate 40-channel limit.
+        /// Selecting all is not truncated; history requests use a bounded concurrency queue.
         public mutating func setChannelSelection(_ ids: Set<Int64>, categoryId: String?) {
             if let categoryId {
                 guard let index = self.categories.firstIndex(where: { $0.id == categoryId }) else { return }

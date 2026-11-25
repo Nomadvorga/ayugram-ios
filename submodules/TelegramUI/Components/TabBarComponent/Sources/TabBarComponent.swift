@@ -488,6 +488,8 @@ public final class TabBarComponent: Component {
     /// A horizontal regular bar takes iOS 27's portrait tab bar layout (`tabBarSystemItemsLayout`); without it, its
     /// items share the available width (`tabBarItemsLayout`), as where iOS would switch to its wide bar.
     public let usesSystemLayout: Bool
+    public let showsLabels: Bool
+    public let fillsAvailableWidth: Bool
 
     public init(
         theme: PresentationTheme,
@@ -500,7 +502,9 @@ public final class TabBarComponent: Component {
         outerInsets: UIEdgeInsets,
         axis: Axis,
         isCompact: Bool,
-        usesSystemLayout: Bool = true
+        usesSystemLayout: Bool = true,
+        showsLabels: Bool = SGSimpleSettings.shared.showTabNames,
+        fillsAvailableWidth: Bool = false
     ) {
         self.theme = theme
         self.tintSelectedItem = tintSelectedItem
@@ -513,6 +517,8 @@ public final class TabBarComponent: Component {
         self.axis = axis
         self.isCompact = isCompact
         self.usesSystemLayout = usesSystemLayout
+        self.showsLabels = showsLabels
+        self.fillsAvailableWidth = fillsAvailableWidth
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -549,6 +555,7 @@ public final class TabBarComponent: Component {
         if lhs.usesSystemLayout != rhs.usesSystemLayout {
             return false
         }
+        if lhs.showsLabels != rhs.showsLabels || lhs.fillsAvailableWidth != rhs.fillsAvailableWidth { return false }
         return true
     }
 
@@ -870,11 +877,11 @@ public final class TabBarComponent: Component {
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 4.0
             let isSystemLayout = component.axis == .horizontal && !component.isCompact && component.usesSystemLayout
-            var availableSize = CGSize(width: isSystemLayout ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: Swiftgram
+            var availableSize = CGSize(width: (isSystemLayout || component.fillsAvailableWidth) ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: Swiftgram
             // MARK: Swiftgram
             let sgUnreducedAvailableWidth = availableSize.width
             // Compact layouts already size the bar for the visible items and search button.
-            if component.axis == .horizontal && !component.isCompact && !(SGSimpleSettings.shared.wideTabBar || component.search?.isActive ?? false) {
+            if component.axis == .horizontal && !component.isCompact && !component.fillsAvailableWidth && !(SGSimpleSettings.shared.wideTabBar || component.search?.isActive ?? false) {
                 let widthReducer: CGFloat
 
                 switch component.items.count {
@@ -914,7 +921,7 @@ public final class TabBarComponent: Component {
             
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
 
-            let sgShowsTitle = !component.isCompact && SGSimpleSettings.shared.showTabNames // MARK: Swiftgram
+            let sgShowsTitle = !component.isCompact && component.showsLabels // MARK: Swiftgram
             // The search button is as tall as the bar.
             let barHeight: CGFloat
             if isSystemLayout {
@@ -973,9 +980,9 @@ public final class TabBarComponent: Component {
             }
             var itemsLayout: TabBarItemsLayout // MARK: Swiftgram
             if isSystemLayout {
-                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar /* MARK: Swiftgram */)
+                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar || component.fillsAvailableWidth /* MARK: Swiftgram */)
             } else {
-                itemsLayout = tabBarItemsLayout(axis: component.axis, isCompact: component.isCompact, unboundItemWidths: titleWidths.map { $0 + 10.0 * 2.0 }, availableLength: availableLength)
+                itemsLayout = tabBarItemsLayout(axis: component.axis, isCompact: component.isCompact && !component.fillsAvailableWidth, unboundItemWidths: titleWidths.map { $0 + 10.0 * 2.0 }, availableLength: availableLength)
             }
             // MARK: Swiftgram
             if component.axis == .horizontal && !sgShowsTitle {

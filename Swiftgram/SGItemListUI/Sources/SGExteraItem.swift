@@ -40,6 +40,15 @@ public enum SGItemListVisualStyle: Equatable {
     }
 }
 
+/// Native fallback and extera rendering share the same reusable node and discrete control.
+func sgSegmentedSelectorItem(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle, value: Int, options: [String], enabled: Bool, updated: @escaping (Int) -> Void) -> ListViewItem {
+    return SGExteraItem(presentationData: presentationData, sectionId: sectionId, visualStyle: visualStyle, title: "", content: .segmentedSelector(value: value, options: options), enabled: enabled, segmentedValueUpdated: updated)
+}
+
+func sgSettingsPreviewItem(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle, kind: SGSettingsPreviewKind, sliderUpdated: ((Int32) -> Void)?, selectionUpdated: ((Int) -> Void)?) -> ListViewItem {
+    return SGExteraItem(presentationData: presentationData, sectionId: sectionId, visualStyle: visualStyle, title: "", content: .settingsPreview(kind), segmentedValueUpdated: selectionUpdated, sliderValueUpdated: sliderUpdated)
+}
+
 extension SGItemListUIEntry {
     func exteraItem(presentationData: ItemListPresentationData, arguments: SGItemListArguments<BoolSetting, SliderSetting, OneFromManySetting, DisclosureLink, ActionType>) -> ListViewItem? {
         switch self {
@@ -66,12 +75,21 @@ extension SGItemListUIEntry {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 arguments.setOneFromManyValue(setting)
             })
+        case let .segmentedSelector(_, _, setting, value, options, enabled):
+            return sgSegmentedSelectorItem(presentationData: presentationData, sectionId: self.section, visualStyle: .extera, value: value, options: options, enabled: enabled, updated: { index in
+                arguments.setSegmentedValue(setting, index)
+            })
         case let .action(_, _, action, text, kind):
             return SGExteraItem(presentationData: presentationData, sectionId: self.section, title: text, content: .action(kind), enabled: kind != .disabled, action: {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 arguments.action(action)
             })
-        case .percentageSlider, .appearancePreview, .peerColorDisclosurePreview, .searchInput:
+        case let .appearancePreview(_, _, kind, _):
+            if case let .doubleTap(incomingSymbol, outgoingSymbol) = kind {
+                return SGExteraItem(presentationData: presentationData, sectionId: self.section, title: "", content: .doubleTap(incomingSymbol: incomingSymbol, outgoingSymbol: outgoingSymbol))
+            }
+            return nil
+        case .percentageSlider, .peerColorDisclosurePreview, .searchInput, .settingsPreview:
             return nil
         }
     }
@@ -86,6 +104,9 @@ private enum SGExteraContent {
     case disclosure
     case selector(String)
     case action(ItemListActionKind)
+    case doubleTap(incomingSymbol: String, outgoingSymbol: String)
+    case segmentedSelector(value: Int, options: [String])
+    case settingsPreview(SGSettingsPreviewKind)
 
     var isCard: Bool {
         switch self {
@@ -105,11 +126,28 @@ private enum SGExteraContent {
         default: return nil
         }
     }
+
+    var isPreview: Bool {
+        if case .doubleTap = self { return true }
+        return false
+    }
+
+    var isSegmented: Bool {
+        if case .segmentedSelector = self { return true }
+        return false
+    }
+
+    var isSettingsPreview: Bool {
+        if case .settingsPreview = self { return true }
+        return false
+    }
+
 }
 
 /// Every fact used to join cards or indent a neighbour's separator belongs in this descriptor.
 private struct SGExteraNeighbor: Equatable, ItemListNeighborFacet {
     let sectionId: ItemListSectionId
+    let visualStyle: SGItemListVisualStyle
     let isCard: Bool
     let isCheckbox: Bool
     let isTextItem: Bool
@@ -121,6 +159,7 @@ private struct SGExteraNeighbor: Equatable, ItemListNeighborFacet {
 private final class SGExteraItem: ListViewItem, ItemListItem {
     let presentationData: ItemListPresentationData
     let sectionId: ItemListSectionId
+    let visualStyle: SGItemListVisualStyle
     let title: String
     let subtitle: String?
     let icon: UIImage?
@@ -129,18 +168,26 @@ private final class SGExteraItem: ListViewItem, ItemListItem {
     let tag: ItemListItemTag?
     let action: (() -> Void)?
     let toggle: ((Bool) -> Void)?
+    let segmentedValueUpdated: ((Int) -> Void)?
+    let sliderValueUpdated: ((Int32) -> Void)?
 
     var isAlwaysPlain: Bool { return !self.content.isCard }
-    var approximateHeight: CGFloat { return 54.0 }
+    var approximateHeight: CGFloat {
+        if case let .settingsPreview(kind) = self.content {
+            return SGSettingsPreviewGeometry.height(kind: kind, width: 320.0, baseSize: self.presentationData.fontSize.itemListBaseFontSize)
+        }
+        return self.content.isPreview ? 190.0 : (self.content.isSegmented ? 80.0 : 54.0)
+    }
     var neighborDescriptor: AnyEquatable {
         let isText: Bool
         if case .notice = self.content { isText = true } else { isText = false }
-        return AnyEquatable(SGExteraNeighbor(sectionId: self.sectionId, isCard: self.content.isCard, isCheckbox: self.content.isCheckbox, isTextItem: isText))
+        return AnyEquatable(SGExteraNeighbor(sectionId: self.sectionId, visualStyle: self.visualStyle, isCard: self.content.isCard, isCheckbox: self.content.isCheckbox, isTextItem: isText))
     }
 
-    init(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, title: String, subtitle: String? = nil, icon: UIImage? = nil, content: SGExteraContent, enabled: Bool = true, tag: ItemListItemTag? = nil, action: (() -> Void)? = nil, toggle: ((Bool) -> Void)? = nil) {
+    init(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle = .extera, title: String, subtitle: String? = nil, icon: UIImage? = nil, content: SGExteraContent, enabled: Bool = true, tag: ItemListItemTag? = nil, action: (() -> Void)? = nil, toggle: ((Bool) -> Void)? = nil, segmentedValueUpdated: ((Int) -> Void)? = nil, sliderValueUpdated: ((Int32) -> Void)? = nil) {
         self.presentationData = presentationData
         self.sectionId = sectionId
+        self.visualStyle = visualStyle
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
@@ -149,6 +196,8 @@ private final class SGExteraItem: ListViewItem, ItemListItem {
         self.tag = tag
         self.action = action
         self.toggle = toggle
+        self.segmentedValueUpdated = segmentedValueUpdated
+        self.sliderValueUpdated = sliderValueUpdated
     }
 
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -181,6 +230,9 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
     private lazy var valueLabel = UILabel()
     private lazy var badgeLabel = UILabel()
     private lazy var iconView = UIImageView()
+    private var doubleTapPreview: AyuDoubleTapPreviewView?
+    private var segmentedControl: SGDiscreteSelectorControl?
+    private var settingsPreview: SGSettingsPreviewView?
     private lazy var rowButton = UIButton(type: .custom)
     private lazy var toggleButton = UIButton(type: .custom)
     private lazy var separator = UIView()
@@ -263,12 +315,12 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
 
     @objc private func touchDown() {
         guard let item = self.item, item.enabled, item.content.isCard else { return }
-        self.surface.backgroundColor = SGItemListVisualStyle.extera.cardColor(theme: item.presentationData.theme).mixedWith(item.presentationData.theme.list.itemPrimaryTextColor, alpha: 0.06)
+        self.surface.backgroundColor = item.visualStyle.cardColor(theme: item.presentationData.theme).mixedWith(item.presentationData.theme.list.itemPrimaryTextColor, alpha: 0.06)
     }
 
     @objc private func touchUp() {
         guard let item = self.item else { return }
-        self.surface.backgroundColor = item.content.isCard ? SGItemListVisualStyle.extera.cardColor(theme: item.presentationData.theme) : .clear
+        self.surface.backgroundColor = item.content.isCard ? item.visualStyle.cardColor(theme: item.presentationData.theme) : .clear
     }
 
     @objc private func pressed() {
@@ -292,8 +344,17 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
             let isCard = item.content.isCard
             let previous = neighbors.previous?.base(SGExteraNeighbor.self)
             let next = neighbors.next?.base(SGExteraNeighbor.self)
-            let joinsTop = isCard && previous?.isCard == true && previous?.sectionId == item.sectionId
-            let joinsBottom = isCard && next?.isCard == true && next?.sectionId == item.sectionId
+            let topFacet = neighbors.previous?.base(ItemListNeighborFacet.self)
+            let bottomFacet = neighbors.next?.base(ItemListNeighborFacet.self)
+            let joinsTop: Bool
+            let joinsBottom: Bool
+            if item.visualStyle == .native {
+                joinsTop = isCard && topFacet?.sectionId == item.sectionId && topFacet?.isAlwaysPlain == false
+                joinsBottom = isCard && bottomFacet?.sectionId == item.sectionId && bottomFacet?.isAlwaysPlain == false
+            } else {
+                joinsTop = isCard && previous?.visualStyle == .extera && previous?.isCard == true && previous?.sectionId == item.sectionId
+                joinsBottom = isCard && next?.visualStyle == .extera && next?.isCard == true && next?.sectionId == item.sectionId
+            }
             // ItemListController reserves a minimum 16pt band and larger safe/Duo/iPad insets.
             // Never draw under its side overlays just to shave three points off the reference margin.
             let left = max(13.0, params.leftInset)
@@ -340,32 +401,38 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                 case .neutral: textColor = theme.list.itemPrimaryTextColor
                 case .disabled: textColor = theme.list.itemDisabledTextColor
                 }
-            case .checkbox:
+            case .checkbox, .doubleTap, .segmentedSelector, .settingsPreview:
                 titleFont = Font.regular(baseSize)
                 textColor = theme.list.itemPrimaryTextColor
             }
             let valueFont = Font.regular(baseSize)
             let subtitleFont = Font.regular(baseSize * 0.82)
             let badgeFont = Font.semibold(baseSize * 0.65)
+            let titleLineLimit = !isCard || item.content.isCheckbox || baseSize > 22.0 ? 0 : 1
+            let subtitleLineLimit = baseSize > 22.0 ? 0 : 2
             let attributedTitle: NSAttributedString
             if case .notice = item.content {
                 attributedTitle = parseMarkdownIntoAttributedString(item.title, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: textColor), bold: MarkdownAttributeSet(font: Font.semibold(titleFont.pointSize), textColor: textColor), link: MarkdownAttributeSet(font: titleFont, textColor: theme.list.itemAccentColor), linkAttribute: { _ in nil }))
             } else {
                 attributedTitle = NSAttributedString(string: item.title, attributes: [.font: titleFont, .foregroundColor: textColor])
             }
-            func measure(_ text: NSAttributedString, width: CGFloat) -> CGSize {
-                let rect = text.boundingRect(with: CGSize(width: max(1.0, width), height: 10000.0), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-                return CGSize(width: ceil(rect.width), height: ceil(rect.height))
+            func measure(_ text: NSAttributedString, width: CGFloat, font: UIFont, lineLimit: Int) -> CGSize {
+                guard text.length != 0 else { return .zero }
+                let constrainedWidth = max(1.0, width)
+                let constrainedHeight = lineLimit == 0 ? 10000.0 : ceil(font.lineHeight * CGFloat(lineLimit))
+                let options: NSStringDrawingOptions = lineLimit == 0 ? [.usesLineFragmentOrigin, .usesFontLeading] : [.usesLineFragmentOrigin, .usesFontLeading, .truncatesLastVisibleLine]
+                let rect = text.boundingRect(with: CGSize(width: constrainedWidth, height: constrainedHeight), options: options, context: nil)
+                return CGSize(width: min(constrainedWidth, ceil(rect.width)), height: min(constrainedHeight, ceil(rect.height)))
             }
-            let badgeSize = badge.map { measure(NSAttributedString(string: $0, attributes: [.font: badgeFont]), width: width * 0.3) } ?? .zero
+            let badgeSize = badge.map { measure(NSAttributedString(string: $0, attributes: [.font: badgeFont]), width: width * 0.3, font: badgeFont, lineLimit: 1) } ?? .zero
             let badgeWidth = badge == nil ? 0.0 : badgeSize.width + 16.0
             let valueLimit = max(1.0, (width - titleX - textInset - accessoryWidth) * 0.45)
-            let valueSize = value.map { measure(NSAttributedString(string: $0, attributes: [.font: valueFont]), width: valueLimit) } ?? .zero
+            let valueSize = value.map { measure(NSAttributedString(string: $0, attributes: [.font: valueFont]), width: valueLimit, font: valueFont, lineLimit: 1) } ?? .zero
             let valueWidth = value == nil ? 0.0 : valueSize.width + 12.0
             let titleWidth = max(1.0, width - titleX - textInset - accessoryWidth - valueWidth - badgeWidth)
-            let titleSize = measure(attributedTitle, width: titleWidth)
+            let titleSize = measure(attributedTitle, width: titleWidth, font: titleFont, lineLimit: titleLineLimit)
             let subtitleText = item.subtitle.map { NSAttributedString(string: $0, attributes: [.font: subtitleFont, .foregroundColor: theme.list.itemSecondaryTextColor]) }
-            let subtitleSize = subtitleText.map { measure($0, width: titleWidth) } ?? .zero
+            let subtitleSize = subtitleText.map { measure($0, width: titleWidth, font: subtitleFont, lineLimit: subtitleLineLimit) } ?? .zero
             let textHeight = titleSize.height + (subtitleText == nil ? 0.0 : 5.0 + subtitleSize.height)
             let height: CGFloat
             let topInset: CGFloat
@@ -380,24 +447,87 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                 topInset = 0.0
                 bottomInset = neighbors.next == nil && !params.isStandalone ? 20.0 : 0.0
             default:
-                height = max(54.0, max(textHeight, valueSize.height) + 22.0)
+                if case let .segmentedSelector(_, options) = item.content {
+                    height = SGDiscreteSelectorControl.height(options: options, width: max(1.0, width - 44.0), baseSize: baseSize)
+                } else if case let .settingsPreview(kind) = item.content {
+                    height = SGSettingsPreviewGeometry.height(kind: kind, width: width, baseSize: baseSize)
+                } else {
+                    height = item.content.isPreview ? 190.0 : max(54.0, max(textHeight, valueSize.height) + 22.0)
+                }
                 let followsHeader = previous?.isCard == false && previous?.isTextItem == false && previous?.sectionId == item.sectionId
                 topInset = params.isStandalone || joinsTop || followsHeader ? 0.0 : 12.0
                 bottomInset = neighbors.next == nil && !params.isStandalone ? 24.0 : 0.0
             }
-            let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: height), insets: UIEdgeInsets(top: topInset, left: 0.0, bottom: bottomInset, right: 0.0))
+            let insets = item.visualStyle == .native ? itemListNeighborsGroupedInsets(itemListNeighbors(item: item, topFacet: topFacet, bottomFacet: bottomFacet), params) : UIEdgeInsets(top: topInset, left: 0.0, bottom: bottomInset, right: 0.0)
+            let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: height), insets: insets)
             return (layout, { [weak self] in
                 guard let self else { return }
                 self.createContent()
                 self.item = item
                 self.view.isAccessibilityElement = false
                 self.surface.frame = CGRect(x: left, y: 0.0, width: width, height: height)
-                self.surface.backgroundColor = isCard ? SGItemListVisualStyle.extera.cardColor(theme: theme) : .clear
-                self.surface.layer.cornerRadius = isCard ? 22.0 : 0.0
+                self.surface.backgroundColor = isCard ? item.visualStyle.cardColor(theme: theme).withAlphaComponent(1.0) : .clear
+                self.surface.layer.cornerRadius = isCard ? (item.visualStyle == .extera ? 22.0 : 11.0) : 0.0
                 var corners: CACornerMask = []
                 if !joinsTop { corners.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner]) }
                 if !joinsBottom { corners.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner]) }
                 self.surface.layer.maskedCorners = corners
+                self.settingsPreview?.isHidden = !item.content.isSettingsPreview
+                if !item.content.isSettingsPreview {
+                    self.settingsPreview?.sliderUpdated = nil
+                    self.settingsPreview?.selectionUpdated = nil
+                }
+                if case let .settingsPreview(kind) = item.content {
+                    let preview: SGSettingsPreviewView
+                    if let current = self.settingsPreview {
+                        preview = current
+                    } else {
+                        preview = SGSettingsPreviewView(frame: .zero)
+                        self.settingsPreview = preview
+                        self.view.addSubview(preview)
+                    }
+                    preview.frame = self.surface.frame
+                    preview.layer.cornerRadius = self.surface.layer.cornerRadius
+                    preview.layer.maskedCorners = corners
+                    if #available(iOS 13.0, *) { preview.layer.cornerCurve = .continuous }
+                    preview.sliderUpdated = item.sliderValueUpdated == nil ? nil : { [weak self] value in
+                        self?.item?.sliderValueUpdated?(value)
+                    }
+                    preview.selectionUpdated = item.segmentedValueUpdated == nil ? nil : { [weak self] value in
+                        self?.item?.segmentedValueUpdated?(value)
+                    }
+                    preview.update(kind: kind, theme: theme, style: item.visualStyle, baseSize: baseSize)
+                }
+                self.doubleTapPreview?.isHidden = !item.content.isPreview
+                if case let .doubleTap(incomingSymbol, outgoingSymbol) = item.content {
+                    let preview: AyuDoubleTapPreviewView
+                    if let current = self.doubleTapPreview {
+                        preview = current
+                    } else {
+                        preview = AyuDoubleTapPreviewView(frame: .zero)
+                        self.doubleTapPreview = preview
+                        self.surface.insertSubview(preview, at: 0)
+                    }
+                    preview.frame = self.surface.bounds
+                    preview.update(theme: theme, visualStyle: .extera, incomingSymbol: incomingSymbol, outgoingSymbol: outgoingSymbol)
+                }
+                self.segmentedControl?.isHidden = !item.content.isSegmented
+                if case let .segmentedSelector(value, options) = item.content {
+                    let control: SGDiscreteSelectorControl
+                    if let current = self.segmentedControl {
+                        control = current
+                    } else {
+                        control = SGDiscreteSelectorControl(frame: .zero)
+                        self.segmentedControl = control
+                        self.view.addSubview(control)
+                    }
+                    control.frame = CGRect(x: left + 22.0, y: 0.0, width: max(1.0, width - 44.0), height: height)
+                    control.valueChanged = { [weak self] index in
+                        guard let item = self?.item, item.enabled else { return }
+                        item.segmentedValueUpdated?(index)
+                    }
+                    control.update(theme: theme, visualStyle: item.visualStyle, baseSize: baseSize, value: value, options: options, enabled: item.enabled)
+                }
                 // The card remains opaque even when its controls are disabled.
                 for label in [self.titleLabel, self.subtitleLabel, self.badgeLabel] {
                     label.alpha = item.enabled ? 1.0 : 0.45
@@ -408,11 +538,17 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                 self.iconView.alpha = item.enabled ? 1.0 : 0.45
                 self.iconView.frame = CGRect(x: textInset, y: floor((height - iconSize) / 2.0), width: iconSize, height: iconSize)
                 self.titleLabel.attributedText = attributedTitle
+                self.titleLabel.numberOfLines = titleLineLimit
+                self.titleLabel.lineBreakMode = titleLineLimit == 0 ? .byWordWrapping : .byTruncatingTail
                 self.titleLabel.frame = CGRect(x: titleX, y: floor((height - textHeight) / 2.0), width: titleWidth, height: titleSize.height)
                 self.subtitleLabel.attributedText = subtitleText
+                self.subtitleLabel.numberOfLines = subtitleLineLimit
+                self.subtitleLabel.lineBreakMode = subtitleLineLimit == 0 ? .byWordWrapping : .byTruncatingTail
                 self.subtitleLabel.frame = CGRect(x: titleX, y: self.titleLabel.frame.maxY + 5.0, width: titleWidth, height: subtitleSize.height)
                 self.subtitleLabel.isHidden = subtitleText == nil
                 self.valueLabel.font = valueFont
+                self.valueLabel.numberOfLines = 1
+                self.valueLabel.lineBreakMode = .byTruncatingTail
                 self.valueLabel.text = value
                 self.valueLabel.textColor = theme.list.itemAccentColor
                 if case .expandableToggle = item.content { self.valueLabel.textColor = theme.list.itemPrimaryTextColor }
@@ -422,18 +558,29 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                 self.valueLabel.alpha = (item.enabled ? 1.0 : 0.45) * (self.hasContextMenu ? 0.55 : 1.0)
                 self.badgeLabel.text = badge
                 self.badgeLabel.font = badgeFont
+                self.badgeLabel.numberOfLines = 1
+                self.badgeLabel.lineBreakMode = .byTruncatingTail
                 self.badgeLabel.textColor = theme.list.itemCheckColors.foregroundColor
                 self.badgeLabel.backgroundColor = theme.list.itemAccentColor
                 self.badgeLabel.frame = CGRect(x: min(width - textInset - badgeWidth, self.titleLabel.frame.minX + titleSize.width + 8.0), y: floor((height - badgeSize.height - 6.0) / 2.0), width: max(0.0, badgeWidth - 4.0), height: badgeSize.height + 6.0)
                 self.badgeLabel.isHidden = badge == nil
-                let separatorX: CGFloat = item.content.isCheckbox && next?.isCheckbox == true ? 106.0 : (item.icon == nil ? 22.0 : titleX)
+                let separatorX: CGFloat = item.content.isPreview || item.content.isSettingsPreview ? 0.0 : (item.content.isCheckbox && next?.isCheckbox == true ? 106.0 : (item.icon == nil ? 22.0 : titleX))
+                // A settings illustration lives above the surface to receive control touches.
+                // Keep the separator in the node so it remains visible above that illustration.
+                if item.content.isSettingsPreview {
+                    self.view.addSubview(self.separator)
+                } else if self.separator.superview !== self.surface {
+                    self.surface.addSubview(self.separator)
+                }
                 self.separator.frame = CGRect(x: separatorX, y: height - UIScreenPixel, width: max(0.0, width - separatorX), height: UIScreenPixel)
-                self.separator.backgroundColor = SGItemListVisualStyle.extera.backgroundColor(theme: theme).mixedWith(theme.list.itemPrimaryTextColor, alpha: theme.overallDarkAppearance ? 0.025 : 0.1)
+                if item.content.isSettingsPreview { self.separator.frame.origin.x += left }
+                self.separator.backgroundColor = item.visualStyle.backgroundColor(theme: theme).mixedWith(theme.list.itemPrimaryTextColor, alpha: theme.overallDarkAppearance ? 0.025 : 0.1)
                 self.separator.isHidden = !joinsBottom
                 self.rowButton.frame = CGRect(x: left, y: 0.0, width: width, height: height)
                 self.rowButton.isEnabled = item.enabled
-                self.rowButton.isUserInteractionEnabled = isCard
-                self.rowButton.isAccessibilityElement = true
+                self.rowButton.isHidden = item.content.isPreview || item.content.isSegmented || item.content.isSettingsPreview
+                self.rowButton.isUserInteractionEnabled = isCard && !self.rowButton.isHidden
+                self.rowButton.isAccessibilityElement = !self.rowButton.isHidden
                 self.rowButton.accessibilityLabel = [attributedTitle.string, item.subtitle, badge].compactMap { $0 }.joined(separator: ", ")
                 self.rowButton.accessibilityValue = value
                 self.rowButton.accessibilityHint = nil
@@ -497,7 +644,15 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                     self.markLayer.strokeColor = theme.list.itemCheckColors.foregroundColor.cgColor
                 }
                 CATransaction.commit()
-                self.view.accessibilityElements = self.toggleButton.isAccessibilityElement ? [self.rowButton, self.toggleButton] : [self.rowButton]
+                if item.content.isSettingsPreview, let preview = self.settingsPreview {
+                    self.view.accessibilityElements = [preview]
+                } else if item.content.isPreview {
+                    self.view.accessibilityElements = []
+                } else if item.content.isSegmented, let control = self.segmentedControl {
+                    self.view.accessibilityElements = [control]
+                } else {
+                    self.view.accessibilityElements = self.toggleButton.isAccessibilityElement ? [self.rowButton, self.toggleButton] : [self.rowButton]
+                }
             })
         }
     }

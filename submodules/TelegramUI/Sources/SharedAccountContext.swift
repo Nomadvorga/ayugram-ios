@@ -2587,11 +2587,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
 
     public func makeChatMessageFeedItem(context: AccountContext, messages: [EngineMessage], presentationData: PresentationData, accountPeer: EnginePeer?, actions: ChatMessageFeedItemActions) -> ListViewItem {
         // Not a preview: a preview hides a link preview's action button (Instant View), and the feed shows it.
-        // No tails: the text and link preview content nodes draw no status line (views, time) then, and the row
-        // shows both in its channel line instead; the bubble's shape does not matter, it draws no background.
+        // Interactive feeds retain the status line: text/media keep some reactions there.
+        // News omits it and draws metadata in its own header instead.
         let corners = presentationData.chatBubbleCorners
-        let feedCorners = PresentationChatBubbleCorners(mainRadius: corners.mainRadius, auxiliaryRadius: corners.auxiliaryRadius, mergeBubbleCorners: corners.mergeBubbleCorners, hasTails: false, serifMessageText: corners.serifMessageText)
-        return self.makeStandaloneChatMessageItem(context: context, messages: messages, theme: presentationData.theme, strings: presentationData.strings, wallpaper: presentationData.chatWallpaper, fontSize: presentationData.chatFontSize, chatBubbleCorners: feedCorners, dateTimeFormat: presentationData.dateTimeFormat, nameOrder: presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: nil, availableReactions: nil, accountPeer: accountPeer, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false, activateGiftMessageInput: nil, feedActions: actions)
+        let feedCorners = PresentationChatBubbleCorners(mainRadius: corners.mainRadius, auxiliaryRadius: corners.auxiliaryRadius, mergeBubbleCorners: corners.mergeBubbleCorners, hasTails: actions.updateReaction != nil, serifMessageText: corners.serifMessageText)
+        return self.makeStandaloneChatMessageItem(context: context, messages: messages, theme: presentationData.theme, strings: presentationData.strings, wallpaper: presentationData.chatWallpaper, fontSize: presentationData.chatFontSize, chatBubbleCorners: feedCorners, dateTimeFormat: presentationData.dateTimeFormat, nameOrder: presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: nil, availableReactions: actions.availableReactions, accountPeer: accountPeer, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false, activateGiftMessageInput: nil, feedActions: actions)
     }
 
     /// The item behind both the preview and the feed bubble; `feedActions` is set for the feed, which draws no
@@ -2616,9 +2616,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             },
             openPeerMention: { _, _ in },
             openMessageContextMenu: { _, _, _, _, _, _ in },
-            openMessageReactionContextMenu: { _, _, _, _ in
+            openMessageReactionContextMenu: { message, source, _, _ in
+                feedActions?.openReactionMenu?(EngineMessage(message), source)
             },
-            updateMessageReaction: { _, _, _, _ in },
+            updateMessageReaction: { message, reaction, _, source in
+                if case let .reaction(value) = reaction {
+                    feedActions?.updateReaction?(EngineMessage(message), value)
+                } else {
+                    feedActions?.openReactionMenu?(EngineMessage(message), source)
+                }
+            },
             activateMessagePinch: { _ in
             },
             openMessageContextActions: { _, _, _, _ in },
@@ -2761,7 +2768,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             },
             openPeerContextMenu: { _, _, _, _, _ in
             },
-            openMessageReplies: { _, _, _ in
+            openMessageReplies: { id, _, _ in
+                feedActions?.openReplies?(id)
             },
             openReplyThreadOriginalMessage: { _ in
             },
@@ -2906,9 +2914,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             context: context,
             chatLocation: chatLocation,
             associatedData: ChatMessageItemAssociatedData(
-                automaticDownloadPeerType: .contact,
-                automaticDownloadPeerId: nil,
-                automaticDownloadNetworkType: .cellular,
+                automaticDownloadPeerType: feedActions != nil ? .channel : .contact,
+                automaticDownloadPeerId: feedActions != nil ? messages.first?.id.peerId : nil,
+                automaticDownloadNetworkType: feedActions?.mediaAutoDownloadNetworkType ?? .cellular,
                 isRecentActions: false,
                 subject: nil,
                 contactsPeerIds: Set(),
@@ -2923,7 +2931,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 areStarReactionsEnabled: false,
                 isPremium: false,
                 accountPeer: accountPeer,
-                forceInlineReactions: true,
+                forceInlineReactions: feedActions?.updateReaction == nil,
                 isStandalone: isStandalone,
                 showTextAsPlaceholder: rank != nil,
                 hidesBubbleBackground: feedActions != nil,

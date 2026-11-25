@@ -1,0 +1,1455 @@
+{
+  "apk": {
+    "file": "vanilla-AyuGram-full-20261104.apk",
+    "sha256": "b7195bd9f3126543566acf3e1e5d3d1cc1fa163db927e85918877f7cb65cb113",
+    "buildMetadata": "repositories {\n  system: GIT\n  local_root_path: \"$PROJECT_DIR\"\n  revision: \"6029a7feaad350cbdd99a91178ea34ad623f1e4f\"\n}\n"
+  },
+  "exteraRepository": "https://github.com/exteraSquad/exteraGram",
+  "exteraRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+  "ayuRepository": "https://github.com/AyuGram/AyuGram4A",
+  "ayuNoticesRevision": "7013145676d36d82ee13c02a89f72097b7490dcd",
+  "resvg": {
+    "version": "2.6.2",
+    "integrity": "sha512-xBaJish5OeGmniDj9cW5PRa/PtmuVU3ziqrbr5xJj901ZDN4TosrVaNZpEiLZAxdfnhAe7uQ7QFWfjPe9d9K2Q=="
+  },
+  "monetPalette": {
+    "background": "#2D3134",
+    "foreground": "#C2E8FF",
+    "source": "Dominant interior colors measured in reference frame 24."
+  },
+  "sources": {
+    "ayu_default_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_background.webp",
+      "apkEntries": [
+        "res/gSt.webp"
+      ],
+      "apkResourceSha256": "5060331142b42020b085388d960acfff45c6deae84c8b0c2a919d0714aa798cb",
+      "sha256": "5060331142b42020b085388d960acfff45c6deae84c8b0c2a919d0714aa798cb"
+    },
+    "ayu_default_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_foreground.webp",
+      "apkEntries": [
+        "res/5cm.webp"
+      ],
+      "apkResourceSha256": "43e42ad0aef90d9f900c96b2bd2f836918e09f9a7947d1ac451675b135ef9f7a",
+      "sha256": "43e42ad0aef90d9f900c96b2bd2f836918e09f9a7947d1ac451675b135ef9f7a"
+    },
+    "ayu_monet_foreground.xml": {
+      "apkResource": "resources/res/drawable-v31/ic_foreground_monet.xml",
+      "apkEntries": [],
+      "apkResourceSha256": "4b24f45b3ef02678e9874ced7280203086528eada1e5d36ecc4e82bbb3c903bf",
+      "sha256": "4b24f45b3ef02678e9874ced7280203086528eada1e5d36ecc4e82bbb3c903bf"
+    },
+    "ayu_ayugram_alt_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayualt_background.webp",
+      "apkEntries": [
+        "res/3mX.webp"
+      ],
+      "apkResourceSha256": "ef886bea981fd32786e5601070f8696a3642a8596898291ea266658a83d6435d",
+      "sha256": "ef886bea981fd32786e5601070f8696a3642a8596898291ea266658a83d6435d"
+    },
+    "ayu_ayugram_alt_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayualt_foreground.webp",
+      "apkEntries": [
+        "res/IyX.webp",
+        "res/iUM.webp"
+      ],
+      "apkResourceSha256": "54580a8c8c4823e2f1a16cf8d5d170b64e7833bd7c8139522e513e8f5377ea72",
+      "sha256": "54580a8c8c4823e2f1a16cf8d5d170b64e7833bd7c8139522e513e8f5377ea72"
+    },
+    "ayu_ayugram_discord_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayudiscord_background.webp",
+      "apkEntries": [
+        "res/DI9.webp"
+      ],
+      "apkResourceSha256": "9df43ed2c2ae7fa8f668bb86e66e744b845ec8a27f382618682b172bc8df3b37",
+      "sha256": "9df43ed2c2ae7fa8f668bb86e66e744b845ec8a27f382618682b172bc8df3b37"
+    },
+    "ayu_ayugram_discord_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayudiscord_foreground.webp",
+      "apkEntries": [
+        "res/IyX.webp",
+        "res/iUM.webp"
+      ],
+      "apkResourceSha256": "54580a8c8c4823e2f1a16cf8d5d170b64e7833bd7c8139522e513e8f5377ea72",
+      "sha256": "54580a8c8c4823e2f1a16cf8d5d170b64e7833bd7c8139522e513e8f5377ea72"
+    },
+    "ayu_ayugram_spotify_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuspotify_background.webp",
+      "apkEntries": [
+        "res/f8O.webp"
+      ],
+      "apkResourceSha256": "5712ec804af25c683b37f8d321644d003219caca4161a7073b81cef7531fe851",
+      "sha256": "5712ec804af25c683b37f8d321644d003219caca4161a7073b81cef7531fe851"
+    },
+    "ayu_ayugram_spotify_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuspotify_foreground.webp",
+      "apkEntries": [
+        "res/3oU.webp"
+      ],
+      "apkResourceSha256": "47dcaa8142b857e2f382a9cf368b90a23230d4b9b64ea5036a602c445393e237",
+      "sha256": "47dcaa8142b857e2f382a9cf368b90a23230d4b9b64ea5036a602c445393e237"
+    },
+    "ayu_ayugram_extera_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuextera_background.webp",
+      "apkEntries": [
+        "res/zM-.webp"
+      ],
+      "apkResourceSha256": "2dd2681461594d51a92671a0f774808d67080deccb4cd20e73f587f78848123b",
+      "sha256": "2dd2681461594d51a92671a0f774808d67080deccb4cd20e73f587f78848123b"
+    },
+    "ayu_ayugram_extera_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuextera_foreground.webp",
+      "apkEntries": [
+        "res/a7L.webp"
+      ],
+      "apkResourceSha256": "5480dba5d5cb6856341b648a1d88ba3828eb85fa2f4668de22cd906a8e369b43",
+      "sha256": "5480dba5d5cb6856341b648a1d88ba3828eb85fa2f4668de22cd906a8e369b43"
+    },
+    "ayu_ayugram_nothing_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayunothing_foreground.webp",
+      "apkEntries": [
+        "res/772.webp"
+      ],
+      "apkResourceSha256": "6c4d91b0bb567d643b5ee5007b2cfaa934256b5ce432ffe0192f857e559a5f0f",
+      "sha256": "6c4d91b0bb567d643b5ee5007b2cfaa934256b5ce432ffe0192f857e559a5f0f"
+    },
+    "ayu_ayugram_bard_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayubard_background.webp",
+      "apkEntries": [
+        "res/qbg.webp"
+      ],
+      "apkResourceSha256": "5da66eaab2a2969f493ea23ea8368049adc7d28a603c5b1e2f51368b6d27f81d",
+      "sha256": "5da66eaab2a2969f493ea23ea8368049adc7d28a603c5b1e2f51368b6d27f81d"
+    },
+    "ayu_ayugram_bard_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayubard_foreground.webp",
+      "apkEntries": [
+        "res/HCU.webp"
+      ],
+      "apkResourceSha256": "3ce0d73d21e1d97c9768dee44eac3eb7804c96241dd47cce0db644680cac1794",
+      "sha256": "3ce0d73d21e1d97c9768dee44eac3eb7804c96241dd47cce0db644680cac1794"
+    },
+    "ayu_ayugram_yaplus_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuyaplus_background.webp",
+      "apkEntries": [
+        "res/Thx.webp"
+      ],
+      "apkResourceSha256": "903a0214e32e0682cf045ea19d77238f2cac2de8944f23b08b82d06337594187",
+      "sha256": "903a0214e32e0682cf045ea19d77238f2cac2de8944f23b08b82d06337594187"
+    },
+    "ayu_ayugram_yaplus_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayuyaplus_foreground.webp",
+      "apkEntries": [
+        "res/RXc.webp"
+      ],
+      "apkResourceSha256": "8f24c498db9ce5abfa6dbc81b8a10bd6f122534c3abcd6eb0819a4c938b1cd36",
+      "sha256": "8f24c498db9ce5abfa6dbc81b8a10bd6f122534c3abcd6eb0819a4c938b1cd36"
+    },
+    "ayu_ayutyan_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ayutyan_foreground.webp",
+      "apkEntries": [
+        "res/4qH.webp"
+      ],
+      "apkResourceSha256": "a74b2cf0718a329bf9c75a63349eebcc0841832ce8fd87c236987980f1f789e1",
+      "sha256": "a74b2cf0718a329bf9c75a63349eebcc0841832ce8fd87c236987980f1f789e1"
+    },
+    "extera_default_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_extera_assets_foreground.webp",
+      "apkEntries": [
+        "res/bIw.webp"
+      ],
+      "apkResourceSha256": "0b384db29831e53a8b07adfa6dba986f8061677fcc7150c5fcf53ae367af14bc",
+      "gitPath": "TMessagesProj/appicons/exteragram/default/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "0b384db29831e53a8b07adfa6dba986f8061677fcc7150c5fcf53ae367af14bc"
+    },
+    "extera_monet_foreground.xml": {
+      "apkResource": "resources/res/drawable-v31/ic_foreground_monet_extera.xml",
+      "apkEntries": [],
+      "apkResourceSha256": "c1668a952bdfffb873188d2fa71460f18404d8c5089d821e402c925cb6e6bb44",
+      "sha256": "c1668a952bdfffb873188d2fa71460f18404d8c5089d821e402c925cb6e6bb44"
+    },
+    "extera_winter_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_winter_background.webp",
+      "apkEntries": [
+        "res/S5U.webp"
+      ],
+      "apkResourceSha256": "f84d29b078c2256a9836fc84ef91be3cb3d77d1e51728c3a174a8049e1a7e7fa",
+      "gitPath": "TMessagesProj/appicons/exteragram/winter/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "f84d29b078c2256a9836fc84ef91be3cb3d77d1e51728c3a174a8049e1a7e7fa"
+    },
+    "extera_winter_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_extera_assets_foreground.webp",
+      "apkEntries": [
+        "res/bIw.webp"
+      ],
+      "apkResourceSha256": "0b384db29831e53a8b07adfa6dba986f8061677fcc7150c5fcf53ae367af14bc",
+      "sha256": "0b384db29831e53a8b07adfa6dba986f8061677fcc7150c5fcf53ae367af14bc"
+    },
+    "extera_orbit_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_orbit_foreground.webp",
+      "apkEntries": [
+        "res/ZIE.webp"
+      ],
+      "apkResourceSha256": "c2c3e74c352e1de7030436eb78ba0fc67b89713649793cc0ba557bc08074cc84",
+      "gitPath": "TMessagesProj/appicons/exteragram/orbit/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "c2c3e74c352e1de7030436eb78ba0fc67b89713649793cc0ba557bc08074cc84"
+    },
+    "extera_editor_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_editor_background.webp",
+      "apkEntries": [
+        "res/9z0.webp"
+      ],
+      "apkResourceSha256": "553043d02634ff4a164cc1e04e779a3f6a613cadb2e8c455f5b2b3353dd3215c",
+      "gitPath": "TMessagesProj/appicons/exteragram/editor/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "553043d02634ff4a164cc1e04e779a3f6a613cadb2e8c455f5b2b3353dd3215c"
+    },
+    "extera_editor_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_editor_foreground.webp",
+      "apkEntries": [
+        "res/cZU.webp"
+      ],
+      "apkResourceSha256": "73201e7f2424554c60a338f9ea7d5be1bc189974bd43da148dadda67bcf956a9",
+      "gitPath": "TMessagesProj/appicons/exteragram/editor/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "73201e7f2424554c60a338f9ea7d5be1bc189974bd43da148dadda67bcf956a9"
+    },
+    "extera_mole_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_mole_background.webp",
+      "apkEntries": [
+        "res/5Rg.webp"
+      ],
+      "apkResourceSha256": "b4c8aa46ec1972e43e5aaf4067dc1cf858aad165d4e2140ba0cefab4a3c569dd",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/mole/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "8baa765f8fdaff5cec9ae722206dcc691b4404d83ffb2a6868845099c070a373"
+    },
+    "extera_mole_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_mole_foreground.webp",
+      "apkEntries": [
+        "res/KKY.webp"
+      ],
+      "apkResourceSha256": "0a8ac3960e43ae92d3f099120929d17ee7e82d16dca9f638dcb0871a155eaab5",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/mole/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "6986b88d227997d088b78f07d5fd82b3a77a7b5b7b9c99cbbbe669bfa75e0d72"
+    },
+    "extera_echpochmak_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_echpochmak_background.webp",
+      "apkEntries": [
+        "res/C4Y.webp"
+      ],
+      "apkResourceSha256": "e5bc8480fe6b01067c3f193c52b98ac29626c5b5b348f5928bab0062239b9cc6",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/echpochmak/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "b3b1c038ef953529dc49970d73e23ae2a622de61a0bc1dfa6c0573828de1a4a8"
+    },
+    "extera_echpochmak_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_echpochmak_foreground.webp",
+      "apkEntries": [
+        "res/27T.webp"
+      ],
+      "apkResourceSha256": "e49adaf727492dd02fec9665f9854f0981eaeff5935cf9bfd6e243892b49b050",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/echpochmak/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "dbb7e23b7654b7fef9dfe19ccfdfae8b0b8cb35f6edc104027068b3e4574127d"
+    },
+    "extera_avatar_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_avatar_background.webp",
+      "apkEntries": [
+        "res/hKC.webp"
+      ],
+      "apkResourceSha256": "215918f04e7fdffb4dd40be31a6d23f7c57ec7e19dfdeba15e2cd6d7fad4efd9",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/avatar/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "bfcaceaf4e17a5ffa6dc19b22892145fdc8f72fbac38ff530d7892f90780d5bd"
+    },
+    "extera_avatar_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_avatar_foreground.webp",
+      "apkEntries": [
+        "res/-xN.webp"
+      ],
+      "apkResourceSha256": "abf1336bc7a7f466f0fedc7de1970689b56a54eb5044a2e9add5fa9d1b39f670",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/avatar/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "f49d807fa807ad8f3d421962f4012a72d5aa0a05aeb5ea2a7b04b1c3b2902eb3"
+    },
+    "extera_candy_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_candy_background.webp",
+      "apkEntries": [
+        "res/Rjp.webp"
+      ],
+      "apkResourceSha256": "e23ca7f381a30ee33a2b3f16725a31cb41988fec85a3636762bf3f4e88513269",
+      "gitPath": "TMessagesProj/appicons/impulz3/candy/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "e739bdf3ba20fab42dc8070e2ba1b11ff083558f3c63536de0745d687adbc353"
+    },
+    "extera_candy_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_candy_foreground.webp",
+      "apkEntries": [
+        "res/w-z.webp"
+      ],
+      "apkResourceSha256": "466c615e3ed02203eb952b7c98978bd740cf821381543eddd3d35b6c1c941b51",
+      "gitPath": "TMessagesProj/appicons/impulz3/candy/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "71d1fd5baa0b52e2fa319f111f13d6a8d64c6eac36a72a3fd6efb236d46834a3"
+    },
+    "extera_guitar_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_guitar_background.webp",
+      "apkEntries": [
+        "res/DiJ.webp"
+      ],
+      "apkResourceSha256": "80b4d97000a06faa27b076a99e06612f9b8a4c449ac83f1eb781410c04b1c0a2",
+      "gitPath": "TMessagesProj/appicons/nekto_nkt/guitar/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "bca7701cff524eb3e5a845edd58b10b2b7b89a6ae8978aeffe2db6d94ba93204"
+    },
+    "extera_guitar_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_guitar_foreground.webp",
+      "apkEntries": [
+        "res/D4A.webp"
+      ],
+      "apkResourceSha256": "ded521ceef581f3522c19714fb5af1a65d60cd18920a826c392d7fbb04c1408b",
+      "gitPath": "TMessagesProj/appicons/nekto_nkt/guitar/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "9bed85aca472542898a160facd2a83bd89578e9de69484ca726282cb8b3eadf0"
+    },
+    "extera_sus_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_sus_foreground.webp",
+      "apkEntries": [
+        "res/eT5.webp"
+      ],
+      "apkResourceSha256": "6165b74e69d5f6815af438be62143fabbda1b1140c9c45d2217b5c0e6b5f9796",
+      "gitPath": "TMessagesProj/appicons/MilesBlooper/sus/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "6165b74e69d5f6815af438be62143fabbda1b1140c9c45d2217b5c0e6b5f9796"
+    },
+    "extera_frog_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_frog_background.webp",
+      "apkEntries": [
+        "res/eJo.webp"
+      ],
+      "apkResourceSha256": "48e3c7685f2826bca75015f52ead7f853a0e3bc37a470c505bf73ec495adc525",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/frog/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "c71b64970e130186c3aa968dec64353c0f832d50f07390260fa374fa106bd008"
+    },
+    "extera_frog_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_frog_foreground.webp",
+      "apkEntries": [
+        "res/8sQ.webp"
+      ],
+      "apkResourceSha256": "9e4bfddb8065b0a56d0add654df931ff3277d8e1fb8c3561889c6e6899d9c829",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/frog/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "1f08c616613540ac4e27a8553178f3cde5bd7d21b026fb341c1b35fecc86bdfd"
+    },
+    "extera_hamster_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_hamster_background.webp",
+      "apkEntries": [
+        "res/6OJ.webp"
+      ],
+      "apkResourceSha256": "82f6343c468b10592f57e89e2eb37e1ad078b0b42452d91a9a449119d7c14a21",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/hamster/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "77fdd4315f7cc0ca2f292974a072d37a63b87a6d48b2b90a13686ce2014045da"
+    },
+    "extera_hamster_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_hamster_foreground.webp",
+      "apkEntries": [
+        "res/Q6S.webp"
+      ],
+      "apkResourceSha256": "ee235271660ef5f4fbee23d3b3738a56d27e390d9c3a9c4550993594feb728b4",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/hamster/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "314664de09b1d83ef7e94236850273237507af3038676b96cc7c35a151c96b92"
+    },
+    "extera_sponge_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_sponge_background.webp",
+      "apkEntries": [
+        "res/kXP.webp"
+      ],
+      "apkResourceSha256": "c2095eab8d91b62e143ac70a89b5654ea96c69c84c04861d93997e2517a16af4",
+      "gitPath": "TMessagesProj/appicons/nneeuurr/sponge/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "eed2b8f26f8a9fc2de3c0858227e4f803d5b5b1b42b0337bc988116082383ec3"
+    },
+    "extera_sponge_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_sponge_foreground.webp",
+      "apkEntries": [
+        "res/HuU.webp"
+      ],
+      "apkResourceSha256": "517fcf0d4114e730918d6ddce23092f623a16e7b8f833d6c062a5857c5098203",
+      "gitPath": "TMessagesProj/appicons/nneeuurr/sponge/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "2758bc389ffff9512cac370e4e7aeda77c5973e506d7248126c0ee3c22a0dc76"
+    },
+    "extera_invincible_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_invincible_background.webp",
+      "apkEntries": [
+        "res/o7x.webp"
+      ],
+      "apkResourceSha256": "18a7c3fb80ec9865571d20ea9d60c480468920cc079401f30ae168be9ad3958a",
+      "gitPath": "TMessagesProj/appicons/exteragram/invincible/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "18a7c3fb80ec9865571d20ea9d60c480468920cc079401f30ae168be9ad3958a"
+    },
+    "extera_invincible_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_invincible_foreground.webp",
+      "apkEntries": [
+        "res/GTo.webp"
+      ],
+      "apkResourceSha256": "876e20a91e6742a41e5d3bf560b5a9ffd170f5e8c3ce87652a0a433a313c1a23",
+      "gitPath": "TMessagesProj/appicons/exteragram/invincible/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "876e20a91e6742a41e5d3bf560b5a9ffd170f5e8c3ce87652a0a433a313c1a23"
+    },
+    "extera_flappy_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_flappy_background.webp",
+      "apkEntries": [
+        "res/3_S.webp"
+      ],
+      "apkResourceSha256": "1bffc14afe95d7db240560b0cc607e08a50710306a5c1b5a070df2c2d6214779",
+      "gitPath": "TMessagesProj/appicons/nneeuurr/flappy/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "73816287dfa849b44ca90ce62e123cbc67b35cb743512694a671f4b0795cbd5b"
+    },
+    "extera_flappy_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_flappy_foreground.webp",
+      "apkEntries": [
+        "res/XuC.webp"
+      ],
+      "apkResourceSha256": "f57a6f2922c1fc82b647af63161aac54c6fdf4c96cf126498b7b339f1caa85d6",
+      "gitPath": "TMessagesProj/appicons/nneeuurr/flappy/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "8a5f90f7226d7285eab772f088c2b1c9976216918338885734a5bd05c204d2fa"
+    },
+    "extera_nyan_cat_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_nyan_cat_background.webp",
+      "apkEntries": [
+        "res/maI.webp"
+      ],
+      "apkResourceSha256": "f3fce1e30b179a7d6346ce1573bd6d7069b181374b193c457ee870da49e515da",
+      "gitPath": "TMessagesProj/appicons/n1ksly/nyan_cat/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "4b8891ab83ca76970ed49043fafd096f940a46d9e39bad277d603d999c0771d2"
+    },
+    "extera_nyan_cat_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_nyan_cat_foreground.webp",
+      "apkEntries": [
+        "res/v2Q.webp"
+      ],
+      "apkResourceSha256": "f78687698f18f21ee4cf1b51ff39632fa8417dc1243c0d808c84e3730c21c8c7",
+      "gitPath": "TMessagesProj/appicons/n1ksly/nyan_cat/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "66567f337c127b8ad5354fda8f91031e4002a28c266b4e1388bdf40742b6a567"
+    },
+    "extera_ice_age_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ice_age_background.webp",
+      "apkEntries": [
+        "res/61-.webp"
+      ],
+      "apkResourceSha256": "0a6d149ee7caf3049405614334a598da0dfd65dce562565b4a3bdbb8db464b06",
+      "gitPath": "TMessagesProj/appicons/exteragram/ice_age/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "0a6d149ee7caf3049405614334a598da0dfd65dce562565b4a3bdbb8db464b06"
+    },
+    "extera_ice_age_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_ice_age_foreground.webp",
+      "apkEntries": [
+        "res/4xr.webp"
+      ],
+      "apkResourceSha256": "924e9441aa3f517608059b14f72b37813e9c04fe66b7f4f24afcfd715bce25bf",
+      "gitPath": "TMessagesProj/appicons/exteragram/ice_age/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "924e9441aa3f517608059b14f72b37813e9c04fe66b7f4f24afcfd715bce25bf"
+    },
+    "extera_fish_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_fish_background.webp",
+      "apkEntries": [
+        "res/JYu.webp"
+      ],
+      "apkResourceSha256": "81c9acdd5f37761164a98a6712aae3501e0a7e817d32627272dcd553bc152ac4",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/fish/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "7048721ff69448483389807374ac69f26b07ada732e8b912c1572e60a2197ab3"
+    },
+    "extera_fish_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_fish_foreground.webp",
+      "apkEntries": [
+        "res/aPY.webp"
+      ],
+      "apkResourceSha256": "5f6de58502304e01f1b8311de68e81d8312903619800efb5861f29da2d763780",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/fish/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "ddf4951a663fe79cac94aa5659f6afcdb13c454ce3641903398397ac66946e13"
+    },
+    "extera_psychosis_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_psychosis_background.webp",
+      "apkEntries": [
+        "res/8mi.webp"
+      ],
+      "apkResourceSha256": "e8592cf83aed6c9fb2fa172fd959d8c003585799a003e5a5953f93c287534603",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/psychosis/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "78840b0e791e1fbe44d001455b499aec0663830379afe7e0733ecd02eac972e3"
+    },
+    "extera_psychosis_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_psychosis_foreground.webp",
+      "apkEntries": [
+        "res/ium.webp"
+      ],
+      "apkResourceSha256": "854ccc2b36535f8065bb1cd7326e453e4e1b143f2084cae0ad15b6fabae186aa",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/psychosis/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "1717f1e51fa61aa9d4607467e1b9123e3ee4c61450446cc1374e6abe1ca884c8"
+    },
+    "extera_xp_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_xp_background.webp",
+      "apkEntries": [
+        "res/ARg.webp"
+      ],
+      "apkResourceSha256": "65b7680c70dfbf0d9190e35e028dbe59a520b39a4f7e03a20df12ed149d81409",
+      "gitPath": "TMessagesProj/appicons/weizoqq/xp/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "a5fc4dac3e2194236c9351da9c3660c6f71ca1c7b75be38cef04754efbf91858"
+    },
+    "extera_xp_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_xp_foreground.webp",
+      "apkEntries": [
+        "res/5Fc.webp"
+      ],
+      "apkResourceSha256": "a43c2d5a7f6245e2a9f82c367c56060d86808309246208f6a41b756e838bb0a8",
+      "gitPath": "TMessagesProj/appicons/weizoqq/xp/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "2e05c1e0dac4665359960dfc72ba08aa4f226ba100b7b63627cc9465d881d366"
+    },
+    "extera_nasa_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_nasa_background.webp",
+      "apkEntries": [
+        "res/ROQ.webp"
+      ],
+      "apkResourceSha256": "1e358e5f0819a1a8a42da516de64d8b4d56bfdc286b6f01103a087895306e82a",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/nasa/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "455c14e967501265218eaf18cc42abfd1906d46f6ef1d9ecc3968c31b275d527"
+    },
+    "extera_nasa_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_nasa_foreground.webp",
+      "apkEntries": [
+        "res/Zdu.webp"
+      ],
+      "apkResourceSha256": "cb3645e7157f64e07647a7c3a11d8410609b7294aade7be998bbf9d9e62c57e7",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/nasa/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "884b7f9b02b94120e64be078fa9e3235e5d3c5e919d7171f17808a86e83da836"
+    },
+    "extera_cyberpunk_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_cyberpunk_foreground.webp",
+      "apkEntries": [
+        "res/Etr.webp"
+      ],
+      "apkResourceSha256": "591ddec963f4ae4365081c046b7c3ee58cff6229b2b1e55c04ff52ac1327e769",
+      "gitPath": "TMessagesProj/appicons/exteragram/cyberpunk/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "591ddec963f4ae4365081c046b7c3ee58cff6229b2b1e55c04ff52ac1327e769"
+    },
+    "extera_space_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_space_background.webp",
+      "apkEntries": [
+        "res/PBt.webp"
+      ],
+      "apkResourceSha256": "24bb07879796d6e6d13c88445c6e1ea8c090b22e35fc26692cf94bbe5ba2fb7f",
+      "gitPath": "TMessagesProj/appicons/exteragram/space/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "24bb07879796d6e6d13c88445c6e1ea8c090b22e35fc26692cf94bbe5ba2fb7f"
+    },
+    "extera_space_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_space_foreground.webp",
+      "apkEntries": [
+        "res/kgw.webp"
+      ],
+      "apkResourceSha256": "e31292a0717de92ad2c6b167cf4bf25f6180c9b4a00cc9104dd0955a020ee1b6",
+      "gitPath": "TMessagesProj/appicons/exteragram/space/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "e31292a0717de92ad2c6b167cf4bf25f6180c9b4a00cc9104dd0955a020ee1b6"
+    },
+    "extera_jellyfish_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_jellyfish_background.webp",
+      "apkEntries": [
+        "res/4HF.webp"
+      ],
+      "apkResourceSha256": "9eede62dc078d37436468b0fdbf8cc7aa241d900a540d2e0dac23b207c60649a",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/jellyfish/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "ed6f01accb2f7342ae93f913a7bff4a4b185dfbd88cded9310bbd161a145352e"
+    },
+    "extera_jellyfish_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_jellyfish_foreground.webp",
+      "apkEntries": [
+        "res/Gok.webp"
+      ],
+      "apkResourceSha256": "4174ce67f36f0b2721d58ce33b94952fe6c6e2546ca44a5beed1c3ed934245fd",
+      "gitPath": "TMessagesProj/appicons/whatwherewhywhen/jellyfish/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "4f7685c845812a5dab7d52f3409c4624d1b6f042be75b8df1249c98ed905c915"
+    },
+    "extera_human_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_human_background.webp",
+      "apkEntries": [
+        "res/J23.webp"
+      ],
+      "apkResourceSha256": "0330a07f5a29b512a6d996818e64d7e52bb50ed6964debb6c39925910882a694",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/human/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "91ff97673cddc742ae37d92141f2319b58711c1fc4f14fa4e69c55006812e1c6"
+    },
+    "extera_human_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_human_foreground.webp",
+      "apkEntries": [
+        "res/LET.webp"
+      ],
+      "apkResourceSha256": "21ceb240f54b9bb6a506c99c9997c2548f7fdabd883f82243d752c62236dec52",
+      "gitPath": "TMessagesProj/appicons/cIick_cIack/human/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "58cdbec6cc69d2f3d97e6bca37681541c2168795392b8427e148aa1d9ba8d205"
+    },
+    "extera_sunset_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_sunset_background.webp",
+      "apkEntries": [
+        "res/76Y.webp"
+      ],
+      "apkResourceSha256": "c671f43d22be7182b1ef51a0088ba33c628d19dbb91a832177614730d42ba78e",
+      "gitPath": "TMessagesProj/appicons/exteragram/sunset/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "c671f43d22be7182b1ef51a0088ba33c628d19dbb91a832177614730d42ba78e"
+    },
+    "extera_sunset_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_sunset_foreground.webp",
+      "apkEntries": [
+        "res/2D0.webp"
+      ],
+      "apkResourceSha256": "7e764b63604a4549ef70e7c4df5c7e89a902fe2779c31d7e0252cf1208b4a7e7",
+      "gitPath": "TMessagesProj/appicons/exteragram/sunset/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "7e764b63604a4549ef70e7c4df5c7e89a902fe2779c31d7e0252cf1208b4a7e7"
+    },
+    "extera_amethyst_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_amethyst_background.webp",
+      "apkEntries": [
+        "res/QKg.webp"
+      ],
+      "apkResourceSha256": "3bdbb1f3e3b7a0f45a3444e88cdd8e6ef73b5ef08aeca6af2ede0a5e29d0d620",
+      "gitPath": "TMessagesProj/appicons/exteragram/amethyst/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "3bdbb1f3e3b7a0f45a3444e88cdd8e6ef73b5ef08aeca6af2ede0a5e29d0d620"
+    },
+    "extera_amethyst_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_amethyst_foreground.webp",
+      "apkEntries": [
+        "res/hRq.webp"
+      ],
+      "apkResourceSha256": "aea78b77d0fb8b622312616e2c49fcbfaca10ebefed0ac5c321dc1002e65437c",
+      "gitPath": "TMessagesProj/appicons/exteragram/amethyst/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "aea78b77d0fb8b622312616e2c49fcbfaca10ebefed0ac5c321dc1002e65437c"
+    },
+    "extera_aurora_background.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_aurora_background.webp",
+      "apkEntries": [
+        "res/leo.webp"
+      ],
+      "apkResourceSha256": "f99ef34023d2a36dbeb3de92273e2031b2be4c2b16bbc0bd13a921962a7d37cf",
+      "gitPath": "TMessagesProj/appicons/exteragram/aurora/ic_launcher_background.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "f99ef34023d2a36dbeb3de92273e2031b2be4c2b16bbc0bd13a921962a7d37cf"
+    },
+    "extera_aurora_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_aurora_foreground.webp",
+      "apkEntries": [
+        "res/HU8.webp"
+      ],
+      "apkResourceSha256": "d5e21144dd85822ea4da8129403be48006a3f16d53c549c627bc6156c1d55413",
+      "gitPath": "TMessagesProj/appicons/exteragram/aurora/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "d5e21144dd85822ea4da8129403be48006a3f16d53c549c627bc6156c1d55413"
+    },
+    "extera_osu_background.png": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_osu_background.webp",
+      "apkEntries": [
+        "res/mUE.webp"
+      ],
+      "apkResourceSha256": "0d90f8451a5f57dbc29d7c7bf39ada1eb9ac1dc636f314bb2486e31bf4d8662a",
+      "gitPath": "TMessagesProj/appicons/ataeshi/osu/ic_launcher_background.png",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "67330fc7dc92a13398f1c8c25ee30c668a5f9eebfb3b5767ddff273c39c91783"
+    },
+    "extera_osu_foreground.png": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_osu_foreground.webp",
+      "apkEntries": [
+        "res/rZl.webp"
+      ],
+      "apkResourceSha256": "06ca11e2409fcfbf5632fd1ef81eaf6f53d5f548f1177a056632b629d6dca00d",
+      "gitPath": "TMessagesProj/appicons/ataeshi/osu/ic_launcher_foreground.png",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "574de01e6309b675650bd938036e4b4a99776d29f8ad373589116ee9525e017d"
+    },
+    "extera_google_foreground.webp": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_google_foreground.webp",
+      "apkEntries": [
+        "res/fz5.webp"
+      ],
+      "apkResourceSha256": "5a1bee14e670744f9c4ed2c3c092f6af4a9bcdf58a0492ad1bd3880483fad001",
+      "gitPath": "TMessagesProj/appicons/exteragram/google/ic_launcher_foreground.webp",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "5a1bee14e670744f9c4ed2c3c092f6af4a9bcdf58a0492ad1bd3880483fad001"
+    },
+    "extera_google26_foreground.svg": {
+      "apkResource": "resources/res/mipmap-xxxhdpi/ic_launcher_google26_foreground.webp",
+      "apkEntries": [
+        "res/D7Z.webp"
+      ],
+      "apkResourceSha256": "c6e54675d7527805da8129207ea9fa57f895c578913bb7cccd93da7decddbd31",
+      "gitPath": "TMessagesProj/appicons/Slucket/google26/ic_launcher_foreground.svg",
+      "gitRevision": "b4d852f48f2734a0bee1a74a0939be621612262a",
+      "sha256": "40bd625df1c1e550c816d3e476050d3f3b2aa32a808a33adf64dfcc9ffaabf30"
+    }
+  },
+  "generated": {
+    "SGDefault": {
+      "SGDefault_20x20.png": "fa7f63c5d6064c443ada55a63fe7be87ccaf1d551c02d1172bd0725a70c85bc8",
+      "SGDefault_29x29.png": "81fb0d75347b7a643c22054222c1cca69561ffaa2e34ec44cea973717a7f337f",
+      "SGDefault_40x40.png": "b33f380b31072dca5dcd4f6aedc5a3a4f1a9835867931f7d18fa1fda3c4bffc9",
+      "SGDefault_58x58.png": "3daa74b576da795ffb0b54fc2ea4adbde7293c95ae819dfb03a6a0abe0111253",
+      "SGDefault_60x60.png": "44085127822d97b5090f611b0314f2f84c745710534a0e0abf182c4fa68492df",
+      "SGDefault_76x76.png": "7dd85d7b088990e0ea6d318c41b8afa204feeed63e6a9000d0950b6402f64edd",
+      "SGDefault_80x80.png": "34528218fa6c8749526009ff7b6a422f28e8e387c3ac53141d2faf00641b9b4c",
+      "SGDefault_87x87.png": "6d3e0843156fc4e844ed10ca2551b9f53ed933a71e593b2c649ebc331015fce8",
+      "SGDefault_120x120.png": "a31d5280a2f68c95f6ae99460207dbf47fcc899e2c7e270fcf3bfe0ad0249259",
+      "SGDefault_152x152.png": "2aa9fa42e7c96574e4155bf836031f791b7c4faf739fb9082c449b4d39657057",
+      "SGDefault_167x167.png": "04942dccfdb5483cb8186f4038d0abf97eeeb18993848f6aa83b27c999b2b2ad",
+      "SGDefault_180x180.png": "c53f645ba74ad938dcea35af024a6bdadcfbf9e8a4f9f5438bdcf01bdd8964a1",
+      "SGDefault_1024x1024.png": "09b402c4b549b3b1e8511d45711e0f9f8b0e4e624c3a25c9aa1599ae1f29c847"
+    },
+    "AyuMonet": {
+      "AyuMonet_20x20.png": "a41b769e13d482095ae4c2d5c9fe6da64c3e3f37cd7ba6d044e4444d47658eea",
+      "AyuMonet_29x29.png": "040225e42f15888207bb68a8cad1337f4f6c787e08b4bbf227fb33e451ec3411",
+      "AyuMonet_40x40.png": "1b33658ed1514ca7dc1793bbed17193fa9123a2298af8892f6c5c20ab3de687a",
+      "AyuMonet_58x58.png": "f5a53c432239e97d16276ac7af9208d3418db2d3a9f6790faacf9f3fc9e95b6d",
+      "AyuMonet_60x60.png": "48feb7a477651f8ed199ac479a225cd7983fdb0180e40d090f2145dd00d49d08",
+      "AyuMonet_76x76.png": "3f12aa234706923eb57be4d2244546bd200abdc69ed95651855e8c8c696ae384",
+      "AyuMonet_80x80.png": "2f689ae88769ec0bf4771f4e25b690b01a6bd618e571dcf85699fdf69e099f1b",
+      "AyuMonet_87x87.png": "f97eb421208ce520cc5747742aa8abef7d1d44feebe003f204f7f8acdafd4d63",
+      "AyuMonet_120x120.png": "b051c3743e3f0986187ed2e777a94d251857269fb0be0503534a677cdf74c9ad",
+      "AyuMonet_152x152.png": "f881aaabc6433b5f36415c66b0c3a39c4f8e3166c3fa973a0fb9e7ff1afac95c",
+      "AyuMonet_167x167.png": "1624a9b784475fd56a770b3aba851af79bb76bfb098dd41eba07472baa771e7d",
+      "AyuMonet_180x180.png": "e6ea3cb502bce676652736f355b4f82d168ab29d84b46b0307840d4b56f69f5d",
+      "AyuMonet_1024x1024.png": "64ccc910e7c74f56f84e305434587ac2d555443fe9c19f49a9b1418a490f1219",
+      "AyuMonet@2x.png": "b051c3743e3f0986187ed2e777a94d251857269fb0be0503534a677cdf74c9ad",
+      "AyuMonet@3x.png": "e6ea3cb502bce676652736f355b4f82d168ab29d84b46b0307840d4b56f69f5d"
+    },
+    "AyuAlt": {
+      "AyuAlt_20x20.png": "434c142caf0dde48116bfbebee42f4efa6996a421f9e1b3b1cf47552c474272d",
+      "AyuAlt_29x29.png": "c0e8823a5d5650c8ef5bb9b463cb5d9a5f346ad98d0e031ef4708699b3f77147",
+      "AyuAlt_40x40.png": "012b7fa8f52947e397d88f59ef23b452f052a8060d5756f781d419d08d552fb7",
+      "AyuAlt_58x58.png": "eeff638eacc0202f50be4e89420dc887a248406340dcd6c55a34c2da6bf4ec97",
+      "AyuAlt_60x60.png": "40af2c0cde10b28c0716fd6e344901937d75f7d93f734582535616e4b6c58667",
+      "AyuAlt_76x76.png": "e4955a7749232aad11d5c339ab43afdec5a611087f2d0340ce9dc69092d3a504",
+      "AyuAlt_80x80.png": "8db01c061001f6b44d10ec47a48412002d5a3409bb9e2fe049060d8b49a7749f",
+      "AyuAlt_87x87.png": "ba103068b19d76643acd569cf0327754d81c839b7d37f064a0f0f0484aca2f98",
+      "AyuAlt_120x120.png": "c0a829c1cb10f9e21ed1607d88c8fa723436101fa4edf2aee889c65be5a69954",
+      "AyuAlt_152x152.png": "23980d5f6f93ae8896fda6eeeb0198de68d8c0e3085234d96c7390478b9c3b4f",
+      "AyuAlt_167x167.png": "5e1e08b68524b9d83ea0fa113e817743c96f6317171293eea981536f2505a271",
+      "AyuAlt_180x180.png": "389216ae3b7fcba750977073a23368c1e7822aef9ba8e4dce18f955557d1c1a4",
+      "AyuAlt_1024x1024.png": "c90cce2ed523d276542af36b7f446d9d906efc723c72a013937fc32dd03c97ca",
+      "AyuAlt@2x.png": "c0a829c1cb10f9e21ed1607d88c8fa723436101fa4edf2aee889c65be5a69954",
+      "AyuAlt@3x.png": "389216ae3b7fcba750977073a23368c1e7822aef9ba8e4dce18f955557d1c1a4"
+    },
+    "AyuDiscord": {
+      "AyuDiscord_20x20.png": "36917a7b95af933297414accfda85029b3a618d8f77a3bfd7f97f5b57e76033d",
+      "AyuDiscord_29x29.png": "11bc762411d71699f93eb605f7d8d17623e266871bbbe239e9d7b69bcc84f398",
+      "AyuDiscord_40x40.png": "33b08010a2954033dcb64828c2e14f734d264b5bc86bd58295399289c3157339",
+      "AyuDiscord_58x58.png": "5d24e5f0da4f6312568607760ea92972d09b0ef5b168516954c58a4a661928f3",
+      "AyuDiscord_60x60.png": "914ee266da49b76c978c6ed5f983b9b33a8d01dee7309405325775729118eb21",
+      "AyuDiscord_76x76.png": "63ffde87cf633a156d707870cf5dd7e7a86016be16af893aca0f136c64bc37d7",
+      "AyuDiscord_80x80.png": "46f2ad3b8ce76fbe9da9d06681602ea7225228eced4c5fd630eb01196cc3e63d",
+      "AyuDiscord_87x87.png": "b13f33341a138ec72b470a2ad9a1d204a79848f3d16d32da1c8c4e267b9338c2",
+      "AyuDiscord_120x120.png": "4bbdbd1c7ea4b9eec48c3876b8635423e793278a2079f7361c2b5ee3383f90ea",
+      "AyuDiscord_152x152.png": "c7a3572cb1e37a9138ba4b1d3a7cd5484c97e508a36976339587cc5cbbe9ba31",
+      "AyuDiscord_167x167.png": "7c1e02168853daa746171a7d6f9a9a40af2d5db49098608e6a129517c9a8d67a",
+      "AyuDiscord_180x180.png": "1cda9eab88d94a7cbeee4761cefef7878b946798e12d19abb9473093907db48d",
+      "AyuDiscord_1024x1024.png": "7ba0c91cac37b9da89b4a779fa7a692b43e5103f522fbe605883ab2bdf226d88",
+      "AyuDiscord@2x.png": "4bbdbd1c7ea4b9eec48c3876b8635423e793278a2079f7361c2b5ee3383f90ea",
+      "AyuDiscord@3x.png": "1cda9eab88d94a7cbeee4761cefef7878b946798e12d19abb9473093907db48d"
+    },
+    "AyuSpotify": {
+      "AyuSpotify_20x20.png": "f87f8dcfe60ecc718c1d5e3e3e45cfed559eb730de4a2ca92d9645f3d8a5572e",
+      "AyuSpotify_29x29.png": "cec483ba0e85dd5c5a0693d24c65e017b3079ec9b8a3e9f5863bd445d4b92646",
+      "AyuSpotify_40x40.png": "efd06091c1e040b8e6a4096200f824af8629db41ae0986ae529288070379f988",
+      "AyuSpotify_58x58.png": "7b9c54687dd0834163aa54753ee1932f59831b894ca5244c4ce45d9856b40e22",
+      "AyuSpotify_60x60.png": "b5d57b8e723c0942b13da345b9e707f16cb8dc301d4f87bda8800237ab1120ca",
+      "AyuSpotify_76x76.png": "58a822cf62881df7c1b4bc9a652c1b2b97cf65ad6d9722e7ea30e4c39e6e586b",
+      "AyuSpotify_80x80.png": "4f84fdd14b1ef2ae496575accc8b23b85325653587c566fcff4e89ebd37e48bd",
+      "AyuSpotify_87x87.png": "6ea39d04b051ff6a244aaa3bf0c6d43f66ab7a668546030b5131a7383d71c6b9",
+      "AyuSpotify_120x120.png": "0916cbd5a5db9a8980891294b819090add94c17fa4ec8c2a1d6fae5481bf90a1",
+      "AyuSpotify_152x152.png": "ad0867974c5779f16a7d70aac6f0c5340ded03af38fbd3b88ee262f1be37021d",
+      "AyuSpotify_167x167.png": "f900c63e1a2e28c21e6f44c684332dbccac91ef016ed5d9b20078a620072ab81",
+      "AyuSpotify_180x180.png": "a019b98a78e3336cbf570b398afa564013c5ada857255a532d274a2b07aa84fb",
+      "AyuSpotify_1024x1024.png": "b6c3de18273f47c401b6129ab1f8a80f8240c6aa7d3592fd2119a990e3566663",
+      "AyuSpotify@2x.png": "0916cbd5a5db9a8980891294b819090add94c17fa4ec8c2a1d6fae5481bf90a1",
+      "AyuSpotify@3x.png": "a019b98a78e3336cbf570b398afa564013c5ada857255a532d274a2b07aa84fb"
+    },
+    "AyuExtera": {
+      "AyuExtera_20x20.png": "13c104ed12102ad2f94594aaa90c4077bff10f4bf5daeffbe7368f67b1ed32a3",
+      "AyuExtera_29x29.png": "6b2df225c9bfcec70cde34a703079160df4b5087c823fac44d250f39772e858c",
+      "AyuExtera_40x40.png": "4300417fe2674b5d0420035f75cbeefa3b7544e3558d26a93d5331dcd4b7f99d",
+      "AyuExtera_58x58.png": "cf8a76cb8a7bdfd66e63191f5dd768cd1f928fa2f4d64eb13709f3ade40b6998",
+      "AyuExtera_60x60.png": "d5e4b5e36b4f18e0855ded9dc5c96f06b6f9c85dbade3b15bbfefef13046f41e",
+      "AyuExtera_76x76.png": "7b88d1f226a7cd8a14d28174eb9bda6536aabae96541a68f9e52c11802073e94",
+      "AyuExtera_80x80.png": "97d78cac0aa2c3045ce5ca340921d6fdac38a90ac163518680cf769c52a68ab9",
+      "AyuExtera_87x87.png": "ce3e246ea8b404c4ac46d26debfb96fbdff09ec06f4f5fd457cc28c472676ffc",
+      "AyuExtera_120x120.png": "36322a748066d41d474054c6b2310c6540cd30c6e8a89789092cc893583c9582",
+      "AyuExtera_152x152.png": "b5c53ddb47b82a036d8760805aef3ba982783581562af4da4cc4e727d0ac91f8",
+      "AyuExtera_167x167.png": "519c5bc7a78f70dc7cd754ce557686f578106d9e36293d00bbd8d2477fa79e80",
+      "AyuExtera_180x180.png": "8629b770d6998aab8a38d56614d0d7808ba69a8dd3c59dce8565f9cb53da2b01",
+      "AyuExtera_1024x1024.png": "249d03f633cf9f0c036c44c19605c5f9358b931b3eb6a08c77b8841d5d3ce91b",
+      "AyuExtera@2x.png": "36322a748066d41d474054c6b2310c6540cd30c6e8a89789092cc893583c9582",
+      "AyuExtera@3x.png": "8629b770d6998aab8a38d56614d0d7808ba69a8dd3c59dce8565f9cb53da2b01"
+    },
+    "AyuNothing": {
+      "AyuNothing_20x20.png": "13aeba9b2ed29ffcc630223a764a9988b3b5f15122c46b3c0e422742172b6ff0",
+      "AyuNothing_29x29.png": "fc93f602ee2aa765dd3b2a895da606c3b862ec68585f828985ca621c04794216",
+      "AyuNothing_40x40.png": "b68a4678a8f5c120fb6088edd5724490372d1378d468fe3d8c75d59989c356c0",
+      "AyuNothing_58x58.png": "cca5be58c6b778483b69f919ec051d5c40be25e26634e106e5a95b569fc60980",
+      "AyuNothing_60x60.png": "e366041fd6f99034c38743f105c923fa9078b47bd707c620be27e08c6eb2673e",
+      "AyuNothing_76x76.png": "f6b6b0d86d359335150d75aaa896083cbb50d9a3be31510e917515311c33d106",
+      "AyuNothing_80x80.png": "50370b1ac22d970d299c4be862e72a958f8c443cc733ca75f2e545ece79c2533",
+      "AyuNothing_87x87.png": "a93dbd43f52763563832605360271c8c004382c2b92d2121d03831e69ad91727",
+      "AyuNothing_120x120.png": "26a9f097ab119be607ea7baaf29ed11864bd0a1a2d8bc9786aeccc84685a2c1f",
+      "AyuNothing_152x152.png": "42338d4e6161e35d9aaadd7784d6be49496bc928c9867bdd5e5e451d4f82d20b",
+      "AyuNothing_167x167.png": "9265034aa9497c3f1ae1422e6bd2c07eede0fe272a37ad0781a76687d88f38a5",
+      "AyuNothing_180x180.png": "e522eb5fccc3350e910e6d6585c80dbb824f85201c34077bbe2a58cb30f388d1",
+      "AyuNothing_1024x1024.png": "a7fd9b41d2884b1eae8b59fcf9c5d9dc53fb4e044728035c5f57261cbd98680e",
+      "AyuNothing@2x.png": "26a9f097ab119be607ea7baaf29ed11864bd0a1a2d8bc9786aeccc84685a2c1f",
+      "AyuNothing@3x.png": "e522eb5fccc3350e910e6d6585c80dbb824f85201c34077bbe2a58cb30f388d1"
+    },
+    "AyuBard": {
+      "AyuBard_20x20.png": "1113e44b0376aaf8a4f6ad8e9b16ec39f6172ae2841d5c4d1a72d11a0778445f",
+      "AyuBard_29x29.png": "d61ab7553bb5a2e005a149aaff3b5eaa115007bb3fd1459c9ac401f30e215dcf",
+      "AyuBard_40x40.png": "bf4efe742c1a3ff2d57b725c264201a6ab6d0c262d813974334d0edca39d076e",
+      "AyuBard_58x58.png": "907a133f2c3f9a52e97d3259ff67c0309094939a42d2a2a7772f187c84a7b98b",
+      "AyuBard_60x60.png": "2a462b0de1be46b61a0068fa89f63d70df430a9e075aa4bb837e8dd76757663d",
+      "AyuBard_76x76.png": "bc98f454b2b86b2ba558c19ee2b577353d0c829d7381f1561ce81a45c0de3cff",
+      "AyuBard_80x80.png": "099f66d1a31353bcc8b5f736a70c9c7fb93480fecb2a94780af062cbd7cbc3d2",
+      "AyuBard_87x87.png": "58843f3824e6510cc942275407028234eab50752262f368288c211642a3d51b4",
+      "AyuBard_120x120.png": "7b8e903212f187384b03b6f6c821cdc36644ef8c12bbc7d68b941b0a98f3d17a",
+      "AyuBard_152x152.png": "ae8c40665cbc9071261559f2a8d0d7dcfe7d89c7217aac35ec8e7cd6eee45ae0",
+      "AyuBard_167x167.png": "fc6dc0cc3a9c23a863f466e3210fd75d1b3546b7068bf060eeee39471c249dbe",
+      "AyuBard_180x180.png": "1a4b082d11d40c56c4f2097193bdc4d03f9fd4f5f00485fee363f26149e3c305",
+      "AyuBard_1024x1024.png": "f7945dd1e5c53ebd9908c407216ebe44a315de943f0e1349e5f1df67ff73420f",
+      "AyuBard@2x.png": "7b8e903212f187384b03b6f6c821cdc36644ef8c12bbc7d68b941b0a98f3d17a",
+      "AyuBard@3x.png": "1a4b082d11d40c56c4f2097193bdc4d03f9fd4f5f00485fee363f26149e3c305"
+    },
+    "AyuYandexPlus": {
+      "AyuYandexPlus_20x20.png": "59cb072d0b293975860626bd12f32042f6074221ddf25fd5f36b107812b6beab",
+      "AyuYandexPlus_29x29.png": "a319a5289f396c9e807ec5f09f3fe5e4b1eb745f0615e31566fb0ae5ef6a8b8b",
+      "AyuYandexPlus_40x40.png": "1c28f54b6843449da0db9085794c0eef7ee39a06767dc5dd743fb4ec5f6a156e",
+      "AyuYandexPlus_58x58.png": "c8bafa759378225ba8a5ae355873b89bdc5346068db02b44e7c9fa99853cf9e7",
+      "AyuYandexPlus_60x60.png": "26a1672d17751951428050ce0825b1170698a6cb22ed1737fd66e6ebadaa91bc",
+      "AyuYandexPlus_76x76.png": "df3feb5fde50553d93615b6cbeeb1eb2c62535995faf235a3b9468547429d2b8",
+      "AyuYandexPlus_80x80.png": "83f168bb406bd998fa87a3bd51d4f92ba7c9d31847ddd4798a15120fe8f620aa",
+      "AyuYandexPlus_87x87.png": "b1e3be549e626b307ce1f67e48e145e50cc1888b9d2b501844502fe141bf2b70",
+      "AyuYandexPlus_120x120.png": "65db71752f19fe4619134b820125be628206872b12703b462e54305b52c4f296",
+      "AyuYandexPlus_152x152.png": "7c0c931cb55f8bb5869dcd42d89f21b4e5d9ed2547521f40306e8bafe9e7a5a0",
+      "AyuYandexPlus_167x167.png": "2a37de0a3bb583a533bd4bcbb6db5bee74508020100b239179b3f4bbd6aad7ef",
+      "AyuYandexPlus_180x180.png": "25113ccc1adc24190c4931c590f27d49a7d076b2b33806bb30da2cae83679500",
+      "AyuYandexPlus_1024x1024.png": "9c33db1f5d9f78c1b2d81e554a71949929f545d405c93a7a0b11391c1b41324e",
+      "AyuYandexPlus@2x.png": "65db71752f19fe4619134b820125be628206872b12703b462e54305b52c4f296",
+      "AyuYandexPlus@3x.png": "25113ccc1adc24190c4931c590f27d49a7d076b2b33806bb30da2cae83679500"
+    },
+    "AyuTyan": {
+      "AyuTyan_20x20.png": "b54719f8a5b097502011d1071f72aa8055b8bec1d9a007ef66b8fcb86c29b298",
+      "AyuTyan_29x29.png": "06fd9086f8a4494eced65a0f955d4230452f477b21be71981b15c84a398805dc",
+      "AyuTyan_40x40.png": "c0bd8113a2ef1e96e2bb375690747a4fd2b6efaf85a2496fbb1e210e21f1a2e0",
+      "AyuTyan_58x58.png": "70df23142e61b08e653bd8b578aa247136760eef97b1f301aff49269e158bf73",
+      "AyuTyan_60x60.png": "4783d3a79ab162694507960b2d300e5102b328087ea04df06f7342d6d7ce6b6a",
+      "AyuTyan_76x76.png": "ceca092331527b74d471f60a1910659150475e120e7200816a5f9f6dca75bdaa",
+      "AyuTyan_80x80.png": "d20fcc1a31c0a6b50fabc58ed57e1c1889ec6600f25f2535538e28a85ffaeb6e",
+      "AyuTyan_87x87.png": "a3201da4a99da0e56b9cc37e10bdf6c3ff3053530e8c156579009f5a1c46a01f",
+      "AyuTyan_120x120.png": "2bf3787c73a39d3dcab460cdc56cdd5d1477581d08ee0cd5e22afb96eae31f4f",
+      "AyuTyan_152x152.png": "503cd1be13252c90cdcf3426fd7ab9dc853887b161c7caa40f1c7c8f03f26a11",
+      "AyuTyan_167x167.png": "28bf2996b589473ee56de3c9921105529596884f945153edb2f66b289f0f1cec",
+      "AyuTyan_180x180.png": "40234294d1c6edbe550786c87e734c8546dbe1bf6aab351e8ad82d0f60e603ea",
+      "AyuTyan_1024x1024.png": "2815c25a43e5964aff52355d4499f6b7e0da22d4613307fc7f20a39e69d54a9e",
+      "AyuTyan@2x.png": "2bf3787c73a39d3dcab460cdc56cdd5d1477581d08ee0cd5e22afb96eae31f4f",
+      "AyuTyan@3x.png": "40234294d1c6edbe550786c87e734c8546dbe1bf6aab351e8ad82d0f60e603ea"
+    },
+    "ExteraDefault": {
+      "ExteraDefault_20x20.png": "5c1fba5161c8713c32a918a28866a044924fd9ed1808f8778b40d8cda10ee3c6",
+      "ExteraDefault_29x29.png": "295f4e0855a02350a8ec2e97607652b0bc6eeefe2099e86419edc51b5e224191",
+      "ExteraDefault_40x40.png": "393c3cbd104ffe7abf4c754529bf351b1c90fe41208e04191bd9343900e32cbe",
+      "ExteraDefault_58x58.png": "2dd2974dccb576a010473e03d58006eecb847579db7bbbe68e83782def412dfc",
+      "ExteraDefault_60x60.png": "69cfa4eb7e4b6eabef7c37c44befec612a669f9d5e68f264ce2e90095da59268",
+      "ExteraDefault_76x76.png": "a69d5432038f16ba691fd9f909baa8b3c49fb568a12d941f2baaaa039f6a2dcc",
+      "ExteraDefault_80x80.png": "3652c67fbca571b4e58616272a919e204cd572b6a6d00b108ffb02a9fb842d6a",
+      "ExteraDefault_87x87.png": "544459b01b7fa269d6b322dfc4424243b7eab032042a600def4a9446da20868d",
+      "ExteraDefault_120x120.png": "06194774ae3015892140b7c9e47ce4117a01bc595cda2afa7d71072f4dd52762",
+      "ExteraDefault_152x152.png": "0a4bb497f8d74b3d663c0805659d62b0910c6f7b77af202dd7dd4f78d11680f6",
+      "ExteraDefault_167x167.png": "c9b09e231af1e48662148b800073a5584eb3658f928e8171447170dcf71e559f",
+      "ExteraDefault_180x180.png": "02d884f4e0cd1362ed42b9c07ee92dbb12d586ea1ea95227a2fbaa892b64076e",
+      "ExteraDefault_1024x1024.png": "796cea9a3e1f22a962bc935ddb226956c2e7de6c208252372e633828df9af829",
+      "ExteraDefault@2x.png": "06194774ae3015892140b7c9e47ce4117a01bc595cda2afa7d71072f4dd52762",
+      "ExteraDefault@3x.png": "02d884f4e0cd1362ed42b9c07ee92dbb12d586ea1ea95227a2fbaa892b64076e"
+    },
+    "ExteraMonet": {
+      "ExteraMonet_20x20.png": "c35480cded830cf4d31f5fd77fe3366f5ed088386debe05c80e596e60a86ee79",
+      "ExteraMonet_29x29.png": "c378fec8fa2ee2ddbeccca417889548fcb498df4a6d87b2ed8bb3b58dfbd5a8e",
+      "ExteraMonet_40x40.png": "77cd7e51034cb10084e305651856e230807eb27c83344a0e0fdad05cf09cc302",
+      "ExteraMonet_58x58.png": "78a53a872b64af63bf7454b8ad491706b595d99b6274106f6e644070b190d688",
+      "ExteraMonet_60x60.png": "7f8b4205104d1772f0fee64bd467390b7cf1b040ace51d0de8d656c4672dcd9a",
+      "ExteraMonet_76x76.png": "2665ad2225ef346999c83f1b23b7f294a24c9196f861da237059b76f777b6adc",
+      "ExteraMonet_80x80.png": "93d484980b2696979fbf06f1db878f305b373ca23e420c668deb0645290f47d8",
+      "ExteraMonet_87x87.png": "d3831dd07a3882fe7f4a41c00ea713af9b8169fbe923f82bc210653099b0cffe",
+      "ExteraMonet_120x120.png": "fb14f0a2415f6825410bb9cabc5154f2d6bbc870941b1d2562bf69990d4fd92d",
+      "ExteraMonet_152x152.png": "8d1166692432afe494c723c20fefe8aebdcd06bae693ce891eef86a3cdcce6a1",
+      "ExteraMonet_167x167.png": "fe6d5bf34224f14f3713ebbd0e52594f5a980d60b9010293ae8815bde36c97f0",
+      "ExteraMonet_180x180.png": "809d32e68175ee28df2f488cdbeb6167b3f0452984923820a7affa1180a88e8e",
+      "ExteraMonet_1024x1024.png": "a45ee17555050fa2d192dd647cb6ff789116d77f187c9e1da229e5ab38022a60",
+      "ExteraMonet@2x.png": "fb14f0a2415f6825410bb9cabc5154f2d6bbc870941b1d2562bf69990d4fd92d",
+      "ExteraMonet@3x.png": "809d32e68175ee28df2f488cdbeb6167b3f0452984923820a7affa1180a88e8e"
+    },
+    "ExteraWinter": {
+      "ExteraWinter_20x20.png": "87cbb3dd4098e165e75eb812989ed1a70dc231a5e33305f2a1298bc9e5934a4e",
+      "ExteraWinter_29x29.png": "f7c6dac288361c4b47c8892a40df1f1f0b1dc6ed892d4f0200547238c598ab9b",
+      "ExteraWinter_40x40.png": "b253cc5161748df24072560f2b3328a559411f33c1d0c9f0f4cd26bf6f5c9830",
+      "ExteraWinter_58x58.png": "121f6f071ad439d1a680e4d2bdf84652ca41c0787e1c7cefc85c0092cf1391a3",
+      "ExteraWinter_60x60.png": "a67d27c7548c43dab5b62d1f4f4e91f1344d905291540eaf95c96b85dfb8a147",
+      "ExteraWinter_76x76.png": "99bb967f5297369639a8bf7335245d62a1ab4ab9d050ab763a3a95254051f15b",
+      "ExteraWinter_80x80.png": "81788000321497eb514f150887ac7914e01c97a262624b7f6c9292407b90b382",
+      "ExteraWinter_87x87.png": "9f8141aff7a2730619e7264ae1f9d96bef0035241c380afaf1476c56328f8531",
+      "ExteraWinter_120x120.png": "22fe7c18eaa10deb84da6e200fbb2f2ebf5e1a1eb6b076dbd87d629d3c38d61b",
+      "ExteraWinter_152x152.png": "0d175ffcbb0985d9d8b7da3c019a755038fdd6821fccb71109544f2db1832009",
+      "ExteraWinter_167x167.png": "9ef50bd2b25ea47a720e6deb8f617d11915e8b88432b2f1c8f5a0cd08a36e92f",
+      "ExteraWinter_180x180.png": "6689a9fe5304ff3ce98d8ad5245f3c8cdb97473001ec93ed2a97d978ae09270d",
+      "ExteraWinter_1024x1024.png": "58e241ef79843b7f7a2f0569bef2a899095be0bead0f83a41538f8106d35d765",
+      "ExteraWinter@2x.png": "22fe7c18eaa10deb84da6e200fbb2f2ebf5e1a1eb6b076dbd87d629d3c38d61b",
+      "ExteraWinter@3x.png": "6689a9fe5304ff3ce98d8ad5245f3c8cdb97473001ec93ed2a97d978ae09270d"
+    },
+    "ExteraOrbit": {
+      "ExteraOrbit_20x20.png": "29b66ce50691fa8e5c3f66f419f8fa17d70405a0a905248faab6ee78c7a8c6cc",
+      "ExteraOrbit_29x29.png": "1e2ac541d8acbd8a018a4be125636d9871606dda4cea52f1d15636c677615d70",
+      "ExteraOrbit_40x40.png": "4c1e7e2f7cc74f45834c6081edeb632fb5d6d36087e740f46d14536621ef7521",
+      "ExteraOrbit_58x58.png": "c6321791f9878402668b6dfad64106ed4fd7eff5b03279ebf4366bf1cffb531f",
+      "ExteraOrbit_60x60.png": "37b363a6c4ca7ff1a453322f9f86092bd3e131bff6c6893cc6987c3e5fb501e2",
+      "ExteraOrbit_76x76.png": "9daeb3479243088be48b25823765c2d3317d54e736a335a6441b0085adcb86d5",
+      "ExteraOrbit_80x80.png": "4ce891ba04f650662386c15c05d7f196f99a786f9fc7ccb6f75f805d8423588c",
+      "ExteraOrbit_87x87.png": "b2ec2f4a3a3c50a3fdb8492276ca3b391c76914c8037526a64c1b92ae3121eb5",
+      "ExteraOrbit_120x120.png": "d0268302ddf2133ee97b87c067fa88466d61fdd1dfd7d268df04025a7bbb58ec",
+      "ExteraOrbit_152x152.png": "4839825bdd9b36da8e6226a650c5f4aca633894e6ff4948447aedfb049d2192e",
+      "ExteraOrbit_167x167.png": "b1b102d3f936d5e6bd7b19c86de2fbd61ca4f0d5c8fa9af8f932399e156787df",
+      "ExteraOrbit_180x180.png": "c1ec2faa44c7058092b3c497f32af74c7d6836518400946c7e561a45c1a2b2ba",
+      "ExteraOrbit_1024x1024.png": "405d051536f62e8e705b35c98e1cdbb5fcc7528eb29f79471ab0ccfc9d330ece",
+      "ExteraOrbit@2x.png": "d0268302ddf2133ee97b87c067fa88466d61fdd1dfd7d268df04025a7bbb58ec",
+      "ExteraOrbit@3x.png": "c1ec2faa44c7058092b3c497f32af74c7d6836518400946c7e561a45c1a2b2ba"
+    },
+    "ExteraEditor": {
+      "ExteraEditor_20x20.png": "05dc8e712d4eed3464513244939cb790c739ebb818be0f947e7b2cac462b120c",
+      "ExteraEditor_29x29.png": "6342c2833ca433fc8aa5c7704664c8747f9f0ddf61472f221552810c16eb5898",
+      "ExteraEditor_40x40.png": "d2654ce5e92de57cd7d887550dacd9759600a6e4b70b956b3417dadb0a84b53a",
+      "ExteraEditor_58x58.png": "4ac3b38a350a04b78230e686147b8c19c8aeb3ab59a0c8ca2628ba39ae58a86d",
+      "ExteraEditor_60x60.png": "d2adfef0cd0c7b70c184b2e32dcd92d58cdbfcdbc07dd008f3e544c1ee410f01",
+      "ExteraEditor_76x76.png": "4d94880e813cb0ff24608b7d30a8a91b57ae7bdf5d1255a60022bdd6a2249c60",
+      "ExteraEditor_80x80.png": "0c7bca4f7f069dd0db9066e882d2ec599235e36c82f6f910d4e9529d01f14ac2",
+      "ExteraEditor_87x87.png": "6ec9679d587c4074eb437f67a512b389dfccee4b04f1e92fe5855d99ff667623",
+      "ExteraEditor_120x120.png": "14eb204e5f29da819cbe3c8b6af164d41491f8a251f67394a624650a8dbfa0b6",
+      "ExteraEditor_152x152.png": "53b598e25e82f24e5a9ddb57336fd8619dc59ab45b81c8692833e92104aaed25",
+      "ExteraEditor_167x167.png": "4f7e6aeb9e4d09adad845c70252962de065eeb7312c0a420618c52b7db048876",
+      "ExteraEditor_180x180.png": "3b26491fa87964b045ad71c8ce5b0969176fcc9a6fbe0bf016e51d145f6b4c91",
+      "ExteraEditor_1024x1024.png": "0850c7217c8ad5806a8acacfccd9a96290e7ec1566275aed102c49821d62fc15",
+      "ExteraEditor@2x.png": "14eb204e5f29da819cbe3c8b6af164d41491f8a251f67394a624650a8dbfa0b6",
+      "ExteraEditor@3x.png": "3b26491fa87964b045ad71c8ce5b0969176fcc9a6fbe0bf016e51d145f6b4c91"
+    },
+    "ExteraMole": {
+      "ExteraMole_20x20.png": "14c0bc45bfaa7d5307d6ec65be89f5e6cfdd0aad47712ad98e11a1ac94b75d25",
+      "ExteraMole_29x29.png": "bc53432490537f63aed0a24fa189a3c8c505744e6a1195b75878cef8927e418f",
+      "ExteraMole_40x40.png": "03fa0a39637b422c844a355177129260c40a387e3d9e6749b91dbf1e0bf3d97b",
+      "ExteraMole_58x58.png": "f742f79a7510880627643455b52c3abafd430d11b6ecf92780794bd40ad504b5",
+      "ExteraMole_60x60.png": "d97ea06aa835f4f3bb1254fe4f10cdef50ad2619c0cf19e8fe5d9be67c2da4a8",
+      "ExteraMole_76x76.png": "603075791289212d4abcd2208ac8f77d9bbfe8a17ac30943bc3e99b161be274c",
+      "ExteraMole_80x80.png": "edcf20b90d7cd76b29ef1cb11e3de34cb2f7cf2102c648fb4b03cb3c9b552031",
+      "ExteraMole_87x87.png": "d79ca143f1d8e25d4f5b1af043e7300a5d78bc92f0ceabd36a346dc2fff90e94",
+      "ExteraMole_120x120.png": "449afa41c75e8019b58f902b75546c686c6b280fd48683415131e03002d13471",
+      "ExteraMole_152x152.png": "7d6ac619789ec6fcc4d75aa31116ffb3a99846bf4589c755907495464ffca2ef",
+      "ExteraMole_167x167.png": "1236cf6baf92a431663789b7df3f36d5d41ef97765024c65add02a9706025fe8",
+      "ExteraMole_180x180.png": "c93a7239aaf3ff8dcd7bdef6f42fdf0d5b2f5a60a47a2273bea5d5fa64f5a0eb",
+      "ExteraMole_1024x1024.png": "20b4cabcd1154a2d790e67f35c01e65974ae1c524896394c7905302ea994a56c",
+      "ExteraMole@2x.png": "449afa41c75e8019b58f902b75546c686c6b280fd48683415131e03002d13471",
+      "ExteraMole@3x.png": "c93a7239aaf3ff8dcd7bdef6f42fdf0d5b2f5a60a47a2273bea5d5fa64f5a0eb"
+    },
+    "ExteraEchpochmak": {
+      "ExteraEchpochmak_20x20.png": "20d21bcdff5cc67dc17b444e748a81740b217593f003ab476e598c5ebbd8a025",
+      "ExteraEchpochmak_29x29.png": "c4d9d5d2d212d4daca15263cc761f14f735234274993127df4e9cecf31a958c2",
+      "ExteraEchpochmak_40x40.png": "3da9b1730a27c66f9577ee23485da676a55507ffee0ec5a8bd8ded44f75bc2b6",
+      "ExteraEchpochmak_58x58.png": "2257bf6526f96bf525bd87c9b6b7a3db72b64bbe3477eca3bbbdf234bc35d77f",
+      "ExteraEchpochmak_60x60.png": "07ebc1ceaa1d84b98ea3b0f7aab8250c4031101471b72c44368667555f6fb30f",
+      "ExteraEchpochmak_76x76.png": "3f8e9fa78e1cbc0b3b7e71a1ec4abb756047c06f93ace8c4a0f7a380bcc4ccd4",
+      "ExteraEchpochmak_80x80.png": "78b960eb56e223b725d596e4f3bc626b9031bc5f242cba1c5adc7c480cc87c1a",
+      "ExteraEchpochmak_87x87.png": "12b3c07befdb75f6ae534f9e4c1962a80960c5ba7f236bf59c1b355e2d4d7ad6",
+      "ExteraEchpochmak_120x120.png": "3a994b76a4f0664d05d56abca4a82e179fba0199745be9d51ac647524a982a91",
+      "ExteraEchpochmak_152x152.png": "974f315308616f565d411d6bbf88abe237fafdb4d642a8be4aac04d25dd8082b",
+      "ExteraEchpochmak_167x167.png": "8592bd44036e5bbce266282accab1c206698fdbfa80ab5b8e5a68ed89ddf1344",
+      "ExteraEchpochmak_180x180.png": "7294d594dbf70d1cf0ac43b34e553afe16bc0eaba86d188465a5c9cee1bca40e",
+      "ExteraEchpochmak_1024x1024.png": "066539019a89855b6e04bfe4541d725a1652b0a5a75d75ee52bc6cf1a1a06fb8",
+      "ExteraEchpochmak@2x.png": "3a994b76a4f0664d05d56abca4a82e179fba0199745be9d51ac647524a982a91",
+      "ExteraEchpochmak@3x.png": "7294d594dbf70d1cf0ac43b34e553afe16bc0eaba86d188465a5c9cee1bca40e"
+    },
+    "ExteraAvatar": {
+      "ExteraAvatar_20x20.png": "ce88d5db246441d492b6e7dd85b3c2987a1e15e0cee7cab0daaa2e5a256106b4",
+      "ExteraAvatar_29x29.png": "16f27f75d47a23a04c2071e95c64268d8d006cf30290c0d3e419b7c7f77be427",
+      "ExteraAvatar_40x40.png": "45c81d1a3ce16fcf8c20706fba35b7963935d168b352bb40d33ab3d7b777678f",
+      "ExteraAvatar_58x58.png": "f572b8af61386c4339754dbeab81f66527190070fa392b874739d6925e245680",
+      "ExteraAvatar_60x60.png": "df0b164b65d6502e58cbdf4c19d0e53931f7491a89858b5143091a97966aa32a",
+      "ExteraAvatar_76x76.png": "aa35c72237486ca67661cf06e75be6cdfa18cf25c8d296732a887a073fafa97f",
+      "ExteraAvatar_80x80.png": "c27688f843c48807b01c363e7062eafcb43226eabcd2028a6e1aeafe07d72156",
+      "ExteraAvatar_87x87.png": "7e5f0d05f18081de70321cf95571042a26f0fcc07e4e6071efc87d2e47df1820",
+      "ExteraAvatar_120x120.png": "b4103b4c8c2dd5060fe9d20f82aeed9c0498412c91bd2afc1d6c4cab49473f12",
+      "ExteraAvatar_152x152.png": "6bb490a48e396d2876ade981b9f4b925543ccaed26b4b6a70bc62e800157e357",
+      "ExteraAvatar_167x167.png": "6a85f61984121d297bc19d572d66d206778c8c0a15aa900ed52183860b855eb3",
+      "ExteraAvatar_180x180.png": "3e142cfa6722d48949cf2eaa6b39288d6692e1d0ad6847788581e8e25969c970",
+      "ExteraAvatar_1024x1024.png": "4757abba1f93e291bd615bc4df50ddcd7393a8784aabd317b8e0f3942973abde",
+      "ExteraAvatar@2x.png": "b4103b4c8c2dd5060fe9d20f82aeed9c0498412c91bd2afc1d6c4cab49473f12",
+      "ExteraAvatar@3x.png": "3e142cfa6722d48949cf2eaa6b39288d6692e1d0ad6847788581e8e25969c970"
+    },
+    "ExteraCandy": {
+      "ExteraCandy_20x20.png": "7e8bb3d858b2caabb3bcfa7f070c40afe32ba965a2f7b2578b3ad285439cb362",
+      "ExteraCandy_29x29.png": "5d8513af0a4c110858540e7323dac68b3807f2e81b1141f8a079ca33738e137e",
+      "ExteraCandy_40x40.png": "7aa00db16ffbd43b5fbfccd307d593db01c4e1d55400027e8a874c52d4a9d8dd",
+      "ExteraCandy_58x58.png": "d34af11251d0cf64502d362768a4833820cf6af39330f9d3eb40108bc66fbb4e",
+      "ExteraCandy_60x60.png": "5c5be09171583db094ec46978af83547a3463dec277262fe6a01f95e99797923",
+      "ExteraCandy_76x76.png": "74084861c7399f5283988929a685e302b5c987767017df623b1b835368dbca5f",
+      "ExteraCandy_80x80.png": "7e9c8dbb57ece357f0db1806b18bafa56a58fb4dcde31834f0f8285c67df1439",
+      "ExteraCandy_87x87.png": "82e1b3460397ed0eccd0855122530911dc71c47356dab12bcb5eb5d70142e8d0",
+      "ExteraCandy_120x120.png": "2d324bb4fb33b7fd804792905b960ba2c9a6476d918790ae26568103581fff35",
+      "ExteraCandy_152x152.png": "d61c1a64f350933e2472fa139ea122b0254066b54f737c038ef3a644f3a39ae3",
+      "ExteraCandy_167x167.png": "a47c907b1e31f64e9c0ea2977a1c8f4c22d99069949d78d05cfb3897a5c33d57",
+      "ExteraCandy_180x180.png": "e69d7a859bed07e4cb47557a936c0f52d2fb5cb856db247198d7835552d9439d",
+      "ExteraCandy_1024x1024.png": "735defd8454d5e832914be2a619b68063e9491db8127e73064783f1126e3ef87",
+      "ExteraCandy@2x.png": "2d324bb4fb33b7fd804792905b960ba2c9a6476d918790ae26568103581fff35",
+      "ExteraCandy@3x.png": "e69d7a859bed07e4cb47557a936c0f52d2fb5cb856db247198d7835552d9439d"
+    },
+    "ExteraGuitar": {
+      "ExteraGuitar_20x20.png": "2c031cbaf2687d2a580435631cf8b563caadedbd9f910fe040147b4c0c9514a9",
+      "ExteraGuitar_29x29.png": "9b60e9e2edfc284b66ab6cd811f35c74cdbfe3cc443575331034dfe49cb91aee",
+      "ExteraGuitar_40x40.png": "4155e5a6b3993df13405c3d087b6569fddeacacaa36ae49bd2e2543886faf89e",
+      "ExteraGuitar_58x58.png": "b3a2449f7fcedf2e98330ea4dee3271ce3f3e40e144cc99d1c960ba958460100",
+      "ExteraGuitar_60x60.png": "1f1b9e0c86aa6a4aaa94791a10047bba58e8f579dcd6c4c2da353619398298a0",
+      "ExteraGuitar_76x76.png": "cd3405787c8a40f4767e6b342d68383481f20820eb7d87074776d5d46f0dd6cf",
+      "ExteraGuitar_80x80.png": "2959cb64229e9acacf6f3a7d6c08b6cf4c11d9583588eef45c1921ba5d969ee2",
+      "ExteraGuitar_87x87.png": "73c76b5040250c06b50ab6cb7fef1cbbb9609cc40cbaaa53a626016178bc2b38",
+      "ExteraGuitar_120x120.png": "6b015c46e498801d11b4928d15ad3d71847436dce5c5bd84e824c3e612cf08a5",
+      "ExteraGuitar_152x152.png": "9f6534e1f035e3d48f1e622456ad579464988189bfceba9f0db46a6b1acd1865",
+      "ExteraGuitar_167x167.png": "cff91a41bf3911feb00e63b2a281bd2be4e557ce68f801ea6125f4cc313f0674",
+      "ExteraGuitar_180x180.png": "72bfdbf359208e94d4c113ff5333db3ab45e7cd5f756b80b3dbea48b8be63c3e",
+      "ExteraGuitar_1024x1024.png": "492d06adbb36c6f6ff618bdf1cde446a7231fa9ab2f5bc1518832dbc76597af7",
+      "ExteraGuitar@2x.png": "6b015c46e498801d11b4928d15ad3d71847436dce5c5bd84e824c3e612cf08a5",
+      "ExteraGuitar@3x.png": "72bfdbf359208e94d4c113ff5333db3ab45e7cd5f756b80b3dbea48b8be63c3e"
+    },
+    "ExteraSus": {
+      "ExteraSus_20x20.png": "de971f60fffb2cd4f9be253be9548ed6345a6f06da660ea46ebbd812720ac35a",
+      "ExteraSus_29x29.png": "1ae7232c6146290a4bb047e000a0b744ab4c6fc62140d66eb6ce1cda2f2aa4a3",
+      "ExteraSus_40x40.png": "fa3c5066aef2275d6e477dce57fbd374034d263de3509cb7a76a5a9cc1f617a4",
+      "ExteraSus_58x58.png": "0d1c529030ba47a9009c1bb2b6ad3740eb717895e927abe630774dcf8741bbb7",
+      "ExteraSus_60x60.png": "de92837fa160a22794eb4d55bbb90bab8bd5b5634003b60762a92bcb47d906cb",
+      "ExteraSus_76x76.png": "eba301d851b6fd947ed52832b4042bd674007c52155e0e3737f994bef501ba3f",
+      "ExteraSus_80x80.png": "8eda631ac6dda01c686084a36e0838d79dcd944980bd98ce8ceb9f854e28c219",
+      "ExteraSus_87x87.png": "3e0505d43bd314ae43f57b76232ec5fcd919e7cc5935a77f74ac82ddd511a419",
+      "ExteraSus_120x120.png": "eb256bffd9a37be458eaa339580ce58c707084a52c5d18e48dbf261a35c31fe2",
+      "ExteraSus_152x152.png": "8eb6e448a23dd3d180841cc380d03c7a8ace1a10622096248bce02fa9f10f238",
+      "ExteraSus_167x167.png": "1eda0dc97ee986ee8fb40ba66aeacf01ede1543e5f870ebc669f399459031e3f",
+      "ExteraSus_180x180.png": "e6c61e4f2583101f8d241ff1d6f622770fbb2df040aa5f2585d70d33efd480ed",
+      "ExteraSus_1024x1024.png": "102a3bec7f3914cb218a4929ceec4d9fd87e81762f6543f013dfd7472f9f78bd",
+      "ExteraSus@2x.png": "eb256bffd9a37be458eaa339580ce58c707084a52c5d18e48dbf261a35c31fe2",
+      "ExteraSus@3x.png": "e6c61e4f2583101f8d241ff1d6f622770fbb2df040aa5f2585d70d33efd480ed"
+    },
+    "ExteraFrog": {
+      "ExteraFrog_20x20.png": "266875866a7b07a7ce4c00b3b6af2c6eddff006ad9ee2d2d1ad273cd8273a056",
+      "ExteraFrog_29x29.png": "3116acb5736d9e41191ddb66c247a21bc1f3a803113a419b6c7f403ec6c583ea",
+      "ExteraFrog_40x40.png": "ffff21a1f7abbb64545c5f68e910c93de798e998962dec76c215a054ffdc77a8",
+      "ExteraFrog_58x58.png": "3661c346a1cbc34e6ce1435fae87253022eafb156ab278c25608333be67ce19f",
+      "ExteraFrog_60x60.png": "a2e2c5a42b0ed70e33b52075897eb5b0d70e47c62ddbe8e75c1c95f344ba15f1",
+      "ExteraFrog_76x76.png": "12eda140243387d0949b3b6e0ada4bdbcb246aff93d60c67e41b1e9bcaa08f02",
+      "ExteraFrog_80x80.png": "9a1914b2037204c6181e9562838bbdd30b799a242bdf9d25ec8a51343219dd9e",
+      "ExteraFrog_87x87.png": "359b5494c588c6277b8b41d448048b0ecc47c1ace8d2b2f7169659049a896566",
+      "ExteraFrog_120x120.png": "a4d45bf1afbbb4b547d1e0a36ecca78edad65fd52c68e7c7833a624159edf8d2",
+      "ExteraFrog_152x152.png": "ea86695ec4742e5c5f7faba30a0de99745c84bf4caf56188f11df68202c9eacb",
+      "ExteraFrog_167x167.png": "7fa563dd64a6ae7434def6bb94755ec9348259070b34ec88204a93df91b9896d",
+      "ExteraFrog_180x180.png": "a57f40db24f741707cdba6257cf91e0017c7eea936e9605a3e8dabac7072f90b",
+      "ExteraFrog_1024x1024.png": "060a6b0faa350a8277a5f387739e552c170759d9518d750b50ef1186179803a8",
+      "ExteraFrog@2x.png": "a4d45bf1afbbb4b547d1e0a36ecca78edad65fd52c68e7c7833a624159edf8d2",
+      "ExteraFrog@3x.png": "a57f40db24f741707cdba6257cf91e0017c7eea936e9605a3e8dabac7072f90b"
+    },
+    "ExteraHamster": {
+      "ExteraHamster_20x20.png": "8a34ac3dc988e74144c68ad45730bdbe3c1d3dddb8fd8813de1a180038e97aa3",
+      "ExteraHamster_29x29.png": "36ef34503a3a9efe086652807eb2a299095f1644a8abd81bc5938918a4c6a0fd",
+      "ExteraHamster_40x40.png": "66ea2a72a17cf69109fb24cef5a4da1f9fdb71eea5f70eb38f58a701657a452e",
+      "ExteraHamster_58x58.png": "f0d36ee72b340a0b82ae7a281eea76aa7ede97ddb110858621abea2c5efa8276",
+      "ExteraHamster_60x60.png": "2a01db8a2cf4cc252e25097bd36608a99cea9423e6d9b00eff1b97e11657bc91",
+      "ExteraHamster_76x76.png": "54aeeeda0d44688d84690fbd0c86d74064d50eb2e86c76b13fd48c3bb7d85fc4",
+      "ExteraHamster_80x80.png": "a444504bb64485004c75a9b2a87ff0fea4f67c5c309aecd471f50496c5f5dc9d",
+      "ExteraHamster_87x87.png": "fed5c0f9ebcf75678cbb1c26e2f545501738183f01389acc3ace32b971227c19",
+      "ExteraHamster_120x120.png": "d74e05038808052f9983dddc36518050a8bd515b2918d32db39213ea4cef1068",
+      "ExteraHamster_152x152.png": "fd1f402f0cfa2ec21d591ec9d18cd86ef828a47b248fc8439cac28a1fe717a33",
+      "ExteraHamster_167x167.png": "36af71ad537b9dafe172f58310cc09bce825d6017d2cc1eefad8ed0ef351f4cd",
+      "ExteraHamster_180x180.png": "cdb3d7b50df93b671b723f2bfe7720d441106a2ff68561fbbf228f77e43fa597",
+      "ExteraHamster_1024x1024.png": "29bc2ed3ebb1661c4859c16dd4343453db5e7768d9466be79c76bc5371b0b5b8",
+      "ExteraHamster@2x.png": "d74e05038808052f9983dddc36518050a8bd515b2918d32db39213ea4cef1068",
+      "ExteraHamster@3x.png": "cdb3d7b50df93b671b723f2bfe7720d441106a2ff68561fbbf228f77e43fa597"
+    },
+    "ExteraSponge": {
+      "ExteraSponge_20x20.png": "4ad2b52ae2066507f93a8347cdc56ea01838dffa01bd48d3349f2ed5604f6e7e",
+      "ExteraSponge_29x29.png": "ed15cfd8d49decf94e0ce806722c1380d6694bb954c8c1a9ba6551b148d7366c",
+      "ExteraSponge_40x40.png": "a367c327a0d6320bb3bc3e87ebf75c183dce4d16b18b1600a7ce8a8ed6395e60",
+      "ExteraSponge_58x58.png": "1a59b3a005f41c0db442185696dfa2cdf1f69dc096a189ca4ad2774af5ca0cd7",
+      "ExteraSponge_60x60.png": "be824b55587084bbbb5c0ec3f871469e5a3a961e7c81ec2e6b9fda262ab34a2a",
+      "ExteraSponge_76x76.png": "a1383f4063ba2298835da7880518716fcabc305ecae65941cf6b51f5d4cd4f43",
+      "ExteraSponge_80x80.png": "39197fb6cd786dca337b8378b1c27651c5b055079d62abb394c692023540fd7c",
+      "ExteraSponge_87x87.png": "c285752202adcdc33dfb1e29848a0e60db07c91b542d3afed29030186980eccc",
+      "ExteraSponge_120x120.png": "1a41c69158c750603df593037ba0ac16f3f516e6867ce1b67c48c556cf6cadea",
+      "ExteraSponge_152x152.png": "95c0a609967b9f173854a5e0b72c0e0a2ebd3b767f106f47985730c494682842",
+      "ExteraSponge_167x167.png": "9d0450dfcbca32034bd41bcee7e82ee4e7ad7e24954e18a20f3f005abd2b7b2c",
+      "ExteraSponge_180x180.png": "751c89074837173425b49a0acf64ba95bd3fef24d25bee433edc48f10f0d0bcb",
+      "ExteraSponge_1024x1024.png": "227dcd79817cae01370a72094d6df4642282103a80a942d61cf281c2ca505ea1",
+      "ExteraSponge@2x.png": "1a41c69158c750603df593037ba0ac16f3f516e6867ce1b67c48c556cf6cadea",
+      "ExteraSponge@3x.png": "751c89074837173425b49a0acf64ba95bd3fef24d25bee433edc48f10f0d0bcb"
+    },
+    "ExteraInvincible": {
+      "ExteraInvincible_20x20.png": "afc5323fcba539f2bde277318851b85b379dfe30144097836acfb6423fd74640",
+      "ExteraInvincible_29x29.png": "c61f2123a511c6df58b2b77ff8efb973bf4cb6dc6497acdf6325b976a738298d",
+      "ExteraInvincible_40x40.png": "a2e3cfedcad7fc1d3ac8e88fe0736c9f6ff4653fb83e74c261987af8e70c2ccf",
+      "ExteraInvincible_58x58.png": "9ecb5aff7979e5d1d1f83081711dd71b4393aa6ff24b1cb8bc5c9fdea2c17b94",
+      "ExteraInvincible_60x60.png": "ccb4dffa53fbee515b0534878fe54619a6d4a28c670cfacf557256745a4f39a8",
+      "ExteraInvincible_76x76.png": "97874bc06773d70ae3dc2e03b4d2ad91e97156622b7dc07780279ad6cfda5e28",
+      "ExteraInvincible_80x80.png": "9668ca21c7e76f73cdc020e3d924ecfbe0de3f2fcc569606c2a59dbf98a2828f",
+      "ExteraInvincible_87x87.png": "c80f63df8557146dcc4953077b37dfd0c63269c3be1df9ac85cf91f50929266b",
+      "ExteraInvincible_120x120.png": "3687b734de4cef044e34c48119774e17bbac25afe6a2c5200c6a5a3fa721da79",
+      "ExteraInvincible_152x152.png": "c080c5d764ad05f2e0d9b55d3f13cf6828683d1ad0bb2865112b5171819f3b22",
+      "ExteraInvincible_167x167.png": "f2736c9eea0b954a2e3c16c118ea99840ba4edb9446f49c79c172ffff15f07ee",
+      "ExteraInvincible_180x180.png": "96f16fb8a318d082aaa5ef7ab18303d592c9f7ea9a7c2dfb87282a18983ba55a",
+      "ExteraInvincible_1024x1024.png": "2e17094d7f88677bafdf9caddcb1a8f898aefa131c02ea55fe77fd471b964338",
+      "ExteraInvincible@2x.png": "3687b734de4cef044e34c48119774e17bbac25afe6a2c5200c6a5a3fa721da79",
+      "ExteraInvincible@3x.png": "96f16fb8a318d082aaa5ef7ab18303d592c9f7ea9a7c2dfb87282a18983ba55a"
+    },
+    "ExteraFlappy": {
+      "ExteraFlappy_20x20.png": "500cb36b940225079a1337f560f090e0ccd673a64202f1e45fdcd7b31a3bc4c4",
+      "ExteraFlappy_29x29.png": "bd9b1180d6a896bf6ca97620961be8c4276ed1aed512cba1a7804555adc8e28b",
+      "ExteraFlappy_40x40.png": "8f35b7f4a0da64a290bb611a0f04c986396c330b76267c9b2a332c2df4b584da",
+      "ExteraFlappy_58x58.png": "460d7d0c8a73615f6fdf2012b9e0c40c89b7aa96ee8c390fd983f41f21bbfee9",
+      "ExteraFlappy_60x60.png": "581edfb0d046cc1b317a808b493004b044751ccde92d943baa30f82f620b0f93",
+      "ExteraFlappy_76x76.png": "a8e0ca2cb0ecee849edda87f7bd0e083f0e12d7df4f1cee1c467b36be6415f60",
+      "ExteraFlappy_80x80.png": "0313167cc8b8fa5764bbe573c38f10f1b0d834bd43870b209172ab35efe36fb9",
+      "ExteraFlappy_87x87.png": "6738e008e908bbbdcf6f28877d9dcce6eaea02b96a81c515eaf8dec72819ba33",
+      "ExteraFlappy_120x120.png": "53c899c3d58473a391ac959d45d59c5d9d9a3d8917370ce5732b81bb9e580bc3",
+      "ExteraFlappy_152x152.png": "93b51eb6dfedbba19ad2d3c163ab3fe62a006353122cba96a54000fe70af52cf",
+      "ExteraFlappy_167x167.png": "db7c242b00e35745f88707eabae26401503019ff71648b468246c7387aea79ce",
+      "ExteraFlappy_180x180.png": "e48100cf5b3ee17fca8acd8a079de2ab66150cfcc9065f8e35b29682cd876648",
+      "ExteraFlappy_1024x1024.png": "0329220bbe3f9a3c46b95c35116c90af841e8241ecc0fd5e8544304c285a7faa",
+      "ExteraFlappy@2x.png": "53c899c3d58473a391ac959d45d59c5d9d9a3d8917370ce5732b81bb9e580bc3",
+      "ExteraFlappy@3x.png": "e48100cf5b3ee17fca8acd8a079de2ab66150cfcc9065f8e35b29682cd876648"
+    },
+    "ExteraNyanCat": {
+      "ExteraNyanCat_20x20.png": "72e49b1285c76712b0c20c94d34de391e6c412264ca32a0bcc3eb4eded164a84",
+      "ExteraNyanCat_29x29.png": "aa7517f446c110cfb1a2c6b25bff39a9d780fcca158e4fe1b273d799d0c7fecb",
+      "ExteraNyanCat_40x40.png": "d805836bb43dfa2bb1b2b95df90745f513821624d1e4a831b47e464364fcdcf3",
+      "ExteraNyanCat_58x58.png": "63a53f0c338a61ee564ba9fed6908115bf583d80b6cce9035585598b83d45f16",
+      "ExteraNyanCat_60x60.png": "cf3f49453c814405af53a47b8ed33f1bcbe48ff17ab0f903c2eeda60aaa6fc70",
+      "ExteraNyanCat_76x76.png": "d1240cf95cb067c3b583434146bbf595ffb27c7acd7551851422f48ff8c337ab",
+      "ExteraNyanCat_80x80.png": "783d6a0d669390b72d49752dddfc35468b75152ee5a514e6077bc213657c406d",
+      "ExteraNyanCat_87x87.png": "b738ebe092839eba31803cdcfd5b65a39e6233c26d33e72cbbc89ccdd6900199",
+      "ExteraNyanCat_120x120.png": "5eae90182680d47834447f3192a2671c89d398ea855d7464f0b284e0f573be89",
+      "ExteraNyanCat_152x152.png": "9625be09b3910abe5c46aa7652ac07239b16cce9e0e8d54c9741bd946102b913",
+      "ExteraNyanCat_167x167.png": "a316c83fee4b1660478cacce3350ce21124a18ead457ad5496c2f400a8f09a15",
+      "ExteraNyanCat_180x180.png": "3b6c12686c5068606f7b38f11ccb355c975ae98e9a65285bf8a37b1c7e76db14",
+      "ExteraNyanCat_1024x1024.png": "1b784aba620ffd7423345ab6d5fba120c78a7949699f0368a495296fc3b8fd7a",
+      "ExteraNyanCat@2x.png": "5eae90182680d47834447f3192a2671c89d398ea855d7464f0b284e0f573be89",
+      "ExteraNyanCat@3x.png": "3b6c12686c5068606f7b38f11ccb355c975ae98e9a65285bf8a37b1c7e76db14"
+    },
+    "ExteraIceAge": {
+      "ExteraIceAge_20x20.png": "d4166442d197a075ce4ebfeeefca739579d3cc0e17d3182c4dbd72078ef4e8bd",
+      "ExteraIceAge_29x29.png": "8749a3bad61231e915f2035c5438cf1dd08c53e468fb89eb312f91b02e52259a",
+      "ExteraIceAge_40x40.png": "36a5b6067a5d807e13da2ced1d4b68cd475c5141268d92cf7def8af145896144",
+      "ExteraIceAge_58x58.png": "3708eefe754e8374f52c420896bd7ec7107e3689e6072b6ceba2fe4477916391",
+      "ExteraIceAge_60x60.png": "baed607024628f98d11de44820a175f0046cf44e70fec920506f34e4b205812e",
+      "ExteraIceAge_76x76.png": "95819e18c20d2b5ce1ea1b4b04e5ddf1ceff8f777f8708b9bcf9f6fb1ab2e8e6",
+      "ExteraIceAge_80x80.png": "6e33e5a43a72b288e9f36b5aa40b9bfb6547e674fb1b53720085e596526fd992",
+      "ExteraIceAge_87x87.png": "1dc40ed748870b6ff5ac248bbd65970a2a4e76bd1ed1018d3bc5adcca5971d65",
+      "ExteraIceAge_120x120.png": "aaea5fea68ac3d845c731d5c62198024ee6fd8c94ca847b8f1b004618e2c48fd",
+      "ExteraIceAge_152x152.png": "a11dd0e74335760947dbf9a4b0a9f263e7e98d431bc6f0d0875845e795db06d6",
+      "ExteraIceAge_167x167.png": "8dd7272f0dc3e733d6fbccdb36dbbd151897e06d6d02fe25aca31f7c5b1129dc",
+      "ExteraIceAge_180x180.png": "c3c60568795aad83cb467260c4b3dfdbfcdbc76d132bc8a700887360eda20f83",
+      "ExteraIceAge_1024x1024.png": "289aaa7904262e6e5f4c2a3444d45ce5d28d7e79c689b2c67192d823ade06da1",
+      "ExteraIceAge@2x.png": "aaea5fea68ac3d845c731d5c62198024ee6fd8c94ca847b8f1b004618e2c48fd",
+      "ExteraIceAge@3x.png": "c3c60568795aad83cb467260c4b3dfdbfcdbc76d132bc8a700887360eda20f83"
+    },
+    "ExteraFish": {
+      "ExteraFish_20x20.png": "9aea304cf9b534bf12d58e32cb1ad7a4896340336dbe81047e44df203e812b97",
+      "ExteraFish_29x29.png": "bac342eb4d03db1619ca129edece51fb35782f98a6c4fa6653a9dad116712485",
+      "ExteraFish_40x40.png": "ccd282e46e0f84f1d6cc676f119d1c2f3e3fad71816475a975a770909c1ad82a",
+      "ExteraFish_58x58.png": "8f7155d8cd5cac210425dba72d481ed26706eb623e630cdb727c546538023305",
+      "ExteraFish_60x60.png": "8ecfff3860e409e3e4f5429bf001443d89149f004a4af28f757edc2fee71f967",
+      "ExteraFish_76x76.png": "a6890b3e6f4abaabea6bd42665c5c9fddc497b5d8eab740d405600be03870cee",
+      "ExteraFish_80x80.png": "93a4a31d16e2d52f5e1c57bde5c865c7ba2a921b0e4206498d0bed99e502f37c",
+      "ExteraFish_87x87.png": "ac72da8d5b567b8448a789bf9170b4a6274bc0b42226d65b4a3cfc211ee0593c",
+      "ExteraFish_120x120.png": "d7415360a1a6d8ed323e3167439aed01d79ed90877288c8b103b42d5bd657c4a",
+      "ExteraFish_152x152.png": "fad46d184a3e8832b553adf707fa0f766551aa6968d0ac3a46f9bba55bc82c4a",
+      "ExteraFish_167x167.png": "eede88cb6e66257e19b36fd67d82b54884e92fa66eb26535c251d4889d2c2ea7",
+      "ExteraFish_180x180.png": "ede3aa8c8bb551f48f0bcea1c6d22c05ce8822519bf47d1c786f2b9d882b3688",
+      "ExteraFish_1024x1024.png": "e0c6abe8150cc9bc0376e2f373ae1c3f71c8d61a6ed637909f27ab560078d857",
+      "ExteraFish@2x.png": "d7415360a1a6d8ed323e3167439aed01d79ed90877288c8b103b42d5bd657c4a",
+      "ExteraFish@3x.png": "ede3aa8c8bb551f48f0bcea1c6d22c05ce8822519bf47d1c786f2b9d882b3688"
+    },
+    "ExteraPsychosis": {
+      "ExteraPsychosis_20x20.png": "02c78668923f7c783ddb26e201a4bf2ecd1be784ad39686a201fb57f6cd28175",
+      "ExteraPsychosis_29x29.png": "44c176b86af8a40b544ba9019e5e54770fece69066088552e3a2b3de007f1659",
+      "ExteraPsychosis_40x40.png": "2d36ccddf2753a5bbfb50118545a84204ffcf0fdafe54c3dfa7fa2f87934046f",
+      "ExteraPsychosis_58x58.png": "17d4858fc4935abf7ef1bf9885089d4baf429d82c5a15a612801693eeb83a6dd",
+      "ExteraPsychosis_60x60.png": "fe69a575532e752939c114b19929ef96e259f2786a8c2e2be92c3223dd9d992b",
+      "ExteraPsychosis_76x76.png": "d565299175245bfd0560efd2ecdd7ff748dc5c01c75de755131c2cbd1f03d700",
+      "ExteraPsychosis_80x80.png": "87b36280dbc7c26077b8935d234ffbd22edf2ba44cd1eb9371a461ae0c261aef",
+      "ExteraPsychosis_87x87.png": "80504ad7780cc52c875afc440d2abdcb75b9723afbd1a75f4064261d66738c1f",
+      "ExteraPsychosis_120x120.png": "b78f39ee7009a23ec89abbcd434e773599b622577f4516f96318a1639fe33b9d",
+      "ExteraPsychosis_152x152.png": "f8a404c25b5b9f3524bd92617b3f485a8d4cf12391cdecca0599fb92b4c9e66e",
+      "ExteraPsychosis_167x167.png": "2bd55884222f260d6f4364f2996dc2d95bc0dc8de2d2e120b860d2aeba393e89",
+      "ExteraPsychosis_180x180.png": "c3ef38445f8bdf3b0828b631b8ae9cd68bd87fb477162cd279ac2f3318051c1d",
+      "ExteraPsychosis_1024x1024.png": "b90874d80e5958bf47a64068c9dfa6682e6e9b964593547a76f14cf056ef9eae",
+      "ExteraPsychosis@2x.png": "b78f39ee7009a23ec89abbcd434e773599b622577f4516f96318a1639fe33b9d",
+      "ExteraPsychosis@3x.png": "c3ef38445f8bdf3b0828b631b8ae9cd68bd87fb477162cd279ac2f3318051c1d"
+    },
+    "ExteraXp": {
+      "ExteraXp_20x20.png": "ad626c10b232c63806759e7ee54a84382b863b5580e8a7457ae538e055c3ff85",
+      "ExteraXp_29x29.png": "7541803ab4e4f0adfcb74e1152fe118a09a8e46189fabd2524ef023fb7da6368",
+      "ExteraXp_40x40.png": "0b5ad9a954a9c11c23f9b4e0fc5bfe5c763c21a9f195baf8fec0c3f14a0edd6f",
+      "ExteraXp_58x58.png": "82d2a9ad5a0485df03800902532100ab508fe9b6443fec0ebcba56e0fd443dfa",
+      "ExteraXp_60x60.png": "deedc5b1a2c1e46b4d99d3dcf3ef08365c324b73d22145567489452c2118ea8b",
+      "ExteraXp_76x76.png": "8617229637870868d3c46bbb640254c4f0ce1b675c4c9e319dedc5c934043d25",
+      "ExteraXp_80x80.png": "22feaa4343c3c25a6a17cdb38b990d4d46e4abee4019070299f4f922ae468d30",
+      "ExteraXp_87x87.png": "ee1caa2958061bda448ca7989175b5944e5d88e7fdba8ccaee8ebab9b916ebdb",
+      "ExteraXp_120x120.png": "024dcc50b7035da0a818d31b2e06a6d7c5fd12fef1929242895903187a568f72",
+      "ExteraXp_152x152.png": "73c8c298da20ed9008989a3fb0f64f1f6d941fcde6c00e380e5c02b63338f6ec",
+      "ExteraXp_167x167.png": "5ec17eb9327539970db83283d1b8f0f11fe70535ed639ee460d8a809d8fb8568",
+      "ExteraXp_180x180.png": "ba2367bdda998580dd124ef370764eccae34cb9344c1995d3565915fc361cc21",
+      "ExteraXp_1024x1024.png": "d6064f398d25f13c3ae70137ad09501365525f09a249b80d97086303fc43e5d3",
+      "ExteraXp@2x.png": "024dcc50b7035da0a818d31b2e06a6d7c5fd12fef1929242895903187a568f72",
+      "ExteraXp@3x.png": "ba2367bdda998580dd124ef370764eccae34cb9344c1995d3565915fc361cc21"
+    },
+    "ExteraNasa": {
+      "ExteraNasa_20x20.png": "4484f798e053ac23c357d83cedfa1be7a80540605db5f6ba805deaed87da7d9f",
+      "ExteraNasa_29x29.png": "5f6ad48f007d12f75e0539e9b1a9a3d6a28184f03d4413d000193b28bcbb9d57",
+      "ExteraNasa_40x40.png": "7203b35e2ec53cfb79b22e34d94028d11eb33e014ce695b394891dd3bfa9b601",
+      "ExteraNasa_58x58.png": "4ad0e1d0f113af59a3427c1e9c66a846f289a0526a606fe9edb9809092eb6362",
+      "ExteraNasa_60x60.png": "19c672d84fca2b0f85968e36a8d13b63563dd13fcd2945c7e76e630fe57e55ae",
+      "ExteraNasa_76x76.png": "84867f9311b47756ec78ac6f48d2d5187c71c1a14a8b04402dc9336be1e9521d",
+      "ExteraNasa_80x80.png": "4f36f846c70583fff7bde6889d57257b18bc225a6dacac63c183f9ca532d6a6c",
+      "ExteraNasa_87x87.png": "7d430fc6113938d74fd9c12d00be7b35a3feeeb0cf539ab57cddacc18925b850",
+      "ExteraNasa_120x120.png": "2f72070960b597c8995e2f962ae41c45c908b83d7ae7216e0b5bceed1a6ca83c",
+      "ExteraNasa_152x152.png": "8d8803c7fa5cfce2d6e0d1528b1f605808350e1a749361b8f3aac467bb6a0b53",
+      "ExteraNasa_167x167.png": "f19537a271ecf66b83cf83d12cfd61bae7799de9041ef0d678fecec3ad19b04c",
+      "ExteraNasa_180x180.png": "1a3669ee0227b519fd34e9ac6b0099da6042e128cfb3d6a086905733383cfcd8",
+      "ExteraNasa_1024x1024.png": "5512e7e36771d94e5d98d3de5ee683de90ab96add641c321f80b6787d4865fb3",
+      "ExteraNasa@2x.png": "2f72070960b597c8995e2f962ae41c45c908b83d7ae7216e0b5bceed1a6ca83c",
+      "ExteraNasa@3x.png": "1a3669ee0227b519fd34e9ac6b0099da6042e128cfb3d6a086905733383cfcd8"
+    },
+    "ExteraCyberpunk": {
+      "ExteraCyberpunk_20x20.png": "c318ccae98274528af7dddcb091cffe7f162bda666df6811ffcd07b92eadb7cb",
+      "ExteraCyberpunk_29x29.png": "9596dc6ad5445b3eeb91e323e4d159edf972c9641d00375b75243a36edf3560d",
+      "ExteraCyberpunk_40x40.png": "34c386b586cce2612ad518a8840258ca9827aad32cc52e56c62be6c78570213a",
+      "ExteraCyberpunk_58x58.png": "d4749a1858c5509a8abf970fcf016b3113b6f37e1d9437afc422384140d49530",
+      "ExteraCyberpunk_60x60.png": "ac8344fc486225928f4c5c95b3f7894bfe6ac2faa19273fc3e1f1b9a4d6d8581",
+      "ExteraCyberpunk_76x76.png": "abb47bcddc54cabf7aad88ce947d2e197705d02221d3770dd2636ac15ef0db55",
+      "ExteraCyberpunk_80x80.png": "87caf01319001d88d01c866562eed72023d8c918f402240ae4cc9ea719ddc810",
+      "ExteraCyberpunk_87x87.png": "b44dc47c4f5c318674aa51289bb1eb1a5e163e60a4f1a76bbde375a9d1313d09",
+      "ExteraCyberpunk_120x120.png": "a5e11232c5620b2f33956186d8d863c8183f60a90cd3fb0ec942485ff7545d9a",
+      "ExteraCyberpunk_152x152.png": "ea9862360a12c3650a4f32d1f97726bb128de7c3174e006c28485d3ac587a51e",
+      "ExteraCyberpunk_167x167.png": "200539add41296e96cde158c950087bf9124a5033e752db9b96f093e65cf03f1",
+      "ExteraCyberpunk_180x180.png": "e2ebda12b03fd5d33d302db11368cb1dd0b86e5e062404431198f324e4c19ae2",
+      "ExteraCyberpunk_1024x1024.png": "dc71052159634a8e01895ab7d1015df881044099b53066901825ba5596af8b49",
+      "ExteraCyberpunk@2x.png": "a5e11232c5620b2f33956186d8d863c8183f60a90cd3fb0ec942485ff7545d9a",
+      "ExteraCyberpunk@3x.png": "e2ebda12b03fd5d33d302db11368cb1dd0b86e5e062404431198f324e4c19ae2"
+    },
+    "ExteraSpace": {
+      "ExteraSpace_20x20.png": "d5470b2107fe6b9527f74a43a4beaad4dc56c38d5bcdec75ef1d197aad24d260",
+      "ExteraSpace_29x29.png": "49914848f4f30734120ca6f8f2f863fbc51ba50da1c1146004a8e69f9aa087c0",
+      "ExteraSpace_40x40.png": "b846b554f941f7232d5298b7dca881357324d59dd9c01abd492a5b1e74e994b0",
+      "ExteraSpace_58x58.png": "25ffdf9607bd55ac4119941a88c49d9caebcd0df0b6f6db043c59404f15d6fa1",
+      "ExteraSpace_60x60.png": "a85feac73dcfd553887d5575f7e00c692ff55cf17a24ba3e268ad294c6ec9e0f",
+      "ExteraSpace_76x76.png": "e91a9db936a2c9a0f1eee65733be2c8d15f9589f531c74994c93fcf3d7248a2c",
+      "ExteraSpace_80x80.png": "f6b6c981a65a84f93d6ba272dc125b210c7497bd87d1ee59cdbb1242fd6936b1",
+      "ExteraSpace_87x87.png": "73d5c5d663624ec35fa85de4e0aa143bfe058a2e260cc784e4ce386cf6d3e3b8",
+      "ExteraSpace_120x120.png": "c590994ebf494653319eedd836323e731a23cad14ac8798ae46aa6b2a530dcb0",
+      "ExteraSpace_152x152.png": "0e339be583576a9d026af966622b0d578a1b3ec8a238b07f8a8009497aa5e216",
+      "ExteraSpace_167x167.png": "4d4f40b9532ae4af9eddb553fd0612a6a8da6fddc5782dc90b801b29f1802d45",
+      "ExteraSpace_180x180.png": "59c0cd593788903f9230a5b92c8016fe89cf673783d86f37867982e1dcd4033a",
+      "ExteraSpace_1024x1024.png": "df5f5c585d458398f061612ea071bcc61096439a3b799a41169cb017a9d9dda3",
+      "ExteraSpace@2x.png": "c590994ebf494653319eedd836323e731a23cad14ac8798ae46aa6b2a530dcb0",
+      "ExteraSpace@3x.png": "59c0cd593788903f9230a5b92c8016fe89cf673783d86f37867982e1dcd4033a"
+    },
+    "ExteraJellyfish": {
+      "ExteraJellyfish_20x20.png": "c795b1053d32418669e8000e826fe84605a49a5c65bafda87f6e16ff48fad338",
+      "ExteraJellyfish_29x29.png": "b47679b50fa4a2d0985a46b3c338eec35c2be15c4ef409b60f2c774c7572163e",
+      "ExteraJellyfish_40x40.png": "57f6e83d4d0f003629d3f4bd6d8b2b382ee6a9e85a5acb2d1acb5ac00ce8e9cb",
+      "ExteraJellyfish_58x58.png": "7cfe4de94778f61344621a8b6ece536302674141c50b8b5c644bc2cb97ae5936",
+      "ExteraJellyfish_60x60.png": "3c756c2dc026497fc07b943cf12ee4aade2473fb06ae4c607c15c65bc1d4fa1b",
+      "ExteraJellyfish_76x76.png": "320059d62ac6ecb560e33cbb2e4beb98850783067c62aeab057a125d99675117",
+      "ExteraJellyfish_80x80.png": "68eac1033aa81d8f382db6c96ddc00ce6085a6fb8185fbc49b5da677b179a072",
+      "ExteraJellyfish_87x87.png": "0393b03152623425c67f6426c1e8a100c719e7838df217b30197bef46cd0c733",
+      "ExteraJellyfish_120x120.png": "9eb9928603225a627779b74570f5a45ad1cdf318cb8dd2e0e3cfab11bf6babb2",
+      "ExteraJellyfish_152x152.png": "9e59cf58bb05d6b859290d043ddfa6dd9b1f8b057bce3de28a18090b1e0b9abb",
+      "ExteraJellyfish_167x167.png": "6d748693ee003e83642a19c3b4ac9567d3be8157e7ebcb169694dea9042a69d1",
+      "ExteraJellyfish_180x180.png": "1eced0657867ccfc94474ca4adb669fb856d421ef7d1a7d18097d1075b57da91",
+      "ExteraJellyfish_1024x1024.png": "12d700d461e53e24f3c2a0aadb44354e61100d7466d5ca7b6f8be545fa30c9a4",
+      "ExteraJellyfish@2x.png": "9eb9928603225a627779b74570f5a45ad1cdf318cb8dd2e0e3cfab11bf6babb2",
+      "ExteraJellyfish@3x.png": "1eced0657867ccfc94474ca4adb669fb856d421ef7d1a7d18097d1075b57da91"
+    },
+    "ExteraHuman": {
+      "ExteraHuman_20x20.png": "06119726ec4ee7a74834c581f5aa283926b142e5aac66eebf9936171e5532a62",
+      "ExteraHuman_29x29.png": "3653e5acb8e74615c490e2716fd59d4ba8ca29e304ba191999b20498a90e5d1b",
+      "ExteraHuman_40x40.png": "f97447a922f74b60a99018c032f53b6d574e5a37088b9a0fac45fa55335235a5",
+      "ExteraHuman_58x58.png": "651b71edc7203c5b43f2b82d4aaa5d812c1240c8641bfd770b1cde5fe29c52da",
+      "ExteraHuman_60x60.png": "f144597a4770463e80cf28d4a1fd075b5679dc80525407a407908eb2bc56bca3",
+      "ExteraHuman_76x76.png": "693aebcbfd19a73068780c1d61c8596affc8a3110ca008a9434778fece940090",
+      "ExteraHuman_80x80.png": "1516bc4b0ace1809655b115f43f8d5fd081667e55fdf803b4a2402372b9d9281",
+      "ExteraHuman_87x87.png": "4ca356a0c5570c34ff1cee64dc1fd71f6032694f3ee70059bc704c9dac24e191",
+      "ExteraHuman_120x120.png": "c76ecc996f5f6c6280c8dbb3eabf8a2f4ded7e2c6ceebc9ed5f7508322f90db9",
+      "ExteraHuman_152x152.png": "20c97f800bb7b4d0f5d2da865828d970878cd24e48eaa9fb420bfdf847d53225",
+      "ExteraHuman_167x167.png": "5860f5e768b066b9593eb5a6f59714bc997e3ab48de85397c93992ed31f6a08c",
+      "ExteraHuman_180x180.png": "723e8137c2dcb7c4e24ea8496f23f547a8388aff9e31010314490a15f08a9393",
+      "ExteraHuman_1024x1024.png": "69f9d9618ab144824580467bb90ca864fa72464a1eff5653da0c7600da7e8efa",
+      "ExteraHuman@2x.png": "c76ecc996f5f6c6280c8dbb3eabf8a2f4ded7e2c6ceebc9ed5f7508322f90db9",
+      "ExteraHuman@3x.png": "723e8137c2dcb7c4e24ea8496f23f547a8388aff9e31010314490a15f08a9393"
+    },
+    "ExteraSunset": {
+      "ExteraSunset_20x20.png": "c4233e5d570b8e5b2805db215dc9608c5391be8fb513523fd99d4760499a123a",
+      "ExteraSunset_29x29.png": "c7b755a6a019e08dc905739c85adf5b63d12ff73ebcce32acd4f9db6a1d41f74",
+      "ExteraSunset_40x40.png": "945141464f74b96e341240d1ad7a9871549f454d89066e8f32c1e7f948e7eef6",
+      "ExteraSunset_58x58.png": "258fb2256c7864ad8be727a19010154b0ed7baf689cdbe1e05f81689b6ac4d7a",
+      "ExteraSunset_60x60.png": "39b8d68336a5d8cceb7e3d9503ffb8ce60aa4c1375a378edc30021f4ed08676f",
+      "ExteraSunset_76x76.png": "d70273580c6c49d111b22b868ff48834acc8694c03ba41dbf4e6fa57ea889f76",
+      "ExteraSunset_80x80.png": "ea11a809a6ff40ca075c592111a1bcd9631cffc9b8324e8b96e29ed137fccd9c",
+      "ExteraSunset_87x87.png": "78a239c1a8ecefc9b528403a329f4db3c8d734510c053edccb8084197c677f10",
+      "ExteraSunset_120x120.png": "73f5278a7b02d7e9e1bd9514744097a822f861ad0d66cda92392f7f778d74c4c",
+      "ExteraSunset_152x152.png": "f4e3e928ec43b9072a3ac751b0dae11ee1f9956bfbeb8bb34d4d227e97c8c2d3",
+      "ExteraSunset_167x167.png": "39ad2870c34d584328034508ea029bbf611c273c47ee5e1de9154f12cf34c58d",
+      "ExteraSunset_180x180.png": "d833063fcdfb73c1047ca46479aeb3d27d2055759949b029710547ce2f43f302",
+      "ExteraSunset_1024x1024.png": "09e9f033c1fff522f5e6246f0ae9e9ab3fae182c00864a5c752700c7991e2a76",
+      "ExteraSunset@2x.png": "73f5278a7b02d7e9e1bd9514744097a822f861ad0d66cda92392f7f778d74c4c",
+      "ExteraSunset@3x.png": "d833063fcdfb73c1047ca46479aeb3d27d2055759949b029710547ce2f43f302"
+    },
+    "ExteraAmethyst": {
+      "ExteraAmethyst_20x20.png": "c6646942d0cdb0731fdc819861e282b1d28f207dd026e2d05a0549329c1bdaff",
+      "ExteraAmethyst_29x29.png": "ccbd55c37714d4c2bf3a3fdecfbbf0694964e5310e52e721caf23533f49bfaa6",
+      "ExteraAmethyst_40x40.png": "0faa6964a3bf3263a202465bad11b085624ff1ad0a7255554ff228065a87165d",
+      "ExteraAmethyst_58x58.png": "e445be7a565fffd5f01eddc0082795ed376fe06705b44c74c17cf0e37a9b60ff",
+      "ExteraAmethyst_60x60.png": "5f267e8e6b1fa70b80aed0290ab0d60b5c431f7822cc386135949adb842e6e85",
+      "ExteraAmethyst_76x76.png": "2884eb5109893f0baa201d621c23331f6f1a89a4db23612e5b4f9bf4b59bea7c",
+      "ExteraAmethyst_80x80.png": "a7eacafcc40552390d47163b669dd0b9e861eae668f6db59657b6224266306cc",
+      "ExteraAmethyst_87x87.png": "4aeec4cca2695b4e444f09e66340a375cf39ea0179fed6110170ec8ef5f1a2b8",
+      "ExteraAmethyst_120x120.png": "9190b3270f339ae737a95baebc1077f944d8e51c6205fc7df3ab1d20d938930c",
+      "ExteraAmethyst_152x152.png": "c68411dd44bfeff2182a3ddb9c8e17b962e2e871e146d2d21dd19fee2a553564",
+      "ExteraAmethyst_167x167.png": "b2b32cfa1f58db7d6b89c625e596117698706b62b16b2b9a5637c5b34309e85a",
+      "ExteraAmethyst_180x180.png": "09d7ffd2de1ae3b4285bbc4c658e562143377b987dbd6375e2fcb4876c34b11e",
+      "ExteraAmethyst_1024x1024.png": "1045d74fe937f14ef2f29c88f8eedd20d6ecd9a1adb3cf6377e4752578a7e4f8",
+      "ExteraAmethyst@2x.png": "9190b3270f339ae737a95baebc1077f944d8e51c6205fc7df3ab1d20d938930c",
+      "ExteraAmethyst@3x.png": "09d7ffd2de1ae3b4285bbc4c658e562143377b987dbd6375e2fcb4876c34b11e"
+    },
+    "ExteraAurora": {
+      "ExteraAurora_20x20.png": "dc9c16551189ad0588419177b825d1af0dc116c1f2e88953bc76422aceeb97fe",
+      "ExteraAurora_29x29.png": "9dcd1a64239c1a03a1013a4f22d66140e835bafd799b170cb8e45c4c0c05240f",
+      "ExteraAurora_40x40.png": "77689c331de9c200bc014254444ef489d867360ab73d94c55975b942f5ef0891",
+      "ExteraAurora_58x58.png": "dbf5730679371cf7e61cee17e5e5b8258c172cad94b3bbec956461d09b706020",
+      "ExteraAurora_60x60.png": "7ec48278c5d4f5a30500c9ba2545e28886db0244cef4a9ddebc130b3124ae4cf",
+      "ExteraAurora_76x76.png": "b40fa26f9f440d7e5078de30223b5a00a8a20547cb75277c269c0ce5b1472bf0",
+      "ExteraAurora_80x80.png": "3f9355cbe85b0049f5609f5822b0ebd3d6cd627801a45e200f6b4136a9df9104",
+      "ExteraAurora_87x87.png": "fe6eba814dffe8de29cf73cc10945e1ce189f0e4c2f5b9b06dca43eab5db1e7c",
+      "ExteraAurora_120x120.png": "46f2f443a4ec849f56c09a59b75e6a15ecaa56bd71a90f05f4cd3dfa969e8c21",
+      "ExteraAurora_152x152.png": "fd3f74121f3878aa763d80bcd49bdf2a4d5497719ef323b78e02b6132e13df38",
+      "ExteraAurora_167x167.png": "722067f304c57870781342be866bf363efd324c3c1d14f5bac44faa9c3616c5a",
+      "ExteraAurora_180x180.png": "a41c863d1f3e9294566f44b09405287ad2b7781ba2da3f41e46539b28d007b2d",
+      "ExteraAurora_1024x1024.png": "85abde70749003f4c67788a02dc699010eaf26d99a55b29a24b8d05d67329d03",
+      "ExteraAurora@2x.png": "46f2f443a4ec849f56c09a59b75e6a15ecaa56bd71a90f05f4cd3dfa969e8c21",
+      "ExteraAurora@3x.png": "a41c863d1f3e9294566f44b09405287ad2b7781ba2da3f41e46539b28d007b2d"
+    },
+    "ExteraOsu": {
+      "ExteraOsu_20x20.png": "91eedcd1a58b6f275738b63f0cd439da46758c3d632940e3a0170a16fac93093",
+      "ExteraOsu_29x29.png": "bef74b66b788484c779d8c22281cdeb073179043d627a783c469656f77dc7b1c",
+      "ExteraOsu_40x40.png": "8b7e5b6115130cb113aa9f7f79f6d76b5cc099b4f57931ae8cdbf3470bebf60c",
+      "ExteraOsu_58x58.png": "8d1a7e3f6052d5155915dea023dab2ec156108fd43f0b26e4790e0eb064d8d05",
+      "ExteraOsu_60x60.png": "15430d33ee8196f83e5652191bd759ec3a7bb71635bbad818df9f6bf4c8bec51",
+      "ExteraOsu_76x76.png": "aba7ccfac4e7be24170662490d03af78ab2df1f7d979fd9d3425789217b13739",
+      "ExteraOsu_80x80.png": "21de0e80dceddec0745d2049d1cba779cddb6da21000f41a8baac2bcabbc8e26",
+      "ExteraOsu_87x87.png": "bcfc0a62218da71b25ff4492eac7932ec61573f4d0c9ccd4ff7098ad2774a6f0",
+      "ExteraOsu_120x120.png": "100d70dc4b9778c0d564e7bbe72352b4391f9f9630ebf77d9a5d4ef8fd82e76d",
+      "ExteraOsu_152x152.png": "88c43b4873cb8c1286af97315399de0bba23a92b2f133c0406031509dffc20b8",
+      "ExteraOsu_167x167.png": "2a84feef44392d9570d5e88f2e7d8d9d99b97b20f60f0464899a4fb22e196a7c",
+      "ExteraOsu_180x180.png": "b04d686dfb0c35d93d28bf90074cd760a804989fcbb59d85b623a988e9590a42",
+      "ExteraOsu_1024x1024.png": "57d15d172774bbfee3576611f26ad7b3f16d7dabf3d61b7d996d28ac14649e29",
+      "ExteraOsu@2x.png": "100d70dc4b9778c0d564e7bbe72352b4391f9f9630ebf77d9a5d4ef8fd82e76d",
+      "ExteraOsu@3x.png": "b04d686dfb0c35d93d28bf90074cd760a804989fcbb59d85b623a988e9590a42"
+    },
+    "ExteraGoogle": {
+      "ExteraGoogle_20x20.png": "ce387be1da5c07b0212b1785987925d0a5852e14aa8a0fc3d605ad4bb7ad5b5d",
+      "ExteraGoogle_29x29.png": "3be937dd83ad0c791178c0072dfb42df2919a303ccf68a5bc79c7951531502e4",
+      "ExteraGoogle_40x40.png": "afe2004d32605b2b58cadc23f0e2ca9f160a686d97d27194f3e577386934a58a",
+      "ExteraGoogle_58x58.png": "f1eb34a4e87f77fe208ecca171f56a490a4e37967bda72d4eee921cf4e171faf",
+      "ExteraGoogle_60x60.png": "c8f6413d95f8c13e45874b4b36db3d77632d953789a11361f55fd5c0c39bdeb6",
+      "ExteraGoogle_76x76.png": "72b4f52d9db8568c462c574d11ef0a1e2e7ace92af13fea30683ff77188fbd10",
+      "ExteraGoogle_80x80.png": "3b743c19b9f4d6b12ab24bbe059ac64d06d71efe29400b3201df1cc8b5c9c438",
+      "ExteraGoogle_87x87.png": "55a0407fef90c1d04bd9238a4678afdafe99f21317969ef48ccbc27e7d5a52a2",
+      "ExteraGoogle_120x120.png": "15604b587d0395a8096b91e514e7e16a25255a16581da412aa484a741ebca9bf",
+      "ExteraGoogle_152x152.png": "4f9a0012c814202d2971fd3ad4e94037e9e1ae0c08ed025e14ebb4bf47c464e0",
+      "ExteraGoogle_167x167.png": "8e30b08f866813d5d91772244d58033e2cac227d9c6b49e1c55548a9a11a9a09",
+      "ExteraGoogle_180x180.png": "a9e08793de0ae185a2c3269a4eb9b2991164a2e24bba99a51b96a7a8e3d425a7",
+      "ExteraGoogle_1024x1024.png": "4a4a3e9e4559ac006f4ba304ae2f7093248ce1c53b250ef8e39b5db2f2e81f1c",
+      "ExteraGoogle@2x.png": "15604b587d0395a8096b91e514e7e16a25255a16581da412aa484a741ebca9bf",
+      "ExteraGoogle@3x.png": "a9e08793de0ae185a2c3269a4eb9b2991164a2e24bba99a51b96a7a8e3d425a7"
+    },
+    "ExteraGoogle26": {
+      "ExteraGoogle26_20x20.png": "a7a2f52873c85f6de283957ee5b86aa3068a33103b3149b8ad2f129429f5bb39",
+      "ExteraGoogle26_29x29.png": "7b2f402a9a0cc875e1a76f475b4e9716596da6628a512a93b15a336df25cc379",
+      "ExteraGoogle26_40x40.png": "901ae33e6e2f3010f5938222506ad46ae703a75ed3a76081ee4822f6c2a13fa0",
+      "ExteraGoogle26_58x58.png": "5122837466b3537f381ba240451900a9e7cd096fc5c244dce5c1b530e4de08d3",
+      "ExteraGoogle26_60x60.png": "43a412c39e7539317bb4f5a7fa5799d57555a265db049610325edd3ad0a03287",
+      "ExteraGoogle26_76x76.png": "d25eadb991f704f4e8920e596d6e652ec68ea3beaabc26e8c4a672e0b13036ec",
+      "ExteraGoogle26_80x80.png": "8de83a43ac4b6c820acea9409c190808960f5919c75fe22d4f6b3b54701f9eda",
+      "ExteraGoogle26_87x87.png": "b6124a74f137200496d824e2299c1937951ccd873abcfa44ebb07fd768dfdd3f",
+      "ExteraGoogle26_120x120.png": "dce6962da59e5e574f4cf3f03b1241e8bb8d6484fa3ec2faa7d51efcc2701b61",
+      "ExteraGoogle26_152x152.png": "8fce539419aa2323c2fb0b23e2ba189620f81f536040936cb8f275b7efd84fbd",
+      "ExteraGoogle26_167x167.png": "5b9b1f530ffd317852702f336bc903602e96e727230ac9ecb4dc0640516f146c",
+      "ExteraGoogle26_180x180.png": "3282a4c77fb3fb5a790e50c9351602d87c391cb32c034753625bfdaab1ae3f7a",
+      "ExteraGoogle26_1024x1024.png": "f1594f5b3667a58ac84e84c60a77d132edf31fcf7e4589e1a6d14251825345e3",
+      "ExteraGoogle26@2x.png": "dce6962da59e5e574f4cf3f03b1241e8bb8d6484fa3ec2faa7d51efcc2701b61",
+      "ExteraGoogle26@3x.png": "3282a4c77fb3fb5a790e50c9351602d87c391cb32c034753625bfdaab1ae3f7a"
+    }
+  },
+  "overview": {
+    "AyuOverviewIcon": {
+      "source": "Telegram/Telegram-iOS/Swiftgram.icon/Assets/AyuGram.png",
+      "sha256": "a5d0540dd69fe9d8ecf26ceeda8875a0b992f7bf41dffd86c88bf9d8faeb5104"
+    },
+    "ExteraOverviewIcon": {
+      "source": "Telegram/Telegram-iOS/ExteraDefault.alticon/ExteraDefault_1024x1024.png",
+      "sha256": "796cea9a3e1f22a962bc935ddb226956c2e7de6c208252372e633828df9af829"
+    }
+  },
+  "notices": {
+    "AYUGRAM-LICENSE.txt": "b409e426c009da876fc30b51ac3d9d6fcb965fcad27b53710d549b290331a853",
+    "AYUGRAM-README.md": "d2f7daa2d7f8d980692d269e8536fee0c907a6f25b4de85c8a08f0badda52514",
+    "extera-icons.json": "09a1c1f23bd6924ab828cbaa500fcb2f42c0f0c3147290be2fb506f0b94591e7",
+    "EXTERAGRAM-ADDITIONAL-TERMS.md": "fba1f3bf8bf7b02ddd8b9ca1bba2f75dec008b1591b9fcb9f9d208ccb1e9ee1e",
+    "EXTERAGRAM-APPICONS-README.md": "e87c8e81cd352308cee9e9ac0621c77bfc1114fbb73913d4fd6154eaf7158159",
+    "EXTERAGRAM-LICENSE.txt": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "GeneratedAppIcons.java.txt": "02f8f5324e024796a1e6ed4ff980fba7d392a0b709f04eab1b392d36a27d685f"
+  }
+}

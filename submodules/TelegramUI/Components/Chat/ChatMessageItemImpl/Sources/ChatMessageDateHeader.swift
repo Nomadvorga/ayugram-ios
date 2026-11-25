@@ -21,6 +21,7 @@ import ComponentFlow
 import EmojiStatusComponent
 import AppBundle
 import GlassBackgroundComponent
+import SGSimpleSettings
 
 private let timezoneOffset: Int32 = {
     let nowTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
@@ -1119,6 +1120,13 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     private var backgroundContent: WallpaperBubbleBackgroundNode?
     
     private var isAvatarHidden: Bool = false
+    private let onlineMarkerLayer = CAShapeLayer()
+    private let onlinePresenceDisposable = MetaDisposable()
+    private var onlinePresenceTimer: SwiftSignalKit.Timer?
+    private var onlineSettingsObserver: NSObjectProtocol?
+    private var onlinePresenceActive = false
+    private var onlinePresenceVisible = false
+    private var usesCustomLetters = false
     
     private var trackingIsInHierarchy: Bool = false {
         didSet {
@@ -1158,6 +1166,12 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.avatarNode)
+        self.onlineMarkerLayer.isHidden = true
+        self.onlineMarkerLayer.lineWidth = 2.0
+        self.avatarNode.layer.addSublayer(self.onlineMarkerLayer)
+        self.onlineSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.updateOnlinePresenceSubscription()
+        })
 
         if let peer = peer {
             self.setPeer(context: context, theme: presentationData.theme.theme, synchronousLoad: synchronousLoad, peer: peer, authorOfMessage: messageReference, emptyColor: .black)
@@ -1183,10 +1197,63 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     
     deinit {
         self.cachedDataDisposable.dispose()
+        self.onlinePresenceDisposable.dispose()
+        self.onlinePresenceTimer?.invalidate()
+        if let observer = self.onlineSettingsObserver { NotificationCenter.default.removeObserver(observer) }
+    }
+
+    override public func didEnterHierarchy() {
+        super.didEnterHierarchy()
+        self.onlinePresenceVisible = true
+        self.updateOnlinePresenceSubscription()
+    }
+
+    override public func didExitHierarchy() {
+        super.didExitHierarchy()
+        self.onlinePresenceVisible = false
+        self.updateOnlinePresenceSubscription()
+    }
+
+    private func updateOnlinePresenceSubscription() {
+        let eligible: Bool
+        if let peer = self.peer, case let .user(user) = peer {
+            eligible = user.botInfo == nil && !user.isDeleted && user.id != self.context.account.peerId
+        } else {
+            eligible = false
+        }
+        let active = self.onlinePresenceVisible && !self.usesCustomLetters && eligible && ExteraMessageSettings.shared.showOnlineStatus
+        guard active != self.onlinePresenceActive else { return }
+        self.onlinePresenceActive = active
+        self.onlinePresenceDisposable.set(nil)
+        self.onlinePresenceTimer?.invalidate()
+        self.onlinePresenceTimer = nil
+        self.onlineMarkerLayer.isHidden = true
+        guard active else { return }
+        self.onlinePresenceDisposable.set((self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Presence(id: self.peerId))
+        |> deliverOnMainQueue).startStrict(next: { [weak self] presence in
+            guard let self, self.onlinePresenceActive else { return }
+            self.onlinePresenceTimer?.invalidate()
+            self.onlinePresenceTimer = nil
+            let now = Int32(clamping: Int64(Date().timeIntervalSince1970))
+            // A hidden/recently/unknown presence never implies online.
+            guard let presence, case let .present(until) = presence.status, until >= now else {
+                self.onlineMarkerLayer.isHidden = true
+                return
+            }
+            self.onlineMarkerLayer.isHidden = false
+            let timer = SwiftSignalKit.Timer(timeout: max(1.0, Double(Int64(until) - Int64(now) + 1)), repeat: false, completion: { [weak self] in
+                self?.onlineMarkerLayer.isHidden = true
+                self?.onlinePresenceTimer = nil
+            }, queue: Queue.mainQueue())
+            self.onlinePresenceTimer = timer
+            timer.start()
+        }))
     }
 
     public func setCustomLetters(context: AccountContext, theme: PresentationTheme, synchronousLoad: Bool, letters: [String], emptyColor: UIColor) {
         self.containerNode.isGestureEnabled = false
+        self.usesCustomLetters = true
+        self.updateOnlinePresenceSubscription()
 
         self.avatarNode.setCustomLetters(letters, icon: !letters.isEmpty ? nil : .phone, roundingScope: .chatMessage)
     }
@@ -1376,6 +1443,13 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         self.avatarNode.position = avatarFrame.center
         self.avatarNode.bounds = CGRect(origin: CGPoint(), size: avatarFrame.size)
         self.avatarNode.updateSize(size: avatarFrame.size)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.onlineMarkerLayer.frame = CGRect(x: avatarFrame.width - 12.0, y: avatarFrame.height - 12.0, width: 12.0, height: 12.0)
+        self.onlineMarkerLayer.path = UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 10.0, height: 10.0)).cgPath
+        self.onlineMarkerLayer.fillColor = self.presentationData.theme.theme.chatList.onlineDotColor.cgColor
+        self.onlineMarkerLayer.strokeColor = self.presentationData.theme.theme.chatList.backgroundColor.cgColor
+        CATransaction.commit()
     }
 
     override public func animateRemoved(duration: Double) {

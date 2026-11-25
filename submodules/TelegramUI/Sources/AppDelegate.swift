@@ -1053,6 +1053,21 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 icons = [
                     PresentationAppIcon(name: "SGDefault", imageName: "SGDefault", isDefault: true),
                 ]
+                // The bundled registry preserves iOS identifiers and records the original Android artwork.
+                // Keep UIApplication ownership and the requestSetAlternateIconName callback below unchanged.
+                if let url = getAppBundle().url(forResource: "ExteraAppIconCatalog", withExtension: "json"),
+                    let data = try? Data(contentsOf: url),
+                    let catalog = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+                    let bundledIcons: [PresentationAppIcon] = catalog.compactMap { item in
+                        guard let name = item["name"] as? String, let imageName = item["imageName"] as? String else {
+                            return nil
+                        }
+                        return PresentationAppIcon(name: name, imageName: imageName, isDefault: name == "SGDefault")
+                    }
+                    if !bundledIcons.isEmpty {
+                        icons = bundledIcons
+                    }
+                }
                 //
                 
                 return icons
@@ -3667,5 +3682,4 @@ private final class NavigationBarOverflowMenuReferenceSource: ContextReferenceCo
         return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: mainWindowScreenBounds)
     }
 }
-
 

@@ -533,10 +533,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         }
         
         func updateZoom(fraction: CGFloat) {
-            guard let camera = self.getController()?.camera else {
-                return
-            }
-            camera.setZoomLevel(fraction)
+            self.getController()?.node.updateZoom(.fraction(fraction))
         }
     }
     
@@ -906,6 +903,10 @@ public class VideoMessageCameraScreen: ViewController {
         private let cameraImpl: CameraImpl
         fileprivate var camera: CameraProtocol?
         private var pinchStartTimestamp: Double?
+        private let zoomSlider = UISlider()
+        private var zoomState: CameraZoomState?
+        private var zoomRequestId = 0
+        private var isDismissingCamera = false
         private let updateState: ActionSlot<CameraState>
         
         fileprivate var liveUploadInterface: LegacyLiveUploadInterface?
@@ -1056,6 +1057,15 @@ public class VideoMessageCameraScreen: ViewController {
             self.backgroundColor = .clear
             
             self.view.addSubview(self.containerView)
+
+            self.zoomSlider.minimumValue = 0.0
+            self.zoomSlider.maximumValue = 1.0
+            self.zoomSlider.tintColor = .white
+            self.zoomSlider.accessibilityLabel = self.presentationData.strings.SharedMedia_ZoomIn
+            self.zoomSlider.isHidden = true
+            self.zoomSlider.addTarget(self, action: #selector(self.zoomSliderChanged), for: .valueChanged)
+            self.zoomSlider.addTarget(self, action: #selector(self.zoomSliderReleased), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            self.containerView.addSubview(self.zoomSlider)
             
             self.containerView.addSubview(self.previewContainerView)
 
@@ -1159,7 +1169,16 @@ public class VideoMessageCameraScreen: ViewController {
                 guard let self else {
                     return
                 }
+                let positionChanged = self.cameraState.position != position
                 self.cameraState = self.cameraState.updatedPosition(position).updatedFlashMode(flashMode)
+                // Position can be published before the backend schedules its device switch.
+                // Enqueue on the next main turn, then the camera's serial queue resets the new lens.
+                if positionChanged || self.zoomState == nil {
+                    self.zoomRequestId += 1
+                    self.zoomState = nil
+                    self.zoomSlider.isEnabled = false
+                    Queue.mainQueue().async { [weak self] in self?.updateZoom(.reset) }
+                }
                 
                 if !self.cameraState.isDualCameraEnabled {
                     self.animatePositionChange()
@@ -1179,15 +1198,16 @@ public class VideoMessageCameraScreen: ViewController {
         }
         
         @objc private func handlePinch(_ gestureRecognizer: UIPinchGestureRecognizer) {
+            guard self.cameraIsActive, !self.isDismissingCamera, self.previewState == nil, !self.transitioningToPreview else { return }
             switch gestureRecognizer.state {
             case .began:
                 self.pinchStartTimestamp = CACurrentMediaTime()
             case .changed:
-                guard let camera = self.camera else {
+                guard self.camera != nil else {
                     return
                 }
                 let scale = gestureRecognizer.scale
-                camera.setZoomDelta(scale)
+                self.updateZoom(.delta(scale))
                 gestureRecognizer.scale = 1.0
             case .ended:
                 let pinchStartTimestamp = self.pinchStartTimestamp
@@ -1195,20 +1215,50 @@ public class VideoMessageCameraScreen: ViewController {
                 if let pinchStartTimestamp, CACurrentMediaTime() - pinchStartTimestamp <= 0.5 {
                     return
                 }
-                self.camera?.rampZoom(1.0, rate: 8.0)
+                if !ExteraMediaSettings.shared.staticZoom { self.updateZoom(.reset) }
             case .cancelled:
                 self.pinchStartTimestamp = nil
-                self.camera?.rampZoom(1.0, rate: 8.0)
+                if !ExteraMediaSettings.shared.staticZoom { self.updateZoom(.reset) }
             case .failed:
                 self.pinchStartTimestamp = nil
             default:
                 break
             }
         }
+
+        fileprivate func updateZoom(_ update: CameraZoomUpdate) {
+            guard !self.isDismissingCamera, let camera = self.camera else { return }
+            self.zoomRequestId += 1
+            let requestId = self.zoomRequestId
+            camera.updateZoom(update, completion: { [weak self] state in
+                guard let self, requestId == self.zoomRequestId else { return }
+                let needsLayout = self.zoomState == nil || self.zoomState?.minimum != state?.minimum || self.zoomState?.maximum != state?.maximum
+                self.zoomState = state
+                self.zoomSlider.isEnabled = state != nil
+                if !self.zoomSlider.isTracking {
+                    self.zoomSlider.value = Float(state?.fraction ?? 0.0)
+                }
+                if let state {
+                    self.zoomSlider.accessibilityValue = String(format: "%.1f×", state.value / state.neutral)
+                }
+                if needsLayout { self.requestUpdateLayout(transition: .immediate) }
+            })
+        }
+
+        @objc private func zoomSliderChanged() {
+            guard self.cameraIsActive, self.previewState == nil, !self.transitioningToPreview else { return }
+            self.updateZoom(.fraction(CGFloat(self.zoomSlider.value)))
+        }
+
+        @objc private func zoomSliderReleased() {
+            guard self.cameraIsActive, self.previewState == nil, !self.transitioningToPreview else { return }
+            self.updateZoom(ExteraMediaSettings.shared.staticZoom ? .read : .reset)
+        }
                 
         private var animatingIn = false
         func animateIn() {
             self.animatingIn = true
+            self.zoomSlider.isHidden = true
             
             self.backgroundView.alpha = 0.0
             UIView.animate(withDuration: 0.4, animations: {
@@ -1222,6 +1272,7 @@ public class VideoMessageCameraScreen: ViewController {
                 self.previewContainerView.center = targetPosition
             }, completion: { [weak self] _ in
                 self?.animatingIn = false
+                self?.requestUpdateLayout(transition: .immediate)
             })
             
             if let view = self.componentHost.view {
@@ -1230,6 +1281,9 @@ public class VideoMessageCameraScreen: ViewController {
         }
 
         func animateOut(completion: @escaping () -> Void) {
+            self.isDismissingCamera = true
+            self.zoomRequestId += 1
+            self.zoomSlider.isEnabled = false
             self.camera?.stopCapture(invalidate: true)
                                     
             UIView.animate(withDuration: 0.25, animations: {
@@ -1241,6 +1295,7 @@ public class VideoMessageCameraScreen: ViewController {
             
             self.componentHost.view?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
             self.previewContainerView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false)
+            self.zoomSlider.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false)
         }
         
         private func animatePositionChange() {
@@ -1612,6 +1667,12 @@ public class VideoMessageCameraScreen: ViewController {
             let previewBandInsets: (left: CGFloat, right: CGFloat) = layout.safeInsets.left != layout.safeInsets.right ? (layout.safeInsets.left, layout.safeInsets.right) : (0.0, 0.0)
             let previewBandWidth = layout.size.width - previewBandInsets.left - previewBandInsets.right
             let previewSide = min(369.0, previewBandWidth - 24.0)
+            // Reserve the control's space before the asynchronous device snapshot arrives,
+            // so the preview's entrance animation and the later slider share one resting frame.
+            let reservesZoomSlider = ExteraMediaSettings.shared.zoomSlider && self.cameraIsActive && !self.isDismissingCamera
+                && self.previewState == nil && !self.transitioningToPreview
+            let showsZoomSlider = reservesZoomSlider && !self.animatingIn
+                && (self.zoomState.map { $0.maximum > $0.minimum } ?? false)
             var previewFrame: CGRect
             if layout.metrics.isTablet {
                 // Use the scene this view actually lives in; `connectedScenes` is unordered and a
@@ -1632,6 +1693,9 @@ public class VideoMessageCameraScreen: ViewController {
                 if layout.reservedCorners != .none {
                     previewFrame = videoMessageCameraPreviewFrameAbovePanel(frame: previewFrame, bandMinX: previewBandInsets.left, bandMaxX: layout.size.width - previewBandInsets.right, topY: max(layout.statusBarHeight ?? 0.0, layout.safeInsets.top) + 12.0, panelTop: backgroundFrame.maxY)
                 }
+            }
+            if reservesZoomSlider {
+                previewFrame = videoMessageCameraPreviewFrameAbovePanel(frame: previewFrame, bandMinX: previewBandInsets.left, bandMaxX: layout.size.width - previewBandInsets.right, topY: max(layout.statusBarHeight ?? 0.0, layout.safeInsets.top) + 12.0, panelTop: backgroundFrame.maxY, bottomSpacing: 76.0)
             }
             if !self.animatingIn {
                 transition.setFrame(view: self.previewContainerView, frame: previewFrame)
@@ -1712,6 +1776,13 @@ public class VideoMessageCameraScreen: ViewController {
             
                 let componentFrame = CGRect(origin: .zero, size: componentSize)
                 transition.setFrame(view: componentView, frame: componentFrame)
+            }
+
+            self.zoomSlider.isHidden = !showsZoomSlider
+            if showsZoomSlider {
+                let sliderWidth = max(0.0, min(240.0, previewFrame.width - 48.0))
+                transition.setFrame(view: self.zoomSlider, frame: CGRect(x: previewFrame.midX - sliderWidth / 2.0, y: previewFrame.maxY + 8.0, width: sliderWidth, height: 44.0))
+                self.containerView.bringSubviewToFront(self.zoomSlider)
             }
             
             if let previewState = self.previewState {

@@ -12,6 +12,7 @@ public final class ExteraMessageSettings: @unchecked Sendable {
         case replyBackground
         case showForwardsCount
         case showPollResultsBeforeVoting
+        case showOnlineStatus
     }
 
     private let store = AyuSettingsStore.shared
@@ -29,6 +30,7 @@ public final class ExteraMessageSettings: @unchecked Sendable {
             Self.key(.replyBackground): true,
             Self.key(.showForwardsCount): false,
             Self.key(.showPollResultsBeforeVoting): false,
+            Self.key(.showOnlineStatus): false,
         ])
     }
 
@@ -80,6 +82,11 @@ public final class ExteraMessageSettings: @unchecked Sendable {
     public var showForwardsCount: Bool {
         get { return self.value(.showForwardsCount) }
         set { self.set(.showForwardsCount, newValue) }
+    }
+
+    public var showOnlineStatus: Bool {
+        get { return self.value(.showOnlineStatus) }
+        set { self.set(.showOnlineStatus, newValue) }
     }
 
     public var showPollResultsBeforeVoting: Bool {

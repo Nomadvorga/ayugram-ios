@@ -15,7 +15,10 @@ FILES = [
     *sorted((ROOT / "submodules/TelegramUI/Sources").glob("ExteraMath*.swift")),
     ROOT / "submodules/TelegramUI/Sources/ChatInterfaceInputContextPanels.swift",
     ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraMathSettings.swift",
+    ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraInlineSettingsController.swift",
+    ROOT / "Swiftgram/SGMath/Sources/ExteraMathPreferences.swift",
     ROOT / "Tests/ExteraMath/ExteraMathEngineTests.swift",
+    ROOT / "Tests/ExteraMath/ExteraMathSettingsTests.swift",
 ]
 failed = False
 for path in FILES:

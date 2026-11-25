@@ -33,6 +33,7 @@ def main():
     sources = args.repo / "Swiftgram/SGSimpleSettings/Sources"
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
     browser = (sources / "ExteraBrowserSettings.swift").read_text(encoding="utf-8")
+    navigation = (sources / "ExteraNavigationSettings.swift").read_text(encoding="utf-8")
     declarations = [declaration(backup, marker) for marker in ["public enum BackupError", "fileprivate enum Value", "private enum Rule", "private static func rejectDuplicateKeys", "private struct JSONStructureValidator"]]
     cases = []
 
@@ -86,7 +87,8 @@ def main():
     rows = []
     for name, raw, accepted in cases:
         rows.append(f'            ({json.dumps(name)}, Data(base64Encoded: "{base64.b64encode(raw).decode()}")!, {str(accepted).lower()}),')
-    harness = "import CoreFoundation\nimport Foundation\n\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n\nenum ExteraSettingsBackup {\n" + "\n\n".join(declarations)
+    bindings = '\nlet APP_GROUP_IDENTIFIER = "extera-validator-" + UUID().uuidString\nlet ayuSettingsDidChangeNotification = Notification.Name("ExteraValidationChanged")\nenum SGSimpleSettings { static let shared = 0 }\n'
+    harness = "import CoreFoundation\nimport Foundation\n" + bindings + navigation + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n\nenum ExteraSettingsBackup {\n" + "\n\n".join(declarations)
     harness += """
 
     static func runTests() throws {
@@ -134,6 +136,16 @@ def main():
         try rule("hosts-wildcard", .exactHosts, "[\\\"*.example.com\\\"]", false)
         try rule("hosts-port", .exactHosts, "[\\\"example.com:443\\\"]", false)
         try rule("hosts-mixed", .exactHosts, "[\\\"example.com\\\",1]", false)
+        let defaults = try JSONEncoder().encode(ExteraNavigationSettings.Configuration())
+        let navigation = String(decoding: defaults, as: UTF8.self)
+        func jsonString(_ value: String) throws -> String {
+            return String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
+        }
+        try rule("navigation-defaults", .navigationConfiguration, try jsonString(navigation), true)
+        try rule("navigation-empty", .navigationConfiguration, try jsonString("{}"), false)
+        try rule("navigation-wrong-type", .navigationConfiguration, "true", false)
+        let duplicate = "{\\\"barMode\\\":0," + String(navigation.dropFirst())
+        try rule("navigation-duplicate", .navigationConfiguration, try jsonString(duplicate), false)
         print("Passed \\(count) production Swift validation fixtures")
     }
 }

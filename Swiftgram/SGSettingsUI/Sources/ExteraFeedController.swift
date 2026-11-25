@@ -7,6 +7,7 @@ import SGStrings
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
+import TelegramUIPreferences
 import UIKit
 
 private enum ExteraFeedAction: Equatable {
@@ -16,6 +17,7 @@ private enum ExteraFeedAction: Equatable {
     case channels(String?)
     case categories
     case selectCategory(String?)
+    case switchCategory(String?)
     case editCategory(String)
     case newCategory
     case renameCategory(String)
@@ -44,7 +46,9 @@ private struct ExteraFeedEntry: ItemListNodeEntry {
         case toggle(String, Bool, ExteraFeedToggle)
         case search(String, String)
         case channel(EnginePeer, String, Bool, String?)
-        case post(EngineMessage, String, String, Bool, Bool)
+        case tabs([ExteraFeedSettings.Category], String?)
+        case category(ExteraFeedSettings.Category)
+        case post([EngineMessage], String, String, Bool, Bool, AvailableReactions?, Bool, MediaAutoDownloadSettings)
     }
 
     let stableId: String
@@ -69,8 +73,13 @@ private struct ExteraFeedEntry: ItemListNodeEntry {
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: ""), text: query, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { actions.query.set($0) }, action: {}, dismissKeyboardOnEnter: true)
         case let .channel(peer, title, selected, categoryId):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, context: actions.context, iconPeer: peer, title: title, label: selected ? "✓" : "", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: { actions.toggle(.channel(peer.id.toInt64(), categoryId), value: !selected) })
-        case let .post(message, channel, preview, unread, wide):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: channel, titleFont: unread ? .bold : .regular, titleBadge: unread ? actions.text("Extera.FeedUnread", "Unread") : nil, label: preview, labelStyle: .multilineDetailText, sectionId: self.section, style: wide ? .plain : .blocks, action: { actions.perform(.open(message.id)) })
+        case let .tabs(categories, selected):
+            return ExteraFeedControlsItem(theme: presentationData.theme, sectionId: self.section, content: .tabs(categories, selected, actions.text("Extera.FeedAllChannels", "Main Feed")), selected: { actions.perform(.switchCategory($0)) })
+        case let .category(category):
+            return ExteraFeedControlsItem(theme: presentationData.theme, sectionId: self.section, content: .category(category, actions.text("Extera.FeedCategoryHidden", "Hidden"), actions.text("Extera.FeedCategoryVisible", "Visible")), selected: { _ in actions.perform(.editCategory(category.id)) }, hidden: { actions.toggle(.categoryHidden(category.id), value: !category.isHidden) })
+        case let .post(messages, channel, metadata, unread, wide, reactions, wifi, _):
+            guard let message = messages.first else { preconditionFailure() }
+            return ExteraFeedPostItem(context: actions.context, messages: messages, presentationData: actions.context.sharedContext.currentPresentationData.with { $0 }, channel: channel, metadata: metadata + (unread ? " · " + actions.text("Extera.FeedUnread", "Unread") : ""), wide: wide, sectionId: self.section, actions: actions.bubbleActions(availableReactions: reactions, wifi: wifi), pageVisibility: actions.pageVisibility.get(), openPost: { actions.perform(.open(message.id)) }, openReactionPicker: { actions.reactionMenu(message, sourceView: $0) })
         }
     }
 }
@@ -100,12 +109,24 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
     let snapshots = feed.signal |> mapToSignal { snapshot -> Signal<(ExteraFeedSnapshot, [EnginePeer.Id: EnginePeerReadCounters]), NoError> in
         guard case .feed = page, !snapshot.messages.isEmpty else { return .single((snapshot, [:])) }
         let ids = Set(snapshot.messages.map { $0.id.peerId })
-        return context.engine.data.subscribe(EngineDataMap(ids.map { TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: $0) }))
-        |> map { (snapshot, $0) }
+        return context.engine.data.subscribe(
+            EngineDataMap(ids.map { TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: $0) }),
+            TelegramEngine.EngineData.Item.Messages.Messages(ids: Set(snapshot.messages.map(\.id)))
+        ) |> map { counters, stored in
+            var updated = snapshot
+            updated.messages = snapshot.messages.map { stored[$0.id] ?? $0 }
+            return (updated, counters)
+        }
     }
-    let signal = combineLatest(context.sharedContext.presentationData, snapshots, actions.query.get())
+    let networkIsWifi = context.account.networkType |> map { type -> Bool in
+        switch type {
+        case .none, .wifi: return true
+        case .cellular: return false
+        }
+    } |> distinctUntilChanged
+    let signal = combineLatest(context.sharedContext.presentationData, snapshots, actions.query.get(), context.engine.stickers.availableReactions(), networkIsWifi, context.sharedContext.automaticMediaDownloadSettings)
     |> deliverOnMainQueue
-    |> map { presentationData, snapshotAndCounters, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, snapshotAndCounters, query, availableReactions, wifi, downloadSettings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (snapshot, counters) = snapshotAndCounters
         let settings = feed.settings.state
         let appearance = ExteraFeedSettings.shared
@@ -124,6 +145,7 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
         case .feed:
             title = settings.selectedCategory?.title ?? text("Extera.ChannelFeed", "Channel Feed")
             rightButton = ItemListNavigationButton(content: .text(text("Extera.FeedRefresh", "Refresh")), style: snapshot.loading ? .activity : .regular, enabled: !snapshot.loading, action: { actions.perform(.refresh) })
+            add("tabs", 0, .tabs(settings.visibleCategories, settings.selectedCategoryId))
             add("channels", 0, .action(text("Extera.FeedChannels", "Choose Channels"), .channels(nil), false))
             add("categories", 0, .action(text("Extera.FeedCategories", "Categories"), .categories, false))
             add("unread", 0, .toggle(text("Extera.FeedUnreadOnly", "Unread Only"), settings.unreadOnly, .unread))
@@ -145,19 +167,27 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short
                 let channels = Dictionary(uniqueKeysWithValues: snapshot.channels.map { ($0.id, $0.peer.debugDisplayTitle) })
-                let messages = snapshot.messages.filter { !settings.unreadOnly || unread($0) }
+                let messages = snapshot.messages
+                var displayedPostCount = 0
+                var displayedAlbums = Set<String>()
                 for message in messages {
-                    let id = "post.\(message.id.peerId.toInt64()).\(message.id.namespace).\(message.id.id)"
-                    var body = message.text
-                    if body.isEmpty {
-                        body = exteraFeedMediaDescription(message, lang: lang)
+                    let id: String
+                    let post: [EngineMessage]
+                    if let groupingKey = message.groupingKey {
+                        let albumId = "\(message.id.peerId.toInt64()).\(groupingKey)"
+                        guard displayedAlbums.insert(albumId).inserted else { continue }
+                        id = "album.\(albumId)"
+                        post = messages.filter { $0.id.peerId == message.id.peerId && $0.groupingKey == groupingKey }.sorted { $0.index < $1.index }
+                    } else {
+                        id = "post.\(message.id.peerId.toInt64()).\(message.id.namespace).\(message.id.id)"
+                        post = [message]
                     }
-                    // The full original message and attachments open in Telegram's chat renderer.
-                    if body.count > 1400 { body = String(body.prefix(1400)) + "…" }
+                    guard !settings.unreadOnly || post.contains(where: unread) else { continue }
+                    displayedPostCount += 1
                     let date = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(message.timestamp)))
-                    add(id, 2, .post(message, channels[message.id.peerId.toInt64()] ?? message.author?.debugDisplayTitle ?? "", date + "\n" + body, unread(message), appearance.widePosts))
+                    add(id, 2, .post(post, channels[message.id.peerId.toInt64()] ?? message.author?.debugDisplayTitle ?? "", date, post.contains(where: unread), appearance.widePosts, availableReactions, wifi, downloadSettings))
                 }
-                if messages.isEmpty && !snapshot.loading && !snapshot.historyUncertain && snapshot.channelsLoaded {
+                if displayedPostCount == 0 && !snapshot.loading && !snapshot.historyUncertain && snapshot.channelsLoaded {
                     add("empty", 2, .notice(settings.unreadOnly ? text("Extera.FeedNoUnread", "No unread posts in the loaded history. Load older posts or refresh for new posts.") : text("Extera.FeedNoPosts", "No posts are available in the selected channels. Refresh to retry, or check your channel and archive selection.")))
                 }
                 if snapshot.loading {
@@ -174,11 +204,8 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                 if snapshot.historyLimitReached {
                     add("limit", 3, .notice(text("Extera.FeedHistoryLimit", "This feed keeps up to 100 posts per channel and displays up to 1,000 posts. Open the original channel for its remaining history.")))
                 }
-                if snapshot.selectedChannelsLimited {
-                    add("channelLimit", 3, .notice(text("Extera.FeedSelectionLimit", "A feed can load up to 40 channels. Choose fewer channels or split them into categories.")))
-                }
             }
-            add("info", 4, .notice(text("Extera.FeedReadBehaviorInfo", "Opening a post marks it and earlier posts in that channel as read in the feed. Read All asks for confirmation, then also marks the selected original channels as read. Use Refresh to fetch new posts. Photos, videos, and the full post open in the original channel.")))
+            add("info", 4, .notice(text("Extera.FeedMediaReadBehaviorInfo", "Photos and videos use Telegram's media controls and download settings. Opening the original post marks it read in this feed. Read All asks for confirmation before also marking the selected original channels as read.")))
         case let .channels(categoryId):
             let category = settings.categories.first(where: { $0.id == categoryId })
             title = category?.title ?? text("Extera.FeedSettings", "Feed Settings")
@@ -194,7 +221,7 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                     add("openFeed", 1, .action(text("Extera.ChannelFeed", "Channel Feed"), .selectCategory(nil), false))
                     add("categoriesHeader", 2, .header(text("Extera.FeedCategories", "Categories")))
                     for category in settings.categories {
-                        add("category.\(category.id)", 2, .action(category.title + (category.isHidden ? " · " + text("Extera.FeedHidden", "Hidden") : ""), .editCategory(category.id), false))
+                        add("category.\(category.id)", 2, .category(category))
                     }
                     add("create", 2, .action(text("Extera.FeedNewCategory", "New Category"), .newCategory, false))
                 }
@@ -224,15 +251,12 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
             if snapshot.channelsHaveMore {
                 add("moreChannels", 6, .action(text("Extera.FeedMoreChannels", "Load More Channels"), .moreChannels, false))
             }
-            if snapshot.channelLimitReached {
-                add("registryLimit", 6, .notice(text("Extera.FeedChannelListLimit", "Channel selection scans up to 2,000 recent chats in each chat list. Older channels may become available after you open them.")))
-            }
         case .categories:
             title = text("Extera.FeedCategories", "Categories")
             add("all", 0, .action((settings.selectedCategoryId == nil ? "✓ " : "") + text("Extera.FeedAllChannels", "Main Feed"), .selectCategory(nil), false))
             add("create", 0, .action(text("Extera.FeedNewCategory", "New Category"), .newCategory, false))
             for category in settings.categories {
-                add("category.\(category.id)", 1, .action((settings.selectedCategoryId == category.id ? "✓ " : "") + category.title + (category.isHidden ? " · " + text("Extera.FeedHidden", "Hidden") : ""), .editCategory(category.id), false))
+                add("category.\(category.id)", 1, .category(category))
             }
             add("info", 2, .notice(text("Extera.FeedCategoriesInfo", "Each category has its own channel selection. Open a category to select it, choose channels, rename, hide, reorder, or delete it.")))
         case let .category(id):
@@ -258,25 +282,31 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: wide ? .plain : .blocks, animateChanges: false), actions))
     }
     let controller = ItemListController(context: context, state: signal)
+    controller.setReorderEntry { (from: Int, to: Int, entries: [ExteraFeedEntry]) -> Signal<Bool, NoError> in
+        guard entries.indices.contains(from), entries.indices.contains(to),
+              case let .category(source) = entries[from].content,
+              case let .category(destination) = entries[to].content else { return .single(false) }
+        feed.settings.update { state in
+            if from < to, let index = state.categories.firstIndex(where: { $0.id == destination.id }) {
+                let next = index + 1 < state.categories.count ? state.categories[index + 1].id : nil
+                state.moveCategory(id: source.id, before: next)
+            } else {
+                state.moveCategory(id: source.id, before: destination.id)
+            }
+        }
+        return .single(true)
+    }
     actions.controller = controller
     let pageId = actions.pageId
-    controller.didAppear = { [weak feed] _ in feed?.setPageVisible(pageId, visible: true) }
-    controller.didDisappear = { [weak feed] _ in feed?.setPageVisible(pageId, visible: false) }
-    return controller
-}
-
-private func exteraFeedMediaDescription(_ message: EngineMessage, lang: String) -> String {
-    for media in message.engineMedia {
-        switch media {
-        case .image: return i18n("Extera.FeedPhoto", lang, "Photo · Open in Channel")
-        case let .file(file):
-            if file.isVideo { return i18n("Extera.FeedVideo", lang, "Video · Open in Channel") }
-            return file.fileName ?? i18n("Extera.FeedAttachment", lang, "Attachment · Open in Channel")
-        case .poll: return i18n("Extera.FeedPoll", lang, "Poll · Open in Channel")
-        default: break
-        }
+    controller.didAppear = { [weak feed, weak actions] _ in
+        actions?.pageVisibility.set(true)
+        feed?.setPageVisible(pageId, visible: true)
     }
-    return i18n("Extera.FeedPost", lang, "Post · Open in Channel")
+    controller.didDisappear = { [weak feed, weak actions] _ in
+        actions?.pageVisibility.set(false)
+        feed?.setPageVisible(pageId, visible: false)
+    }
+    return controller
 }
 
 private final class ExteraFeedActions {
@@ -284,6 +314,8 @@ private final class ExteraFeedActions {
     let context: AccountContext
     private let feed: ExteraFeedContext
     let query = ValuePromise<String>("", ignoreRepeated: true)
+    let pageVisibility = ValuePromise<Bool>(false, ignoreRepeated: true)
+    private let interactionDisposable = MetaDisposable()
     weak var controller: ViewController?
 
     init(context: AccountContext, feed: ExteraFeedContext) {
@@ -292,6 +324,7 @@ private final class ExteraFeedActions {
     }
 
     deinit {
+        self.interactionDisposable.dispose()
         // Also release a visibility token if a controller is removed without paired
         // UIKit appearance callbacks (for example, replacement of a navigation stack).
         let feed = self.feed
@@ -305,6 +338,61 @@ private final class ExteraFeedActions {
 
     private func push(_ page: ExteraFeedPage) {
         self.controller?.push(exteraFeedPageController(context: self.context, feed: self.feed, page: page))
+    }
+
+    func bubbleActions(availableReactions: AvailableReactions?, wifi: Bool) -> ChatMessageFeedItemActions {
+        return ChatMessageFeedItemActions(openUrl: { [weak self] in self?.openUrl($0) }, openMessage: { [weak self] in self?.openMedia($0) ?? false }, openPeer: { [weak self] in self?.openPeer($0) }, openInstantPage: { [weak self] message in
+            guard let self, let navigation = self.controller?.navigationController as? NavigationController,
+                  let page = self.context.sharedContext.makeInstantPageController(context: self.context, message: message, sourcePeerType: nil) else { return }
+            navigation.pushViewController(page)
+        }, navigateToMessage: { [weak self] in self?.perform(.open($0)) }, availableReactions: availableReactions, mediaAutoDownloadNetworkType: wifi ? .wifi : .cellular, updateReaction: { [weak self] message, reaction in
+            guard let self else { return }
+            if reaction == .stars {
+                self.perform(.open(message.id))
+                return
+            }
+            let update: UpdateMessageReaction
+            switch reaction {
+            case let .builtin(value): update = .builtin(value)
+            case let .custom(fileId): update = .custom(fileId: fileId, file: nil)
+            case .stars: return
+            }
+            let _ = self.context.sharedContext.updateExteraFeedReaction(context: self.context, messageId: message.id, reaction: update)
+        }, openReactionMenu: { [weak self] message, source in self?.reactionMenu(message, sourceView: source) }, openReplies: { [weak self] id in
+            guard let self, let controller = self.controller else { return }
+            self.interactionDisposable.set(self.context.sharedContext.openExteraFeedReplies(context: self.context, messageId: id, controller: controller))
+        })
+    }
+
+    func reactionMenu(_ message: EngineMessage, sourceView: UIView? = nil) {
+        guard let controller = self.controller else { return }
+        self.interactionDisposable.set(self.context.sharedContext.presentExteraFeedReactionMenu(context: self.context, messageId: message.id, sourceView: sourceView ?? controller.view, controller: controller))
+    }
+
+    private func openPeer(_ peer: EnginePeer) {
+        guard let navigation = self.controller?.navigationController as? NavigationController else { return }
+        self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigation, context: self.context, chatLocation: .peer(peer)))
+    }
+
+    private func openUrl(_ url: String) {
+        guard let controller = self.controller else { return }
+        let context = self.context
+        self.interactionDisposable.set((context.sharedContext.resolveUrl(context: context, peerId: nil, url: url, skipUrlAuth: false)
+        |> deliverOnMainQueue).start(next: { [weak self, weak controller] resolved in
+            guard let controller else { return }
+            context.sharedContext.openResolvedUrl(resolved, context: context, urlContext: .generic, navigationController: controller.navigationController as? NavigationController, forceExternal: false, forceUpdate: false, openPeer: { [weak self] peer, _ in
+                self?.openPeer(peer)
+            }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak controller] c, a in
+                controller?.present(c, in: .window(.root), with: a)
+            }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
+        }))
+    }
+
+    private func openMedia(_ message: EngineMessage) -> Bool {
+        guard let controller = self.controller, let navigation = controller.navigationController as? NavigationController else { return false }
+        return self.context.sharedContext.openChatMessage(OpenChatMessageParams(context: self.context, chatLocation: .peer(id: message.id.peerId), chatFilterTag: nil, chatLocationContextHolder: nil, message: message._asMessage(), standalone: false, reverseMessageGalleryOrder: false, navigationController: navigation, dismissInput: {}, present: { [weak controller] c, a, _ in
+            controller?.present(c, in: .window(.root), with: a)
+        }, transitionNode: { _, _, _ in nil }, addToTransitionSurface: { [weak controller] view in controller?.view.addSubview(view) }, openUrl: { [weak self] in self?.openUrl($0) }, openPeer: { [weak self] peer, _ in self?.openPeer(EnginePeer(peer)) }, callPeer: { _, _ in }, openConferenceCall: { _ in }, enqueueMessage: { _ in }, sendSticker: nil, sendEmoji: nil, setupTemporaryHiddenMedia: { _, _, _ in }, chatAvatarHiddenMedia: { _, _ in }))
     }
 
     func toggle(_ toggle: ExteraFeedToggle, value: Bool) {
@@ -347,6 +435,8 @@ private final class ExteraFeedActions {
         case let .selectCategory(id):
             self.feed.settings.update { $0.selectedCategoryId = id }
             self.push(.feed)
+        case let .switchCategory(id):
+            self.feed.settings.update { $0.selectedCategoryId = id }
         case .newCategory: self.editCategoryTitle(id: nil)
         case let .renameCategory(id): self.editCategoryTitle(id: id)
         case let .deleteCategory(id):
@@ -366,7 +456,7 @@ private final class ExteraFeedActions {
         case .moreChannels: self.feed.loadMoreChannels()
         case let .selectionMenu(categoryId):
             let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
-            let alert = UIAlertController(title: self.text("Extera.FeedSelectionMenu", "Selection"), message: self.text("Extera.FeedBulkSelectionInfo", "Select All includes every loaded channel, including channels outside the search. A feed loads up to 40 channels at a time; use categories for larger selections."), preferredStyle: .actionSheet)
+            let alert = UIAlertController(title: self.text("Extera.FeedSelectionMenu", "Selection"), message: self.text("Extera.FeedFullSelectionInfo", "Select All includes every subscribed channel in the local registry, including channels outside the search."), preferredStyle: .actionSheet)
             alert.addAction(UIAlertAction(title: self.text("Extera.FeedSelectAll", "Select All"), style: .default, handler: { [weak self] _ in
                 guard let self else { return }
                 let ids = Set(self.feed.current.channels.map(\.id))

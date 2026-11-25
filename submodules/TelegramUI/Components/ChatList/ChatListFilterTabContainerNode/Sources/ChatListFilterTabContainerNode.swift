@@ -337,7 +337,7 @@ private final class ItemNode: ASDisplayNode {
     func updateLayout(height: CGFloat, transition: ContainedViewLayoutTransition) -> (width: CGFloat, shortWidth: CGFloat) {
         // MARK: Swiftgram
         var height = height
-        if SGSimpleSettings.shared.hideTabBar {
+        if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             height = 46.0
         }
         let titleSize = self.titleNode.updateLayout(CGSize(width: 160.0, height: .greatestFiniteMagnitude))
@@ -388,7 +388,7 @@ private final class ItemNode: ASDisplayNode {
     func updateArea(size: CGSize, sideInset: CGFloat, useShortTitle: Bool, transition: ContainedViewLayoutTransition) {
         // MARK: Swiftgram
         var size = size
-        if SGSimpleSettings.shared.hideTabBar {
+        if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             size.height = 46.0
         }
         transition.updateAlpha(node: self.titleContainer, alpha: useShortTitle ? 0.0 : 1.0)

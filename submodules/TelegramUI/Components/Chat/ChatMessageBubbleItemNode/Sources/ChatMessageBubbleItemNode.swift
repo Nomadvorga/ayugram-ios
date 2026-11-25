@@ -919,6 +919,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     private var mediaInfoNode: ChatMessageStarsMediaInfoNode?
     
     private var summarizeButtonNode: ChatMessageShareButton?
+    private var exteraSummaryBridge: ExteraAISummaryBridge?
+    private let summaryRequestDisposable = MetaDisposable()
+    private var summaryRequestId: UUID?
+    private var summaryRequestMessageId: EngineMessage.Id?
+    private var summaryRequestCleanup: (() -> Void)?
+    private var summaryPolicyObserver: NSObjectProtocol?
+    private weak var summaryDialog: UIAlertController?
     private var shareButtonNode: ChatMessageShareButton?
     
     // MARK: Swiftgram
@@ -961,6 +968,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         didSet {
             if self.visibility != oldValue {
                 self.visibilityStatus = self.visibility != .none
+                if self.visibility == .none { self.cancelSummaryRequest() }
                 
                 self.updateVisibility(isScroll: true)
             }
@@ -1191,6 +1199,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     deinit {
+        self.exteraSummaryBridge?.cancel()
+        self.summaryRequestDisposable.dispose()
+        if let observer = self.summaryPolicyObserver { NotificationCenter.default.removeObserver(observer) }
+        let cleanup = self.summaryRequestCleanup
+        let dialog = self.summaryDialog
+        DispatchQueue.main.async {
+            dialog?.dismiss(animated: false)
+            cleanup?()
+        }
     }
 
     override public func updateTrailingItemSpace(_ height: CGFloat, transition: ContainedViewLayoutTransition) {
@@ -2154,7 +2171,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 needsShareButton = true
             }
             
-            if ExteraAISettings.shared.configuration.showSummaries, let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
+            let aiConfiguration = ExteraAISettings.shared.configuration
+            if aiConfiguration.showSummaries && (item.message.attributes.contains(where: { $0 is SummarizationMessageAttribute }) || (aiConfiguration.replacesTelegramSummaries(isPremium: item.context.isPremium) && item.message.text.count >= 800 && ChatMessageBubbleItemNode.externalSummaryContentAllowed(item))) {
                 needsSummarizeButton = true
             }
             
@@ -4522,6 +4540,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         //
         
+        if let previous = strongSelf.appliedItem, strongSelf.summaryRequestId != nil,
+           previous.message.id != item.message.id || previous.message.text != item.message.text || previous.associatedData.translateToLanguage != item.associatedData.translateToLanguage || (strongSelf.exteraSummaryBridge != nil && !ChatMessageBubbleItemNode.externalSummaryContentAllowed(item)) {
+            strongSelf.cancelSummaryRequest()
+        }
         strongSelf.appliedItem = item
         strongSelf.appliedForwardInfo = ChatMessageAppliedForwardInfo(messageId: item.content.firstMessage.id, source: forwardSource, authorSignature: forwardAuthorSignature)
         strongSelf.updateAccessibilityData(accessibilityData)
@@ -9100,40 +9122,205 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         guard let item = self.item else {
             return
         }
-        
+        if self.summaryRequestMessageId == item.message.id {
+            self.cancelSummaryRequest()
+            return
+        }
         if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
             item.controllerInteraction.summarizedMessageIds.remove(item.message.id)
             let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
         } else {
-            guard ExteraAISettings.shared.configuration.showSummaries else { return }
-            item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
-            let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
-            
-            let translateToLanguage = item.associatedData.translateToLanguage
-            var requestSummary = true
-            for attribute in item.message.attributes {
-                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summaryForLang(translateToLanguage) != nil {
-                    requestSummary = false
-                    break
-                }
+            let configuration = ExteraAISettings.shared.configuration
+            guard configuration.showSummaries else { return }
+            if configuration.replacesTelegramSummaries(isPremium: item.context.isPremium) {
+                self.confirmExternalSummary(item: item, configuration: configuration)
+                return
             }
-            if requestSummary {
-                let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: translateToLanguage)
-                |> deliverOnMainQueue).start(error: { error in
+            let language = item.associatedData.translateToLanguage
+            let customKey = self.customSummarySourceKey(language)
+            let hasCustomSummary = item.message.attributes.compactMap { $0 as? DerivedDataMessageAttribute }.contains(where: { $0.data[customKey] != nil })
+            let cached = item.message.attributes.compactMap { $0 as? SummarizationMessageAttribute }.contains(where: { $0.summaryForLang(language) != nil })
+            if cached && !hasCustomSummary {
+                item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
+                item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+                return
+            }
+            // A custom-provider cache is never accepted as a Telegram result.
+            let id = self.beginSummaryRequest(item: item)
+            self.presentSummaryProgress(item: item)
+            self.summaryRequestDisposable.set((item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: language)
+            |> then(item.context.engine.messages.updateLocallyDerivedData(messageId: item.message.id, update: { data in
+                var data = data
+                data.removeValue(forKey: customKey)
+                return data
+            }) |> castError(SummarizeError.self))
+            |> deliverOnMainQueue).start(error: { [weak self] error in
+                guard let self, self.summaryRequestId == id else { return }
+                self.finishSummaryRequest(completion: { [weak self] in
+                    guard let self else { return }
                     if case .limitExceededPremium = error, let parentController = item.controllerInteraction.navigationController()?.topViewController as? ViewController {
-                        item.controllerInteraction.summarizedMessageIds.remove(item.message.id)
-                        let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
-                        let controller = premiumAlertController(
-                            context: item.context,
-                            parentController: parentController,
-                            title: item.presentationData.strings.Conversation_Summary_Limit_Title,
-                            text: item.presentationData.strings.Conversation_Summary_Limit_Text
-                        )
+                        let controller = premiumAlertController(context: item.context, parentController: parentController, title: item.presentationData.strings.Conversation_Summary_Limit_Title, text: item.presentationData.strings.Conversation_Summary_Limit_Text)
                         parentController.present(controller, in: .window(.root))
+                    } else {
+                        self.presentSummaryError(item: item, error: ExteraAIError.transport(self.summaryText("Telegram could not summarize this message. Try again later.", "Telegram не удалось создать сводку. Повторите попытку позже.", item: item)))
                     }
                 })
-            }
+            }, completed: { [weak self] in
+                guard let self, self.summaryRequestId == id else { return }
+                item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
+                self.finishSummaryRequest(keepVisible: true)
+                item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+            }))
         }
+    }
+
+    private func summaryText(_ english: String, _ russian: String, item: ChatMessageItem) -> String {
+        return item.presentationData.strings.baseLanguageCode.hasPrefix("ru") ? russian : english
+    }
+
+    private static func externalSummaryContentAllowed(_ item: ChatMessageItem) -> Bool {
+        return item.message.id.namespace == Namespaces.Message.Cloud && item.message.id.peerId.namespace != Namespaces.Peer.SecretChat && !item.associatedData.isCopyProtectionEnabled && !item.message.isCopyProtected() && !item.message.containsSecretMedia && !item.message.text.isEmpty && !item.message.attributes.contains(where: { $0 is RichTextMessageAttribute }) && !item.message.media.contains(where: { $0 is TelegramMediaPaidContent || $0 is TelegramMediaExpiredContent })
+    }
+
+    private func customSummarySourceKey(_ language: String?) -> String {
+        return "extera.ai.summary.custom." + (language ?? "original")
+    }
+
+    private func beginSummaryRequest(item: ChatMessageItem) -> UUID {
+        self.cancelSummaryRequest()
+        let id = UUID()
+        self.summaryRequestId = id
+        self.summaryRequestMessageId = item.message.id
+        self.summaryRequestCleanup = {
+            item.controllerInteraction.summarizedMessageIds.remove(item.message.id)
+            item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+        }
+        let initial = ExteraAISettings.shared.configuration
+        let usesCustom = initial.replacesTelegramSummaries(isPremium: item.context.isPremium)
+        self.summaryPolicyObserver = NotificationCenter.default.addObserver(forName: ExteraAISettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            let current = ExteraAISettings.shared.configuration
+            if !current.showSummaries || current.replacesTelegramSummaries(isPremium: item.context.isPremium) != usesCustom || (usesCustom && current.selectedService != initial.selectedService) {
+                self?.cancelSummaryRequest()
+            }
+        })
+        return id
+    }
+
+    private func finishSummaryRequest(keepVisible: Bool = false, completion: (() -> Void)? = nil) {
+        self.summaryRequestId = nil
+        self.summaryRequestMessageId = nil
+        if let observer = self.summaryPolicyObserver { NotificationCenter.default.removeObserver(observer) }
+        self.summaryPolicyObserver = nil
+        self.exteraSummaryBridge?.cancel()
+        self.exteraSummaryBridge = nil
+        self.summaryRequestDisposable.set(nil)
+        let cleanup = self.summaryRequestCleanup
+        self.summaryRequestCleanup = nil
+        if !keepVisible { cleanup?() }
+        let dialog = self.summaryDialog
+        self.summaryDialog = nil
+        if let dialog, dialog.presentingViewController != nil {
+            dialog.dismiss(animated: true, completion: completion)
+        } else { completion?() }
+    }
+
+    private func cancelSummaryRequest() { self.finishSummaryRequest() }
+
+    private func presentSummaryError(item: ChatMessageItem, error: Error) {
+        guard let parent = item.controllerInteraction.navigationController()?.topViewController as? ViewController else { return }
+        let alert = UIAlertController(title: self.summaryText("AI Summary", "Сводка ИИ", item: item), message: error.localizedDescription, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: item.presentationData.strings.Common_OK, style: .default))
+        parent.present(alert, animated: true)
+    }
+
+    private func presentSummaryProgress(item: ChatMessageItem) {
+        guard let parent = item.controllerInteraction.navigationController()?.topViewController as? ViewController else { return }
+        let progress = UIAlertController(title: self.summaryText("AI Summary", "Сводка ИИ", item: item), message: self.summaryText("Generating…", "Генерация…", item: item), preferredStyle: .alert)
+        progress.addAction(UIAlertAction(title: item.presentationData.strings.Common_Cancel, style: .cancel, handler: { [weak self] _ in self?.cancelSummaryRequest() }))
+        self.summaryDialog = progress
+        parent.present(progress, animated: true)
+    }
+
+    private func confirmExternalSummary(item: ChatMessageItem, configuration: ExteraAIConfiguration) {
+        do {
+            let plan = try ExteraAISummaryPlan(configuration: configuration, isPremium: item.context.isPremium, text: item.message.text, language: item.associatedData.translateToLanguage, contentAllowed: ChatMessageBubbleItemNode.externalSummaryContentAllowed(item))
+            // Readiness includes Keychain access, before offering to send the message.
+            _ = try ExteraAISettings.shared.apiKey(serviceId: plan.service.id)
+            guard let parent = item.controllerInteraction.navigationController()?.topViewController as? ViewController else { return }
+            let id = self.beginSummaryRequest(item: item)
+            let host = try ExteraAIClient.endpoint(for: plan.service).host ?? plan.service.name
+            let disclosure = self.summaryText("Send this message to", "Отправить это сообщение в", item: item) + " " + plan.service.name + " (" + host + ")?"
+            let alert = UIAlertController(title: self.summaryText("AI Summary", "Сводка ИИ", item: item), message: disclosure, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: item.presentationData.strings.Common_Cancel, style: .cancel, handler: { [weak self] _ in self?.cancelSummaryRequest() }))
+            alert.addAction(UIAlertAction(title: self.summaryText("Send", "Отправить", item: item), style: .default, handler: { [weak self, weak alert] _ in
+                guard let self, self.summaryRequestId == id, let current = self.item,
+                      current.message.id == item.message.id, current.message.text == plan.text,
+                      ChatMessageBubbleItemNode.externalSummaryContentAllowed(current), plan.matches(configuration: ExteraAISettings.shared.configuration, isPremium: item.context.isPremium) else {
+                    self?.cancelSummaryRequest()
+                    return
+                }
+                self.summaryDialog = nil
+                alert?.dismiss(animated: true, completion: { [weak self] in self?.startExternalSummary(item: current, plan: plan, id: id) })
+            }))
+            self.summaryDialog = alert
+            parent.present(alert, animated: true)
+        } catch { self.presentSummaryError(item: item, error: error) }
+    }
+
+    private func startExternalSummary(item: ChatMessageItem, plan: ExteraAISummaryPlan, id: UUID) {
+        guard self.summaryRequestId == id, self.item?.message.id == item.message.id,
+              self.visibility != .none, plan.matches(configuration: ExteraAISettings.shared.configuration, isPremium: item.context.isPremium) else { self.cancelSummaryRequest(); return }
+        let bridge = ExteraAISummaryBridge(context: item.context, plan: plan)
+        self.exteraSummaryBridge = bridge
+        do {
+            try bridge.start(completion: { [weak self, weak bridge] result in
+                guard let self, let bridge, self.summaryRequestId == id, self.exteraSummaryBridge === bridge else { return }
+                switch result {
+                case let .success(text):
+                    self.storeExternalSummary(item: item, text: text, bridge: bridge, id: id)
+                case .failure(.cancelled): self.cancelSummaryRequest()
+                case let .failure(error):
+                    self.finishSummaryRequest(completion: { [weak self] in self?.presentSummaryError(item: item, error: error) })
+                }
+            })
+            self.presentSummaryProgress(item: item)
+        } catch { self.cancelSummaryRequest(); self.presentSummaryError(item: item, error: error) }
+    }
+
+    private func storeExternalSummary(item: ChatMessageItem, text: String, bridge: ExteraAISummaryBridge, id: UUID) {
+        let language = bridge.plan.language
+        let customKey = self.customSummarySourceKey(language)
+        self.summaryRequestDisposable.set((item.context.account.postbox.transaction { transaction -> Bool in
+            var stored = false
+            let committed = bridge.commitIfActive {
+                transaction.updateMessage(item.message.id, update: { current in
+                    guard current.text == bridge.plan.text, !current.isCopyProtected(), !current.containsSecretMedia,
+                          !current.attributes.contains(where: { $0 is RichTextMessageAttribute }),
+                          !current.media.contains(where: { $0 is TelegramMediaPaidContent || $0 is TelegramMediaExpiredContent }),
+                          let marker = CodableEntry(true) else { return .skip }
+                    let previous = current.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute
+                    var translated = previous?.translated ?? [:]
+                    let summary: SummarizationMessageAttribute.Summary?
+                    if let language { translated[language] = .init(text: text, entities: []); summary = previous?.summary }
+                    else { summary = .init(text: text, entities: []) }
+                    var derived = (current.attributes.first(where: { $0 is DerivedDataMessageAttribute }) as? DerivedDataMessageAttribute)?.data ?? [:]
+                    derived[customKey] = marker
+                    var attributes = current.attributes.filter { !($0 is SummarizationMessageAttribute) && !($0 is DerivedDataMessageAttribute) }
+                    attributes.append(SummarizationMessageAttribute(fromLang: previous?.fromLang ?? "", summary: summary, translated: translated))
+                    attributes.append(DerivedDataMessageAttribute(data: derived))
+                    stored = true
+                    return .update(StoreMessage(id: current.id, customStableId: nil, globallyUniqueId: current.globallyUniqueId, groupingKey: current.groupingKey, threadId: current.threadId, timestamp: current.timestamp, flags: StoreMessageFlags(current.flags), tags: current.tags, globalTags: current.globalTags, localTags: current.localTags, forwardInfo: current.forwardInfo.flatMap(StoreMessageForwardInfo.init), authorId: current.author?.id, text: current.text, attributes: attributes, media: current.media))
+                })
+            }
+            return committed && stored
+        } |> deliverOnMainQueue).start(next: { [weak self] stored in
+            guard let self, self.summaryRequestId == id else { return }
+            if stored && bridge.isActive {
+                item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
+                self.finishSummaryRequest(keepVisible: true)
+                item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+            } else { self.cancelSummaryRequest() }
+        }))
     }
     
     private func updateVisibility(isScroll: Bool) {

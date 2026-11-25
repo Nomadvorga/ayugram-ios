@@ -9,6 +9,12 @@ public final class ExteraMathSettings: @unchecked Sendable {
         case radians
     }
 
+    public enum MeasureSystem: String, CaseIterable {
+        case auto
+        case metric
+        case imperial
+    }
+
     public static let shared = ExteraMathSettings()
 
     private let store = AyuSettingsStore.shared
@@ -25,6 +31,11 @@ public final class ExteraMathSettings: @unchecked Sendable {
             "extera.inlineImperial": false,
             "extera.inlineTargetCurrency": "auto",
         ])
+        if MeasureSystem(rawValue: self.store.string("extera.inlineMeasureSystem")) == nil {
+            let legacy = self.store.userDefaults.persistentDomain(forName: APP_GROUP_IDENTIFIER)?["extera.inlineImperial"] as? Bool
+            let system = Self.measureSystem(rawValue: "", legacyImperial: legacy)
+            self.store.setString(system.rawValue, "extera.inlineMeasureSystem")
+        }
     }
 
     /// Master switch for native inline results. Defaults to true, as on exteraGram.
@@ -70,10 +81,50 @@ public final class ExteraMathSettings: @unchecked Sendable {
         set { self.store.setBool(newValue, "extera.inlineTimeZones") }
     }
 
-    /// Choose imperial counterparts for implicit unit conversions.
+    /// Empty/unrecognised new values retain the old boolean's explicit preference.
+    /// An old false becomes metric, preserving pre-migration conversion behaviour.
+    /// New installations with no persisted legacy key start in automatic mode.
+    public var inlineMeasureSystem: MeasureSystem {
+        get {
+            return MeasureSystem(rawValue: self.store.string("extera.inlineMeasureSystem")) ?? .auto
+        }
+        set {
+            self.store.performBatchUpdates {
+                self.store.setString(newValue.rawValue, "extera.inlineMeasureSystem")
+                self.store.setBool(Self.usesImperial(newValue, locale: .current), "extera.inlineImperial")
+            }
+        }
+    }
+
+    /// Pure migration policy, also used by compatibility tests.
+    public static func measureSystem(rawValue: String, legacyImperial: Bool?) -> MeasureSystem {
+        if let value = MeasureSystem(rawValue: rawValue) { return value }
+        if let legacyImperial { return legacyImperial ? .imperial : .metric }
+        return .auto
+    }
+
+    public static func usesImperial(_ system: MeasureSystem, locale: Locale) -> Bool {
+        switch system {
+        case .auto:
+            // Same regions as Android InlineResults.isImperial(). The UK uses
+            // mixed measures and is deliberately metric in this preference.
+            let region: String?
+            if #available(iOS 16.0, macOS 13.0, *) { region = locale.region?.identifier }
+            else { region = locale.regionCode }
+            return region.map { ["US", "LR", "MM"].contains($0) } ?? false
+        case .metric: return false
+        case .imperial: return true
+        }
+    }
+
+    public var resolvedImperial: Bool {
+        return Self.usesImperial(self.inlineMeasureSystem, locale: .current)
+    }
+
+    /// Source-compatible facade for old callers/backups. Writes select an explicit system.
     public var inlineImperial: Bool {
-        get { return self.store.bool("extera.inlineImperial") }
-        set { self.store.setBool(newValue, "extera.inlineImperial") }
+        get { return self.resolvedImperial }
+        set { self.inlineMeasureSystem = newValue ? .imperial : .metric }
     }
 
     /// ISO currency code (or GRAM/BTC/ETH/SOL/USDT), or `auto` for device locale.

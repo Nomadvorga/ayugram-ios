@@ -608,7 +608,7 @@ private final class CameraContext {
     
     func setZoomLevel(_ zoomLevel: CGFloat) {
         if self.initialConfiguration.isRoundVideo {
-            if self.positionValue == .front {
+            if self.isDualCameraEnabled == true && self.positionValue == .front {
                 self.additionalDeviceContext?.device.setZoomLevel(zoomLevel)
             } else {
                 self.mainDeviceContext?.device.setZoomLevel(zoomLevel)
@@ -620,7 +620,7 @@ private final class CameraContext {
     
     func setZoomDelta(_ zoomDelta: CGFloat) {
         if self.initialConfiguration.isRoundVideo {
-            if self.positionValue == .front {
+            if self.isDualCameraEnabled == true && self.positionValue == .front {
                 self.additionalDeviceContext?.device.setZoomDelta(zoomDelta)
             } else {
                 self.mainDeviceContext?.device.setZoomDelta(zoomDelta)
@@ -639,7 +639,7 @@ private final class CameraContext {
 
     func rampZoom(_ zoomLevel: CGFloat, rate: CGFloat) {
         if self.initialConfiguration.isRoundVideo {
-            if self.positionValue == .front {
+            if self.isDualCameraEnabled == true && self.positionValue == .front {
                 self.additionalDeviceContext?.device.rampZoom(zoomLevel, rate: rate)
             } else {
                 self.mainDeviceContext?.device.rampZoom(zoomLevel, rate: rate)
@@ -649,6 +649,16 @@ private final class CameraContext {
         }
     }
     
+    func updateZoom(_ update: CameraZoomUpdate) -> CameraZoomState? {
+        let device: CameraDevice?
+        if self.initialConfiguration.isRoundVideo, self.isDualCameraEnabled == true, self.positionValue == .front {
+            device = self.additionalDeviceContext?.device
+        } else {
+            device = self.mainDeviceContext?.device
+        }
+        return device?.updateZoom(update)
+    }
+
     func takePhoto() -> Signal<PhotoCaptureResult, NoError> {
         guard let mainDeviceContext = self.mainDeviceContext else {
             #if targetEnvironment(simulator)
@@ -1108,6 +1118,13 @@ final class LegacyCamera: CameraProtocol {
             if let context = self.contextRef?.takeUnretainedValue() {
                 context.setZoomScale(zoomScale)
             }
+        }
+    }
+
+    func updateZoom(_ update: CameraZoomUpdate, completion: @escaping (CameraZoomState?) -> Void) {
+        self.queue.async {
+            let state = self.contextRef?.takeUnretainedValue().updateZoom(update)
+            Queue.mainQueue().async { completion(state) }
         }
     }
 

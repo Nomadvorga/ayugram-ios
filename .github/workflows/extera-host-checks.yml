@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'Swiftgram/SGSimpleSettings/**'
+      - 'Swiftgram/SGMath/**'
       - 'Swiftgram/SGItemListUI/Sources/SliderPercentageItem.swift'
       - 'Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings'
       - 'Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings'
@@ -38,7 +39,11 @@ jobs:
             submodules/TelegramUI/Sources/ExteraMathUnits.swift \
             submodules/TelegramUI/Sources/ExteraMathTimeZones.swift \
             submodules/TelegramUI/Sources/ExteraMathCurrencyRates.swift \
-            Tests/ExteraMath/ExteraMathEngineTests.swift
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraMathSettings.swift \
+            Swiftgram/SGMath/Sources/ExteraMathPreferences.swift \
+            Tests/ExteraMath/ExteraMathEngineTests.swift \
+            Tests/ExteraMath/ExteraMathSettingsTests.swift
       - name: Lyrics parsers
         if: ${{ !cancelled() }}
         run: |
@@ -56,6 +61,7 @@ jobs:
           python3 docs/validation/check_extera_backup.py
           python3 tools/check_extera_localizations.py
           python3 docs/validation/run_extera_backup_validation.py
+          python3 docs/validation/run_extera_ai_backup_validation.py
           python3 docs/validation/run_ayu_settings_store_validation.py
       - name: Local feed persistence
         if: ${{ !cancelled() }}
@@ -64,7 +70,45 @@ jobs:
           TSAN_OPTIONS=halt_on_error=1 python3 tools/run_extera_xctests.py --sanitize=thread --warnings-as-errors \
             Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
             Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraFeedHistoryPolicy.swift \
             Tests/ExteraFeed/ExteraFeedSettingsTests.swift
+      - name: Navigation persistence and strict import
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift \
+            Tests/ExteraNavigation/ExteraNavigationSettingsTests.swift
+      - name: Camera zoom and volume policy
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 Tests/ExteraMedia/verify_integration.py
+          python3 Tests/ExteraMedia/run_model_tests.py
+      - name: Chat-list gestures and distance units
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraChatAppearanceSettings.swift \
+            Tests/ExteraChatAppearance/ExteraChatAppearanceSettingsTests.swift
+          python3 Tests/ExteraChatAppearance/run_distance_tests.py --sanitize=thread
+      - name: Speech policy and offline model lifecycle
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 Tests/ExteraSpeech/verify_integration.py
+          python3 Tests/ExteraSpeech/run_host_tests.py
+      - name: AI generation and response formatting
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraAISettings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraAIClient.swift \
+            Tests/ExteraAI/ExteraAIClientTests.swift
       - name: HTTP pill models
         if: ${{ !cancelled() }}
         run: |

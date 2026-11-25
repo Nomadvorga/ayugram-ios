@@ -140,6 +140,8 @@ public final class ChatListNodeInteraction {
     /// The list hosted by the chat side list (`ChatListControllerImpl.isSideList`).
     var isSideListMode: Bool = false
     var openSideListAllThreads: (() -> Void)?
+    /// Installed by the active list container; opens actual folder navigation.
+    var openFolderSelection: (() -> Void)?
     var inlineNavigationLocation: ChatListHighlightedLocation?
     
     let animationCache: AnimationCache
@@ -2005,9 +2007,9 @@ public final class ChatListNode: ListViewImpl {
             savedMessagesPeer = .single(nil)
         }
         
-        let exteraArchiveSettings = Signal<(hideFolder: Bool, onPull: Bool, disableSwipe: Bool), NoError> { subscriber in
+        let exteraArchiveSettings = Signal<(hideFolder: Bool, onPull: Bool, disableSwipe: Bool, swipe: ExteraChatAppearanceSettings.SwipeAction), NoError> { subscriber in
             let emit = {
-                subscriber.putNext((ExteraSettings.shared.hideArchiveFolder, ExteraSettings.shared.archiveOnPull, ExteraSettings.shared.disableUnarchiveSwipe))
+                subscriber.putNext((ExteraSettings.shared.hideArchiveFolder, ExteraSettings.shared.archiveOnPull, ExteraSettings.shared.disableUnarchiveSwipe, ExteraChatAppearanceSettings.shared.swipeAction))
             }
             let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
                 emit()
@@ -2017,7 +2019,7 @@ public final class ChatListNode: ListViewImpl {
                 NotificationCenter.default.removeObserver(observer)
             }
         } |> distinctUntilChanged(isEqual: { lhs, rhs in
-            return lhs.hideFolder == rhs.hideFolder && lhs.onPull == rhs.onPull && lhs.disableSwipe == rhs.disableSwipe
+            return lhs.hideFolder == rhs.hideFolder && lhs.onPull == rhs.onPull && lhs.disableSwipe == rhs.disableSwipe && lhs.swipe == rhs.swipe
         })
 
         let nativeArchiveSettings = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.chatArchiveSettings))
@@ -2243,6 +2245,7 @@ public final class ChatListNode: ListViewImpl {
         let previousChatListFilters = Atomic<[ChatListFilter]?>(value: nil)
         
         let previousAccountIsPremium = Atomic<Bool?>(value: nil)
+        let previousSwipeAction = Atomic<ExteraChatAppearanceSettings.SwipeAction?>(value: nil)
         
         let isSideList = self.isSideList
         // The chat side list's "All Messages" row stands for the parent: Saved Messages or a channel's direct messages.
@@ -2744,6 +2747,10 @@ public final class ChatListNode: ListViewImpl {
             }
             
             var forceAllUpdated = false
+            let swipeAction = ExteraChatAppearanceSettings.shared.swipeAction
+            if previousSwipeAction.swap(swipeAction) != swipeAction {
+                forceAllUpdated = true
+            }
             let previousChatListFiltersValue = previousChatListFilters.swap(chatListFilters)
             if chatListFilters != previousChatListFiltersValue {
                 forceAllUpdated = true

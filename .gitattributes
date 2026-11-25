@@ -7,3 +7,8 @@ submodules/OpusBinding/* linguist-vendored
 submodules/sqlcipher/* linguist-vendored
 submodules/Stripe/* linguist-vendored
 third-party/* linguist-vendored
+
+# Preserve original icon artwork/notices exactly as recorded by provenance.json.
+Telegram/Telegram-iOS/AppIconSources/** -text whitespace=cr-at-eol
+# Upstream notice is stored byte-for-byte, including its original blank line.
+Telegram/Telegram-iOS/AppIconSources/AYUGRAM-README.md -whitespace

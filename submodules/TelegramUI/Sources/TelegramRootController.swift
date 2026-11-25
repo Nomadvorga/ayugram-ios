@@ -37,6 +37,7 @@ import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
 import NewsScreen
+import QrCodeUI
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -89,6 +90,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
     public var newsController: NewsScreen?
+    private var exteraFeedTabController: ViewController?
+    private var exteraNavigationObserver: NSObjectProtocol?
+    private var exteraOriginalLayout: ContainerViewLayout?
+    private var exteraLegacyTabs = (contacts: true, calls: true, news: false)
+    private var exteraAppliedNavigationConfiguration: ExteraNavigationSettings.Configuration?
+    private let exteraMenuActionDisposable = MetaDisposable()
     
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -114,6 +121,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         
         super.init(mode: .automaticMasterDetail, theme: NavigationControllerTheme(presentationTheme: self.presentationData.theme))
+
+        self.exteraNavigationObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.applyExteraNavigation()
+        })
         
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
@@ -126,6 +137,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     (strongSelf.rootTabController as? TabBarControllerImpl)?.updateTheme(theme: presentationData.theme)
                     strongSelf.rootTabController?.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
                 }
+                strongSelf.applyExteraNavigation(force: true)
             }
         })
         
@@ -152,6 +164,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     deinit {
+        if let observer = self.exteraNavigationObserver { NotificationCenter.default.removeObserver(observer) }
+        self.exteraMenuActionDisposable.dispose()
         self.permissionsDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
@@ -184,6 +198,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
+        self.exteraOriginalLayout = layout
+        var layout = layout
+        let tablet = ExteraNavigationSettings.shared.configuration.usesTabletLayout(availableWidth: Double(layout.size.width), systemIsRegular: layout.metrics.widthClass == .regular)
+        layout.metrics = LayoutMetrics(widthClass: tablet ? .regular : .compact, heightClass: layout.metrics.heightClass, orientation: layout.metrics.orientation, windowSize: layout.metrics.windowSize)
         let needsRootWallpaperBackgroundNode: Bool
         if case .regular = layout.metrics.widthClass {
             needsRootWallpaperBackgroundNode = true
@@ -210,9 +228,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func addRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
-        let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
+        self.exteraLegacyTabs = (showContactsTab, showCallsTab, showNewsTab)
+        let tabBarController = ExteraRootTabController(theme: self.presentationData.theme, strings: self.presentationData.strings)
+        tabBarController.menuActions = { [weak self] in self?.exteraMenuActions() ?? [] }
+        tabBarController.performMenuAction = { [weak self] id in self?.performExteraMenuAction(id) }
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)
+        (chatListController as? ChatListControllerImpl)?.exteraOpenNavigationMenu = { [weak tabBarController] sourceView in
+            tabBarController?.openNavigationMenu(sourceView: sourceView)
+        }
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
             chatListController.tabBarItem.accessibilityValue = sharedContext.switchingData.chatListBadgeAccessibilityValue
@@ -269,34 +293,127 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
+        self.applyExteraNavigation()
+        if restoreSettignsController != nil, let index = tabBarController.controllers.firstIndex(where: { $0 === accountSettingsController }) { tabBarController.selectedIndex = index }
         self.pushViewController(tabBarController, animated: false)
     }
         
     public func updateRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
-        guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
+        self.exteraLegacyTabs = (showContactsTab, showCallsTab, showNewsTab)
+        self.applyExteraNavigation()
+    }
+
+    private func applyExteraNavigation(force: Bool = false) {
+        guard let tabs = self.rootTabController as? ExteraRootTabController else { return }
+        let configuration = ExteraNavigationSettings.shared.configuration
+        let visible = configuration.visibleTabs(contacts: self.exteraLegacyTabs.contacts, calls: self.exteraLegacyTabs.calls, news: self.exteraLegacyTabs.news)
+        // Seed the editor from the account's existing tab preferences until its first tab edit.
+        if !configuration.tabsCustomized && configuration.tabs != visible.map({ $0.rawValue }) {
+            ExteraNavigationSettings.shared.update { $0.tabs = visible.map { $0.rawValue } }
             return
         }
-        var controllers: [ViewController] = []
-        // MARK: Swiftgram
-        if showContactsTab, let sgContactsTabController = self.sgContactsTabController {
-            controllers.append(sgContactsTabController)
+        if !force && self.exteraAppliedNavigationConfiguration == configuration { return }
+        if visible.contains(.feed), self.exteraFeedTabController == nil {
+            self.exteraFeedTabController = self.context.sharedContext.makeExteraFeedController(context: self.context)
         }
-        //
-        if showCallsTab {
-            controllers.append(self.callListController!)
+        self.exteraFeedTabController?.tabBarItem.title = exteraNavigationText("Feed", "Feed", "Лента", language: self.presentationData.strings.baseLanguageCode)
+        self.exteraFeedTabController?.tabBarItem.image = UIImage(systemName: "rectangle.stack")
+        self.exteraFeedTabController?.tabBarItem.selectedImage = UIImage(systemName: "rectangle.stack.fill")
+        let controllers = visible.compactMap { tab -> ViewController? in
+            switch tab {
+            case .contacts: return self.sgContactsTabController
+            case .calls: return self.callListController
+            case .news: return newsFeedApiIsAvailable ? self.newsController : nil
+            case .chats: return self.chatListController
+            case .settings: return self.accountSettingsController
+            case .feed: return self.exteraFeedTabController
+            }
         }
-        if showNewsTab, let newsController = self.newsController {
-            controllers.append(newsController)
+        if tabs.controllers.count != controllers.count || !zip(tabs.controllers, controllers).allSatisfy({ pair in pair.0 === pair.1 }) {
+            let selected = tabs.currentController.flatMap { current in controllers.contains(where: { $0 === current }) ? nil : controllers.firstIndex(where: { $0 === self.chatListController }) }
+            tabs.setControllers(controllers, selectedIndex: selected)
         }
-        controllers.append(self.chatListController!)
-        controllers.append(self.accountSettingsController!)
+        tabs.updateNavigationConfiguration(configuration, theme: self.presentationData.theme, strings: self.presentationData.strings)
+        tabs.updateNavigationPresentation(hideLabels: configuration.hideLabels, docked: configuration.barMode == .show)
+        if self.exteraAppliedNavigationConfiguration?.barMode != configuration.barMode {
+            tabs.updateIsTabBarHidden(configuration.barMode == .hide, transition: .immediate)
+        }
+        self.exteraAppliedNavigationConfiguration = configuration
+        if let layout = self.exteraOriginalLayout { self.containerLayoutUpdated(layout, transition: .immediate) }
+    }
 
-        // A removed selected tab would otherwise fall back to index 0: select Chats instead.
-        var selectedIndex: Int?
-        if let currentController = rootTabController.currentController, !controllers.contains(where: { $0 === currentController }) {
-            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+    private func exteraMenuActions() -> [ExteraNavigationMenuAction] {
+        let language = self.presentationData.strings.baseLanguageCode
+        let configuration = ExteraNavigationSettings.shared.configuration
+        var actions: [ExteraNavigationMenuAction] = []
+        if configuration.barMode == .hide {
+            actions.append(ExteraNavigationMenuAction(id: "navigation.chats", title: self.presentationData.strings.DialogList_Title, symbol: "bubble.left.and.bubble.right"))
         }
-        rootTabController.setControllers(controllers, selectedIndex: selectedIndex)
+        actions += configuration.menu.compactMap { id in
+            if ExteraNavigationSettings.Configuration.isDivider(id) { return ExteraNavigationMenuAction(id: id, title: "", symbol: "") }
+            guard let item = ExteraNavigationSettings.MenuItem(rawValue: id) else { return nil }
+            let title: String
+            let symbol: String
+            switch item {
+            case .profile: title = exteraNavigationText("Profile", "My Profile", "Мой профиль", language: language); symbol = "person.crop.circle"
+            case .ghost: title = AyuGhostSettings.shared.isGhostModeActive ? exteraNavigationText("DisableGhost", "Disable Ghost Mode", "Выключить призрака", language: language) : exteraNavigationText("EnableGhost", "Enable Ghost Mode", "Включить призрака", language: language); symbol = "eye.slash"
+            case .archive: title = exteraNavigationText("Archive", "Archived Chats", "Архив чатов", language: language); symbol = "archivebox"
+            case .newGroup: title = exteraNavigationText("NewGroup", "New Group", "Создать группу", language: language); symbol = "person.2"
+            case .savedMessages: title = exteraNavigationText("SavedMessages", "Saved Messages", "Избранное", language: language); symbol = "bookmark"
+            case .settings: title = self.presentationData.strings.Settings_Title; symbol = "gearshape"
+            case .feed: title = exteraNavigationText("Feed", "Feed", "Лента", language: language); symbol = "rectangle.stack"
+            case .wallet: title = exteraNavigationText("Wallet", "Wallet", "Кошелёк", language: language); symbol = "creditcard"
+            case .contacts: title = self.presentationData.strings.Contacts_Title; symbol = "person"
+            case .newChannel: title = exteraNavigationText("NewChannel", "New Channel", "Создать канал", language: language); symbol = "megaphone"
+            case .calls: title = self.presentationData.strings.Calls_TabTitle; symbol = "phone"
+            case .browser: title = exteraNavigationText("Browser", "Browser", "Браузер", language: language); symbol = "globe"
+            case .qrCode: title = exteraNavigationText("QRCode", "Scan QR Code", "Сканировать QR-код", language: language); symbol = "qrcode.viewfinder"
+            }
+            return ExteraNavigationMenuAction(id: id, title: title, symbol: symbol, enabled: item != .wallet || self.context.walletContext != nil)
+        }
+        return actions
+    }
+
+    private func performExteraMenuAction(_ id: String) {
+        if id == "navigation.chats" { self.openChatsController(activateSearch: false); return }
+        guard let item = ExteraNavigationSettings.MenuItem(rawValue: id) else { return }
+        switch item {
+        case .ghost: AyuGhostSettings.shared.setGhostModeActive(!AyuGhostSettings.shared.isGhostModeActive)
+        case .settings: self.openSettings(edit: false)
+        case .contacts: self.openContacts()
+        case .archive:
+            self.pushViewController(self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: false))
+        case .savedMessages:
+            self.pushViewController(self.context.sharedContext.makeChatController(context: self.context, chatLocation: .peer(id: self.context.account.peerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil))
+        case .profile:
+            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId)) |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+                guard let self, let peer, let controller = self.context.sharedContext.makePeerInfoController(context: self.context, updatedPresentationData: nil, peer: peer, mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) else { return }
+                self.pushViewController(controller)
+            })
+        case .newGroup:
+            let controller = self.context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: self.context, mode: .groupCreation(isCall: false), onlyWriteable: true))
+            self.exteraMenuActionDisposable.set((controller.result |> take(1) |> deliverOnMainQueue).startStrict(next: { [weak self, weak controller] result in
+                guard let self, let controller, case let .result(peers, _) = result else { return }
+                let peerIds: [EnginePeer.Id] = peers.compactMap { peer in
+                    if case let .peer(id) = peer { return id }
+                    return nil
+                }
+                let group = self.context.sharedContext.makeCreateGroupController(context: self.context, peerIds: peerIds, initialTitle: nil, mode: .generic, completion: nil)
+                (controller.navigationController as? NavigationController)?.pushViewController(group)
+            }))
+            self.pushViewController(controller)
+        case .newChannel: self.pushViewController(createChannelController(context: self.context))
+        case .feed:
+            if let feed = self.exteraFeedTabController, let index = self.rootTabController?.controllers.firstIndex(where: { $0 === feed }) { self.rootTabController?.selectedIndex = index }
+            else if let controller = self.context.sharedContext.makeExteraFeedController(context: self.context) { self.pushViewController(controller) }
+        case .calls:
+            if let calls = self.callListController, let index = self.rootTabController?.controllers.firstIndex(where: { $0 === calls }) { self.rootTabController?.selectedIndex = index }
+            else { self.pushViewController(CallListController(context: self.context, mode: .navigation)) }
+        case .wallet:
+            if self.context.walletContext != nil { self.pushViewController(self.context.sharedContext.makeWalletScreen(context: self.context, opensCollectibles: false)) }
+        case .browser: self.pushViewController(webBrowserSettingsController(context: self.context))
+        case .qrCode: self.pushViewController(QrCodeScanScreen(context: self.context, subject: .peer))
+        }
     }
     
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {

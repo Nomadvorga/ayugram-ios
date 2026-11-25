@@ -10,9 +10,10 @@ import AyuSnowEffect
 public enum AyuAppearancePreviewKind: Equatable {
     case avatar(value: Int32, title: String, square: String, circle: String)
     case chatList(title: String, centered: Bool, snow: Bool)
+    case doubleTap(incomingSymbol: String, outgoingSymbol: String)
 }
 
-/// A native adjustable avatar preview or a chat-list header preview.
+/// Native appearance previews and a decorative incoming/outgoing gesture example.
 public final class AyuAppearancePreviewItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
     let kind: AyuAppearancePreviewKind
@@ -69,6 +70,7 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
     private lazy var headerLabel = UILabel()
     private lazy var slider = UISlider()
     private lazy var snowView = AyuSnowView(style: .header)
+    private var doubleTapPreview: AyuDoubleTapPreviewView?
     private var contentCreated = false
     private var item: AyuAppearancePreviewItem?
     private var displayedValue: Int32 = 28
@@ -174,9 +176,11 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
             let isAvatar: Bool
             switch item.kind {
             case .avatar: isAvatar = true
-            case .chatList: isAvatar = false
+            case .chatList, .doubleTap: isAvatar = false
             }
-            let contentSize = CGSize(width: params.width, height: isAvatar ? 210.0 : 100.0)
+            let isDoubleTap: Bool
+            if case .doubleTap = item.kind { isDoubleTap = true } else { isDoubleTap = false }
+            let contentSize = CGSize(width: params.width, height: isDoubleTap ? 190.0 : (isAvatar ? 210.0 : 100.0))
             let insets = itemListNeighborsGroupedInsets(neighbors, params)
             let layout = ListViewItemNodeLayout(contentSize: contentSize, insets: insets)
             return (layout, { [weak self] in
@@ -220,6 +224,8 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
                 let width = max(0.0, params.width - x - params.rightInset - 21.0)
                 self.previewFrame = CGRect(x: x, y: isAvatar ? 112.0 : 18.0, width: width, height: isAvatar ? 80.0 : 64.0)
                 self.preview.frame = self.previewFrame
+                self.preview.isHidden = isDoubleTap
+                self.doubleTapPreview?.isHidden = !isDoubleTap
                 self.preview.backgroundColor = item.theme.list.itemBlocksBackgroundColor
                 self.preview.layer.borderColor = item.theme.list.itemBlocksSeparatorColor.cgColor
                 self.headerLabel.textColor = item.theme.list.itemPrimaryTextColor
@@ -235,12 +241,12 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
                 for control in avatarControls {
                     control.isHidden = !isAvatar
                 }
-                self.headerLabel.isHidden = isAvatar
+                self.headerLabel.isHidden = isAvatar || isDoubleTap
                 self.avatarLayer.isHidden = !isAvatar
                 self.onlineOuterLayer.isHidden = !isAvatar
                 self.onlineInnerLayer.isHidden = !isAvatar
                 for layer in self.skeletonLayers { layer.isHidden = !isAvatar }
-                for layer in self.menuLayers { layer.isHidden = isAvatar }
+                for layer in self.menuLayers { layer.isHidden = isAvatar || isDoubleTap }
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 switch item.kind {
@@ -278,6 +284,17 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
                         layer.cornerRadius = 1.5
                         layer.backgroundColor = item.theme.list.itemPrimaryTextColor.cgColor
                     }
+                case let .doubleTap(incomingSymbol, outgoingSymbol):
+                    let preview: AyuDoubleTapPreviewView
+                    if let current = self.doubleTapPreview {
+                        preview = current
+                    } else {
+                        preview = AyuDoubleTapPreviewView(frame: .zero)
+                        self.doubleTapPreview = preview
+                        self.view.addSubview(preview)
+                    }
+                    preview.frame = CGRect(x: params.leftInset, y: 0.0, width: max(0.0, params.width - params.leftInset - params.rightInset), height: contentSize.height)
+                    preview.update(theme: item.theme, visualStyle: .native, incomingSymbol: incomingSymbol, outgoingSymbol: outgoingSymbol)
                 }
                 CATransaction.commit()
                 self.updateSnowVisibility()

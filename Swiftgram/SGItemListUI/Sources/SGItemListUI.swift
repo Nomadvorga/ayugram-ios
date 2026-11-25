@@ -56,6 +56,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
     let action: (ActionType) -> Void
     let searchInput: (String) -> Void
     let setExpanded: (BoolSetting, Bool) -> Void
+    let setSegmentedValue: (OneFromManySetting, Int) -> Void
 
     
     public init(
@@ -68,7 +69,8 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
         openDisclosureLink: @escaping (DisclosureLink) -> Void = { _ in},
         action: @escaping (ActionType) -> Void = { _ in },
         searchInput: @escaping (String) -> Void = { _ in },
-        setExpanded: @escaping (BoolSetting, Bool) -> Void = { _, _ in }
+        setExpanded: @escaping (BoolSetting, Bool) -> Void = { _, _ in },
+        setSegmentedValue: @escaping (OneFromManySetting, Int) -> Void = { _, _ in }
     ) {
         self.context = context
         self.visualStyle = visualStyle
@@ -80,6 +82,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
         self.action = action
         self.searchInput = searchInput
         self.setExpanded = setExpanded
+        self.setSegmentedValue = setSegmentedValue
     }
 }
 
@@ -93,7 +96,11 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
     case notice(id: Int, section: Section, text: String)
     case percentageSlider(id: Int, section: Section, settingName: SliderSetting, value: Int32)
     case appearancePreview(id: Int, section: Section, kind: AyuAppearancePreviewKind, settingName: SliderSetting?)
+    /// Optional setting ids enable the size scale and the shape tiles respectively.
+    case settingsPreview(id: Int, section: Section, kind: SGSettingsPreviewKind, sliderSetting: SliderSetting?, selectionSetting: OneFromManySetting?)
     case oneFromManySelector(id: Int, section: Section, settingName: OneFromManySetting, text: String, value: String, enabled: Bool)
+    /// A labelled discrete scale; value is an index into options, never a continuous amount.
+    case segmentedSelector(id: Int, section: Section, settingName: OneFromManySetting, value: Int, options: [String], enabled: Bool)
     case disclosure(id: Int, section: Section, link: DisclosureLink, text: String)
     case disclosureSubtitle(id: Int, section: Section, link: DisclosureLink, text: String, subtitle: String, iconName: String)
     case peerColorDisclosurePreview(id: Int, section: Section, name: String, color: UIColor)
@@ -122,12 +129,16 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
 
         case let .appearancePreview(_, sectionId, _, _):
             return sectionId.rawValue
+        case let .settingsPreview(_, sectionId, _, _, _):
+            return sectionId.rawValue
         case let .percentageSlider(_, sectionId, _, _):
             return sectionId.rawValue
             
         case let .peerColorDisclosurePreview(_, sectionId, _, _):
             return sectionId.rawValue
         case let .oneFromManySelector(_, sectionId, _, _, _, _):
+            return sectionId.rawValue
+        case let .segmentedSelector(_, sectionId, _, _, _, _):
             return sectionId.rawValue
             
         case let .action(_, sectionId, _, _, _):
@@ -158,11 +169,15 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return stableIdValue
         case let .appearancePreview(stableIdValue, _, _, _):
             return stableIdValue
+        case let .settingsPreview(stableIdValue, _, _, _, _):
+            return stableIdValue
         case let .percentageSlider(stableIdValue, _, _, _):
             return stableIdValue
         case let .peerColorDisclosurePreview(stableIdValue, _, _, _):
             return stableIdValue
         case let .oneFromManySelector(stableIdValue, _, _, _, _, _):
+            return stableIdValue
+        case let .segmentedSelector(stableIdValue, _, _, _, _, _):
             return stableIdValue
         case let .action(stableIdValue, _, _, _, _):
             return stableIdValue
@@ -194,6 +209,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         
         case let (.appearancePreview(id1, section1, kind1, setting1), .appearancePreview(id2, section2, kind2, setting2)):
             return id1 == id2 && section1 == section2 && kind1 == kind2 && setting1 == setting2
+        case let (.settingsPreview(id1, section1, kind1, slider1, selection1), .settingsPreview(id2, section2, kind2, slider2, selection2)):
+            return id1 == id2 && section1 == section2 && kind1 == kind2 && slider1 == slider2 && selection1 == selection2
         case let (.percentageSlider(id1, section1, settingName1, value1), .percentageSlider(id2, section2, settingName2, value2)):
             return id1 == id2 && section1 == section2 && value1 == value2 && settingName1 == settingName2
             
@@ -207,6 +224,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         
         case let (.oneFromManySelector(id1, section1, settingName1, text1, value1, enabled1), .oneFromManySelector(id2, section2, settingName2, text2, value2, enabled2)):
             return id1 == id2 && section1 == section2 && settingName1 == settingName2 && text1 == text2 && value1 == value2 && enabled1 == enabled2
+        case let (.segmentedSelector(id1, section1, setting1, value1, options1, enabled1), .segmentedSelector(id2, section2, setting2, value2, options2, enabled2)):
+            return id1 == id2 && section1 == section2 && setting1 == setting2 && value1 == value2 && options1 == options2 && enabled1 == enabled2
         case let (.action(id1, section1, actionType1, text1, kind1), .action(id2, section2, actionType2, text2, kind2)):
             return id1 == id2 && section1 == section2 && actionType1 == actionType2 && text1 == text2 && kind1 == kind2
             
@@ -262,6 +281,14 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
                     arguments.updateSliderValue(setting, value)
                 }
             })
+        case let .settingsPreview(_, _, kind, sliderSetting, selectionSetting):
+            let sliderUpdated: ((Int32) -> Void)? = sliderSetting.map { setting in
+                return { arguments.updateSliderValue(setting, $0) }
+            }
+            let selectionUpdated: ((Int) -> Void)? = selectionSetting.map { setting in
+                return { arguments.setSegmentedValue(setting, $0) }
+            }
+            return sgSettingsPreviewItem(presentationData: presentationData, sectionId: self.section, visualStyle: arguments.visualStyle, kind: kind, sliderUpdated: sliderUpdated, selectionUpdated: selectionUpdated)
         case let .percentageSlider(_, _, setting, value):
             return SliderPercentageItem(
                 theme: presentationData.theme,
@@ -283,6 +310,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) // Closing search keyboard if active
                 arguments.setOneFromManyValue(settingName)
             }, tag: SGOneFromManyTag(setting: settingName))
+        case let .segmentedSelector(_, _, setting, value, options, enabled):
+            return sgSegmentedSelectorItem(presentationData: presentationData, sectionId: self.section, visualStyle: .native, value: value, options: options, enabled: enabled, updated: { index in
+                arguments.setSegmentedValue(setting, index)
+            })
         case let .action(_, _, actionType, text, kind):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: kind, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) // Closing search keyboard if active
@@ -325,10 +356,14 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
                 return title.lowercased().contains(query)
             }
             return false
+        case let .settingsPreview(_, _, kind, _, _):
+            return kind.searchableText.lowercased().contains(query)
         case .percentageSlider:
             return false // Assuming percentage sliders don't have searchable text
         case .oneFromManySelector(_, _, _, let text, let value, _):
             return text.lowercased().contains(query) || value.lowercased().contains(query)
+        case .segmentedSelector(_, _, _, _, let options, _):
+            return options.contains { $0.lowercased().contains(query) }
         case .disclosure(_, _, _, let text):
             return text.lowercased().contains(query)
         case .disclosureSubtitle(_, _, _, let text, let subtitle, _):

@@ -756,6 +756,7 @@ enum RevealOptionKey: Int32 {
     case open
     case close
     case edit
+    case selectFolder
 }
 
 private func canArchivePeer(id: EnginePeer.Id, accountPeerId: EnginePeer.Id) -> Bool {
@@ -4289,6 +4290,39 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 } else {
                                     peerLeftRevealOptions = []
                                 }
+                                // Apply only to ordinary chat-list rows. Forum, saved-message,
+                                // sponsored and custom-action rows keep their native semantics.
+                                let isCommunity: Bool
+                                if case .community = peerData.peer.peer {
+                                    isCommunity = true
+                                } else {
+                                    isCommunity = false
+                                }
+                                if case .chatList = item.chatListLocation, !item.editing, !isCommunity {
+                                    let preference = ExteraChatAppearanceSettings.shared.swipeAction
+                                    var preferredKey: Int32?
+                                    switch preference {
+                                    case .archive:
+                                        preferredKey = peerRevealOptions.first(where: { $0.key == RevealOptionKey.archive.rawValue || $0.key == RevealOptionKey.unarchive.rawValue })?.key
+                                    case .mute:
+                                        preferredKey = peerRevealOptions.first(where: { $0.key == RevealOptionKey.mute.rawValue || $0.key == RevealOptionKey.unmute.rawValue })?.key
+                                    case .delete: preferredKey = RevealOptionKey.delete.rawValue
+                                    case .read: preferredKey = RevealOptionKey.toggleMarkedUnread.rawValue
+                                    case .pin:
+                                        preferredKey = (peerRevealOptions + peerLeftRevealOptions).first(where: { $0.key == RevealOptionKey.pin.rawValue || $0.key == RevealOptionKey.unpin.rawValue })?.key
+                                    case .folder:
+                                        if case .chatList(.root) = item.chatListLocation {
+                                            let theme = item.presentationData.theme
+                                            let icon = UIImage(bundleImageName: "Chat/Context Menu/Folder").map { ItemListRevealOptionIcon.image(image: $0) } ?? .none
+                                            peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.selectFolder.rawValue, title: item.presentationData.strings.ChatListFolderSettings_Title, icon: icon, color: theme.list.itemDisclosureActions.accent.fillColor, iconColor: theme.list.itemDisclosureActions.accent.foregroundColor, textColor: theme.chatList.dateTextColor))
+                                            preferredKey = RevealOptionKey.selectFolder.rawValue
+                                        }
+                                    }
+                                    let allOptions = peerRevealOptions + peerLeftRevealOptions
+                                    let order = ExteraChatAppearanceSettings.prioritizeSwipe(left: peerLeftRevealOptions.map { $0.key }, right: peerRevealOptions.map { $0.key }, preferred: preferredKey)
+                                    peerLeftRevealOptions = order.left.compactMap { key in allOptions.first(where: { $0.key == key }) }
+                                    peerRevealOptions = order.right.compactMap { key in allOptions.first(where: { $0.key == key }) }
+                                }
                             } else {
                                 peerRevealOptions = []
                                 peerLeftRevealOptions = []
@@ -6150,6 +6184,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         var close = true
         if case let .chatList(index) = item.index {
             switch option.key {
+            case RevealOptionKey.selectFolder.rawValue:
+                item.interaction.openFolderSelection?()
             case RevealOptionKey.pin.rawValue:
                 switch item.content {
                 case .loading:

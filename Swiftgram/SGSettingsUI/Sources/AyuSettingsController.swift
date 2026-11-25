@@ -185,12 +185,38 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
     return entries
 }
 
-public func ayuSettingsController(context: AccountContext) -> ViewController {
+public enum AyuSettingsCategory {
+    case ghost, spy, filters, customization
+
+    fileprivate var sections: Set<AyuControllerSection> {
+        switch self {
+        case .ghost: return [.ghostEssentials, .ghostOther]
+        case .spy: return [.spyEssentials]
+        case .filters: return [.usefulFeatures]
+        case .customization: return [.customization, .confirmations]
+        }
+    }
+
+    fileprivate var titleKey: String {
+        switch self {
+        case .ghost: return "Ayu.Overview.Ghost"
+        case .spy: return "Ayu.Overview.Spy"
+        case .filters: return "Ayu.Overview.Filters"
+        case .customization: return "Ayu.Overview.Customization"
+        }
+    }
+}
+
+public func ayuSettingsController(context: AccountContext, category: AyuSettingsCategory? = nil) -> ViewController {
+    guard let category else {
+        return exteraSettingsOverviewController(context: context, ayu: true)
+    }
     var presentOneFromManyImpl: ((AyuOneFromManySetting, [SGOneFromManyOption]) -> Void)?
     let updatePromise = ValuePromise(true, ignoreRepeated: false)
 
     let arguments = SGItemListArguments<AyuBoolSetting, AyuSliderSetting, AyuOneFromManySetting, AyuDisclosureLink, AnyHashable>(
         context: context,
+        visualStyle: .extera,
         setBoolValue: { setting, value in
             let ghost = AyuGhostSettings.shared
             let wasHidingOnline = ghost.suppressOnlineStatus
@@ -300,8 +326,9 @@ public func ayuSettingsController(context: AccountContext) -> ViewController {
 
     let signal = combineLatest(updatePromise.get(), context.sharedContext.presentationData)
     |> map { _, presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(i18n("Ayu.AyuPreferences", presentationData.strings.baseLanguageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuControllerEntries(presentationData: presentationData), style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(i18n(category.titleKey, presentationData.strings.baseLanguageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let entries = ayuControllerEntries(presentationData: presentationData).filter { entry in category.sections.contains { $0.rawValue == entry.section } }
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)
         return (controllerState, (listState, arguments))
     }
 

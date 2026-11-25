@@ -9,6 +9,7 @@ load(
 sgdeps = [
     "//submodules/AyuSnowEffect:AyuSnowEffect",
     "//Swiftgram/SGSettingsUI:SGSettingsUI",
+    "//Swiftgram/SGMath:SGMath",
     "//Swiftgram/SGConfig:SGConfig",
     "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
@@ -71,11 +72,27 @@ filegroup(
 #    ], exclude = ["Telegram-iOS/Icons.xcassets/**/.*"]),
 #)
 
+filegroup(
+    name = "ExteraMathSources",
+    srcs = [
+        "Sources/ExteraMathEngine.swift",
+        "Sources/ExteraMathUnits.swift",
+        "Sources/ExteraMathTimeZones.swift",
+        "Sources/ExteraMathCurrencyRates.swift",
+    ],
+    visibility = ["//Swiftgram/SGMath:__pkg__"],
+)
+
 swift_library(
     name = "TelegramUI",
     module_name = "TelegramUI",
     srcs = glob([
         "Sources/**/*.swift",
+    ], exclude = [
+        "Sources/ExteraMathEngine.swift",
+        "Sources/ExteraMathUnits.swift",
+        "Sources/ExteraMathTimeZones.swift",
+        "Sources/ExteraMathCurrencyRates.swift",
     ]) + sgsrcs,
     copts = [
         "-warnings-as-errors",

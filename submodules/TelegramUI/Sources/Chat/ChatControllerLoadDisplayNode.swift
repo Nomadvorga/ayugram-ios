@@ -4716,6 +4716,7 @@ extension ChatControllerImpl {
             guard let self else {
                 return
             }
+            if self.openExteraAIComposeIfEnabled() { return }
             self.chatDisplayNode.openAICompose()
         }, openExpandedInput: { [weak self] in
             guard let self else {

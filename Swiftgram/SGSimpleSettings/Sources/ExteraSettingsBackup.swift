@@ -68,9 +68,15 @@ public enum ExteraSettingsBackup {
         case string(Set<String>)
         case text(maximumLength: Int, allowedCharacters: CharacterSet?)
         case exactHosts
+        case navigationConfiguration
 
         func validate(_ object: Any) throws -> Value {
             switch self {
+            case .navigationConfiguration:
+                guard let value = object as? String, let data = value.data(using: .utf8) else { throw BackupError.invalidValue }
+                try ExteraSettingsBackup.rejectDuplicateKeys(data)
+                guard ExteraNavigationSettings.isValidConfigurationJSON(value) else { throw BackupError.invalidValue }
+                return .string(value)
             case .boolean:
                 // NSNumber bridges 0/1 to Bool. A conditional Bool cast alone is not strict JSON validation.
                 guard let number = object as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
@@ -118,7 +124,56 @@ public enum ExteraSettingsBackup {
         let rule: Rule
         let defaultValue: Value
         let read: () -> Value
-        let write: (Value) -> Void
+        let write: ((Value) -> Void)?
+        let aiFlag: WritableKeyPath<ExteraAIConfiguration, Bool>?
+        let aiWrite: ((inout ExteraAIConfiguration, Value) -> Void)?
+
+        init(name: String, rule: Rule, defaultValue: Value, read: @escaping () -> Value, write: ((Value) -> Void)? = nil, aiFlag: WritableKeyPath<ExteraAIConfiguration, Bool>? = nil, aiWrite: ((inout ExteraAIConfiguration, Value) -> Void)? = nil) {
+            self.name = name
+            self.rule = rule
+            self.defaultValue = defaultValue
+            self.read = read
+            self.write = write
+            self.aiFlag = aiFlag
+            self.aiWrite = aiWrite
+        }
+    }
+
+    private static func aiBoolean(_ name: String, _ keyPath: WritableKeyPath<ExteraAIConfiguration, Bool>, defaultValue: Bool = true) -> Setting {
+        return Setting(name: name, rule: .boolean, defaultValue: .boolean(defaultValue), read: {
+            .boolean(ExteraAISettings.shared.configuration[keyPath: keyPath])
+        }, aiFlag: keyPath)
+    }
+
+    private static func navigationConfiguration() -> Setting {
+        let data: Data
+        do { data = try JSONEncoder().encode(ExteraNavigationSettings.Configuration()) }
+        catch { preconditionFailure("Navigation defaults must encode: \(error)") }
+        return Setting(name: "extera.navigation.configuration", rule: .navigationConfiguration, defaultValue: .string(String(decoding: data, as: UTF8.self)), read: {
+            .string(ExteraNavigationSettings.shared.configurationJSON)
+        }, write: {
+            if case let .string(value) = $0 { precondition(ExteraNavigationSettings.shared.restoreConfigurationJSON(value)) }
+        })
+    }
+
+    private static func aiTemperature(_ name: String) -> Setting {
+        return Setting(name: name, rule: .integer(0 ... 20), defaultValue: .integer(10), read: {
+            let value = ExteraAISettings.shared.configuration.temperature
+            return .integer(value.isFinite ? Int((max(0.0, min(2.0, value)) * 10.0).rounded()) : 10)
+        }, aiWrite: { configuration, value in
+            if case let .integer(tenths) = value { configuration.temperature = Double(tenths) / 10.0 }
+        })
+    }
+
+    private static func aiSummaryPolicy(_ name: String) -> Setting {
+        return Setting(name: name, rule: .string(["automatic", "enabled", "disabled"]), defaultValue: .string("automatic"), read: {
+            let policy = ExteraAISettings.shared.configuration.replaceTelegramSummaries
+            return .string(policy.map { $0 ? "enabled" : "disabled" } ?? "automatic")
+        }, aiWrite: { configuration, value in
+            if case let .string(policy) = value {
+                configuration.replaceTelegramSummaries = policy == "automatic" ? nil : policy == "enabled"
+            }
+        })
     }
 
     private static func boolean(_ name: String, defaultValue: Bool = false, read: @escaping () -> Bool, write: @escaping (Bool) -> Void) -> Setting {
@@ -188,6 +243,14 @@ public enum ExteraSettingsBackup {
 
     // Explicit allowlist: adding a preference anywhere else must never silently expand backup/reset scope.
     private static let settings: [Setting] = [
+        aiBoolean("extera.ai.showEditor", \.showEditor),
+        aiBoolean("extera.ai.showSummaries", \.showSummaries),
+        aiBoolean("extera.ai.showInstantViewSummaries", \.showInstantViewSummaries),
+        aiBoolean("extera.ai.showResponseOnly", \.showResponseOnly, defaultValue: false),
+        aiBoolean("extera.ai.insertAsQuote", \.insertAsQuote),
+        aiTemperature("extera.ai.temperatureTenths"),
+        navigationConfiguration(),
+        aiSummaryPolicy("extera.ai.replaceTelegramSummaries"),
         boolean("extera.browser.automaticFilterUpdates", defaultValue: true, read: { ExteraBrowserFilters.shared.automaticUpdates }, write: { ExteraBrowserFilters.shared.automaticUpdates = $0 }),
         boolean("extera.stickers.unlimitedRecent", read: { ExteraStickerSettings.shared.unlimitedRecentStickers }, write: { ExteraStickerSettings.shared.unlimitedRecentStickers = $0 }),
         integer("extera.stickers.size", allowed: Set(4 ... 20), defaultValue: 12, read: { ExteraStickerSettings.shared.size }, write: { ExteraStickerSettings.shared.size = $0 }),
@@ -295,6 +358,8 @@ public enum ExteraSettingsBackup {
         simpleString(.transcriptionBackend, \.transcriptionBackend, allowed: ["default", "apple"], defaultValue: "default"),
         text("extera.appleSpeechLocaleIdentifier", maximumLength: 64, allowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"), read: { ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier }, write: { ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier = $0 }),
         boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
+        boolean("extera.speech.isEnabled", defaultValue: true, read: { ExteraSpeechSettings.shared.isEnabled }, write: { ExteraSpeechSettings.shared.isEnabled = $0 }),
+        boolean("extera.speech.useManagedOfflineModel", read: { ExteraSpeechSettings.shared.useManagedOfflineModel }, write: { ExteraSpeechSettings.shared.useManagedOfflineModel = $0 }),
         boolean("extera.chat.hideKeyboardOnScroll", read: { ExteraChatSettings.shared.hideKeyboardOnScroll }, write: { ExteraChatSettings.shared.hideKeyboardOnScroll = $0 }),
         boolean("extera.feed.widePosts", defaultValue: true, read: { ExteraFeedSettings.shared.widePosts }, write: { ExteraFeedSettings.shared.widePosts = $0 }),
         boolean("extera.feed.showUnreadCounter", defaultValue: true, read: { ExteraFeedSettings.shared.showUnreadCounter }, write: { ExteraFeedSettings.shared.showUnreadCounter = $0 }),
@@ -336,6 +401,18 @@ public enum ExteraSettingsBackup {
         boolean("extera.media.pauseOnMinimizeVoice", read: { ExteraMediaSettings.shared.pauseOnMinimizeVoice }, write: { ExteraMediaSettings.shared.pauseOnMinimizeVoice = $0 }),
         boolean("extera.media.pauseOnMinimizeRound", read: { ExteraMediaSettings.shared.pauseOnMinimizeRound }, write: { ExteraMediaSettings.shared.pauseOnMinimizeRound = $0 }),
         boolean("extera.media.rememberLastUsedCamera", defaultValue: true, read: { ExteraMediaSettings.shared.rememberLastUsedCamera }, write: { ExteraMediaSettings.shared.rememberLastUsedCamera = $0 }),
+        boolean("extera.media.zoomSlider", defaultValue: true, read: { ExteraMediaSettings.shared.zoomSlider }, write: { ExteraMediaSettings.shared.zoomSlider = $0 }),
+        boolean("extera.media.staticZoom", read: { ExteraMediaSettings.shared.staticZoom }, write: { ExteraMediaSettings.shared.staticZoom = $0 }),
+        boolean("extera.media.unmuteWithVolumeButtons", read: { ExteraMediaSettings.shared.unmuteWithVolumeButtons }, write: { ExteraMediaSettings.shared.unmuteWithVolumeButtons = $0 }),
+        Setting(name: ExteraChatAppearanceSettings.swipeActionKey, rule: .string(Set(ExteraChatAppearanceSettings.SwipeAction.allCases.map(\.rawValue))), defaultValue: .string("archive"), read: { .string(ExteraChatAppearanceSettings.shared.swipeAction.rawValue) }, write: {
+            if case let .string(value) = $0, let action = ExteraChatAppearanceSettings.SwipeAction(rawValue: value) { ExteraChatAppearanceSettings.shared.swipeAction = action }
+        }),
+        Setting(name: ExteraChatAppearanceSettings.microphoneKey, rule: .string(Set(ExteraChatAppearanceSettings.Microphone.allCases.map(\.rawValue))), defaultValue: .string("automatic"), read: { .string(ExteraChatAppearanceSettings.shared.microphone.rawValue) }, write: {
+            if case let .string(value) = $0, let microphone = ExteraChatAppearanceSettings.Microphone(rawValue: value) { ExteraChatAppearanceSettings.shared.microphone = microphone }
+        }),
+        Setting(name: ExteraChatAppearanceSettings.distanceUnitKey, rule: .string(Set(ExteraChatAppearanceSettings.DistanceUnit.allCases.map(\.rawValue))), defaultValue: .string("automatic"), read: { .string(ExteraChatAppearanceSettings.shared.distanceUnit.rawValue) }, write: {
+            if case let .string(value) = $0, let unit = ExteraChatAppearanceSettings.DistanceUnit(rawValue: value) { ExteraChatAppearanceSettings.shared.distanceUnit = unit }
+        }),
         boolean("extera.inlineResults", defaultValue: true, read: { ExteraMathSettings.shared.inlineResults }, write: { ExteraMathSettings.shared.inlineResults = $0 }),
         boolean("extera.inlineMathResult", defaultValue: true, read: { ExteraMathSettings.shared.inlineMathResult }, write: { ExteraMathSettings.shared.inlineMathResult = $0 }),
         boolean("extera.inlineDigitGrouping", defaultValue: true, read: { ExteraMathSettings.shared.inlineDigitGrouping }, write: { ExteraMathSettings.shared.inlineDigitGrouping = $0 }),
@@ -343,6 +420,12 @@ public enum ExteraSettingsBackup {
         boolean("extera.inlineCurrencies", defaultValue: true, read: { ExteraMathSettings.shared.inlineCurrencies }, write: { ExteraMathSettings.shared.inlineCurrencies = $0 }),
         boolean("extera.inlineTimeZones", defaultValue: true, read: { ExteraMathSettings.shared.inlineTimeZones }, write: { ExteraMathSettings.shared.inlineTimeZones = $0 }),
         boolean("extera.inlineImperial", read: { ExteraMathSettings.shared.inlineImperial }, write: { ExteraMathSettings.shared.inlineImperial = $0 }),
+        boolean("extera.showOnlineStatus", read: { ExteraMessageSettings.shared.showOnlineStatus }, write: { ExteraMessageSettings.shared.showOnlineStatus = $0 }),
+        // Apply after the legacy boolean: new backups preserve auto, while old
+        // partial backups still select the explicit metric/imperial preference.
+        Setting(name: "extera.inlineMeasureSystem", rule: .string(["auto", "metric", "imperial"]), defaultValue: .string("auto"), read: { .string(ExteraMathSettings.shared.inlineMeasureSystem.rawValue) }, write: {
+            if case let .string(value) = $0, let system = ExteraMathSettings.MeasureSystem(rawValue: value) { ExteraMathSettings.shared.inlineMeasureSystem = system }
+        }),
         Setting(name: "extera.inlineTargetCurrency", rule: .string(Set(NSLocale.commonISOCurrencyCodes + ["auto", "BTC", "ETH", "SOL", "USDT", "GRAM"])), defaultValue: .string("auto"), read: { .string(ExteraMathSettings.shared.inlineTargetCurrency) }, write: {
             if case let .string(value) = $0 { ExteraMathSettings.shared.inlineTargetCurrency = value }
         }),
@@ -435,27 +518,48 @@ public enum ExteraSettingsBackup {
 
     /// Apply only a previously validated document. Missing allowlisted settings retain their current values.
     /// All writes go through the original setters so cached values and extension mirrors stay coherent.
-    public static func apply(_ backup: ValidatedBackup) {
+    /// AI flags are encoded together before any other write, so a persistence error leaves the import unapplied.
+    public static func apply(_ backup: ValidatedBackup) throws {
         precondition(Thread.isMainThread)
+        var failure: Error?
         AyuSettingsStore.shared.performBatchUpdates {
-            for setting in self.settings {
-                if let value = backup.values[setting.name] {
-                    setting.write(value)
-                }
-            }
-            SGSimpleSettings.shared.synchronizeShared()
+            do {
+                try self.write(backup.values)
+                SGSimpleSettings.shared.synchronizeShared()
+            } catch { failure = error }
         }
+        if let failure { throw failure }
     }
 
     /// The caller must obtain confirmation first. Writes defaults only to this same closed allowlist.
     /// SharedPreferences must additionally be reset by the UI using Telegram's own defaults.
-    public static func reset() {
+    public static func reset() throws {
         precondition(Thread.isMainThread)
+        var failure: Error?
         AyuSettingsStore.shared.performBatchUpdates {
-            for setting in self.settings {
-                setting.write(setting.defaultValue)
+            do {
+                try self.write(Dictionary(uniqueKeysWithValues: self.settings.map { ($0.name, $0.defaultValue) }))
+                SGSimpleSettings.shared.synchronizeShared()
+            } catch { failure = error }
+        }
+        if let failure { throw failure }
+    }
+
+    /// Keep the only throwing persistence operation first and apply its flags in one read/modify/write.
+    /// Missing flags retain their current values; services, roles, credentials and history are untouched.
+    private static func write(_ values: [String: Value]) throws {
+        let aiSettings = self.settings.filter { ($0.aiFlag != nil || $0.aiWrite != nil) && values[$0.name] != nil }
+        if !aiSettings.isEmpty {
+            try ExteraAISettings.shared.update { configuration in
+                for setting in aiSettings {
+                    guard let value = values[setting.name] else { continue }
+                    if let keyPath = setting.aiFlag, case let .boolean(flag) = value { configuration[keyPath: keyPath] = flag }
+                    setting.aiWrite?(&configuration, value)
+                }
             }
-            SGSimpleSettings.shared.synchronizeShared()
+        }
+        for setting in self.settings {
+            if let value = values[setting.name] { setting.write?(value) }
         }
     }
 

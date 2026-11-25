@@ -6,6 +6,7 @@ import ChatPresentationInterfaceState
 import ChatControllerInteraction
 import ChatInputContextPanelNode
 import SGSimpleSettings
+import SGMath
 
 private func inputQueryResultPriority(_ result: ChatPresentationInputQueryResult) -> (Int, Bool) {
     switch result {
@@ -50,17 +51,7 @@ func textInputContextPanel(context: AccountContext, chatPresentationInterfaceSta
         let inputState = chatPresentationInterfaceState.interfaceState.effectiveInputState
         let selection = inputState.selectionRange
         let sourceText = inputState.inputText.string
-        let options = ExteraMathEngine.Options(
-            degrees: ExteraMathSettings.shared.inlineAngleUnit == .degrees,
-            grouping: ExteraMathSettings.shared.inlineDigitGrouping,
-            decimalSeparator: Locale.current.decimalSeparator ?? ".",
-            units: ExteraMathSettings.shared.inlineUnits,
-            currencies: ExteraMathSettings.shared.inlineCurrencies,
-            timeZones: ExteraMathSettings.shared.inlineTimeZones,
-            arithmetic: ExteraMathSettings.shared.inlineMathResult,
-            imperial: ExteraMathSettings.shared.inlineImperial,
-            localCurrency: ExteraMathSettings.shared.resolvedTargetCurrency
-        )
+        let options = ExteraMathEngine.Options(settings: ExteraMathSettings.shared)
         // The line must be a complete expression or conversion; @bot queries,
         // commands and prose cannot steal the existing context-result surface.
         if selection.isEmpty, let suggestion = ExteraMathEngine.suggestion(in: sourceText, caret: selection.lowerBound, options: options) {

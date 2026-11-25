@@ -7,6 +7,9 @@ import Foundation
 
 /// A deterministic, bounded calculator that can also supply composer suggestions.
 public enum ExteraMathEngine {
+    public static var supportedCurrencyCodes: [String] {
+        return ExteraMathUnits.supportedCurrencyCodes.sorted()
+    }
     public struct Options {
         public var degrees: Bool
         public var grouping: Bool

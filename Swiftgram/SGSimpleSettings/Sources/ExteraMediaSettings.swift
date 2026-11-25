@@ -15,6 +15,9 @@ public final class ExteraMediaSettings: @unchecked Sendable {
             "extera.media.pauseOnMinimizeVoice": false,
             "extera.media.pauseOnMinimizeRound": false,
             "extera.media.askVideoMessagesCamera": false,
+            "extera.media.zoomSlider": true,
+            "extera.media.staticZoom": false,
+            "extera.media.unmuteWithVolumeButtons": false,
             // Preserve AyuGram's existing camera memory by default.
             "extera.media.rememberLastUsedCamera": true
         ])
@@ -59,6 +62,33 @@ public final class ExteraMediaSettings: @unchecked Sendable {
     public var rememberLastUsedCamera: Bool {
         get { return self.store.bool("extera.media.rememberLastUsedCamera") }
         set { self.store.setBool(newValue, "extera.media.rememberLastUsedCamera") }
+    }
+
+    /// Show a zoom control below the live round-video camera preview.
+    public var zoomSlider: Bool {
+        get { return self.store.bool("extera.media.zoomSlider") }
+        set { self.store.setBool(newValue, "extera.media.zoomSlider") }
+    }
+
+    /// Keep the current round-video zoom when a pinch or slider gesture ends.
+    /// The value belongs to the active lens and recording session, not a persisted startup zoom.
+    public var staticZoom: Bool {
+        get { return self.store.bool("extera.media.staticZoom") }
+        set { self.store.setBool(newValue, "extera.media.staticZoom") }
+    }
+
+    /// iOS adaptation: an observed system-volume change unmutes an actively playing gallery video.
+    /// Public APIs cannot consume hardware volume keys or identify their event source.
+    public var unmuteWithVolumeButtons: Bool {
+        get { return self.store.bool("extera.media.unmuteWithVolumeButtons") }
+        set { self.store.setBool(newValue, "extera.media.unmuteWithVolumeButtons") }
+    }
+
+    /// Ignore initial/no-op observations, invalid samples and changes to zero volume.
+    public static func shouldUnmuteVideo(previousVolume: Float, volume: Float) -> Bool {
+        return previousVolume.isFinite && volume.isFinite
+            && (0.0 ... 1.0).contains(previousVolume) && (0.0 ... 1.0).contains(volume)
+            && volume > 0.0 && abs(volume - previousVolume) > 0.0001
     }
 
     /// 0 = front, 1 = rear, 2 = ask before starting a recording.

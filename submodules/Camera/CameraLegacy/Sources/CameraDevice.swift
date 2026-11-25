@@ -299,6 +299,22 @@ final class CameraDevice {
         return self.videoDevice?.videoZoomFactor
     }
 
+    var zoomState: CameraZoomState? {
+        guard let device = self.videoDevice else { return nil }
+        return CameraZoomState(minimum: device.minAvailableVideoZoomFactor, maximum: device.maxAvailableVideoZoomFactor, neutral: device.neutralZoomFactor, value: device.videoZoomFactor)
+    }
+
+    func updateZoom(_ update: CameraZoomUpdate) -> CameraZoomState? {
+        guard let device = self.videoDevice, let state = self.zoomState else { return nil }
+        if let target = state.target(for: update) {
+            self.transaction(device) { device in
+                device.cancelVideoZoomRamp()
+                device.videoZoomFactor = self.clampedZoomFactor(target, for: device)
+            }
+        }
+        return self.zoomState
+    }
+
     func setZoomFactor(_ zoomFactor: CGFloat) {
         guard let device = self.videoDevice else {
             return

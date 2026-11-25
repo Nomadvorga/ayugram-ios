@@ -518,6 +518,26 @@ final class CameraNeo: NSObject, CameraProtocol {
         }
     }
 
+    func updateZoom(_ update: CameraZoomUpdate, completion: @escaping (CameraZoomState?) -> Void) {
+        self.sessionQueue.async { [weak self] in
+            guard let self, !self.isInvalidated, let device = self.activeDevice else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            func snapshot() -> CameraZoomState? {
+                return CameraZoomState(minimum: device.minAvailableVideoZoomFactor, maximum: device.maxAvailableVideoZoomFactor, neutral: 1.0, value: device.videoZoomFactor)
+            }
+            if let target = snapshot()?.target(for: update) {
+                self.withLockedDevice(device) { device in
+                    device.cancelVideoZoomRamp()
+                    device.videoZoomFactor = self.clampedZoom(target, device: device)
+                }
+            }
+            let state = snapshot()
+            DispatchQueue.main.async { completion(state) }
+        }
+    }
+
     func rampZoom(_ zoomLevel: CGFloat, rate: CGFloat) {
         self.sessionQueue.async { [weak self] in
             guard let self, let device = self.activeDevice else {

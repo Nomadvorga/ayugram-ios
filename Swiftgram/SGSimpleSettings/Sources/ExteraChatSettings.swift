@@ -51,6 +51,8 @@ public final class ExteraChatSettings {
             Self.key(.hideKeyboardOnScroll): false,
             Self.key(.swipeToReplyIncoming): true,
             Self.key(.swipeToReplyOutgoing): true,
+            // Sentinel preserves the legacy setting without disk reads during layout.
+            Self.key(.channelBottomButton): -1,
         ])
     }
 
@@ -64,13 +66,14 @@ public final class ExteraChatSettings {
         set { self.store.setInt(newValue.rawValue, Self.key(.doubleTapOutgoing)) }
     }
 
-    /// Leave the enum key unregistered so its absence can fall back to the legacy preference.
+    /// The unset sentinel falls back to the legacy preference through the cached store.
     public var channelBottomButton: ChannelBottomButton {
         get {
-            guard self.store.userDefaults.object(forKey: Self.key(.channelBottomButton)) != nil else {
+            let rawValue = self.store.int(Self.key(.channelBottomButton))
+            guard rawValue != -1 else {
                 return SGSimpleSettings.shared.hideChannelBottomButton ? .hidden : .mute
             }
-            return ChannelBottomButton(rawValue: self.store.int(Self.key(.channelBottomButton))) ?? .mute
+            return ChannelBottomButton(rawValue: rawValue) ?? .mute
         }
         set { self.store.setInt(newValue.rawValue, Self.key(.channelBottomButton)) }
     }

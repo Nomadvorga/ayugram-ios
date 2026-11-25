@@ -1,57 +1,177 @@
-# Feed settings and explicit channel read action
+# exteraGram local feed integration handoff
 
-2026-11-25. Implementation confined to `ExteraFeedController.swift`, `ExteraFeedSettings.swift`, `Tests/ExteraFeed`, and this document. Root-owned settings, localization, navigation, and the feed loader are unchanged by this work.
+2026-11-25. This work changes the feed controller/context/settings, adds native post
+and category controls, extends the existing AccountContext feed interface and its
+TelegramUI implementation, and adds model tests. No commit or push. Settings root,
+navigation host, localization tables, backup and BUILD files are owned by the root
+integration agent and were not edited here. The host CI feed command received only
+the new production history-policy source argument; other agents' changes remain.
 
-## Reference and behavior
+## Implemented behavior
 
-Read screenshots 09, 10, 11, 13 directly and the existing 01–22 inventory. Read root CLAUDE/AGENTS and TelegramCore State/Messages guides. Android behavior was inspected with `git show HEAD:…` in `C:\Users\PC\exteragram-reference`: `feed/ui/FeedChannelsActivity.kt`, `feed/FeedUnreadTracker.java`, and `ExteraConfig.kt` (the feed directory is not checked out by the sparse checkout). Android defaults confirm wide posts and unread counter default to true; bottom tab defaults to false.
+- `ExteraFeedPostItem` hosts the real `SharedAccountContext.makeChatMessageFeedItem`
+  / `ChatMessageItemImpl`. Original photos, videos, round videos, captions, entities,
+  custom emoji, reaction attributes and comment attributes reach Telegram's bubble.
+  There are no URL thumbnails or placeholder media. Albums use a stable peer/group
+  identity and preserve all loaded members when any member matches Unread Only.
+  History/window boundaries can still yield a partial album until another page loads.
+- A channel/date header opens the source post. The native bubble opens the ordinary
+  media viewer, links, peers, reply targets and Instant View. The media viewer uses
+  no custom zoom transition; its existing native presentation handles opening/closing.
+- Interactive feed bubbles retain their native status line and use regular reaction
+  placement. The old News caller has default action parameters and keeps its existing
+  hidden-status layout. Photo/video media stay in the exteraGram bubble; no News API
+  is enabled and News' separate media-gallery renderer is not used.
+- Reaction chips toggle actual engine reactions. The plus button and chip context
+  action open Telegram's `ContextController` with `topMessageReactions`, including
+  channel-permitted custom emoji and the native expanded selector when necessary.
+  Mutation reads the latest stored message, checks `canAddMessageReactions` and
+  `peerMessageAllowedReactions`, allows removal of an existing selection, and uses
+  `addMessageReactions` / `setMessageReactions`. The engine applies its normal account
+  reaction-count limits and album updates. The feed subscribes to stored messages so
+  pending/local/server reaction changes redraw the native chips.
+- Selecting Stars opens the original post so the user can use the channel's native
+  paid-reaction interface. This bridge never calls a Stars payment API and never
+  silently charges a paid reaction. Opening the source is not payment confirmation.
+- The native comments pill calls `ChatControllerImpl.openMessageReplies` with
+  `isChannelPost: true`, using its existing discussion lookup, preload, progress and
+  error handling. It opens the actual discussion thread, including on first access.
+- Autodownload uses the shared current settings, `.channel`, the real channel ID and
+  the account network-type signal (the chat's same none/Wi-Fi versus cellular mapping).
+  Network and download-setting changes invalidate rows. Telegram's nodes retain their
+  usual resource fetching, download controls, spoilers and autoplay behavior. Media
+  visibility is restricted to the host row's visible rectangle and active page/app;
+  push/tab disappearance, scrolling offscreen, removal and background stop playback.
+- Horizontal category tabs switch the current feed controller in place. Hidden
+  categories stay in the editor and retain their position/membership; hiding the
+  selected category falls back to Main Feed. Eye controls toggle visibility separately
+  from opening the editor. Native ItemList reorder handles persist stable category IDs;
+  up/down actions remain available in the category detail screen.
+- The registry enumerates **all local root/archive channels** through
+  `getAllLocalChannels(count: Int.max)`, subscribes to their peer/group data, and keeps
+  subscribed broadcast channels only. Activation, Refresh and root/archive chat-list
+  changes re-enumerate the registry. There is no 40-channel selection/history cap or
+  2,000-chat scan cap. Channels absent from the device's local chat lists cannot be
+  discovered by this local API; no claim of server-wide subscription discovery is made.
+- Select All uses the full current registry, including matches outside search. Empty,
+  archived and category selections remain independent. History requests run with at
+  most four in flight. The existing 100 messages/channel, 1,000 visible messages, manual
+  Load Older/Refresh and uncertain-history retry limits remain. Counters describe
+  **loaded unread messages**, not the Android total unread count. A channel frontier
+  prevents known older pages being published ahead of another channel's pending page.
 
-- Feed settings now contain working persisted wide-post and unread-counter toggles. Wide posts use the existing plain/full-width item-list presentation instead of grouped post cards. The counter remains explicitly labelled **loaded unread posts**; this work does not claim the Android total-unread-counter implementation.
-- The channel picker has a native editable search row with a clear button and Search return key. Search trims whitespace and matches channel titles case-insensitively. Selected and unselected matches appear in separate sections, with real peer avatars. Selection uses a right-hand checkmark supported by the existing item; it does not reproduce Android's left circular checkbox.
-- The selection action sheet has Select All / Deselect All and an iPad popover anchor. Select All replaces membership with all **loaded** channels, including those outside the search. Deselect All clears the entire main/category selection, including unavailable channels. Main/category membership remains independent. The selection is no longer silently constrained to 40; the unchanged history loader still limits loading to 40 and displays its limit notice. Load More Channels retains the existing scan limits.
-- Main settings list categories and the create-category action directly. Existing category editing, hide, and up/down actions remain available. Drag reorder and category tabs are not implemented here.
-- Read All captures the selected category/main-feed scope before showing confirmation. Cancel has no handler and mutates no state. Confirmation calls `togglePeersUnreadMarkInteractively(peerIds:setToValue: false)` for only selected, currently subscribed eligible channels, excluding archive unless enabled. Its scope includes channels without loaded posts and channels beyond the history loader's 40-channel cap, within the channel registry's existing scan window. It never calls the account-wide `markAllChatsAsRead`.
-- That engine method uses the same persisted interactive read operation as the chat-list Mark as Read, including the server-known top ID and ordinary synchronization/retries. The callback means the local operation has been enqueued, not that a server acknowledgement arrived. It is started with `startStandalone` so navigation does not cancel the enqueue. Known loaded IDs advance local feed cursors monotonically after that transaction completes. No `Int32.max` sentinel is persisted to suppress future posts.
-- For channels whose read state is hidden by AyuGram, ordinary synchronization deliberately skips the request. The confirmed action therefore also calls the existing public `ayuReadHistoryOnServer(account:peerId:maxId:)` for those peers only. This is the same explicit ghost bypass as Read Message. Its server-only max ID (`Int32.max - 1`) means read through the server's current top; it is never stored in feed settings. **Existing helper limitation:** it returns Void, catches RPC errors internally, and does not persist/retry a failed bypass. Source-channel acknowledgement/offline retry under ghost mode cannot be guaranteed within these permitted files. A durable explicit-read queue would need TelegramCore work. The UI does not display a server-success acknowledgement.
-- The feed subscribes to TelegramEngine read counters for peers represented in the loaded post window, so source-channel reads also suppress unread badges/filter matches for posts loaded later. Channel-selection/category settings install no such subscription. Reading a feed page alone does not enqueue source-channel reads.
+## Read behavior retained
 
-## API for the root agent
+Opening the original post advances the local feed cursor. Merely viewing the feed or
+opening its media does not enqueue a source-channel read. Engine read counters also
+remove feed unread marks after the source channel was read elsewhere.
 
-```swift
-ExteraFeedSettings.shared.widePosts = value
-let wide = ExteraFeedSettings.shared.widePosts
-ExteraFeedSettings.shared.showUnreadCounter = value
-```
+Read All captures the eligible selection before its confirmation alert and enqueues
+`togglePeersUnreadMarkInteractively(peerIds:setToValue: false)`. It includes unloaded
+selected channels and excludes archive unless enabled. The engine reads to the server's
+known top through the normal persistent sync path. The completion means local enqueue,
+not server acknowledgement; local cursors advance only through known loaded IDs.
 
-`shared` is a `PresentationSettings` singleton, intentionally distinct from the existing `ExteraFeedSettings(accountId:)` account-state object. Both bools live in the app-group-backed `AyuSettingsStore`, post its normal notification, and default to true. Keys are `extera.feed.widePosts` and `extera.feed.showUnreadCounter`. No account JSON schema change or fake singleton account ID is introduced. The root's feed-wide setting should use this API rather than `ExteraSettings.shared.wideChannelPosts`.
+For peers hidden by AyuGram ghost settings, confirmation also uses the existing
+`ayuReadHistoryOnServer` explicit bypass with its server-only `Int32.max - 1` sentinel.
+The sentinel is never persisted as a feed cursor. **Existing limitation:** this helper
+returns Void, swallows RPC failures and has no durable retry queue. Offline ghost-mode
+source-read acknowledgement is not guaranteed; the UI makes no success claim.
 
-The bottom-tab toggle is **not exposed**: replacing Contacts requires a real navigation host/consumer outside the permitted files. Adding a stored flag without that consumer would create an inert setting. Inline media, download buttons, reaction/comment controls, wallpaper, and floating headers from screenshot 08 remain a renderer integration task; this change does not draw dummy previews.
+## Root integration requirements
 
-## Root-owned localization handoff
+1. Add `//submodules/AsyncDisplayKit:AsyncDisplayKit` to **SGSettingsUI**'s BUILD deps.
+   Both new `ExteraFeed*Item.swift` files import it. SGSettingsUI already depends on
+   AccountContext, Display, ItemListUI, SGSimpleSettings, SGStrings, SwiftSignalKit,
+   TelegramCore, TelegramPresentationData and TelegramUIPreferences. No dependency on
+   TelegramUI may be added to SGSettingsUI: the three new shared-context bridge methods
+   intentionally keep the existing dependency direction.
+2. New `SharedAccountContextExteraFeed.swift` is picked up by TelegramUI's Sources
+   glob. It uses AccountContext, ChatMessageItemCommon, ContextUI, Display,
+   EntityKeyboard, ReactionSelectionNode, SwiftSignalKit, TelegramCore,
+   TelegramPresentationData and TopMessageReactions. These modules are already used
+   by TelegramUI's normal chat sources; verify the full Bazel build resolves the
+   same module visibility. Do not register another navigation factory in this file.
+3. `ExteraFeedHistoryPolicy.swift` is picked up by SGSimpleSettings' source glob.
+   Its exact source is also passed to the host tests and feed CI command.
+4. Public bridge additions to SharedAccountContext:
+   `presentExteraFeedReactionMenu`, `updateExteraFeedReaction`, `openExteraFeedReplies`.
+   Each returns a Disposable. The action object gains defaulted `availableReactions`,
+   `mediaAutoDownloadNetworkType`, `updateReaction`, `openReactionMenu`, `openReplies`.
+   Existing callers need no argument changes. Any independent test mock implementing
+   SharedAccountContext must implement the new protocol methods.
+5. Preserve the other agent's navigation host. Public entry points remain
+   `exteraFeedController(context:)` and `exteraFeedSettingsController(context:)`.
+   There is no `news_feed_enabled`/dev/parked-API gate on this local feed; account
+   login and local subscribed channels are required. Paid stars require opening
+   the original channel. Reactions/comments follow ordinary Telegram permissions.
+6. Device preferences remain `ExteraFeedSettings.shared.widePosts` and
+   `.showUnreadCounter`, both default true. Keys: `extera.feed.widePosts`,
+   `extera.feed.showUnreadCounter`. Account JSON key/schema remains
+   `extera.feed.account.<record-id>.v1`; category visibility/order use existing fields.
+   The bottom-tab setting belongs to the navigation agent; no new inert flag is added.
 
-New keys use English fallbacks until root adds these entries to SGStrings. Existing keys are reused for archive/categories/etc.
+## Localization handoff
+
+The controller uses SGStrings `i18n` with English fallbacks. Root should merge these
+new/changed keys into en/ru tables; do not retain the old cap40 or text-only descriptions.
 
 | Key | English | Russian |
 | --- | --- | --- |
-| Extera.FeedSettings | Feed Settings | Настройки ленты |
-| Extera.FeedGeneral | General | Основные |
-| Extera.FeedWidePosts | Wide Posts in Feed | Широкие посты в ленте |
-| Extera.FeedUnreadCounter | Unread Post Counter | Счётчик непрочитанных постов |
-| Extera.FeedSearchChannels | Search Channels | Поиск каналов |
-| Extera.FeedShownChannels | Shown in Feed | Показаны в ленте |
-| Extera.FeedHiddenChannels | Hidden from Feed | Скрыты из ленты |
-| Extera.FeedNoMatchingChannels | No matching channels. | Каналы не найдены. |
-| Extera.FeedSelectionMenu | Selection | Выбор каналов |
-| Extera.FeedSelectAll | Select All | Выбрать все |
-| Extera.FeedDeselectAll | Deselect All | Снять выделение |
-| Extera.FeedMarkAllRead | Read All | Прочитать все |
-| Extera.FeedConfirmMarkRead | Mark as Read | Пометить прочитанным |
-| Extera.FeedMarkAllReadInfo | Mark all posts in the feed's channels as read? They will also be marked as read in the original channels. | Отметить все посты в каналах ленты прочитанными? Они также будут отмечены прочитанными в исходных каналах. |
-| Extera.FeedBulkSelectionInfo | Select All includes every loaded channel, including channels outside the search. A feed loads up to 40 channels at a time; use categories for larger selections. | «Выбрать все» включает все загруженные каналы, в том числе вне результатов поиска. Лента загружает до 40 каналов; для большего числа используйте категории. |
-| Extera.FeedReadBehaviorInfo | Opening a post marks it and earlier posts in that channel as read in the feed. Read All asks for confirmation, then also marks the selected original channels as read. Use Refresh to fetch new posts. Photos, videos, and the full post open in the original channel. | Открытие поста отмечает его и более ранние посты канала прочитанными в ленте. «Прочитать все» запрашивает подтверждение, затем отмечает прочитанными и выбранные исходные каналы. Нажмите «Обновить» для загрузки новых постов. Фото, видео и полный текст открываются в исходном канале. |
+| Extera.FeedFullSelectionInfo | Select All includes every subscribed channel in the local registry, including channels outside the search. | «Выбрать все» включает все подписанные каналы локального списка, в том числе вне результатов поиска. |
+| Extera.FeedMediaReadBehaviorInfo | Photos and videos use Telegram's media controls and download settings. Opening the original post marks it read in this feed. Read All asks for confirmation before also marking the selected original channels as read. | Фото и видео используют элементы управления и настройки загрузки Telegram. Открытие исходного поста отмечает его прочитанным в ленте. «Прочитать все» запрашивает подтверждение перед отметкой выбранных исходных каналов прочитанными. |
+| Extera.FeedCategoryHidden | Hidden | Скрыта |
+| Extera.FeedCategoryVisible | Visible | Видна |
 
-## Validation and remaining Mac checks
+Earlier settings/read-action keys remain required: `Extera.FeedSettings`,
+`FeedGeneral`, `FeedWidePosts`, `FeedUnreadCounter`, `FeedSearchChannels`,
+`FeedShownChannels`, `FeedHiddenChannels`, `FeedNoMatchingChannels`,
+`FeedSelectionMenu`, `FeedSelectAll`, `FeedDeselectAll`, `FeedMarkAllRead`,
+`FeedConfirmMarkRead`, `FeedMarkAllReadInfo` (all under `Extera.`). Native reaction
+menu/plus accessibility labels reuse generated Telegram strings.
 
-Tree-sitter Swift parses the production model, controller, and XCTest file without errors; `git diff --check` passes. Swift/Xcode and an iOS simulator are unavailable on this Windows host. These checks are syntax/whitespace checks, not compilation, network testing, or visual validation. Run the existing Mac/CI command in `Tests/ExteraFeed/README.md`; six added model tests cover persistence/isolation of presentation flags, bulk membership above 40, stale categories, archive/category read scope with unloaded channels, and monotonic bounded read cursors.
+## Validation and acceptance gates
 
-Before recording on Mac, expected frames: typing filters channel rows while preserving selection; clearing restores both sections; checking a channel moves it between sections without losing the query; category creation/edit/back returns consistently; wide changes the grouped/full-width post presentation; disabling counter removes only the counter; Read All dims the feed and shows Cancel/Mark as Read; Cancel leaves badges and source channels unchanged; confirm clears the selected source channels while excluded/archive channels remain unread. Record these paths in light/dark and narrow/wide layouts per AGENTS.md, inspect labelled frames, and check iPad action-sheet anchoring and keyboard insets. With ghost suppression off, verify offline confirmation queues read sync and reconnect sends it. With ghost suppression on, verify an online confirmed read sends the explicit bypass and Cancel sends none; offline bypass retains the existing helper limitation above. Mark a channel read elsewhere then load older posts and verify they remain read; a later new post must remain unread. No runtime/visual parity claim is made here.
+On this Windows host, tree-sitter parses all ten production/interface/test Swift
+files and `git diff --check` checks the changed tracked files. These are syntax and
+whitespace checks only. Swift/Xcode/XCTest/iOS Simulator are unavailable: the full
+app is **not typechecked**, the 22 host tests are **not executed** here, and visual
+behavior is **not verified**. Run `Tests/ExteraFeed/README.md`'s exact host command,
+then the full Make.py app build from CLAUDE.md after adding the BUILD dependency.
+
+Before recording, expected frames per AGENTS.md:
+
+- Photos, videos, round videos and multi-photo/mixed albums occupy their native
+  bubble bounds, without clipping, mirrored content, duplicate attachments or a
+  frame of zero-height content. Header and date stay above the bubble; reaction
+  controls/comments stay below their own content. Wide/narrow cards keep side insets
+  consistent in light/dark, portrait/landscape and iPad layouts.
+- Media viewer opens and closes using its native transition. Returning leaves the
+  same post in place. A video moving offscreen or a push/tab/background transition
+  stops playback; returning resumes only visible eligible media. Test separately
+  with autodownload/autoplay enabled and disabled, Wi-Fi and cellular settings.
+- The reaction panel appears at its button/chip; expanding the allowed emoji panel
+  keeps it inside safe areas. Choosing/removing an emoji updates that chip without
+  replacing the whole album/card or jumping the scroll position. Test allowed,
+  disallowed, custom emoji, many permitted emoji, existing selected reactions,
+  disabled channel reactions and Premium/non-Premium accounts. Stars navigate to
+  the source post; no payment is triggered from the feed.
+- Tapping comments presents native loading/error/thread UI and opens that post's
+  discussion, with back returning to the feed. Test a cold cache, a cached reopen,
+  zero-comment post and a removed/inaccessible discussion group.
+- Selecting a category changes the selected tab and posts within the same controller
+  without stacking another feed screen. Dragging moves one row between neighbors;
+  neighbors move together, no row duplicates or disappears. Eye taps never start a
+  drag/open action. Hidden tabs disappear, their editor row stays at its stored
+  position, and revealing restores that position. Test hidden selected categories.
+- Search/select-all work beyond 40 selected channels and beyond 2,000 locally listed
+  chats. Load Older adds posts below the known frontier; offline Refresh retains
+  usable content and offers retry. Category/archive changes cancel obsolete work.
+- Read All dims the feed with Cancel/Mark as Read; Cancel changes no read state.
+  Confirm clears only the captured eligible source channels. Future posts remain
+  unread. Test source reads elsewhere and offline reconnect (ghost helper caveat above).
+
+Record each applicable open/close path in light/dark, optional content present/absent,
+and real speed. Use `simctl io recordVideo`, `tools/animation_sheet.py`, inspect every
+labelled frame sheet and flagged frame, and report evidence by frame index/timestamp.
+No recording or frame-based acceptance claim is made in this handoff.

@@ -20,7 +20,7 @@ class BackupSourceChecks(unittest.TestCase):
                     self.assertRegex(BACKUP, rf"(?:\.{key}\b|[.\"]{key}\")")
 
     def test_all_new_singleton_properties_covered(self):
-        derived = {"resolvedTargetCurrency", "sizeCoefficient", "recentStickersLimit"}
+        derived = {"resolvedTargetCurrency", "resolvedImperial", "sizeCoefficient", "recentStickersLimit"}
         for file in ["ExteraGeneralSettings.swift", "ExteraMathSettings.swift", "ExteraTranslationSettings.swift", "ExteraMediaSettings.swift", "ExteraBrowserSettings.swift", "ExteraStickerSettings.swift", "ExteraPlayerSettings.swift"]:
             source = (SOURCES / file).read_text(encoding="utf-8")
             for key in re.findall(r"public var (\w+):", source):
@@ -35,7 +35,7 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertNotIn("UserDefaults", BACKUP)
 
     def test_explicit_names_unique(self):
-        names = re.findall(r'(?:Setting\(name:|boolean\(|integer\(|text\()\s*"(extera\.[^"]+)"', BACKUP)
+        names = re.findall(r'(?:Setting\(name:|boolean\(|aiBoolean\(|aiTemperature\(|aiSummaryPolicy\(|integer\(|text\()\s*"(extera\.[^"]+)"', BACKUP)
         for helper, name in re.findall(r'\b(simpleBoolean|simpleInteger|simpleString|exteraBoolean)\(\.(\w+)', BACKUP):
             names.append(("extera." if helper == "exteraBoolean" else "simple.") + name)
         self.assertEqual(len(names), len(set(names)))
@@ -76,6 +76,29 @@ class BackupSourceChecks(unittest.TestCase):
             self.assertEqual(body.count("AyuSettingsStore.shared.performBatchUpdates"), 1)
             self.assertEqual(body.count("SGSimpleSettings.shared.synchronizeShared()"), 1)
         self.assertNotIn("NotificationCenter.default.post", BACKUP)
+
+    def test_ai_backup_has_only_portable_generation_preferences(self):
+        names = re.findall(r'aiBoolean\("([^"]+)", \\.(\w+)(?:, defaultValue: false)?\)', BACKUP)
+        self.assertEqual(names, [("extera.ai." + flag, flag) for flag in ["showEditor", "showSummaries", "showInstantViewSummaries", "showResponseOnly", "insertAsQuote"]])
+        self.assertIn('aiTemperature("extera.ai.temperatureTenths")', BACKUP)
+        self.assertIn('aiSummaryPolicy("extera.ai.replaceTelegramSummaries")', BACKUP)
+        self.assertNotIn('"extera.ai.configuration.v1"', BACKUP)
+        self.assertNotIn("try?", BACKUP)
+        write = BACKUP.split("private static func write(", 1)[1].split("private static func rejectDuplicateKeys", 1)[0]
+        self.assertLess(write.index("try ExteraAISettings.shared.update"), write.index("setting.write?(value)"))
+        self.assertIn("public static func apply(_ backup: ValidatedBackup) throws", BACKUP)
+        self.assertIn("public static func reset() throws", BACKUP)
+        for action in ["apply(backup)", "reset()"]:
+            self.assertIn("try ExteraSettingsBackup." + action, UI)
+
+    def test_ai_cache_publishes_only_valid_configuration(self):
+        ai = (SOURCES / "ExteraAISettings.swift").read_text(encoding="utf-8")
+        getter = ai.split("public var configuration:", 1)[1].split("public func update", 1)[0]
+        self.assertLess(getter.index("self.cachedConfiguration"), getter.index("JSONDecoder()"))
+        update = ai.split("public func update", 1)[1].split("private func persist", 1)[0]
+        self.assertLess(update.index("JSONEncoder().encode(value)"), update.index("self.cachedConfiguration = value"))
+        self.assertLess(update.index("data.count <= 1024 * 1024"), update.index("self.cachedConfiguration = value"))
+        self.assertLess(update.index("self.cachedConfiguration = value"), update.index("self.store.setString"))
 
     def test_native_file_flow_and_confirmation(self):
         for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumFileSize + 1", "confirmReset()", "confirmImport(backup)", "ExteraSettingsBackup.apply(backup)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:

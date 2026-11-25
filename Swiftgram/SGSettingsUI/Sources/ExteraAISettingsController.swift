@@ -20,37 +20,134 @@ private enum ExteraAIRow {
 
 /// The settings integration entry point. Push it with the existing native NavigationController.
 public func exteraAISettingsController(context: AccountContext) -> ViewController {
-    return ExteraAIList.make(context: context, title: "AI", build: { page in
+    return ExteraAIHomeController(context: context)
+}
+
+private final class ExteraAIHomeController: ExteraAINativeController, UIScrollViewDelegate {
+    private let page: ExteraAIList
+    private let stack = UIStackView()
+    private var observer: NSObjectProtocol?
+    private var sizeObserver: NSObjectProtocol?
+    private var temperature: ExteraAITemperatureView?
+    private var savingTemperature = false
+    private weak var heroTitle: UILabel?
+
+    init(context: AccountContext) {
+        self.page = ExteraAIList(context: context)
+        super.init(context: context, title: "")
+        self.page.controller = self
+        self.observer = NotificationCenter.default.addObserver(forName: ExteraAISettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self, !self.savingTemperature else { return }
+            self.rebuild()
+        })
+        self.sizeObserver = NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in self?.rebuild() })
+    }
+
+    required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit {
+        if let observer = self.observer { NotificationCenter.default.removeObserver(observer) }
+        if let observer = self.sizeObserver { NotificationCenter.default.removeObserver(observer) }
+    }
+
+    override func buildContent() {
+        self.install(self.stack)
+        self.contentScrollView.delegate = self
+        self.rebuild()
+    }
+
+    override func applyTheme(_ data: PresentationData) {
+        super.applyTheme(data)
+        self.rebuild()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard let heroTitle = self.heroTitle else { return }
+        let threshold = heroTitle.convert(heroTitle.bounds, to: self.stack).maxY + self.stack.frame.minY
+        self.title = scrollView.contentOffset.y > threshold ? self.text("AI Chat", "Чат с ИИ") : ""
+    }
+
+    private func rebuild() {
+        guard self.isViewLoaded, self.temperature?.slider.isTracking != true else { return }
         let config = ExteraAISettings.shared.configuration
-        let selected = config.selectedService?.name ?? page.text("Not configured", "Не настроен")
-        var rows: [ExteraAIRow] = [
-            .action(.main, page.text("AI Chat", "Чат с ИИ"), .generic, { page.push(exteraAIChatController(context: context)) }),
-            .action(.main, page.text("Services", "Сервисы") + ": " + selected, .generic, { page.openServices() }),
-            .action(.main, page.text("Roles", "Роли") + ": " + (config.selectedRole?.name ?? page.text("None", "Нет")), .generic, { page.openRoles() }),
-            .action(.main, page.text("Message History", "История сообщений") + " (\(ExteraAISettings.shared.history(accountId: page.accountId).count))", .generic, { page.openHistory() }),
-        ]
-        if config.showEditor {
-            rows.append(.action(.main, page.text("Improve Text", "Улучшить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .improve)) }))
+        let theme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
+        for view in self.stack.arrangedSubviews { self.stack.removeArrangedSubview(view); view.removeFromSuperview() }
+        let robot = ExteraAIRobotView(frame: .zero)
+        robot.color = theme.list.itemPrimaryTextColor.withAlphaComponent(0.17)
+        robot.heightAnchor.constraint(equalToConstant: 92).isActive = true
+        let title = ExteraAISettingsViews.label(self.text("AI Chat", "Чат с ИИ"), theme: theme, style: .title1)
+        self.heroTitle = title
+        title.textAlignment = .center
+        let subtitle = ExteraAISettingsViews.label(self.text("Generate text from messages or before sending.", "Генерируйте текст по сообщениям или перед отправкой."), theme: theme, style: .subheadline, secondary: true)
+        subtitle.textAlignment = .center
+        let hero = UIStackView(arrangedSubviews: [robot, title, subtitle])
+        hero.axis = .vertical
+        hero.spacing = 10
+        self.stack.addArrangedSubview(ExteraAISettingsViews.padded(hero, vertical: 12))
+
+        self.header("General", "Основные")
+        let history = ExteraAISettings.shared.history(accountId: self.page.accountId)
+        let historyValue = !config.saveHistory ? self.text("Off", "Выкл.") : history.isEmpty ? self.text("None", "Нет") : String(history.count)
+        self.stack.addArrangedSubview(ExteraAISettingsViews.card([
+            ExteraAISettingsViews.action(title: self.text("Services", "Сервисы"), value: config.selectedService?.name ?? self.text("None", "Нет"), symbol: "globe", theme: theme, action: { [weak self] in self?.page.openServices() }),
+            ExteraAISettingsViews.action(title: self.text("Roles", "Роли"), value: config.selectedRole?.name ?? self.text("None", "Нет"), symbol: "person.crop.circle", theme: theme, action: { [weak self] in self?.page.openRoles() }),
+            ExteraAISettingsViews.action(title: self.text("Message History", "История сообщений"), value: historyValue, symbol: "bubble.left.and.bubble.right", theme: theme, action: { [weak self] in self?.page.openHistory() })
+        ], theme: theme))
+        self.note("Conversation history helps AI understand earlier requests and consider them when generating an answer.", "История диалога позволяет ИИ понимать предыдущие запросы и учитывать их при генерации новых ответов.")
+
+        self.header("Telegram AI", "ИИ Telegram")
+        self.stack.addArrangedSubview(ExteraAISettingsViews.card([
+            ExteraAISettingsViews.toggle(title: self.text("Editor", "Редактор"), subtitle: self.text("Translation, style and proofreading of drafts", "Перевод, смена стиля и проверка черновиков"), value: config.useForTextProcessing, theme: theme, update: { [weak self] value in self?.page.change { $0.useForTextProcessing = value } }),
+            ExteraAISettingsViews.toggle(title: self.text("Summaries", "Краткие сводки"), subtitle: self.text("Short summaries of long messages and posts", "Краткое содержание длинных сообщений и постов"), value: config.replacesTelegramSummaries(isPremium: self.context.isPremium), theme: theme, update: { [weak self] value in self?.page.change { $0.replaceTelegramSummaries = value } })
+        ], theme: theme))
+        self.note("Selected functions use your AI service instead of Telegram servers. Select and configure a service first. A separate translation provider takes precedence for translation.", "Выбранные функции используют ваш сервис ИИ вместо серверов Telegram. Сначала выберите и настройте сервис. Отдельный провайдер перевода имеет приоритет для перевода.")
+
+        self.header("Generation", "Генерация")
+        self.stack.addArrangedSubview(ExteraAISettingsViews.card([
+            ExteraAISettingsViews.toggle(title: self.text("Stream Responses", "Потоковая передача ответа"), subtitle: self.text("Display answers smoothly as they arrive.", "Обеспечивает более плавное и быстрое отображение ответов."), value: config.responseStreaming, theme: theme, update: { [weak self] value in self?.page.change { $0.responseStreaming = value } }),
+            ExteraAISettingsViews.toggle(title: self.text("Show Only Response", "Показывать только ответ"), value: config.showResponseOnly, theme: theme, update: { [weak self] value in self?.page.change { $0.showResponseOnly = value } }),
+            ExteraAISettingsViews.toggle(title: self.text("Insert Response as Quote", "Вставлять ответ как цитату"), value: config.insertAsQuote, theme: theme, update: { [weak self] value in self?.page.change { $0.insertAsQuote = value } })
+        ], theme: theme))
+
+        self.header("Temperature", "Температура")
+        let slider = ExteraAITemperatureView(value: config.temperature, title: self.text("Temperature", "Температура"), theme: theme)
+        slider.commit = { [weak self] value in
+            guard let self else { return }
+            self.savingTemperature = true
+            defer { self.savingTemperature = false }
+            do { try ExteraAISettings.shared.update { $0.temperature = value } } catch {
+                self.temperature?.setValue(ExteraAISettings.shared.configuration.temperature)
+                self.showError(error)
+            }
         }
-        if config.showSummaries {
-            rows.append(.action(.main, page.text("Summarize Text", "Сократить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .summarize)) }))
-        }
-        rows += [
-            .notice(.main, page.text("Messages are sent to your selected provider when you press Send. API keys are stored in this device’s Keychain. Chat history is stored locally and separately for each Telegram account.", "Сообщения отправляются выбранному провайдеру по нажатию «Отправить». Ключи API хранятся в Связке ключей устройства, история чата — локально и отдельно для каждого аккаунта Telegram.")),
-            .toggle(.options, page.text("Save Chat History", "Сохранять историю чата"), config.saveHistory, { value in page.change { $0.saveHistory = value } }),
-            .toggle(.options, page.text("Stream Responses", "Потоковые ответы"), config.responseStreaming, { value in page.change { $0.responseStreaming = value } }),
-            .toggle(.options, page.text("Use in Telegram Text Editor", "Использовать в редакторе Telegram"), config.useForTextProcessing, { value in page.change { $0.useForTextProcessing = value } }),
-            .notice(.options, page.text("When enabled, opening proofreading or translation, or applying a style/prompt, sends the editor text to your selected AI service. These requests never use or save chat history. Changed output is plain text; rich documents are rejected. A separately selected translation provider takes precedence for translation.", "При включении проверка, перевод текста и применение стиля или инструкции отправляют текст редактора выбранному сервису ИИ. Эти запросы не используют и не сохраняют историю чата. Изменённый результат — обычный текст; документы с расширенным форматированием не поддерживаются. Отдельно выбранный провайдер перевода имеет приоритет.")),
-            .action(.options, page.text("Temperature", "Температура") + ": " + String(format: "%.1f", config.temperature), .generic, {
-                page.input(title: page.text("Temperature (0–2)", "Температура (0–2)"), value: String(config.temperature), keyboard: .decimalPad, save: { text in
-                    guard let value = Double(text.replacingOccurrences(of: ",", with: ".")), value.isFinite, (0.0...2.0).contains(value) else { throw ExteraAIError.configuration(page.text("Enter a number from 0 to 2.", "Введите число от 0 до 2.")) }
-                    try ExteraAISettings.shared.update { $0.temperature = value }
-                })
-            }),
-            .notice(.options, page.text("Higher temperature makes answers more varied. Some models use their own temperature. Turning history off stops sending or saving earlier turns; it does not delete existing history.", "Чем выше температура, тем разнообразнее ответы. Некоторые модели используют собственную температуру. При отключённой истории предыдущие сообщения не отправляются и новые не сохраняются; старая история остаётся."))
-        ]
-        return rows
-    })
+        self.temperature = slider
+        self.stack.addArrangedSubview(ExteraAISettingsViews.card([slider], theme: theme))
+        self.note("Temperature controls randomness: higher values are more creative, lower values more precise. Some models choose their own temperature.", "Температура управляет случайностью ответа: чем выше значение, тем креативнее ответ; чем ниже — тем точнее. Некоторые модели используют собственную температуру.")
+
+        self.header("Try AI", "Попробовать ИИ")
+        var actions = [ExteraAISettingsViews.action(title: self.text("AI Chat", "Чат с ИИ"), value: "", symbol: "bubble.left", theme: theme, action: { [weak self] in
+            guard let self else { return }; self.page.push(exteraAIChatController(context: self.context))
+        })]
+        if config.showEditor { actions.append(ExteraAISettingsViews.action(title: self.text("Improve Text", "Улучшить текст"), value: "", symbol: "pencil", theme: theme, action: { [weak self] in
+            guard let self else { return }; self.page.push(exteraAITextProcessingController(context: self.context, text: "", action: .improve))
+        })) }
+        if config.showSummaries { actions.append(ExteraAISettingsViews.action(title: self.text("Summarize Text", "Сократить текст"), value: "", symbol: "text.alignleft", theme: theme, action: { [weak self] in
+            guard let self else { return }; self.page.push(exteraAITextProcessingController(context: self.context, text: "", action: .summarize))
+        })) }
+        self.stack.addArrangedSubview(ExteraAISettingsViews.card(actions, theme: theme))
+        self.note("Nothing is sent from this page. In AI Chat and text processing, press Send to share the entered text with your selected service. API keys stay in this device’s Keychain.", "С этой страницы текст не отправляется. В чате и обработке текста нажмите «Отправить», чтобы передать введённый текст выбранному сервису. Ключи API хранятся в Связке ключей устройства.")
+    }
+
+    private func header(_ english: String, _ russian: String) {
+        let theme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
+        let label = ExteraAISettingsViews.label(self.text(english, russian), theme: theme, style: .subheadline)
+        label.textColor = theme.list.itemAccentColor
+        self.stack.addArrangedSubview(ExteraAISettingsViews.padded(label, vertical: 6))
+    }
+
+    private func note(_ english: String, _ russian: String) {
+        let theme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
+        self.stack.addArrangedSubview(ExteraAISettingsViews.padded(ExteraAISettingsViews.label(self.text(english, russian), theme: theme, style: .footnote, secondary: true), vertical: 2))
+    }
 }
 
 private final class ExteraAIServiceDraft {
@@ -121,7 +218,7 @@ private final class ExteraAIList {
     }
 
     func text(_ english: String, _ russian: String) -> String {
-        return self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.hasPrefix("ru") ? russian : english
+        return ExteraAIStrings.text(english, russian, language: self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode)
     }
 
     func push(_ controller: ViewController) { (self.controller?.navigationController as? NavigationController)?.pushViewController(controller) }
@@ -345,7 +442,8 @@ private final class ExteraAIList {
     func openHistory() {
         self.push(Self.make(context: self.context, title: self.text("Message History", "История сообщений"), build: { page in
             let history = ExteraAISettings.shared.history(accountId: page.accountId)
-            var rows: [ExteraAIRow] = history.map { message in
+            var rows: [ExteraAIRow] = [.toggle(.main, page.text("Save Chat History", "Сохранять историю чата"), ExteraAISettings.shared.configuration.saveHistory, { value in page.change { $0.saveHistory = value } })]
+            rows += history.map { message in
                 .action(.main, (message.role == .user ? page.text("You: ", "Вы: ") : "AI: ") + String(message.content.replacingOccurrences(of: "\n", with: " ").prefix(100)), .generic, { page.openHistoryMessage(message) })
             }
             rows.append(.notice(.options, page.text("Only this Telegram account’s AI conversation is shown. Up to 64 messages and 64,000 characters are kept. Requests send up to 32 messages and 24,000 characters. Select a message to edit, copy or delete its turn.", "Показана история ИИ только этого аккаунта Telegram: до 64 сообщений и 64 000 символов. В запрос отправляются до 32 сообщений и 24 000 символов. Выберите сообщение для редактирования, копирования или удаления пары вопрос–ответ.")))

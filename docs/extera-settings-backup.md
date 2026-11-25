@@ -4,9 +4,13 @@ Push `exteraBackupController(context: context)` from SGSettingsUI. Existing BUIL
 
 The explicit allowlist covers exteraGram preferences and their retained Swiftgram counterparts, plus the Contacts/Calls visibility and folders-at-bottom values exposed in the exteraGram UI. Account/auth data, messages, caches, unrelated Ayu settings and all plugin preferences are excluded. The two extera reaction controls intentionally alias Ayu `hideChannelReactions`/`hideGroupReactions` storage and are within scope.
 
+The AI allowlist contains five strict booleans: `extera.ai.showEditor`, `extera.ai.showSummaries`, `extera.ai.showInstantViewSummaries`, and `extera.ai.insertAsQuote` default to `true`; `extera.ai.showResponseOnly` defaults to `false`. Temperature uses integer `extera.ai.temperatureTenths` in `0...20` with default `10`. Summary replacement uses `extera.ai.replaceTelegramSummaries` with `automatic` / `enabled` / `disabled`; reset restores `automatic` (`nil`) independently of the current account's premium status. All present AI preferences serialize together before other writes. Configuration blobs, services/endpoints/models, roles/prompts, API keys and conversation history remain excluded. Reset preserves those private fields and the separate text-processing routing/history settings.
+
 `validate(data:)` validates the entire document before any settings singleton is initialized or any preference is written. It rejects unknown keys, duplicate JSON keys (including escaped duplicates), invalid UTF-8/JSON grammar, nesting beyond 16 containers, incorrect types, invalid ranges/enum values and files larger than 256 KiB. Browser exceptions must be unique normalized exact hosts. Export applies the same validation and file-size bound.
 
-`apply(_:)` and `reset()` run on the main thread. Both use `AyuSettingsStore.performBatchUpdates`, write through the original preference setters, and call `synchronizeShared()` once before the batch ends. The store emits one final custom Ayu notification, including for a batch that changes only Swiftgram settings. Telegram shared-data/network updates run separately through the existing transactions. A partial import changes the download transport only if it includes `simple.downloadSpeedBoost`. Shared transactions continue to completion after the backup screen is popped.
+`apply(_:)` and `reset()` are throwing APIs and run on the main thread. Both use `AyuSettingsStore.performBatchUpdates`, write through the original preference setters, and call `synchronizeShared()` once on success before the batch ends. Present AI flags are persisted together in one configuration update before any other preference write. A configuration validation/encoding failure propagates to the UI and leaves local preferences and shared transactions unapplied; it emits no AI success notification. The store still emits its usual final batch notification, including for an empty/failed batch or one that changes only Swiftgram settings. An import without AI flags does not load or rewrite AI configuration. Telegram shared-data/network updates run separately through the existing transactions, only after local application succeeds. A partial import changes the download transport only if it includes `simple.downloadSpeedBoost`. Shared transactions continue to completion after the backup screen is popped.
+
+`ExteraAISettings.configuration` caches its decoded value, including the default for missing/malformed JSON, under the existing recursive AI lock. Repeated layout reads do not reload/decode the services and roles. Configuration mutations keep the existing store-batch → AI-lock nesting and publish the new cache only after validation and serialization succeed, before the nonthrowing store write so synchronous readers see the new value. AI notifications remain outside the mutation lock. All configuration writes must continue to use `ExteraAISettings.update`; direct writes to its raw store key would bypass this cache.
 
 The store tracks keys explicitly written during the process so a registered default cannot suppress a migration-sensitive first write. Its recursive lock serializes cache/defaults writes and permits synchronous Foundation callbacks to read the updated cache. The nonthrowing batch closure executes without a new lock acquisition held across it. Batching coalesces notifications; it does not make all settings across UserDefaults, caches and Telegram transactions one atomic snapshot. Overlapping batches on different threads are coalesced until the last batch ends. Foundation's own defaults notifications and browser-specific notifications are separate from the custom Ayu notification.
 
@@ -20,6 +24,7 @@ Run from the repository root on Windows:
 py docs/validation/check_extera_backup.py
 py docs/validation/run_extera_backup_validation.py --emit-only
 py docs/validation/run_ayu_settings_store_validation.py --emit-only
+py docs/validation/run_extera_ai_backup_validation.py --emit-only
 ```
 
 The first command performs structural source checks against the actual allowlist, current settings declarations, native file-flow safeguards, partial-import behavior and batching integration. These checks do not execute Swift.
@@ -29,11 +34,14 @@ On a Mac with a Swift toolchain:
 ```sh
 python3 docs/validation/run_extera_backup_validation.py
 python3 docs/validation/run_ayu_settings_store_validation.py
+python3 docs/validation/run_extera_ai_backup_validation.py
 ```
 
 The backup driver extracts the production Swift grammar/type-rule declarations verbatim, supplies independently authored and generated fixtures, and compiles/runs a Foundation-only executable. It does not reimplement the validator in Python. The store driver compiles the actual production `AyuSettingsStore.swift` into a host harness with a unique temporary defaults suite. Generated Swift and executables go into a temporary directory. `--emit-only` prepares these harnesses without claiming runtime success. Both drivers return a failure status when invoked to run without `swiftc`.
 
-**Validation status:** structural source checks passed on Windows. Swift harness execution, the full iOS build, and simulator/UI frame evaluation have not run in this environment.
+The targeted AI driver extracts the production AI model/cache/update/history code and backup validation/export/apply/reset code. It omits Keychain methods, opens the AI initializer/singleton for isolated fixtures, substitutes an instrumented store, and retains the three production AI allowlist entries alongside one ordinary bool fixture. It checks legacy/default caching, repeated reads, failed-update cache preservation, strict boolean validation, private-key rejection, partial imports, one AI write for multiple flags, reset preserving private AI configuration/history, failures before ordinary writes/synchronization, and AI observers reading from another thread outside the mutation lock. The credential sentinel check establishes that backup never touches the sentinel; it does not execute real Keychain operations. This harness also requires `swiftc`; emission and syntax parsing do not establish runtime success.
+
+**Validation status:** all 14 backup source checks pass after math, chat-appearance and media integration. The AI harness includes strict generation booleans, temperature limits, three-state summary-policy round-trips, mixed scalar/flag single writes, and preservation of private fields. Swift harness execution, the full iOS build, and simulator/UI frame evaluation remain pending for the current tree.
 
 ## Remaining runtime and UI cases
 

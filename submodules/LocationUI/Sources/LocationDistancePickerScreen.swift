@@ -382,11 +382,7 @@ private final class LocationDistancePickerContentComponent: Component {
             guard let environment = self.environment else {
                 return true
             }
-            let locale = localeWithStrings(environment.strings)
-            if locale.identifier.hasSuffix("GB") {
-                return false
-            }
-            return locale.usesMetricSystem
+            return usesMetricDistanceUnits(strings: environment.strings)
         }
         
         private func setupDistancesIfNeeded(component: LocationDistancePickerContentComponent) {

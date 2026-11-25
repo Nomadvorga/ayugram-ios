@@ -102,6 +102,8 @@ public protocol CameraProtocol: AnyObject {
     func setZoomLevel(_ zoomLevel: CGFloat)
     func setZoomDelta(_ zoomDelta: CGFloat)
     func setZoomScale(_ zoomScale: CGFloat)
+    /// Executes against the active lens on the capture queue; completion is delivered on the main queue.
+    func updateZoom(_ update: CameraZoomUpdate, completion: @escaping (CameraZoomState?) -> Void)
     func beginExposureTargetBiasChange()
     func setExposureTargetBias(_ bias: CGFloat)
     func endExposureTargetBiasChange()

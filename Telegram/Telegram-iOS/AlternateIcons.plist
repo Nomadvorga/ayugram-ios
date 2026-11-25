@@ -106,4 +106,47 @@
         <key>UIPrerenderedIcon</key>
         <true/>
     </dict>
+    <!-- Original Android artwork; identifiers are persistent. See AppIconSources/provenance.json. -->
+    <key>SGDefault</key><dict><key>CFBundleIconFiles</key><array><string>SGDefault</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuMonet</key><dict><key>CFBundleIconFiles</key><array><string>AyuMonet</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuAlt</key><dict><key>CFBundleIconFiles</key><array><string>AyuAlt</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuDiscord</key><dict><key>CFBundleIconFiles</key><array><string>AyuDiscord</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuSpotify</key><dict><key>CFBundleIconFiles</key><array><string>AyuSpotify</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuExtera</key><dict><key>CFBundleIconFiles</key><array><string>AyuExtera</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuNothing</key><dict><key>CFBundleIconFiles</key><array><string>AyuNothing</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuBard</key><dict><key>CFBundleIconFiles</key><array><string>AyuBard</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuYandexPlus</key><dict><key>CFBundleIconFiles</key><array><string>AyuYandexPlus</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>AyuTyan</key><dict><key>CFBundleIconFiles</key><array><string>AyuTyan</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraDefault</key><dict><key>CFBundleIconFiles</key><array><string>ExteraDefault</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraMonet</key><dict><key>CFBundleIconFiles</key><array><string>ExteraMonet</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraWinter</key><dict><key>CFBundleIconFiles</key><array><string>ExteraWinter</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraOrbit</key><dict><key>CFBundleIconFiles</key><array><string>ExteraOrbit</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraEditor</key><dict><key>CFBundleIconFiles</key><array><string>ExteraEditor</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraMole</key><dict><key>CFBundleIconFiles</key><array><string>ExteraMole</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraEchpochmak</key><dict><key>CFBundleIconFiles</key><array><string>ExteraEchpochmak</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraAvatar</key><dict><key>CFBundleIconFiles</key><array><string>ExteraAvatar</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraCandy</key><dict><key>CFBundleIconFiles</key><array><string>ExteraCandy</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraGuitar</key><dict><key>CFBundleIconFiles</key><array><string>ExteraGuitar</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraSus</key><dict><key>CFBundleIconFiles</key><array><string>ExteraSus</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraFrog</key><dict><key>CFBundleIconFiles</key><array><string>ExteraFrog</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraHamster</key><dict><key>CFBundleIconFiles</key><array><string>ExteraHamster</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraSponge</key><dict><key>CFBundleIconFiles</key><array><string>ExteraSponge</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraInvincible</key><dict><key>CFBundleIconFiles</key><array><string>ExteraInvincible</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraFlappy</key><dict><key>CFBundleIconFiles</key><array><string>ExteraFlappy</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraNyanCat</key><dict><key>CFBundleIconFiles</key><array><string>ExteraNyanCat</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraIceAge</key><dict><key>CFBundleIconFiles</key><array><string>ExteraIceAge</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraFish</key><dict><key>CFBundleIconFiles</key><array><string>ExteraFish</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraPsychosis</key><dict><key>CFBundleIconFiles</key><array><string>ExteraPsychosis</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraXp</key><dict><key>CFBundleIconFiles</key><array><string>ExteraXp</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraNasa</key><dict><key>CFBundleIconFiles</key><array><string>ExteraNasa</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraCyberpunk</key><dict><key>CFBundleIconFiles</key><array><string>ExteraCyberpunk</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraSpace</key><dict><key>CFBundleIconFiles</key><array><string>ExteraSpace</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraJellyfish</key><dict><key>CFBundleIconFiles</key><array><string>ExteraJellyfish</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraHuman</key><dict><key>CFBundleIconFiles</key><array><string>ExteraHuman</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraSunset</key><dict><key>CFBundleIconFiles</key><array><string>ExteraSunset</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraAmethyst</key><dict><key>CFBundleIconFiles</key><array><string>ExteraAmethyst</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraAurora</key><dict><key>CFBundleIconFiles</key><array><string>ExteraAurora</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraOsu</key><dict><key>CFBundleIconFiles</key><array><string>ExteraOsu</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraGoogle</key><dict><key>CFBundleIconFiles</key><array><string>ExteraGoogle</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>ExteraGoogle26</key><dict><key>CFBundleIconFiles</key><array><string>ExteraGoogle26</string></array><key>UIPrerenderedIcon</key><true/></dict>
 </dict>

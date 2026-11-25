@@ -65,6 +65,17 @@ final class TabBarControllerNode: ASDisplayNode {
     private let contextAction: (Int, ContextExtractedContentContainingView, ContextGesture) -> Void
     
     private let tabBarView = ComponentView<Empty>()
+    private let dockedBackground = UIView()
+    private var navigationHideLabels = false
+    private var navigationDocked = false
+
+    func updateNavigationPresentation(hideLabels: Bool, docked: Bool) {
+        guard self.navigationHideLabels != hideLabels || self.navigationDocked != docked else { return }
+        self.navigationHideLabels = hideLabels
+        self.navigationDocked = docked
+        self.layoutResult = nil
+        self.requestUpdate()
+    }
     
     private let disabledOverlayNode: ASDisplayNode
     private var toolbar: ComponentView<Empty>?
@@ -202,7 +213,7 @@ final class TabBarControllerNode: ASDisplayNode {
         transition.updateAlpha(node: self.disabledOverlayNode, alpha: value ? 0.0 : 1.0)
     }
     
-    var tabBarHidden = SGSimpleSettings.shared.hideTabBar { // MARK: Swiftgram
+    var tabBarHidden = ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: Swiftgram
         didSet {
             if self.tabBarHidden != oldValue {
                 self.requestUpdate()
@@ -261,7 +272,11 @@ final class TabBarControllerNode: ASDisplayNode {
 
         let tabBarBottomInset: CGFloat
         let tabBarSideInset: CGFloat
-        if isSystemLayout {
+        let docked = self.navigationDocked && sidePlacement == nil
+        if docked {
+            tabBarBottomInset = max(params.layout.insets(options: []).bottom, keyboardBottomInset)
+            tabBarSideInset = 0.0
+        } else if isSystemLayout {
             // iOS 27 floats the bar at least 21pt above the bottom edge and from the sides (`minimumPlatterInsets`),
             // and higher by as much as the safe area reaches past the home affordance's 21pt allowance in a 34pt
             // portrait inset.
@@ -364,7 +379,9 @@ final class TabBarControllerNode: ASDisplayNode {
                 outerInsets: UIEdgeInsets(top: 0.0, left: tabBarSideInset, bottom: tabBarBottomInset, right: tabBarSideInset),
                 axis: sidePlacement == nil ? .horizontal : .vertical,
                 isCompact: isCompact,
-                usesSystemLayout: !isWide
+                usesSystemLayout: !isWide,
+                showsLabels: !self.navigationHideLabels,
+                fillsAvailableWidth: docked
             )),
             environment: {},
             containerSize: sidePlacement?.frame.size ?? CGSize(width: params.layout.size.width - tabBarSideInset * 2.0, height: 100.0)
@@ -387,6 +404,11 @@ final class TabBarControllerNode: ASDisplayNode {
             if tabBarComponentView.superview == nil {
                 self.view.addSubview(tabBarComponentView)
             }
+            self.view.insertSubview(self.dockedBackground, belowSubview: tabBarComponentView)
+            self.dockedBackground.backgroundColor = self.theme.rootController.tabBar.backgroundColor
+            self.dockedBackground.isUserInteractionEnabled = false
+            self.dockedBackground.isHidden = !docked || self.tabBarHidden || params.toolbar != nil
+            transition.updateFrame(view: self.dockedBackground, frame: CGRect(x: 0, y: tabBarFrame.minY, width: params.layout.size.width, height: params.layout.size.height - tabBarFrame.minY))
             let tabBarAlpha: CGFloat = params.toolbar == nil ? 1.0 : 0.0
             if let crossfadeDuration, let previousAppliedPlacement, let previousPlacement = previousAppliedPlacement.placement {
                 if !previousAppliedPlacement.isHidden && tabBarComponentView.alpha > 0.0, let snapshotView = tabBarComponentView.snapshotView(afterScreenUpdates: false) {

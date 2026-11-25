@@ -1,0 +1,758 @@
+[
+  {
+    "name": "SGDefault",
+    "androidId": "default",
+    "family": "ayu",
+    "title": "Main",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "SGDefault_1024x1024",
+    "background": {
+      "file": "ayu_default_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_default_foreground.webp"
+    },
+    "heroColor": "#21153D"
+  },
+  {
+    "name": "AyuMonet",
+    "androidId": "monet",
+    "family": "ayu",
+    "title": "Monet",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuMonet_1024x1024",
+    "background": {
+      "color": "#2D3134"
+    },
+    "foreground": {
+      "file": "ayu_monet_foreground.xml"
+    },
+    "heroColor": "#25153D"
+  },
+  {
+    "name": "AyuAlt",
+    "androidId": "ayugram_alt",
+    "family": "ayu",
+    "title": "AyuGram Alt",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuAlt_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_alt_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_alt_foreground.webp"
+    },
+    "heroColor": "#20153D"
+  },
+  {
+    "name": "AyuDiscord",
+    "androidId": "ayugram_discord",
+    "family": "ayu",
+    "title": "Discord",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuDiscord_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_discord_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_discord_foreground.webp"
+    },
+    "heroColor": "#15193D"
+  },
+  {
+    "name": "AyuSpotify",
+    "androidId": "ayugram_spotify",
+    "family": "ayu",
+    "title": "Spotify",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuSpotify_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_spotify_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_spotify_foreground.webp"
+    },
+    "heroColor": "#153D24"
+  },
+  {
+    "name": "AyuExtera",
+    "androidId": "ayugram_extera",
+    "family": "ayu",
+    "title": "exteraGram",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuExtera_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_extera_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_extera_foreground.webp"
+    },
+    "heroColor": "#3D1515"
+  },
+  {
+    "name": "AyuNothing",
+    "androidId": "ayugram_nothing",
+    "family": "ayu",
+    "title": "Nothing",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuNothing_1024x1024",
+    "background": {
+      "color": "#FFFFFF"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_nothing_foreground.webp"
+    },
+    "heroColor": "#3D1517"
+  },
+  {
+    "name": "AyuBard",
+    "androidId": "ayugram_bard",
+    "family": "ayu",
+    "title": "Google Bard",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuBard_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_bard_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_bard_foreground.webp"
+    },
+    "heroColor": "#3D1521"
+  },
+  {
+    "name": "AyuYandexPlus",
+    "androidId": "ayugram_yaplus",
+    "family": "ayu",
+    "title": "Yandex Plus",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuYandexPlus_1024x1024",
+    "background": {
+      "file": "ayu_ayugram_yaplus_background.webp"
+    },
+    "foreground": {
+      "file": "ayu_ayugram_yaplus_foreground.webp"
+    },
+    "heroColor": "#3D1520"
+  },
+  {
+    "name": "AyuTyan",
+    "androidId": "ayutyan",
+    "family": "ayu",
+    "title": "AyuTyan",
+    "titleKey": null,
+    "description": null,
+    "author": "AyuGram",
+    "seasonal": false,
+    "imageName": "AyuTyan_1024x1024",
+    "background": {
+      "color": "#E3D7FF"
+    },
+    "foreground": {
+      "file": "ayu_ayutyan_foreground.webp"
+    },
+    "heroColor": "#20153D"
+  },
+  {
+    "name": "ExteraDefault",
+    "androidId": "extera",
+    "family": "extera",
+    "title": "exteraGram",
+    "titleKey": null,
+    "description": null,
+    "author": null,
+    "seasonal": false,
+    "imageName": "ExteraDefault_1024x1024",
+    "background": {
+      "color": "#E83030"
+    },
+    "foreground": {
+      "file": "extera_default_foreground.webp"
+    },
+    "heroColor": "#3D1515"
+  },
+  {
+    "name": "ExteraMonet",
+    "androidId": "monet_extera",
+    "family": "extera",
+    "title": "Monet",
+    "titleKey": null,
+    "description": null,
+    "author": null,
+    "seasonal": false,
+    "imageName": "ExteraMonet_1024x1024",
+    "background": {
+      "color": "#2D3134"
+    },
+    "foreground": {
+      "file": "extera_monet_foreground.xml"
+    },
+    "heroColor": "#25153D"
+  },
+  {
+    "name": "ExteraWinter",
+    "androidId": "winter",
+    "family": "extera",
+    "title": "Winter",
+    "titleKey": "Extera.AppIcon.Name.Winter",
+    "description": "Winter is coming",
+    "author": "exteraGram",
+    "seasonal": true,
+    "imageName": "ExteraWinter_1024x1024",
+    "background": {
+      "file": "extera_winter_background.webp"
+    },
+    "foreground": {
+      "file": "extera_winter_foreground.webp"
+    },
+    "heroColor": "#3D1515"
+  },
+  {
+    "name": "ExteraOrbit",
+    "androidId": "orbit",
+    "family": "extera",
+    "title": "Orbit",
+    "titleKey": "Extera.AppIcon.Name.Orbit",
+    "description": "To infinity and beyond",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraOrbit_1024x1024",
+    "background": {
+      "color": "#E83030"
+    },
+    "foreground": {
+      "file": "extera_orbit_foreground.webp"
+    },
+    "heroColor": "#3D1515"
+  },
+  {
+    "name": "ExteraEditor",
+    "androidId": "editor",
+    "family": "extera",
+    "title": "Editor",
+    "titleKey": "Extera.AppIcon.Name.Editor",
+    "description": "final_v2_FINAL.fig",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraEditor_1024x1024",
+    "background": {
+      "file": "extera_editor_background.webp"
+    },
+    "foreground": {
+      "file": "extera_editor_foreground.webp"
+    },
+    "heroColor": "#3D1517"
+  },
+  {
+    "name": "ExteraMole",
+    "androidId": "mole",
+    "family": "extera",
+    "title": "Mole",
+    "titleKey": null,
+    "description": null,
+    "author": "whatwherewhywhen",
+    "seasonal": false,
+    "imageName": "ExteraMole_1024x1024",
+    "background": {
+      "file": "extera_mole_background.webp"
+    },
+    "foreground": {
+      "file": "extera_mole_foreground.webp"
+    },
+    "heroColor": "#3D1515"
+  },
+  {
+    "name": "ExteraEchpochmak",
+    "androidId": "echpochmak",
+    "family": "extera",
+    "title": "Echpochmak",
+    "titleKey": null,
+    "description": null,
+    "author": "whatwherewhywhen",
+    "seasonal": false,
+    "imageName": "ExteraEchpochmak_1024x1024",
+    "background": {
+      "file": "extera_echpochmak_background.webp"
+    },
+    "foreground": {
+      "file": "extera_echpochmak_foreground.webp"
+    },
+    "heroColor": "#3D2B15"
+  },
+  {
+    "name": "ExteraAvatar",
+    "androidId": "avatar",
+    "family": "extera",
+    "title": "Avatar",
+    "titleKey": null,
+    "description": null,
+    "author": "cIick_cIack",
+    "seasonal": false,
+    "imageName": "ExteraAvatar_1024x1024",
+    "background": {
+      "file": "extera_avatar_background.webp"
+    },
+    "foreground": {
+      "file": "extera_avatar_foreground.webp"
+    },
+    "heroColor": "#3D1A15"
+  },
+  {
+    "name": "ExteraCandy",
+    "androidId": "candy",
+    "family": "extera",
+    "title": "Candy",
+    "titleKey": null,
+    "description": null,
+    "author": "impulz3",
+    "seasonal": false,
+    "imageName": "ExteraCandy_1024x1024",
+    "background": {
+      "file": "extera_candy_background.webp"
+    },
+    "foreground": {
+      "file": "extera_candy_foreground.webp"
+    },
+    "heroColor": "#3D2215"
+  },
+  {
+    "name": "ExteraGuitar",
+    "androidId": "guitar",
+    "family": "extera",
+    "title": "Guitar",
+    "titleKey": null,
+    "description": null,
+    "author": "nekto_nkt",
+    "seasonal": false,
+    "imageName": "ExteraGuitar_1024x1024",
+    "background": {
+      "file": "extera_guitar_background.webp"
+    },
+    "foreground": {
+      "file": "extera_guitar_foreground.webp"
+    },
+    "heroColor": "#3D2715"
+  },
+  {
+    "name": "ExteraSus",
+    "androidId": "sus",
+    "family": "extera",
+    "title": "Impostor",
+    "titleKey": "Extera.AppIcon.Name.Sus",
+    "description": null,
+    "author": "MilesBlooper",
+    "seasonal": false,
+    "imageName": "ExteraSus_1024x1024",
+    "background": {
+      "color": "#FFDE2A"
+    },
+    "foreground": {
+      "file": "extera_sus_foreground.webp"
+    },
+    "heroColor": "#3D3715"
+  },
+  {
+    "name": "ExteraFrog",
+    "androidId": "frog",
+    "family": "extera",
+    "title": "Frog",
+    "titleKey": null,
+    "description": null,
+    "author": "cIick_cIack",
+    "seasonal": false,
+    "imageName": "ExteraFrog_1024x1024",
+    "background": {
+      "file": "extera_frog_background.webp"
+    },
+    "foreground": {
+      "file": "extera_frog_foreground.webp"
+    },
+    "heroColor": "#3A3D15"
+  },
+  {
+    "name": "ExteraHamster",
+    "androidId": "hamster",
+    "family": "extera",
+    "title": "Hamster",
+    "titleKey": null,
+    "description": null,
+    "author": "whatwherewhywhen",
+    "seasonal": false,
+    "imageName": "ExteraHamster_1024x1024",
+    "background": {
+      "file": "extera_hamster_background.webp"
+    },
+    "foreground": {
+      "file": "extera_hamster_foreground.webp"
+    },
+    "heroColor": "#203D15"
+  },
+  {
+    "name": "ExteraSponge",
+    "androidId": "sponge",
+    "family": "extera",
+    "title": "Sponge",
+    "titleKey": null,
+    "description": null,
+    "author": "nneeuurr",
+    "seasonal": false,
+    "imageName": "ExteraSponge_1024x1024",
+    "background": {
+      "file": "extera_sponge_background.webp"
+    },
+    "foreground": {
+      "file": "extera_sponge_foreground.webp"
+    },
+    "heroColor": "#15343D"
+  },
+  {
+    "name": "ExteraInvincible",
+    "androidId": "invincible",
+    "family": "extera",
+    "title": "Invincible",
+    "titleKey": "Extera.AppIcon.Name.Invincible",
+    "description": "Think, Mark!",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraInvincible_1024x1024",
+    "background": {
+      "file": "extera_invincible_background.webp"
+    },
+    "foreground": {
+      "file": "extera_invincible_foreground.webp"
+    },
+    "heroColor": "#152F3D"
+  },
+  {
+    "name": "ExteraFlappy",
+    "androidId": "flappy",
+    "family": "extera",
+    "title": "Flappy",
+    "titleKey": null,
+    "description": null,
+    "author": "nneeuurr",
+    "seasonal": false,
+    "imageName": "ExteraFlappy_1024x1024",
+    "background": {
+      "file": "extera_flappy_background.webp"
+    },
+    "foreground": {
+      "file": "extera_flappy_foreground.webp"
+    },
+    "heroColor": "#152A3D"
+  },
+  {
+    "name": "ExteraNyanCat",
+    "androidId": "nyan_cat",
+    "family": "extera",
+    "title": "Nyan Cat",
+    "titleKey": null,
+    "description": null,
+    "author": "n1ksly",
+    "seasonal": false,
+    "imageName": "ExteraNyanCat_1024x1024",
+    "background": {
+      "file": "extera_nyan_cat_background.webp"
+    },
+    "foreground": {
+      "file": "extera_nyan_cat_foreground.webp"
+    },
+    "heroColor": "#152A3D"
+  },
+  {
+    "name": "ExteraIceAge",
+    "androidId": "ice_age",
+    "family": "extera",
+    "title": "Ice Age",
+    "titleKey": "Extera.AppIcon.Name.IceAge",
+    "description": "Where's my acorn?",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraIceAge_1024x1024",
+    "background": {
+      "file": "extera_ice_age_background.webp"
+    },
+    "foreground": {
+      "file": "extera_ice_age_foreground.webp"
+    },
+    "heroColor": "#15293D"
+  },
+  {
+    "name": "ExteraFish",
+    "androidId": "fish",
+    "family": "extera",
+    "title": "Fish",
+    "titleKey": null,
+    "description": null,
+    "author": "whatwherewhywhen",
+    "seasonal": false,
+    "imageName": "ExteraFish_1024x1024",
+    "background": {
+      "file": "extera_fish_background.webp"
+    },
+    "foreground": {
+      "file": "extera_fish_foreground.webp"
+    },
+    "heroColor": "#15233D"
+  },
+  {
+    "name": "ExteraPsychosis",
+    "androidId": "psychosis",
+    "family": "extera",
+    "title": "Psychosis",
+    "titleKey": null,
+    "description": null,
+    "author": "cIick_cIack",
+    "seasonal": false,
+    "imageName": "ExteraPsychosis_1024x1024",
+    "background": {
+      "file": "extera_psychosis_background.webp"
+    },
+    "foreground": {
+      "file": "extera_psychosis_foreground.webp"
+    },
+    "heroColor": "#15253D"
+  },
+  {
+    "name": "ExteraXp",
+    "androidId": "xp",
+    "family": "extera",
+    "title": "XP",
+    "titleKey": null,
+    "description": null,
+    "author": "weizoqq",
+    "seasonal": false,
+    "imageName": "ExteraXp_1024x1024",
+    "background": {
+      "file": "extera_xp_background.webp"
+    },
+    "foreground": {
+      "file": "extera_xp_foreground.webp"
+    },
+    "heroColor": "#15253D"
+  },
+  {
+    "name": "ExteraNasa",
+    "androidId": "nasa",
+    "family": "extera",
+    "title": "NASA",
+    "titleKey": null,
+    "description": null,
+    "author": "cIick_cIack",
+    "seasonal": false,
+    "imageName": "ExteraNasa_1024x1024",
+    "background": {
+      "file": "extera_nasa_background.webp"
+    },
+    "foreground": {
+      "file": "extera_nasa_foreground.webp"
+    },
+    "heroColor": "#3D1815"
+  },
+  {
+    "name": "ExteraCyberpunk",
+    "androidId": "cyberpunk",
+    "family": "extera",
+    "title": "Cyberpunk",
+    "titleKey": "Extera.AppIcon.Name.Cyberpunk",
+    "description": "Wake up, samurai",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraCyberpunk_1024x1024",
+    "background": {
+      "color": "#0C0E15"
+    },
+    "foreground": {
+      "file": "extera_cyberpunk_foreground.webp"
+    },
+    "heroColor": "#3D3D15"
+  },
+  {
+    "name": "ExteraSpace",
+    "androidId": "space",
+    "family": "extera",
+    "title": "Space",
+    "titleKey": "Extera.AppIcon.Name.Space",
+    "description": "The Final Frontier",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraSpace_1024x1024",
+    "background": {
+      "file": "extera_space_background.webp"
+    },
+    "foreground": {
+      "file": "extera_space_foreground.webp"
+    },
+    "heroColor": "#151B3D"
+  },
+  {
+    "name": "ExteraJellyfish",
+    "androidId": "jellyfish",
+    "family": "extera",
+    "title": "Jellyfish",
+    "titleKey": null,
+    "description": null,
+    "author": "whatwherewhywhen",
+    "seasonal": false,
+    "imageName": "ExteraJellyfish_1024x1024",
+    "background": {
+      "file": "extera_jellyfish_background.webp"
+    },
+    "foreground": {
+      "file": "extera_jellyfish_foreground.webp"
+    },
+    "heroColor": "#151A3D"
+  },
+  {
+    "name": "ExteraHuman",
+    "androidId": "human",
+    "family": "extera",
+    "title": "Human",
+    "titleKey": null,
+    "description": null,
+    "author": "cIick_cIack",
+    "seasonal": false,
+    "imageName": "ExteraHuman_1024x1024",
+    "background": {
+      "file": "extera_human_background.webp"
+    },
+    "foreground": {
+      "file": "extera_human_foreground.webp"
+    },
+    "heroColor": "#17153D"
+  },
+  {
+    "name": "ExteraSunset",
+    "androidId": "sunset",
+    "family": "extera",
+    "title": "Sunset",
+    "titleKey": "Extera.AppIcon.Name.Sunset",
+    "description": "Here comes the sun",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraSunset_1024x1024",
+    "background": {
+      "file": "extera_sunset_background.webp"
+    },
+    "foreground": {
+      "file": "extera_sunset_foreground.webp"
+    },
+    "heroColor": "#3D152E"
+  },
+  {
+    "name": "ExteraAmethyst",
+    "androidId": "amethyst",
+    "family": "extera",
+    "title": "Amethyst",
+    "titleKey": "Extera.AppIcon.Name.Amethyst",
+    "description": "Perfectly balanced",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraAmethyst_1024x1024",
+    "background": {
+      "file": "extera_amethyst_background.webp"
+    },
+    "foreground": {
+      "file": "extera_amethyst_foreground.webp"
+    },
+    "heroColor": "#36153D"
+  },
+  {
+    "name": "ExteraAurora",
+    "androidId": "aurora",
+    "family": "extera",
+    "title": "Aurora",
+    "titleKey": "Extera.AppIcon.Name.Aurora",
+    "description": "Localized entirely in your phone",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraAurora_1024x1024",
+    "background": {
+      "file": "extera_aurora_background.webp"
+    },
+    "foreground": {
+      "file": "extera_aurora_foreground.webp"
+    },
+    "heroColor": "#3D1522"
+  },
+  {
+    "name": "ExteraOsu",
+    "androidId": "osu",
+    "family": "extera",
+    "title": "osu!",
+    "titleKey": null,
+    "description": null,
+    "author": "ataeshi",
+    "seasonal": false,
+    "imageName": "ExteraOsu_1024x1024",
+    "background": {
+      "file": "extera_osu_background.png"
+    },
+    "foreground": {
+      "file": "extera_osu_foreground.png"
+    },
+    "heroColor": "#3D1526"
+  },
+  {
+    "name": "ExteraGoogle",
+    "androidId": "google",
+    "family": "extera",
+    "title": "Google",
+    "titleKey": "Extera.AppIcon.Name.Google",
+    "description": "Don't be evil",
+    "author": "exteraGram",
+    "seasonal": false,
+    "imageName": "ExteraGoogle_1024x1024",
+    "background": {
+      "color": "#FFFFFF"
+    },
+    "foreground": {
+      "file": "extera_google_foreground.webp"
+    },
+    "heroColor": "#15263D"
+  },
+  {
+    "name": "ExteraGoogle26",
+    "androidId": "google26",
+    "family": "extera",
+    "title": "Google ’26",
+    "titleKey": null,
+    "description": null,
+    "author": "Slucket",
+    "seasonal": false,
+    "imageName": "ExteraGoogle26_1024x1024",
+    "background": {
+      "color": "#FFFFFF"
+    },
+    "foreground": {
+      "file": "extera_google26_foreground.svg"
+    },
+    "heroColor": "#15203D"
+  }
+]

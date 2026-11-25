@@ -2152,7 +2152,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                     strongSelf.crossDissolveContentExceptNavigationBar()
                 }
-                (strongSelf.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.3, curve: .linear)) // MARK: Swiftgram
+                (strongSelf.controller?.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: .animated(duration: 0.3, curve: .linear)) // MARK: Swiftgram
             case .select:
                 strongSelf.state = strongSelf.state.withSelectedMessageIds(Set())
                 if let (layout, navigationHeight) = strongSelf.validLayout {
@@ -5398,7 +5398,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         controller.dismissAllTooltips()
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.4, curve: .spring)) // MARK: Swiftgram
+            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: .animated(duration: 0.4, curve: .spring)) // MARK: Swiftgram
         }
         
         if let (layout, navigationHeight) = self.validLayout {
@@ -6233,7 +6233,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             navigationFlags.isOwnStories = self.data?.peer?.id == self.context.account.peerId
             // MARK: Swiftgram
             var navigationSets = peerInfoNavigationButtonSets(navigationFlags)
-            if self.isSettings && !self.state.isEditing && SGSimpleSettings.shared.hideTabBar {
+            if self.isSettings && !self.state.isEditing && ExteraNavigationSettings.shared.configuration.barMode == .hide {
                 // The bar has one leading item. Keep QR accessible beside the trailing items.
                 navigationSets.normal.left = [.back]
                 navigationSets.normal.right.insert(.qrCode, at: 0)

@@ -1,4 +1,5 @@
 import Foundation
+import SGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -139,7 +140,7 @@ public final class NewsScreen: ViewController {
 
     private func deactivateSearch(animated: Bool) {
         self.newsNode.deactivateSearch(placeholderNode: self.searchContentNode()?.placeholderNode, animated: animated)
-        (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.5, curve: .spring))
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: .animated(duration: 0.5, curve: .spring))
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
     }
 

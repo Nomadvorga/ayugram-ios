@@ -532,6 +532,20 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     
     private var isActiveValue: Bool = false
     private var callKitAudioSessionIsActive: Bool = false
+
+    // Confined to queue. setup() alone is not activation; never apply a recording preference
+    // until setActive succeeded and a recording holder still owns the session.
+    private var recordingInputSessionIsActive = false
+    private var ownsRecordingPreferredInput = false
+    private var ownsRecordingSpeakerOverride = false
+    private struct MicrophoneAttempt: Equatable {
+        let microphone: ExteraChatAppearanceSettings.Microphone
+        let inputs: [ExteraChatAppearanceSettings.MicrophonePort]
+        let uid: String
+    }
+    private var failedMicrophoneAttempt: MicrophoneAttempt?
+    private var microphoneSettingsObserver: NSObjectProtocol?
+    private var observedMicrophone = ExteraChatAppearanceSettings.shared.microphone
     
     private let zeroVolumeEvents = ValuePipe<Void>()
     public func didActivateWithZeroVolume() -> Signal<Void, NoError> {
@@ -546,6 +560,17 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         super.init()
         
         let queue = self.queue
+        self.microphoneSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            queue.async {
+                guard let self else { return }
+                let microphone = ExteraChatAppearanceSettings.shared.microphone
+                if microphone != self.observedMicrophone {
+                    self.observedMicrophone = microphone
+                    self.failedMicrophoneAttempt = nil
+                    self.applyRecordingMicrophoneInput()
+                }
+            }
+        }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance(), queue: nil, using: { [weak self] _ in
             queue.async {
                 self?.updateCurrentAudioRouteInfo()
@@ -566,6 +591,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
             queue.async {
                 if let strongSelf = self {
                     if type == .began {
+                        strongSelf.recordingInputSessionIsActive = false
                         strongSelf.updateHolders(interruption: true)
                     }
                 }
@@ -574,6 +600,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
 
         NotificationCenter.default.addObserver(forName: AVAudioSession.mediaServicesWereLostNotification, object: AVAudioSession.sharedInstance(), queue: nil, using: { [weak self] _ in
             managedAudioSessionLog("Media Services were lost")
+            queue.async { self?.recordingInputSessionIsActive = false }
             queue.after(1.0, {
                 if let strongSelf = self {
                     if let (type, outputMode) = strongSelf.currentTypeAndOutputMode {
@@ -593,9 +620,13 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     
     deinit {
         self.deactivateTimer?.invalidate()
+        if let observer = self.microphoneSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     private func updateCurrentAudioRouteInfo() {
+        self.applyRecordingMicrophoneInput()
         managedAudioSessionLog("ManagedAudioSession current route: \(audioInputStateDescription())")
 
         let value = self.isHeadsetPluggedIn()
@@ -627,6 +658,59 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                     self.holders[i].availableOutputsChanged(availableOutputs, activeOutput)
                     break
                 }
+            }
+        }
+    }
+
+    private func applyRecordingMicrophoneInput() {
+        assert(self.queue.isCurrent())
+        guard recordingMicrophonePreferenceApplies(
+            type: self.currentTypeAndOutputMode?.0, sessionActivated: self.recordingInputSessionIsActive,
+            hasRecordingHolder: self.holders.contains(where: { $0.active && $0.audioSessionType.isRecord && $0.deactivatingDisposable == nil }),
+            callKitActive: self.callKitAudioSessionIsActive
+        ) else { return }
+        let session = AVAudioSession.sharedInstance()
+        guard session.category == .playAndRecord || session.category == .record else { return }
+        let microphone = ExteraChatAppearanceSettings.shared.microphone
+        let inputs = currentRecordingMicrophonePorts() ?? []
+        if let failed = self.failedMicrophoneAttempt, failed.microphone != microphone || failed.inputs != inputs {
+            self.failedMicrophoneAttempt = nil
+        }
+        let selected = ExteraChatAppearanceSettings.preferredRecordingInput(
+            microphone: microphone, inputs: inputs, currentInputUIDs: session.currentRoute.inputs.map { $0.uid },
+            respectsSystemInput: ManagedAudioSessionImpl.respectsSystemRecordingInput
+        )
+        if self.ownsRecordingSpeakerOverride && (selected?.kind == .headset || (selected == nil && inputs.contains(where: { $0.kind == .headset }))) {
+            // Native record(false) can force both speaker AND the built-in microphone. Release
+            // only that recorder-owned override so an external/system input can actually route.
+            // This never selects a call/player output or adds a new speaker override.
+            do {
+                try session.overrideOutputAudioPort(.none)
+                self.ownsRecordingSpeakerOverride = false
+            } catch {
+                managedAudioSessionLog("ManagedAudioSession could not release recording speaker override: \(error)")
+            }
+        }
+        let attempt = selected.map { MicrophoneAttempt(microphone: microphone, inputs: inputs, uid: $0.uid) }
+        // A rejected port is retried after availability/selection changes or the next activation,
+        // not on every route notification generated by clearing that rejected preference.
+        let targetUID = attempt != nil && attempt == self.failedMicrophoneAttempt ? nil : selected?.uid
+        let target = targetUID.flatMap { uid in session.availableInputs?.first(where: { $0.uid == uid }) }
+        if session.preferredInput?.uid == target?.uid {
+            self.ownsRecordingPreferredInput = target != nil
+            return
+        }
+        do {
+            try session.setPreferredInput(target)
+            self.ownsRecordingPreferredInput = target != nil
+        } catch {
+            self.failedMicrophoneAttempt = attempt
+            managedAudioSessionLog("ManagedAudioSession recording input preference rejected; following system input: \(error)")
+            do {
+                try session.setPreferredInput(nil)
+                self.ownsRecordingPreferredInput = false
+            } catch {
+                managedAudioSessionLog("ManagedAudioSession could not clear recording input preference: \(error)")
             }
         }
     }
@@ -977,6 +1061,10 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         self.deactivateTimer = nil
         
         let wasPlaybackActive = self.currentTypeAndOutputMode?.0.isPlay ?? false
+        self.recordingInputSessionIsActive = false
+        self.ownsRecordingPreferredInput = false
+        self.ownsRecordingSpeakerOverride = false
+        self.failedMicrophoneAttempt = nil
         self.currentTypeAndOutputMode = nil
         
         managedAudioSessionLog("ManagedAudioSession setting active false")
@@ -1016,6 +1104,20 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         let wasPlaybackActive = self.currentTypeAndOutputMode?.0.isPlay ?? false
         
         if self.currentTypeAndOutputMode == nil || self.currentTypeAndOutputMode! != (type, outputMode) {
+            if !type.isRecord {
+                self.recordingInputSessionIsActive = false
+                self.ownsRecordingSpeakerOverride = false
+                if self.ownsRecordingPreferredInput {
+                    // Release only a preference owned by the recorder before native call/playback
+                    // setup takes over. Subsequent recording notifications cannot change that route.
+                    do {
+                        try AVAudioSession.sharedInstance().setPreferredInput(nil)
+                        self.ownsRecordingPreferredInput = false
+                    } catch {
+                        managedAudioSessionLog("ManagedAudioSession could not release recording input: \(error)")
+                    }
+                }
+            }
             self.currentTypeAndOutputMode = (type, outputMode)
             
             do {
@@ -1222,6 +1324,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                         }
                     }
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
+                    self.ownsRecordingSpeakerOverride = type.isRecord
                 case .headphones:
                     self.preferWiredHeadsetInput()
                 case let .port(port):
@@ -1239,18 +1342,6 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
             try AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
         }
         
-        if case let .record(_, video, _) = type, video, let input = AVAudioSession.sharedInstance().availableInputs?.first {
-            managedAudioSessionLog("ManagedAudioSession picking a data source on the first available input \(describeAudioPort(input))")
-            if let dataSources = input.dataSources {
-                for source in dataSources {
-                    if source.dataSourceName.contains("Bottom") {
-                        try? input.setPreferredDataSource(source)
-                        break
-                    }
-                }
-            }
-        }
-        
         if resetToBuiltin {
             var updatedType = type
             if case .record(false, let video, let withOthers) = updatedType, self.isHeadsetPluggedInValue {
@@ -1259,16 +1350,13 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
             switch updatedType {
                 case .record(false, _, _):
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
-                case .voiceCall, .playWithPossiblePortOverride, .record(true, _, _):
+                    self.ownsRecordingSpeakerOverride = true
+                case .record(true, _, _):
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
-                    if ManagedAudioSessionImpl.respectsSystemRecordingInput, updatedType.isRecord {
-                        // Recording follows the system-wide microphone selection. Pinning a preferred
-                        // input here would override the user's choice (Settings ▸ Sounds & Haptics ▸
-                        // Input, or the Control Center input picker), so clear any preference this
-                        // app set earlier instead.
-                        managedAudioSessionLog("ManagedAudioSession following the system input selection for \(updatedType), clearing the preferred input")
-                        let _ = try? AVAudioSession.sharedInstance().setPreferredInput(nil)
-                    } else if let routes = AVAudioSession.sharedInstance().availableInputs {
+                    self.ownsRecordingSpeakerOverride = false
+                case .voiceCall, .playWithPossiblePortOverride:
+                    try AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
+                    if let routes = AVAudioSession.sharedInstance().availableInputs {
                         var alreadySet = false
                         if self.isHeadsetPluggedInValue {
                             if case .voiceCall = updatedType, case .custom(.builtin) = outputMode {
@@ -1310,11 +1398,14 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     }
     
     private func activate() {
+        self.recordingInputSessionIsActive = false
         if let (type, outputMode) = self.currentTypeAndOutputMode {
             do {
                 let startTime = CFAbsoluteTimeGetCurrent()
                 
                 try AVAudioSession.sharedInstance().setActive(true, options: [.notifyOthersOnDeactivation])
+                self.recordingInputSessionIsActive = type.isRecord
+                self.failedMicrophoneAttempt = nil
                 
                 managedAudioSessionLog("\(CFAbsoluteTimeGetCurrent()) AudioSession activate: \((CFAbsoluteTimeGetCurrent() - startTime) * 1000.0) ms")
                 

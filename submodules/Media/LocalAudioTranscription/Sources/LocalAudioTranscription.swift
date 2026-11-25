@@ -1,5 +1,4 @@
 import Foundation
-import SGLogging
 import SGSimpleSettings
 import Speech
 import SwiftSignalKit
@@ -16,68 +15,64 @@ public func supportedTranscriptionLanguages() -> [String] {
 }
 
 private func transcriptionLocale(_ identifier: String) -> Locale? {
-    let identifier = identifier.replacingOccurrences(of: "_", with: "-")
-    let supported = SFSpeechRecognizer.supportedLocales().sorted { $0.identifier < $1.identifier }
-    if let exact = supported.first(where: { $0.identifier.replacingOccurrences(of: "_", with: "-").lowercased() == identifier.lowercased() }) {
-        return exact
-    }
-    // Telegram language packs have a -raw suffix; bare language codes need a real
-    // recognizer locale, preferably the same regional variant as the device.
-    let code = identifier.hasSuffix("-raw") ? String(identifier.dropLast(4)) : identifier
-    let language = Locale(identifier: code).languageCode
-    guard let language else {
-        return nil
-    }
-    for preferred in Locale.preferredLanguages + [code] {
-        if Locale(identifier: preferred).languageCode == language,
-           let match = supported.first(where: { $0.identifier.replacingOccurrences(of: "_", with: "-").lowercased() == preferred.replacingOccurrences(of: "_", with: "-").lowercased() }) {
-            return match
-        }
-    }
-    return supported.first { $0.languageCode == language }
+    guard let identifier = ExteraSpeechLocalePolicy.resolve(identifier, supported: supportedTranscriptionLanguages(), preferred: Locale.preferredLanguages) else { return nil }
+    return Locale(identifier: identifier)
 }
 
 /// Transcribe a voice message using the selected Apple speech language, or the app language.
 /// Each subscription owns its recognizer, task and temporary file, and can be cancelled
 /// while the authorization prompt is visible without starting recognition afterwards.
-public func transcribeAudio(path: String, appLocale: String) -> Signal<LocallyTranscribedAudio?, NoError> {
-    let settings = ExteraTranslationSettings.shared
-    let identifier = settings.appleSpeechLocaleIdentifier.isEmpty ? appLocale : settings.appleSpeechLocaleIdentifier
-    let onDeviceOnly = settings.appleSpeechOnDeviceOnly
+func legacyTranscribeAudio(path: String, appLocale: String, configuration: ExteraSpeechConfiguration) -> Signal<LocallyTranscribedAudio?, NoError> {
+    let identifier = configuration.localeIdentifier.isEmpty ? appLocale : configuration.localeIdentifier
+    let onDeviceOnly = configuration.onDeviceOnly
     return Signal { subscriber in
         let cancelled = Atomic(value: false)
+        let finished = Atomic(value: false)
         let disposable = MetaDisposable()
-        guard #available(iOS 13.0, *), let locale = transcriptionLocale(identifier) else {
+        let isCurrent = { configuration.isEnabled && configuration == ExteraSpeechSettings.shared.configuration }
+        let fail = {
+            guard !finished.swap(true), !cancelled.with({ $0 }) else { return }
+            disposable.dispose()
             subscriber.putNext(nil)
             subscriber.putCompletion()
+        }
+        guard #available(iOS 13.0, *), isCurrent(), let locale = transcriptionLocale(identifier) else {
+            fail()
+            return EmptyDisposable
+        }
+        let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+            if !isCurrent() { fail() }
+        }
+        guard isCurrent(), !finished.with({ $0 }) else {
+            NotificationCenter.default.removeObserver(observer)
+            fail()
             return EmptyDisposable
         }
         SFSpeechRecognizer.requestAuthorization { status in
             // Preparing a long voice message can involve substantial disk I/O.
             // Each subscription owns its recognizer, so preparation need not block UI.
             Queue.concurrentDefaultQueue().async {
-                guard !cancelled.with({ $0 }) else {
+                guard !cancelled.with({ $0 }), !finished.with({ $0 }), isCurrent() else {
+                    fail()
                     return
                 }
                 guard status == .authorized,
                       let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
                       !onDeviceOnly || recognizer.supportsOnDeviceRecognition else {
-                    SGLogger.shared.log("LocalTranscription", "Recognition unavailable for \(locale.identifier), authorization: \(status.rawValue)")
-                    subscriber.putNext(nil)
-                    subscriber.putCompletion()
+                    fail()
                     return
                 }
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
                 do {
                     try FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: url)
                 } catch {
-                    SGLogger.shared.log("LocalTranscription", "Unable to prepare audio for recognition")
-                    subscriber.putNext(nil)
-                    subscriber.putCompletion()
+                    try? FileManager.default.removeItem(at: url)
+                    fail()
                     return
                 }
-                guard !cancelled.with({ $0 }) else {
+                guard !cancelled.with({ $0 }), !finished.with({ $0 }), isCurrent() else {
                     try? FileManager.default.removeItem(at: url)
+                    fail()
                     return
                 }
                 let request = SFSpeechURLRecognitionRequest(url: url)
@@ -87,17 +82,13 @@ public func transcribeAudio(path: String, appLocale: String) -> Signal<LocallyTr
                 if #available(iOS 16.0, *) {
                     request.addsPunctuation = true
                 }
-                let finished = Atomic(value: false)
                 let timeoutTimer = SwiftSignalKit.Timer(timeout: 180.0, repeat: false, completion: {
-                    guard !finished.swap(true), !cancelled.with({ $0 }) else {
-                        return
-                    }
-                    subscriber.putNext(nil)
-                    subscriber.putCompletion()
+                    fail()
                 }, queue: .mainQueue())
                 timeoutTimer.start()
                 let task = recognizer.recognitionTask(with: request) { result, error in
-                    guard !cancelled.with({ $0 }), !finished.with({ $0 }) else {
+                    guard !cancelled.with({ $0 }), !finished.with({ $0 }), isCurrent() else {
+                        fail()
                         return
                     }
                     if let result, !result.bestTranscription.formattedString.isEmpty {
@@ -108,17 +99,15 @@ public func transcribeAudio(path: String, appLocale: String) -> Signal<LocallyTr
                             _ = finished.swap(true)
                             timeoutTimer.invalidate()
                             try? FileManager.default.removeItem(at: url)
+                            disposable.dispose()
                             subscriber.putCompletion()
                             return
                         }
                     }
                     if error != nil || result?.isFinal == true {
-                        _ = finished.swap(true)
                         timeoutTimer.invalidate()
-                        SGLogger.shared.log("LocalTranscription", "Recognition ended without a final transcript for \(locale.identifier)")
                         try? FileManager.default.removeItem(at: url)
-                        subscriber.putNext(nil)
-                        subscriber.putCompletion()
+                        fail()
                     }
                 }
                 disposable.set(ActionDisposable {
@@ -134,6 +123,7 @@ public func transcribeAudio(path: String, appLocale: String) -> Signal<LocallyTr
         }
         return ActionDisposable {
             _ = cancelled.swap(true)
+            NotificationCenter.default.removeObserver(observer)
             disposable.dispose()
         }
     }

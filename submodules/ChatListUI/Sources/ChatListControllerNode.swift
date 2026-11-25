@@ -227,6 +227,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
             previousItemNode.listNode.activateSearch = nil
             previousItemNode.listNode.presentAlert = nil
             previousItemNode.listNode.present = nil
+            previousItemNode.listNode.interaction?.openFolderSelection = nil
             previousItemNode.listNode.push = nil
             previousItemNode.listNode.toggleArchivedFolderHiddenByDefault = nil
             previousItemNode.listNode.hidePsa = nil
@@ -267,6 +268,9 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         }
         itemNode.listNode.present = { [weak self] c in
             self?.present?(c)
+        }
+        itemNode.listNode.interaction?.openFolderSelection = { [weak self] in
+            self?.exteraPresentSwipeFolders()
         }
         itemNode.listNode.push = { [weak self] c in
             self?.push?(c)
@@ -1010,6 +1014,36 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         }
     }
     
+    /// A folder swipe navigates the list; it does not mutate a chat's folder membership.
+    private func exteraPresentSwipeFolders() {
+        let data = self.context.sharedContext.currentPresentationData.with { $0 }
+        guard self.availableFilters.count > 1 else {
+            self.push?(self.context.sharedContext.makeFilterSettingsController(context: self.context, modal: false, scrollToTags: false, dismissed: nil))
+            return
+        }
+        let sheet = ActionSheetController(presentationData: data)
+        var items: [ActionSheetItem] = []
+        for (index, filter) in self.availableFilters.enumerated() {
+            if let limit = self.filtersLimit, index > Int(limit) { continue }
+            let title: String
+            if case let .filter(.filter(_, folderTitle, _, _)) = filter {
+                title = folderTitle.text
+            } else {
+                title = data.strings.ChatList_Tabs_AllChats
+            }
+            items.append(ActionSheetButtonItem(title: title, color: .accent, font: filter.id == self.selectedId ? .bold : .default, action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                guard let self, let currentIndex = self.availableFilters.firstIndex(where: { $0.id == filter.id }), self.filtersLimit.map({ currentIndex <= Int($0) }) ?? true else { return }
+                self.switchToFilter(id: filter.id)
+            }))
+        }
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        self.present?(sheet)
+    }
+
     public func switchToFilter(id: ChatListFilterTabEntryId, animated: Bool = true, completion: (() -> Void)? = nil) {
         self.onFilterSwitch?()
         if id != self.selectedId, let index = self.availableFilters.firstIndex(where: { $0.id == id }) {

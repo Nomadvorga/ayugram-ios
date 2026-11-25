@@ -208,17 +208,25 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
     private func confirmImport(_ backup: ExteraSettingsBackup.ValidatedBackup) {
         self.confirm(title: self.text("Extera.ImportSettings", "Import Settings"), message: self.text("Extera.ImportSettingsConfirm", "Replace the preferences included in this backup? Accounts, messages, and plugin preferences are kept."), destructive: false, actionTitle: self.text("Extera.ImportSettings", "Import Settings"), action: { [weak self] in
             guard let self else { return }
-            ExteraSettingsBackup.apply(backup)
-            self.applyShared(backup.sharedPreferences, reset: false, updateDownloadSpeedBoost: backup.includesDownloadSpeedBoost)
+            do {
+                try ExteraSettingsBackup.apply(backup)
+                self.applyShared(backup.sharedPreferences, reset: false, updateDownloadSpeedBoost: backup.includesDownloadSpeedBoost)
+            } catch {
+                self.showError(importing: true)
+            }
         })
     }
 
     private func confirmReset() {
         self.confirm(title: self.text("Extera.ResetSettings", "Reset Settings"), message: self.text("Extera.ResetSettingsConfirm", "Reset the preferences exposed in exteraGram settings to their defaults? Accounts, messages, and plugin preferences are kept."), destructive: true, actionTitle: self.text("Extera.ResetSettings", "Reset Settings"), action: { [weak self] in
             guard let self else { return }
-            ExteraSettingsBackup.reset()
-            let calls = CallListSettings.defaultSettings
-            self.applyShared(.init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: ExperimentalUISettings.defaultSettings.foldersTabAtBottom), reset: true, updateDownloadSpeedBoost: true)
+            do {
+                try ExteraSettingsBackup.reset()
+                let calls = CallListSettings.defaultSettings
+                self.applyShared(.init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: ExperimentalUISettings.defaultSettings.foldersTabAtBottom), reset: true, updateDownloadSpeedBoost: true)
+            } catch {
+                self.showMessage(title: self.text("Extera.SettingsBackup", "Settings Backup"), message: self.text("Extera.SettingsBackupResetError", "The settings could not be reset. Please try again."))
+            }
         })
     }
 

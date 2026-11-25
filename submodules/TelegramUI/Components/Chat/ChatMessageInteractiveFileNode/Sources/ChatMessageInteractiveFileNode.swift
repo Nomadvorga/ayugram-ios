@@ -441,6 +441,11 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 let transcriptionResourceId = arguments.file.resource.id
                 
                 if context.sharedContext.immediateExperimentalUISettings.localTranscription || !arguments.associatedData.isPremium || SGSimpleSettings.shared.transcriptionBackend == SGSimpleSettings.TranscriptionBackend.apple.rawValue {
+                    guard ExteraSpeechSettings.shared.isEnabled else {
+                        self.audioTranscriptionState = .collapsed
+                        self.requestUpdateLayout(true)
+                        return
+                    }
                     let appLocale = presentationData.strings.baseLanguageCode
                     let transcriptionLocale = arguments.controllerInteraction.sgGetChatPredictedLang() ?? appLocale
                     

@@ -3008,6 +3008,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
     }
     
+    /// Root host navigation menu, supplied only to the main chat list.
+    public var exteraOpenNavigationMenu: ((UIView) -> Void)?
+
     func updateHeaderContent() -> (primaryContent: ChatListHeaderComponent.Content?, secondaryContent: ChatListHeaderComponent.Content?) {
         var primaryContent: ChatListHeaderComponent.Content?
         if let primaryContext = self.primaryContext {
@@ -3746,7 +3749,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             self.updateLayout(layout: layout, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
         // MARK: Swiftgram
-        if SGSimpleSettings.shared.hideTabBar {
+        if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
         //
@@ -3777,7 +3780,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
         }
         // MARK: Swiftgram
-        if SGSimpleSettings.shared.hideTabBar {
+        if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             (self.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
         //
@@ -5051,7 +5054,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         completion?()
         
         self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: transition) // MARK: Swiftgram
-        (self.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: transition) // MARK: Swiftgram
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: transition) // MARK: Swiftgram
         
         self.isSearchActive = false
         if let navigationController = self.navigationController as? NavigationController {
@@ -7073,7 +7076,12 @@ private final class ChatListLocationContext {
     var rightButtons: [NavigationBarComponent.Button] {
         var result: [NavigationBarComponent.Button] = []
         // MARK: Swiftgram
-        if let settingsButton = self.settingsButton {
+        if let openMenu = self.parentController?.exteraOpenNavigationMenu, self.location == .chatList(groupId: .root) {
+            result.append(NavigationBarComponent.Button(id: "exteraNavigation", content: .more,
+                overflow: NavigationBarComponent.OverflowInfo(title: self.context.sharedContext.currentPresentationData.with { $0.strings.Common_More }, iconName: nil, priority: 4),
+                action: openMenu,
+                accessibilityLabel: self.context.sharedContext.currentPresentationData.with { $0.strings.Common_More }))
+        } else if let settingsButton = self.settingsButton {
             result.append(settingsButton)
         }
         //
@@ -7495,7 +7503,7 @@ private final class ChatListLocationContext {
             }
             var transition: ContainedViewLayoutTransition = .immediate
             let previousToolbar = previousToolbarValue.swap(toolbar)
-            if SGSimpleSettings.shared.hideTabBar { // MARK: Swiftgram
+            if ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: Swiftgram
                 transition = .animated(duration: 0.2, curve: .easeInOut)
             } else if (previousToolbar == nil) != (toolbar == nil) {
                 transition = .animated(duration: 0.4, curve: .spring)
@@ -7664,7 +7672,7 @@ private final class ChatListLocationContext {
                 }
                 
                 // MARK: Swiftgram
-                if SGSimpleSettings.shared.hideTabBar {
+                if ExteraNavigationSettings.shared.configuration.barMode == .hide {
                     self.settingsButton = NavigationBarComponent.Button(id: "settings",
                         content: .more,
                         action: { [weak self] _ in

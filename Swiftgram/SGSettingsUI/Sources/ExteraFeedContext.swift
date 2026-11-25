@@ -21,8 +21,6 @@ struct ExteraFeedSnapshot: Equatable {
     var channelsLoaded = false
     var historyUncertain = false
     var historyLimitReached = false
-    var channelLimitReached = false
-    var selectedChannelsLimited = false
     var hasEligibleChannels = false
 }
 
@@ -31,10 +29,8 @@ struct ExteraFeedSnapshot: Equatable {
 /// Behavior follows exteraGram Android's FeedChannelRegistry / FeedTimelineLoader;
 /// TelegramEngine owns message decoding, caching, and normal API requests on iOS.
 final class ExteraFeedContext {
-    static let maximumChannels = 40
-    static let maximumPostsPerChannel = 100
-    private static let maximumChatListCount = 2000
-    private static let maximumVisiblePosts = 1000
+    static let maximumPostsPerChannel = ExteraFeedHistoryPolicy.maximumPostsPerChannel
+    private static let maximumVisiblePosts = ExteraFeedHistoryPolicy.maximumVisiblePosts
     let settings: ExteraFeedSettings
     private let context: AccountContext
     private let promise = ValuePromise(ExteraFeedSnapshot(), ignoreRepeated: false)
@@ -47,9 +43,8 @@ final class ExteraFeedContext {
     private var uncertain: Set<Int64> = []
     private var refreshing: Set<Int64> = []
     private var requestedIds: Set<Int64> = []
-    private var pending: [Int64] = []
+    private var pending = ExteraFeedHistoryPolicy.RequestQueue()
     private var generation = 0
-    private var channelLimit = 500
     private var windowSize = 100
     private var merged: [EngineMessage] = []
     private var visiblePages: Set<UUID> = []
@@ -99,7 +94,7 @@ final class ExteraFeedContext {
         } else {
             self.generation += 1
             self.channelsDisposable.set(nil)
-            self.pending = Array(Set(self.pending).union(self.requests.keys)).sorted()
+            self.pending.resume(cancelled: Set(self.requests.keys))
             for request in self.requests.values { request.dispose() }
             self.requests.removeAll()
             self.snapshot.loading = false
@@ -108,31 +103,37 @@ final class ExteraFeedContext {
     }
 
     func loadMoreChannels() {
-        guard self.channelLimit < Self.maximumChatListCount else { return }
-        self.channelLimit = min(Self.maximumChatListCount, self.channelLimit + 500)
         if self.running { self.subscribeChannels() }
     }
 
     private func subscribeChannels() {
         self.channelsDisposable.set((combineLatest(
-            self.context.engine.messages.chatList(group: .root, count: self.channelLimit),
-            self.context.engine.messages.chatList(group: .archive, count: self.channelLimit)
-        ) |> deliverOnMainQueue).start(next: { [weak self] main, archive in
+            self.context.engine.messages.chatList(group: .root, count: 1),
+            self.context.engine.messages.chatList(group: .archive, count: 1)
+        ) |> mapToSignal { [weak self] _, _ -> Signal<([EnginePeer.Id: EnginePeer?], [EnginePeer.Id: EngineChatList.Group?]), NoError> in
+            guard let self else { return .complete() }
+            // Enumerate the entire local registry, rather than the first N recent chats.
+            // This is the engine's transaction facade, not a per-channel history/poll view.
+            return self.context.engine.messages.getAllLocalChannels(count: Int.max)
+            |> mapToSignal { ids in
+                return self.context.engine.data.subscribe(
+                    EngineDataMap(ids.map { TelegramEngine.EngineData.Item.Peer.Peer(id: $0) }),
+                    EngineDataMap(ids.map { TelegramEngine.EngineData.Item.Messages.ChatListGroup(id: $0) })
+                )
+            }
+        } |> deliverOnMainQueue).start(next: { [weak self] peers, groups in
             guard let self else { return }
             var channels: [ExteraFeedChannel] = []
-            var seen = Set<Int64>()
-            for (list, archived) in [(main, false), (archive, true)] {
-                for item in list.items {
-                    guard let peer = item.renderedPeer.peer, case let .channel(channel) = peer,
-                          case .broadcast = channel.info, channel.participationStatus == .member,
-                          seen.insert(peer.id.toInt64()).inserted else { continue }
-                    channels.append(ExteraFeedChannel(peer: peer, archived: archived))
-                }
+            for (id, value) in peers {
+                guard let peer = value, let group = groups[id] ?? nil,
+                      group == .root || group == .archive,
+                      case let .channel(channel) = peer, case .broadcast = channel.info,
+                      channel.participationStatus == .member else { continue }
+                channels.append(ExteraFeedChannel(peer: peer, archived: group == .archive))
             }
             channels.sort { $0.peer.debugDisplayTitle.localizedCaseInsensitiveCompare($1.peer.debugDisplayTitle) == .orderedAscending }
             self.snapshot.channels = channels
-            self.snapshot.channelsHaveMore = (main.hasEarlier || archive.hasEarlier) && self.channelLimit < Self.maximumChatListCount
-            self.snapshot.channelLimitReached = (main.hasEarlier || archive.hasEarlier) && self.channelLimit >= Self.maximumChatListCount
+            self.snapshot.channelsHaveMore = false
             self.snapshot.channelsLoaded = true
             self.settingsChanged()
         }))
@@ -141,8 +142,7 @@ final class ExteraFeedContext {
     private func settingsChanged() {
         let settings = self.settings.state
         let eligible = Set(self.snapshot.channels.filter { settings.includeArchived || !$0.archived }.map(\.id)).intersection(settings.effectiveChannelIds)
-        self.snapshot.selectedChannelsLimited = eligible.count > Self.maximumChannels
-        let ids = Set(eligible.sorted().prefix(Self.maximumChannels))
+        let ids = eligible
         self.snapshot.hasEligibleChannels = !ids.isEmpty
         if ids != self.requestedIds {
             self.reset(ids: ids)
@@ -153,6 +153,7 @@ final class ExteraFeedContext {
 
     func refresh() {
         guard self.running else { return }
+        self.subscribeChannels()
         // Retain a usable window and its cursors until replacement history actually arrives.
         self.reset(ids: self.requestedIds, preserveHistory: true)
     }
@@ -172,7 +173,7 @@ final class ExteraFeedContext {
         self.uncertain.removeAll()
         self.refreshing = preserveHistory ? ids : []
         self.requestedIds = ids
-        self.pending = ids.sorted()
+        self.pending.replace(with: ids)
         self.snapshot.historyUncertain = false
         self.snapshot.historyLimitReached = false
         self.snapshot.hasOlder = !ids.isEmpty
@@ -187,13 +188,13 @@ final class ExteraFeedContext {
             self.publish()
             return
         }
-        self.pending = self.loadableIds.subtracting(self.uncertain).sorted()
+        self.pending.replace(with: self.loadableIds.subtracting(self.uncertain))
         self.pump()
     }
 
     func retryUncertain() {
         guard self.running, !self.snapshot.loading else { return }
-        self.pending = self.uncertain.intersection(self.loadableIds).sorted()
+        self.pending.replace(with: self.uncertain.intersection(self.loadableIds))
         self.pump()
     }
 
@@ -204,8 +205,7 @@ final class ExteraFeedContext {
     /// At most four ordinary getHistory requests in flight, independent of selected channel count.
     private func pump() {
         guard self.running else { return }
-        while self.requests.count < 4, !self.pending.isEmpty {
-            let id = self.pending.removeFirst()
+        while let id = self.pending.next(active: Set(self.requests.keys)) {
             let generation = self.generation
             let disposable = MetaDisposable()
             self.requests[id] = disposable
@@ -226,6 +226,7 @@ final class ExteraFeedContext {
                     self.refreshing.remove(id)
                     self.states[id] = state
                     self.messages[id] = Array(all.prefix(Self.maximumPostsPerChannel))
+                    self.context.engine.messages.ensureMessagesAreLocallyAvailable(messages: self.messages[id] ?? [])
                     if result.completed { self.exhausted.insert(id) }
                 }
                 self.requests.removeValue(forKey: id)?.dispose()
@@ -247,10 +248,8 @@ final class ExteraFeedContext {
         let lists = self.messages
         // Hold back posts below the newest channel frontier. A channel still awaiting its older
         // history can contain posts above those, so publishing them would break pagination order.
-        let frontier = lists.compactMap { id, messages -> EngineMessage.Index? in
-            guard !self.exhausted.contains(id) else { return nil }
-            return messages.map(\.index).min()
-        }.max()
+        let oldest = lists.compactMapValues { $0.map(\.index).min() }
+        let frontier = ExteraFeedHistoryPolicy.frontier(oldest: oldest, exhausted: self.exhausted)
         var unique: [EngineMessage.Id: EngineMessage] = [:]
         for messages in lists.values {
             for message in messages {

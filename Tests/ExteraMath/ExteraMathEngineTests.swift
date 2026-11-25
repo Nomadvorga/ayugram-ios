@@ -225,6 +225,26 @@ final class ExteraMathEngineTests: XCTestCase {
         XCTAssertNotNil(ExteraMathEngine.suggestion(in: "90 min=", caret: 7, options: .init(arithmetic: false)))
     }
 
+    func testReferenceHelpExamplesUseRealResultsAndDoNotInventStarsPrices() {
+        let now = ISO8601DateFormatter().date(from: "2026-01-15T12:00:00Z")!
+        let rates = ExteraMathCurrencySnapshot(date: now, unitsPerUSD: ["EUR": 0.8, "RUB": 100, "TON": 0.25])
+        let options = ExteraMathEngine.Options(localCurrency: "RUB", localTimeZone: TimeZone(identifier: "Europe/Moscow")!, now: now, currencyRates: rates)
+        let examples = [
+            "(120 + 80) / 4 =", "√144 + 2^3 =", "max(12, 40, 7) =", "sin(30) =",
+            "hex(255) =", "dec(ff, 16) =", "0xff + 1 =", "2300 - 15% =", "12% от 1200 =", "300к / 12 =",
+            "100€ =", "100 долларов в евро =", "5к ₽ в $ =", "50$ в GRAM =",
+            "72°F =", "10 миль =", "5 кг в фунтах =", "100 км/ч в mph =", "90 мин =", "2 ч + 45 мин =",
+            "18:00 utc =", "12:00 в токио =", "сейчас в нью-йорке ="
+        ]
+        for expression in examples {
+            let result = ExteraMathEngine.suggestion(in: expression, caret: (expression as NSString).length, options: options)
+            XCTAssertNotNil(result, expression)
+            XCTAssertFalse(result?.isPendingCurrency ?? true, expression)
+        }
+        let stars = "500 звёзд ="
+        XCTAssertNil(ExteraMathEngine.suggestion(in: stars, caret: (stars as NSString).length, options: options))
+    }
+
     static var allTests: [(String, (ExteraMathEngineTests) -> () throws -> Void)] {
         return [
             ("testPrecedenceAndUnary", testPrecedenceAndUnary),
@@ -242,6 +262,7 @@ final class ExteraMathEngineTests: XCTestCase {
             ("testCurrencyRequestCancellationStopsTransportAndSuppressesDelivery", testCurrencyRequestCancellationStopsTransportAndSuppressesDelivery),
             ("testTimeZonesDSTOffsetsMeridiemsAndDayShift", testTimeZonesDSTOffsetsMeridiemsAndDayShift),
             ("testConversionSuggestionsAndIndependentOptions", testConversionSuggestionsAndIndependentOptions),
+            ("testReferenceHelpExamplesUseRealResultsAndDoNotInventStarsPrices", testReferenceHelpExamplesUseRealResultsAndDoNotInventStarsPrices),
         ]
     }
 }
