@@ -65,6 +65,13 @@ extension ChatControllerImpl {
             return true
         }
         switch action {
+        case .read:
+            // Explicit user action may pass ghost mode, just like “Read Message”
+            // in the context menu. Never read beyond the tapped incoming message.
+            guard message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud else {
+                return true
+            }
+            ayuReadHistoryOnServer(account: self.context.account, peerId: message.id.peerId, maxId: message.id.id)
         case .reply:
             if case .reply = self.exteraReplyAction(for: message) {
                 self.interfaceInteraction?.setupReplyMessage(message.id, nil, { _, completion in completion() })

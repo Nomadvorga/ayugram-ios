@@ -18,6 +18,16 @@ public struct SGOneFromManyOption {
     }
 }
 
+/// A selector's anchor and highlight contract, shared by native and opt-in SG rows.
+protocol SGOneFromManySourceNode: AnyObject, ItemListItemNode {
+    var oneFromManySourceView: UIView { get }
+    func updateHasContextMenu(hasContextMenu: Bool)
+}
+
+extension ItemListDisclosureItemNode: SGOneFromManySourceNode {
+    var oneFromManySourceView: UIView { return self.labelNode.view }
+}
+
 struct SGOneFromManyTag<Setting: Hashable>: ItemListItemTag {
     let setting: Setting
 
@@ -31,9 +41,9 @@ struct SGOneFromManyTag<Setting: Hashable>: ItemListItemTag {
 
 public func sgPresentOneFromManySelector<Setting: Hashable>(controller: ItemListController, setting: Setting, presentationData: PresentationData, options: [SGOneFromManyOption]) {
     let targetTag = SGOneFromManyTag(setting: setting)
-    var sourceNode: ItemListDisclosureItemNode?
+    var sourceNode: SGOneFromManySourceNode?
     controller.forEachItemNode { node in
-        if let node = node as? ItemListDisclosureItemNode, node.tag?.isEqual(to: targetTag) == true {
+        if let node = node as? SGOneFromManySourceNode, node.tag?.isEqual(to: targetTag) == true {
             sourceNode = node
         }
     }
@@ -55,7 +65,7 @@ public func sgPresentOneFromManySelector<Setting: Hashable>(controller: ItemList
     }
     let contextController = makeContextController(
         presentationData: presentationData,
-        source: .reference(SGOneFromManyReferenceContentSource(sourceView: sourceNode.labelNode.view)),
+        source: .reference(SGOneFromManyReferenceContentSource(sourceView: sourceNode.oneFromManySourceView)),
         items: .single(ContextController.Items(content: .list(items)))
     )
     sourceNode.updateHasContextMenu(hasContextMenu: true)

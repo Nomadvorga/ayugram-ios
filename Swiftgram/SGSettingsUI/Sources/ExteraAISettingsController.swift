@@ -23,13 +23,19 @@ public func exteraAISettingsController(context: AccountContext) -> ViewControlle
     return ExteraAIList.make(context: context, title: "AI", build: { page in
         let config = ExteraAISettings.shared.configuration
         let selected = config.selectedService?.name ?? page.text("Not configured", "Не настроен")
-        return [
+        var rows: [ExteraAIRow] = [
             .action(.main, page.text("AI Chat", "Чат с ИИ"), .generic, { page.push(exteraAIChatController(context: context)) }),
             .action(.main, page.text("Services", "Сервисы") + ": " + selected, .generic, { page.openServices() }),
             .action(.main, page.text("Roles", "Роли") + ": " + (config.selectedRole?.name ?? page.text("None", "Нет")), .generic, { page.openRoles() }),
             .action(.main, page.text("Message History", "История сообщений") + " (\(ExteraAISettings.shared.history(accountId: page.accountId).count))", .generic, { page.openHistory() }),
-            .action(.main, page.text("Improve Text", "Улучшить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .improve)) }),
-            .action(.main, page.text("Summarize Text", "Сократить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .summarize)) }),
+        ]
+        if config.showEditor {
+            rows.append(.action(.main, page.text("Improve Text", "Улучшить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .improve)) }))
+        }
+        if config.showSummaries {
+            rows.append(.action(.main, page.text("Summarize Text", "Сократить текст"), .generic, { page.push(exteraAITextProcessingController(context: context, text: "", action: .summarize)) }))
+        }
+        rows += [
             .notice(.main, page.text("Messages are sent to your selected provider when you press Send. API keys are stored in this device’s Keychain. Chat history is stored locally and separately for each Telegram account.", "Сообщения отправляются выбранному провайдеру по нажатию «Отправить». Ключи API хранятся в Связке ключей устройства, история чата — локально и отдельно для каждого аккаунта Telegram.")),
             .toggle(.options, page.text("Save Chat History", "Сохранять историю чата"), config.saveHistory, { value in page.change { $0.saveHistory = value } }),
             .toggle(.options, page.text("Stream Responses", "Потоковые ответы"), config.responseStreaming, { value in page.change { $0.responseStreaming = value } }),
@@ -43,6 +49,7 @@ public func exteraAISettingsController(context: AccountContext) -> ViewControlle
             }),
             .notice(.options, page.text("Higher temperature makes answers more varied. Some models use their own temperature. Turning history off stops sending or saving earlier turns; it does not delete existing history.", "Чем выше температура, тем разнообразнее ответы. Некоторые модели используют собственную температуру. При отключённой истории предыдущие сообщения не отправляются и новые не сохраняются; старая история остаётся."))
         ]
+        return rows
     })
 }
 
@@ -100,7 +107,7 @@ private final class ExteraAIList {
                 case let .header(section, text): return .header(id: index, section: section, text: text, badge: nil)
                 }
             }
-            let arguments = SGItemListArguments<Int, Int, Int, Int, Int>(context: context, setBoolValue: { index, value in
+            let arguments = SGItemListArguments<Int, Int, Int, Int, Int>(context: context, visualStyle: .extera, setBoolValue: { index, value in
                 if rows.indices.contains(index), case let .toggle(_, _, _, update) = rows[index] { update(value) }
             }, action: { index in
                 if rows.indices.contains(index), case let .action(_, _, _, action) = rows[index] { action() }

@@ -1770,7 +1770,7 @@ public final class MessageInputPanelComponent: Component {
                 let _ = aiButtonMinTextLength
 
                 let showCorner = isTallPanel && hasText
-                let shouldShow = showCorner && component.aiCompose != nil
+                let shouldShow = showCorner && component.aiCompose != nil && ExteraAISettings.shared.configuration.showEditor
 
                 if shouldShow {
                     let aiButton: ComponentView<Empty>
@@ -1803,6 +1803,7 @@ public final class MessageInputPanelComponent: Component {
                                 guard let self, let component = self.component else {
                                     return
                                 }
+                                guard ExteraAISettings.shared.configuration.showEditor else { return }
                                 component.aiCompose?()
                             }
                         )),

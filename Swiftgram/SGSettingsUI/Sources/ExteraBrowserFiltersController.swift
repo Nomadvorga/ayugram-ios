@@ -67,7 +67,7 @@ private final class ExteraBrowserFiltersPage {
                 case let .toggle(section, text, value, _): return .toggle(id: index, section: section, settingName: index, value: value, text: text, enabled: true)
                 }
             }
-            let arguments = SGItemListArguments<Int, Int, Int, Int, Int>(context: context, setBoolValue: { index, value in
+            let arguments = SGItemListArguments<Int, Int, Int, Int, Int>(context: context, visualStyle: .extera, setBoolValue: { index, value in
                 if rows.indices.contains(index), case let .toggle(_, _, _, update) = rows[index] { update(value) }
             }, action: { index in
                 if rows.indices.contains(index), case let .action(_, _, _, action) = rows[index] { action() }

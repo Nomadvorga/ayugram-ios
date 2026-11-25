@@ -5,6 +5,11 @@ import Foundation
 public final class ExteraSettings {
     public static let shared = ExteraSettings()
 
+    /// Publish one settings change after a compound control has updated its children.
+    public static func performBatchUpdates(_ updates: () -> Void) {
+        AyuSettingsStore.shared.performBatchUpdates(updates)
+    }
+
     public enum Keys: String, CaseIterable {
         case disableNumberRounding
         case inAppVibration

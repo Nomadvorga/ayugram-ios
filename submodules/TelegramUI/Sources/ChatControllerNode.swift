@@ -1,6 +1,7 @@
 import AyuSnowEffect
 import Foundation
 import SGSimpleSettings
+import SGStrings
 import UIKit
 import AsyncDisplayKit
 import Postbox
@@ -32,6 +33,7 @@ import AccessoryPanelNode
 import ForwardAccessoryPanelNode
 import ChatOverscrollControl
 import ChatInputPanelNode
+import ChatChannelSubscriberInputPanelNode
 import ChatInputContextPanelNode
 import ChatSendMessageActionUI
 import TextSelectionNode
@@ -1980,7 +1982,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         var dismissedOverlayContextPanelNode: ChatInputContextPanelNode?
         // MARK: Swiftgram
         var inputPanelNodes = inputPanelForChatPresentationIntefaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.inputPanelNode, currentSecondaryPanel: self.secondaryInputPanelNode, textInputPanelNode: self.textInputPanelNode, chatControllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction)
-        if SGSimpleSettings.shared.hideChannelBottomButton {
+        let channelBottomButton = ExteraChatSettings.shared.effectiveChannelBottomButton
+        self.inputPanelBackgroundNode.isHidden = false
+        if channelBottomButton == .hidden {
             // We still need the panel for messages multi-select or search. Likely can break in future.
             if self.chatPresentationInterfaceState.interfaceState.selectionState != nil || self.chatPresentationInterfaceState.search != nil {
                 self.inputPanelBackgroundNode.isHidden = false
@@ -1991,6 +1995,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     // Looks like we're eligible to hide the panel, let's remove safe area fill as well
                     self.inputPanelBackgroundNode.isHidden = true
                 }
+            }
+        }
+        for panel in [inputPanelNodes.primary, inputPanelNodes.secondary] {
+            if let panel = panel as? ChatChannelSubscriberInputPanelNode {
+                panel.discussionButtonTitle = channelBottomButton == .discuss ? i18n("Extera.Chat.ChannelBottomButton.Discuss", self.chatPresentationInterfaceState.strings.baseLanguageCode) : nil
             }
         }
         

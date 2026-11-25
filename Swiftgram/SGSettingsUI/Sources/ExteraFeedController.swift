@@ -22,13 +22,16 @@ private enum ExteraFeedAction: Equatable {
     case deleteCategory(String)
     case moveCategory(String, Int)
     case moreChannels
-    case markLoadedRead
+    case selectionMenu(String?)
+    case markAllRead
     case open(EngineMessage.Id)
 }
 
 private enum ExteraFeedToggle: Equatable {
     case archived
     case unread
+    case widePosts
+    case unreadCounter
     case channel(Int64, String?)
     case categoryHidden(String)
 }
@@ -39,7 +42,9 @@ private struct ExteraFeedEntry: ItemListNodeEntry {
         case header(String)
         case action(String, ExteraFeedAction, Bool)
         case toggle(String, Bool, ExteraFeedToggle)
-        case post(EngineMessage, String, String, Bool)
+        case search(String, String)
+        case channel(EnginePeer, String, Bool, String?)
+        case post(EngineMessage, String, String, Bool, Bool)
     }
 
     let stableId: String
@@ -60,8 +65,12 @@ private struct ExteraFeedEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { actions.perform(action) })
         case let .toggle(title, value, toggle):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: false, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { actions.toggle(toggle, value: $0) })
-        case let .post(message, channel, preview, unread):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: channel, titleFont: unread ? .bold : .regular, titleBadge: unread ? actions.text("Extera.FeedUnread", "Unread") : nil, label: preview, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { actions.perform(.open(message.id)) })
+        case let .search(query, placeholder):
+            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: ""), text: query, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { actions.query.set($0) }, action: {}, dismissKeyboardOnEnter: true)
+        case let .channel(peer, title, selected, categoryId):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, context: actions.context, iconPeer: peer, title: title, label: selected ? "✓" : "", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: { actions.toggle(.channel(peer.id.toInt64(), categoryId), value: !selected) })
+        case let .post(message, channel, preview, unread, wide):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: channel, titleFont: unread ? .bold : .regular, titleBadge: unread ? actions.text("Extera.FeedUnread", "Unread") : nil, label: preview, labelStyle: .multilineDetailText, sectionId: self.section, style: wide ? .plain : .blocks, action: { actions.perform(.open(message.id)) })
         }
     }
 }
@@ -86,12 +95,25 @@ public func exteraFeedSettingsController(context: AccountContext) -> ViewControl
 
 private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedContext, page: ExteraFeedPage) -> ViewController {
     let actions = ExteraFeedActions(context: context, feed: feed)
-    let signal = combineLatest(context.sharedContext.presentationData, feed.signal)
+    // Real channel read state suppresses local unread marks after an explicit mark-all,
+    // including posts loaded later and reads made on another device.
+    let snapshots = feed.signal |> mapToSignal { snapshot -> Signal<(ExteraFeedSnapshot, [EnginePeer.Id: EnginePeerReadCounters]), NoError> in
+        guard case .feed = page, !snapshot.messages.isEmpty else { return .single((snapshot, [:])) }
+        let ids = Set(snapshot.messages.map { $0.id.peerId })
+        return context.engine.data.subscribe(EngineDataMap(ids.map { TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: $0) }))
+        |> map { (snapshot, $0) }
+    }
+    let signal = combineLatest(context.sharedContext.presentationData, snapshots, actions.query.get())
     |> deliverOnMainQueue
-    |> map { presentationData, snapshot -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, snapshotAndCounters, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let (snapshot, counters) = snapshotAndCounters
         let settings = feed.settings.state
+        let appearance = ExteraFeedSettings.shared
         let lang = presentationData.strings.baseLanguageCode
         func text(_ key: String, _ fallback: String) -> String { return i18n(key, lang, fallback) }
+        func unread(_ message: EngineMessage) -> Bool {
+            return settings.isUnread(channelId: message.id.peerId.toInt64(), messageId: message.id.id) && !(counters[message.id.peerId]?.isIncomingMessageIndexRead(message.index) ?? false)
+        }
         var entries: [ExteraFeedEntry] = []
         func add(_ id: String, _ section: Int32, _ content: ExteraFeedEntry.Content) {
             entries.append(ExteraFeedEntry(stableId: id, index: entries.count, section: section, content: content))
@@ -105,11 +127,13 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
             add("channels", 0, .action(text("Extera.FeedChannels", "Choose Channels"), .channels(nil), false))
             add("categories", 0, .action(text("Extera.FeedCategories", "Categories"), .categories, false))
             add("unread", 0, .toggle(text("Extera.FeedUnreadOnly", "Unread Only"), settings.unreadOnly, .unread))
-            let unreadCount = snapshot.messages.filter { settings.isUnread(channelId: $0.id.peerId.toInt64(), messageId: $0.id.id) }.count
+            let unreadCount = snapshot.messages.filter(unread).count
             let countTitle = snapshot.historyUncertain && snapshot.messages.isEmpty ? text("Extera.FeedHistoryUnconfirmed", "Channel history is not confirmed") : "\(text("Extera.FeedLoadedUnread", "Loaded unread posts")): \(unreadCount)"
-            add("count", 1, .header(countTitle))
-            if !snapshot.messages.isEmpty {
-                add("markRead", 1, .action(text("Extera.FeedMarkLoadedRead", "Mark Loaded Posts Read"), .markLoadedRead, false))
+            if appearance.showUnreadCounter {
+                add("count", 1, .header(countTitle))
+            }
+            if snapshot.hasEligibleChannels {
+                add("markRead", 1, .action(text("Extera.FeedMarkAllRead", "Read All"), .markAllRead, false))
             }
             if settings.effectiveChannelIds.isEmpty {
                 add("empty", 1, .notice(text("Extera.FeedChooseChannelsInfo", "Choose the subscribed channels to include in your feed, or create a category with its own channels.")))
@@ -121,7 +145,7 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short
                 let channels = Dictionary(uniqueKeysWithValues: snapshot.channels.map { ($0.id, $0.peer.debugDisplayTitle) })
-                let messages = snapshot.messages.filter { !settings.unreadOnly || settings.isUnread(channelId: $0.id.peerId.toInt64(), messageId: $0.id.id) }
+                let messages = snapshot.messages.filter { !settings.unreadOnly || unread($0) }
                 for message in messages {
                     let id = "post.\(message.id.peerId.toInt64()).\(message.id.namespace).\(message.id.id)"
                     var body = message.text
@@ -131,7 +155,7 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                     // The full original message and attachments open in Telegram's chat renderer.
                     if body.count > 1400 { body = String(body.prefix(1400)) + "…" }
                     let date = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(message.timestamp)))
-                    add(id, 2, .post(message, channels[message.id.peerId.toInt64()] ?? message.author?.debugDisplayTitle ?? "", date + "\n" + body, settings.isUnread(channelId: message.id.peerId.toInt64(), messageId: message.id.id)))
+                    add(id, 2, .post(message, channels[message.id.peerId.toInt64()] ?? message.author?.debugDisplayTitle ?? "", date + "\n" + body, unread(message), appearance.widePosts))
                 }
                 if messages.isEmpty && !snapshot.loading && !snapshot.historyUncertain && snapshot.channelsLoaded {
                     add("empty", 2, .notice(settings.unreadOnly ? text("Extera.FeedNoUnread", "No unread posts in the loaded history. Load older posts or refresh for new posts.") : text("Extera.FeedNoPosts", "No posts are available in the selected channels. Refresh to retry, or check your channel and archive selection.")))
@@ -154,31 +178,54 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                     add("channelLimit", 3, .notice(text("Extera.FeedSelectionLimit", "A feed can load up to 40 channels. Choose fewer channels or split them into categories.")))
                 }
             }
-            add("info", 4, .notice(text("Extera.FeedLocalInfo", "This feed is stored on this device for this account. Opening a post marks it and earlier posts in that channel as read in the feed. Use Refresh to fetch new posts. Photos, videos, and the full post open in the original channel.")))
+            add("info", 4, .notice(text("Extera.FeedReadBehaviorInfo", "Opening a post marks it and earlier posts in that channel as read in the feed. Read All asks for confirmation, then also marks the selected original channels as read. Use Refresh to fetch new posts. Photos, videos, and the full post open in the original channel.")))
         case let .channels(categoryId):
             let category = settings.categories.first(where: { $0.id == categoryId })
-            title = category?.title ?? text("Extera.FeedChannels", "Choose Channels")
-            if categoryId == nil {
-                add("archived", 0, .toggle(text("Extera.FeedIncludeArchived", "Include Archived Channels"), settings.includeArchived, .archived))
-                add("openFeed", 0, .action(text("Extera.ChannelFeed", "Channel Feed"), .selectCategory(nil), false))
-                add("categories", 0, .action(text("Extera.FeedCategories", "Categories"), .categories, false))
+            title = category?.title ?? text("Extera.FeedSettings", "Feed Settings")
+            rightButton = ItemListNavigationButton(content: .text(text("Extera.FeedSelectionMenu", "Selection")), style: .regular, enabled: snapshot.channelsLoaded, action: { actions.perform(.selectionMenu(categoryId)) })
+            add("search", 0, .search(query, text("Extera.FeedSearchChannels", "Search Channels")))
+            let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if search.isEmpty {
+                if categoryId == nil {
+                    add("general", 1, .header(text("Extera.FeedGeneral", "General")))
+                    add("wide", 1, .toggle(text("Extera.FeedWidePosts", "Wide Posts in Feed"), appearance.widePosts, .widePosts))
+                    add("counter", 1, .toggle(text("Extera.FeedUnreadCounter", "Unread Post Counter"), appearance.showUnreadCounter, .unreadCounter))
+                    add("archived", 1, .toggle(text("Extera.FeedIncludeArchived", "Include Archived Channels"), settings.includeArchived, .archived))
+                    add("openFeed", 1, .action(text("Extera.ChannelFeed", "Channel Feed"), .selectCategory(nil), false))
+                    add("categoriesHeader", 2, .header(text("Extera.FeedCategories", "Categories")))
+                    for category in settings.categories {
+                        add("category.\(category.id)", 2, .action(category.title + (category.isHidden ? " · " + text("Extera.FeedHidden", "Hidden") : ""), .editCategory(category.id), false))
+                    }
+                    add("create", 2, .action(text("Extera.FeedNewCategory", "New Category"), .newCategory, false))
+                }
+                add("info", 2, .notice(text("Extera.FeedChannelSelectionInfo", "Select subscribed broadcast channels. Archived channels appear in the feed only when Include Archived Channels is enabled. Category selections are independent of the main feed.")))
             }
-            add("info", 0, .notice(text("Extera.FeedChannelSelectionInfo", "Select subscribed broadcast channels. Archived channels appear in the feed only when Include Archived Channels is enabled. Category selections are independent of the main feed.")))
             let selected = category?.channelIds ?? settings.channelIds
-            for channel in snapshot.channels {
-                let name = channel.peer.debugDisplayTitle + (channel.archived ? " · " + text("Extera.FeedArchived", "Archived") : "")
-                add("channel.\(channel.id)", 1, .toggle(name, selected.contains(channel.id), .channel(channel.id, categoryId)))
+            let matching = snapshot.channels.filter { search.isEmpty || $0.peer.debugDisplayTitle.localizedCaseInsensitiveContains(search) }
+            for included in [true, false] {
+                let channels = matching.filter { selected.contains($0.id) == included }
+                if !channels.isEmpty {
+                    let section: Int32 = included ? 3 : 4
+                    add(included ? "shown" : "hidden", section, .header(text(included ? "Extera.FeedShownChannels" : "Extera.FeedHiddenChannels", included ? "Shown in Feed" : "Hidden from Feed")))
+                    for channel in channels {
+                        let name = channel.peer.debugDisplayTitle + (channel.archived ? " · " + text("Extera.FeedArchived", "Archived") : "")
+                        add("channel.\(channel.id)", section, .channel(channel.peer, name, included, categoryId))
+                    }
+                }
+            }
+            if snapshot.channelsLoaded && !snapshot.channels.isEmpty && matching.isEmpty {
+                add("noMatches", 3, .notice(text("Extera.FeedNoMatchingChannels", "No matching channels.")))
             }
             if !snapshot.channelsLoaded {
-                add("loading", 1, .notice(text("Extera.FeedLoadingChannels", "Loading subscribed channels…")))
+                add("loading", 5, .notice(text("Extera.FeedLoadingChannels", "Loading subscribed channels…")))
             } else if snapshot.channels.isEmpty {
-                add("empty", 1, .notice(text("Extera.FeedNoChannels", "No subscribed broadcast channels are available in the local chat list.")))
+                add("empty", 5, .notice(text("Extera.FeedNoChannels", "No subscribed broadcast channels are available in the local chat list.")))
             }
             if snapshot.channelsHaveMore {
-                add("moreChannels", 2, .action(text("Extera.FeedMoreChannels", "Load More Channels"), .moreChannels, false))
+                add("moreChannels", 6, .action(text("Extera.FeedMoreChannels", "Load More Channels"), .moreChannels, false))
             }
             if snapshot.channelLimitReached {
-                add("registryLimit", 2, .notice(text("Extera.FeedChannelListLimit", "Channel selection scans up to 2,000 recent chats in each chat list. Older channels may become available after you open them.")))
+                add("registryLimit", 6, .notice(text("Extera.FeedChannelListLimit", "Channel selection scans up to 2,000 recent chats in each chat list. Older channels may become available after you open them.")))
             }
         case .categories:
             title = text("Extera.FeedCategories", "Categories")
@@ -206,7 +253,9 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
             }
         }
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: rightButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false), actions))
+        let wide: Bool
+        if case .feed = page { wide = appearance.widePosts } else { wide = false }
+        return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: wide ? .plain : .blocks, animateChanges: false), actions))
     }
     let controller = ItemListController(context: context, state: signal)
     actions.controller = controller
@@ -232,8 +281,9 @@ private func exteraFeedMediaDescription(_ message: EngineMessage, lang: String) 
 
 private final class ExteraFeedActions {
     let pageId = UUID()
-    private let context: AccountContext
+    let context: AccountContext
     private let feed: ExteraFeedContext
+    let query = ValuePromise<String>("", ignoreRepeated: true)
     weak var controller: ViewController?
 
     init(context: AccountContext, feed: ExteraFeedContext) {
@@ -258,20 +308,21 @@ private final class ExteraFeedActions {
     }
 
     func toggle(_ toggle: ExteraFeedToggle, value: Bool) {
-        if value, case let .channel(id, categoryId) = toggle {
-            let state = self.feed.settings.state
-            let selected = categoryId.flatMap { categoryId in state.categories.first(where: { $0.id == categoryId })?.channelIds } ?? state.channelIds
-            if !selected.contains(id) && selected.count >= ExteraFeedContext.maximumChannels {
-                let alert = UIAlertController(title: self.text("Extera.FeedChannels", "Choose Channels"), message: self.text("Extera.FeedSelectionLimit", "A feed can load up to 40 channels. Choose fewer channels or split them into categories."), preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_OK, style: .default))
-                self.controller?.present(alert, animated: true)
-                return
-            }
+        switch toggle {
+        case .widePosts:
+            ExteraFeedSettings.shared.widePosts = value
+            return
+        case .unreadCounter:
+            ExteraFeedSettings.shared.showUnreadCounter = value
+            return
+        default:
+            break
         }
         self.feed.settings.update { state in
             switch toggle {
             case .archived: state.includeArchived = value
             case .unread: state.unreadOnly = value
+            case .widePosts, .unreadCounter: break
             case let .channel(id, categoryId):
                 if let categoryId {
                     guard let index = state.categories.firstIndex(where: { $0.id == categoryId }) else { return }
@@ -313,14 +364,25 @@ private final class ExteraFeedActions {
                 state.categories.swapAt(index, index + offset)
             }
         case .moreChannels: self.feed.loadMoreChannels()
-        case .markLoadedRead:
-            let messages = self.feed.current.messages
-            self.feed.settings.update { state in
-                for message in messages {
-                    let id = String(message.id.peerId.toInt64())
-                    state.readMaxIds[id] = max(state.readMaxIds[id] ?? 0, message.id.id)
-                }
+        case let .selectionMenu(categoryId):
+            let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+            let alert = UIAlertController(title: self.text("Extera.FeedSelectionMenu", "Selection"), message: self.text("Extera.FeedBulkSelectionInfo", "Select All includes every loaded channel, including channels outside the search. A feed loads up to 40 channels at a time; use categories for larger selections."), preferredStyle: .actionSheet)
+            alert.addAction(UIAlertAction(title: self.text("Extera.FeedSelectAll", "Select All"), style: .default, handler: { [weak self] _ in
+                guard let self else { return }
+                let ids = Set(self.feed.current.channels.map(\.id))
+                self.feed.settings.update { $0.setChannelSelection(ids, categoryId: categoryId) }
+            }))
+            alert.addAction(UIAlertAction(title: self.text("Extera.FeedDeselectAll", "Deselect All"), style: .default, handler: { [weak self] _ in
+                self?.feed.settings.update { $0.setChannelSelection([], categoryId: categoryId) }
+            }))
+            alert.addAction(UIAlertAction(title: strings.Common_Cancel, style: .cancel))
+            if let view = self.controller?.view, let popover = alert.popoverPresentationController {
+                popover.sourceView = view
+                popover.sourceRect = CGRect(x: view.bounds.midX, y: view.safeAreaInsets.top, width: 1.0, height: 1.0)
             }
+            self.controller?.present(alert, animated: true)
+        case .markAllRead:
+            self.confirmMarkAllRead()
         case let .open(id):
             if let message = self.feed.current.messages.first(where: { $0.id == id }) {
                 self.context.engine.messages.ensureMessagesAreLocallyAvailable(messages: [message])
@@ -328,6 +390,42 @@ private final class ExteraFeedActions {
             self.feed.settings.markRead(channelId: id.peerId.toInt64(), messageId: id.id)
             self.context.sharedContext.navigateToChat(accountId: self.context.account.id, peerId: id.peerId, messageId: id)
         }
+    }
+
+    private func confirmMarkAllRead() {
+        // Capture the scope before presenting the confirmation. A category or selection change
+        // while the dialog is open must not silently expand the user's confirmed action.
+        let snapshot = self.feed.current
+        let state = self.feed.settings.state
+        let ids = state.markAllReadChannelIds(available: Set(snapshot.channels.map(\.id)), archived: Set(snapshot.channels.filter(\.archived).map(\.id)))
+        guard !ids.isEmpty else { return }
+        var maxIds: [Int64: Int32] = [:]
+        for message in snapshot.messages where ids.contains(message.id.peerId.toInt64()) {
+            let peerId = message.id.peerId.toInt64()
+            maxIds[peerId] = max(maxIds[peerId] ?? 0, message.id.id)
+        }
+        let alert = UIAlertController(title: self.text("Extera.FeedMarkAllRead", "Read All"), message: self.text("Extera.FeedMarkAllReadInfo", "Mark all posts in the feed's channels as read? They will also be marked as read in the original channels."), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_Cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: self.text("Extera.FeedConfirmMarkRead", "Mark as Read"), style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            let settings = self.feed.settings
+            for id in ids.sorted() {
+                let peerId = EnginePeer.Id(id)
+                if ayuIsReadStateHidden(peerId: peerId) {
+                    // An explicit confirmed read must bypass ghost suppression, just like
+                    // AyuGram's Read Message action. This server-only sentinel is never
+                    // persisted as a local feed cursor; future posts must remain unread.
+                    ayuReadHistoryOnServer(account: self.context.account, peerId: peerId, maxId: Int32.max - 1)
+                }
+            }
+            // This is the chat-list read-to-server-top path, not a read of the visible
+            // page or a global markAllChatsAsRead. The engine persists pending sync and
+            // retries normally unless ghost mode suppresses it (explicit bypass above).
+            let _ = self.context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: ids.sorted().map { EnginePeer.Id($0) }, setToValue: false).startStandalone(completed: {
+                settings.update { $0.markRead(maxIds: maxIds) }
+            })
+        }))
+        self.controller?.present(alert, animated: true)
     }
 
     private func editCategoryTitle(id: String?) {

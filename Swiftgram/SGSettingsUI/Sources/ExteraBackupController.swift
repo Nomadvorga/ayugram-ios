@@ -42,7 +42,7 @@ private final class ExteraBackupTemporaryFile {
 /// Push this controller from the exteraGram Other category. No action changes account or plugin data.
 public func exteraBackupController(context: AccountContext) -> ViewController {
     let actions = ExteraBackupActions(context: context)
-    let arguments = SGItemListArguments<Int, Int, Int, Int, ExteraBackupAction>(context: context, action: { action in
+    let arguments = SGItemListArguments<Int, Int, Int, Int, ExteraBackupAction>(context: context, visualStyle: .extera, action: { action in
         actions.perform(action)
     })
     let signal = context.sharedContext.presentationData

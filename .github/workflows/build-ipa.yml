@@ -9,11 +9,13 @@ on:
   workflow_dispatch:
     inputs:
       configuration:
-        description: 'debug_arm64 builds much faster; release_arm64 is optimized'
+        description: 'Device IPA or simulator build + isolated onboarding smoke (debug is faster)'
         type: choice
         options:
           - debug_arm64
           - release_arm64
+          - debug_sim_arm64
+          - release_sim_arm64
         default: debug_arm64
 
 concurrency:
@@ -30,7 +32,7 @@ jobs:
     timeout-minutes: 355
     env:
       CONFIGURATION: ${{ inputs.configuration || 'debug_arm64' }}
-      DISK_CACHE: /Users/runner/bazel-disk-cache
+      DISK_CACHE: /Users/runner/bazel-disk-cache/${{ inputs.configuration || 'debug_arm64' }}
       REPO_CACHE: /Users/runner/bazel-repo-cache
       # GitHub rejects cache entries above 10 GB; the disk cache compresses well.
       DISK_CACHE_LIMIT_GB: '9'
@@ -120,6 +122,15 @@ jobs:
         timeout-minutes: 320
         run: |
           set -euo pipefail
+          # The smoke rejects an IPA older than this successful build invocation.
+          if [[ "$CONFIGURATION" == *_sim_arm64 ]]; then
+            python3 - <<'PY'
+          import pathlib, time
+          marker = pathlib.Path("build/simulator-build-start.txt")
+          marker.parent.mkdir(parents=True, exist_ok=True)
+          marker.write_text(str(time.time()))
+          PY
+          fi
           BUILD_NUMBER=$(( $(cat build_number_offset) + ${{ github.run_number }} ))
           EXTRA_ARGS=""
           if [ "$CONFIGURATION" = "release_arm64" ]; then
@@ -135,11 +146,35 @@ jobs:
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath=build/artifacts \
             $EXTRA_ARGS
-          for ipa in build/artifacts/*.ipa; do
-            [ "$ipa" = build/artifacts/AyuGram.ipa ] || mv "$ipa" build/artifacts/AyuGram.ipa
-          done
+          if [[ "$CONFIGURATION" == *_sim_arm64 ]]; then
+            # Make.py copies this exact output after a successful build; never pick a stale glob match.
+            mv build/artifacts/Swiftgram.ipa build/artifacts/AyuGram.ipa
+          else
+            for ipa in build/artifacts/*.ipa; do
+              [ "$ipa" = build/artifacts/AyuGram.ipa ] || mv "$ipa" build/artifacts/AyuGram.ipa
+            done
+          fi
+
+      - name: Simulator onboarding smoke
+        if: success() && contains(env.CONFIGURATION, '_sim_arm64')
+        timeout-minutes: 12
+        run: |
+          python3 tools/extera_simulator_smoke.py \
+            --ipa build/artifacts/AyuGram.ipa \
+            --build-start-file build/simulator-build-start.txt \
+            --output build/simulator-validation
+
+      - name: Upload simulator evidence
+        if: always() && contains(env.CONFIGURATION, '_sim_arm64')
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-simulator-evidence-${{ env.CONFIGURATION }}-${{ github.run_number }}
+          path: build/simulator-validation/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload IPA
+        if: success() || (failure() && contains(env.CONFIGURATION, '_sim_arm64') && hashFiles('build/artifacts/*.ipa') != '')
         uses: actions/upload-artifact@v4
         with:
           name: AyuGram-iOS-${{ env.CONFIGURATION }}-${{ github.run_number }}

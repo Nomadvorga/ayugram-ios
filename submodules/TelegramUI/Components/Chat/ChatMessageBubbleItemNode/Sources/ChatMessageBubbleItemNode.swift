@@ -2154,7 +2154,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 needsShareButton = true
             }
             
-            if let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
+            if ExteraAISettings.shared.configuration.showSummaries, let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
                 needsSummarizeButton = true
             }
             
@@ -9105,6 +9105,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             item.controllerInteraction.summarizedMessageIds.remove(item.message.id)
             let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
         } else {
+            guard ExteraAISettings.shared.configuration.showSummaries else { return }
             item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
             let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
             

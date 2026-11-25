@@ -2985,6 +2985,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
     
     override func maybePerformActionForSwipeDismiss() -> Bool {
+        guard SGSimpleSettings.shared.videoPIPSwipeDirection == SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue else {
+            return false
+        }
         if let data = self.context.currentAppConfiguration.with({ $0 }).data {
             if let _ = data["ios_killswitch_disable_swipe_pip"] {
                 return false

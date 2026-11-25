@@ -137,6 +137,85 @@ final class ExteraFeedSettingsTests: XCTestCase {
         XCTAssertTrue(settings.state.isUnread(channelId: 30, messageId: 1))
     }
 
+    func testPresentationPreferencesPersistWithoutChangingAnyAccountState() {
+        let first = self.settings()
+        let second = self.settings()
+        first.update { $0.channelIds = [1, 2] }
+        second.update { $0.channelIds = [3] }
+        let firstState = first.state
+        let secondState = second.state
+        let presentation = ExteraFeedSettings.shared
+        defer {
+            presentation.widePosts = true
+            presentation.showUnreadCounter = true
+        }
+        presentation.widePosts = false
+        presentation.showUnreadCounter = false
+        XCTAssertFalse(ExteraFeedSettings.shared.widePosts)
+        XCTAssertFalse(ExteraFeedSettings.shared.showUnreadCounter)
+        XCTAssertEqual(AyuSettingsStore.shared.userDefaults.object(forKey: "extera.feed.widePosts") as? Bool, false)
+        XCTAssertEqual(AyuSettingsStore.shared.userDefaults.object(forKey: "extera.feed.showUnreadCounter") as? Bool, false)
+        XCTAssertEqual(first.state, firstState)
+        XCTAssertEqual(second.state, secondState)
+    }
+
+    func testBulkSelectionPreservesAllChannelsBeyondLoaderLimitAndCategoryIndependence() {
+        let settings = self.settings()
+        let ids = Set((1 ... 80).map(Int64.init))
+        settings.update {
+            $0.categories = [.init(id: "category", title: "Category", channelIds: [999])]
+            $0.setChannelSelection(ids, categoryId: nil)
+        }
+        XCTAssertEqual(settings.state.channelIds, ids)
+        XCTAssertEqual(settings.state.categories[0].channelIds, [999])
+        settings.update { $0.setChannelSelection([11, 12], categoryId: "category") }
+        XCTAssertEqual(settings.state.channelIds, ids)
+        XCTAssertEqual(settings.state.categories[0].channelIds, [11, 12])
+        settings.update { $0.setChannelSelection([], categoryId: nil) }
+        XCTAssertTrue(settings.state.channelIds.isEmpty)
+        XCTAssertEqual(settings.state.categories[0].channelIds, [11, 12])
+        settings.update { $0.setChannelSelection([], categoryId: "category") }
+        XCTAssertTrue(settings.state.categories[0].channelIds.isEmpty)
+    }
+
+    func testBulkSelectionForDeletedCategoryDoesNotFallBackToMainFeed() {
+        var state = ExteraFeedSettings.State()
+        state.channelIds = [1]
+        state.setChannelSelection([2, 3], categoryId: "deleted")
+        XCTAssertEqual(state.channelIds, [1])
+    }
+
+    func testMarkAllScopeIncludesUnloadedChannelsButExcludesUnavailableAndArchive() {
+        var state = ExteraFeedSettings.State()
+        state.channelIds = [1, 2, 3, 99]
+        XCTAssertEqual(state.markAllReadChannelIds(available: [1, 2, 3, 4], archived: [2]), [1, 3])
+        state.includeArchived = true
+        XCTAssertEqual(state.markAllReadChannelIds(available: [1, 2, 3, 4], archived: [2]), [1, 2, 3])
+        // Scope does not depend on the post page or the loader's 40-channel cap.
+        state.channelIds = Set((1 ... 80).map(Int64.init))
+        XCTAssertEqual(state.markAllReadChannelIds(available: state.channelIds, archived: []).count, 80)
+    }
+
+    func testMarkAllScopeUsesCurrentCategoryAndRespectsEmptyCategory() {
+        var state = ExteraFeedSettings.State()
+        state.channelIds = [1, 2]
+        state.categories = [.init(id: "a", title: "A", channelIds: [3, 4]), .init(id: "empty", title: "Empty")]
+        state.selectedCategoryId = "a"
+        XCTAssertEqual(state.markAllReadChannelIds(available: [1, 2, 3, 4, 5], archived: [4]), [3])
+        state.selectedCategoryId = "empty"
+        XCTAssertTrue(state.markAllReadChannelIds(available: [1, 2, 3, 4, 5], archived: []).isEmpty)
+    }
+
+    func testBatchReadMarksAreMonotonicAndDoNotHideFuturePosts() {
+        let settings = self.settings()
+        settings.markRead(channelId: 1, messageId: 100)
+        settings.update { $0.markRead(maxIds: [1: 50, 2: 10, 3: 0, 4: -1]) }
+        XCTAssertEqual(settings.state.readMaxIds, ["1": 100, "2": 10])
+        XCTAssertTrue(settings.state.isUnread(channelId: 1, messageId: 101))
+        XCTAssertTrue(settings.state.isUnread(channelId: 2, messageId: 11))
+        XCTAssertTrue(settings.state.isUnread(channelId: 3, messageId: 1))
+    }
+
     func testConcurrentScreenInstancesDoNotLoseReadAdvancesOrChannelSelections() {
         let id = Int64.random(in: 1 ... Int64.max)
         let first = SharedFeedSettings(ExteraFeedSettings(accountId: id))
@@ -187,6 +266,12 @@ final class ExteraFeedSettingsTests: XCTestCase {
         ("testCategoryRenameReorderAndSelectionRemainIndependent", testCategoryRenameReorderAndSelectionRemainIndependent),
         ("testEmptyCategoryDoesNotSilentlyUseMainFeed", testEmptyCategoryDoesNotSilentlyUseMainFeed),
         ("testReadCursorIsSharedAcrossCategorySwitches", testReadCursorIsSharedAcrossCategorySwitches),
+        ("testPresentationPreferencesPersistWithoutChangingAnyAccountState", testPresentationPreferencesPersistWithoutChangingAnyAccountState),
+        ("testBulkSelectionPreservesAllChannelsBeyondLoaderLimitAndCategoryIndependence", testBulkSelectionPreservesAllChannelsBeyondLoaderLimitAndCategoryIndependence),
+        ("testBulkSelectionForDeletedCategoryDoesNotFallBackToMainFeed", testBulkSelectionForDeletedCategoryDoesNotFallBackToMainFeed),
+        ("testMarkAllScopeIncludesUnloadedChannelsButExcludesUnavailableAndArchive", testMarkAllScopeIncludesUnloadedChannelsButExcludesUnavailableAndArchive),
+        ("testMarkAllScopeUsesCurrentCategoryAndRespectsEmptyCategory", testMarkAllScopeUsesCurrentCategoryAndRespectsEmptyCategory),
+        ("testBatchReadMarksAreMonotonicAndDoNotHideFuturePosts", testBatchReadMarksAreMonotonicAndDoNotHideFuturePosts),
         ("testConcurrentScreenInstancesDoNotLoseReadAdvancesOrChannelSelections", testConcurrentScreenInstancesDoNotLoseReadAdvancesOrChannelSelections),
         ("testCorruptStorageFallsBackAndNextChangeRepairsIt", testCorruptStorageFallsBackAndNextChangeRepairsIt),
         ("testSynchronousObserverCanWaitForStateReadOnAnotherQueue", testSynchronousObserverCanWaitForStateReadOnAnotherQueue),

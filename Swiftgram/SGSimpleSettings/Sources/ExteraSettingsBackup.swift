@@ -296,13 +296,18 @@ public enum ExteraSettingsBackup {
         text("extera.appleSpeechLocaleIdentifier", maximumLength: 64, allowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"), read: { ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier }, write: { ExteraTranslationSettings.shared.appleSpeechLocaleIdentifier = $0 }),
         boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
         boolean("extera.chat.hideKeyboardOnScroll", read: { ExteraChatSettings.shared.hideKeyboardOnScroll }, write: { ExteraChatSettings.shared.hideKeyboardOnScroll = $0 }),
+        boolean("extera.feed.widePosts", defaultValue: true, read: { ExteraFeedSettings.shared.widePosts }, write: { ExteraFeedSettings.shared.widePosts = $0 }),
+        boolean("extera.feed.showUnreadCounter", defaultValue: true, read: { ExteraFeedSettings.shared.showUnreadCounter }, write: { ExteraFeedSettings.shared.showUnreadCounter = $0 }),
+        integer("extera.chat.channelBottomButton", allowed: [0, 1, 2], defaultValue: 1, read: { ExteraChatSettings.shared.channelBottomButton.rawValue }, write: {
+            if let value = ExteraChatSettings.ChannelBottomButton(rawValue: $0) { ExteraChatSettings.shared.channelBottomButton = value }
+        }),
         boolean("extera.chat.addCommaAfterMention", read: { ExteraChatSettings.shared.addCommaAfterMention }, write: { ExteraChatSettings.shared.addCommaAfterMention = $0 }),
         boolean("extera.chat.swipeToReplyIncoming", defaultValue: true, read: { ExteraChatSettings.shared.swipeToReplyIncoming }, write: { ExteraChatSettings.shared.swipeToReplyIncoming = $0 }),
         boolean("extera.chat.swipeToReplyOutgoing", defaultValue: true, read: { ExteraChatSettings.shared.swipeToReplyOutgoing }, write: { ExteraChatSettings.shared.swipeToReplyOutgoing = $0 }),
-        integer("extera.chat.doubleTapIncoming", allowed: [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], defaultValue: 1, read: { ExteraChatSettings.shared.doubleTapIncoming.rawValue }, write: {
+        integer("extera.chat.doubleTapIncoming", allowed: [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], defaultValue: 1, read: { ExteraChatSettings.shared.doubleTapIncoming.rawValue }, write: {
             if let value = ExteraChatSettings.DoubleTapAction(rawValue: $0) { ExteraChatSettings.shared.doubleTapIncoming = value }
         }),
-        integer("extera.chat.doubleTapOutgoing", allowed: [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], defaultValue: -1, read: { ExteraChatSettings.shared.doubleTapOutgoing.rawValue }, write: {
+        integer("extera.chat.doubleTapOutgoing", allowed: [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], defaultValue: -1, read: { ExteraChatSettings.shared.doubleTapOutgoing.rawValue }, write: {
             if let value = ExteraChatSettings.DoubleTapAction(rawValue: $0) { ExteraChatSettings.shared.doubleTapOutgoing = value }
         }),
         boolean("extera.hideReactionsInPrivateChats", read: { ExteraMessageSettings.shared.hideReactionsInPrivateChats }, write: { ExteraMessageSettings.shared.hideReactionsInPrivateChats = $0 }),

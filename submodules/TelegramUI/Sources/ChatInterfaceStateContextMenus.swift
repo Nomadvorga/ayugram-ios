@@ -1,4 +1,6 @@
 import SGSimpleSettings // MARK: Swiftgram
+import SGSettingsUI
+import SGStrings
 import PeerInfoUI
 import Foundation
 import UIKit
@@ -52,6 +54,26 @@ private struct MessageContextMenuData {
     let canSelect: Bool
     let resourceStatus: EngineMediaResource.FetchStatus?
     let messageActions: ChatAvailableMessageActions
+}
+
+/// Use only an already loaded, complete article. Opening its summary never fetches
+/// a URL or starts an AI request; the native screen requires an explicit Send.
+private func exteraAIInstantViewSummaryText(message: EngineRawMessage, isCopyProtected: Bool) -> String? {
+    guard ExteraAISettings.shared.configuration.showInstantViewSummaries,
+          !isCopyProtected, !message.isCopyProtected(), !message.containsSecretMedia,
+          message.id.peerId.namespace != Namespaces.Peer.SecretChat,
+          !message.attributes.contains(where: { $0 is RestrictedContentMessageAttribute }) else {
+        return nil
+    }
+    for media in message.effectiveMedia {
+        if let webpage = media as? TelegramMediaWebpage,
+           case let .Loaded(content) = webpage.content,
+           let page = content.instantPage, page.isComplete {
+            let text = markdownStringFromInstantPage(page).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { return text }
+        }
+    }
+    return nil
 }
 
 func canEditMessage(context: AccountContext, limitsConfiguration: EngineConfiguration.Limits, message: EngineRawMessage) -> Bool {
@@ -1355,6 +1377,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || chatPresentationInterfaceState.myCopyProtectionEnabled || message.isCopyProtected()
+        if let articleText = exteraAIInstantViewSummaryText(message: message, isCopyProtected: isCopyProtected) {
+            actions.append(.action(ContextMenuActionItem(text: i18n("Extera.SummarizeInstantView", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Message"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                f(.default)
+                guard ExteraAISettings.shared.configuration.showInstantViewSummaries else { return }
+                controllerInteraction.navigationController()?.pushViewController(exteraAITextProcessingController(context: context, text: articleText, action: .summarizeInstantView))
+            })))
+        }
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {

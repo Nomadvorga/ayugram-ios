@@ -32,6 +32,7 @@ private enum SubscriberAction: Equatable, Hashable {
     case kicked
     case muteNotifications
     case unmuteNotifications
+    case discuss(EnginePeer.Id, String)
     case unpinMessages(Int)
     case hidePinnedMessages
     case openChannel
@@ -56,6 +57,8 @@ private func titleAndColorForAction(_ action: SubscriberAction, theme: Presentat
             return (strings.Conversation_Mute, theme.chat.inputPanel.panelControlAccentColor)
         case .unmuteNotifications:
             return (strings.Conversation_Unmute, theme.chat.inputPanel.panelControlAccentColor)
+        case let .discuss(_, title):
+            return (title, theme.chat.inputPanel.panelControlAccentColor)
         case .unpinMessages:
             return (strings.Chat_PanelUnpinAllMessages, theme.chat.inputPanel.panelControlAccentColor)
         case .hidePinnedMessages:
@@ -202,6 +205,12 @@ private final class ChannelNewsContextReferenceContentSource: ContextReferenceCo
 }
 
 public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
+    /// When set, replaces only the member channel's mute action with its available discussion group.
+    public var discussionButtonTitle: String?
+    private let discussionDisposable = MetaDisposable()
+    private var observedDiscussionPeerId: EnginePeer.Id?
+    private var availableDiscussionPeerId: EnginePeer.Id?
+
     private let panelContainer = UIView()
     private let panel = ComponentView<Empty>()
     
@@ -283,6 +292,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         self.actionDisposable.dispose()
         self.newsActionDisposable.dispose()
         self.badgeDisposable.dispose()
+        self.discussionDisposable.dispose()
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -399,6 +409,10 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             if let context = self.context, let presentationInterfaceState = self.presentationInterfaceState, let peer = presentationInterfaceState.renderedPeer?.peer {
                 self.actionDisposable.set(context.engine.peers.togglePeerMuted(peerId: peer.id, threadId: nil).startStrict())
             }
+        case let .discuss(peerId, _):
+            if peerId == self.availableDiscussionPeerId, peerId == presentationInterfaceState.peerDiscussionId {
+                self.interfaceInteraction?.navigateToChat(peerId)
+            }
         case .hidePinnedMessages, .unpinMessages:
             self.interfaceInteraction?.unpinAllMessages()
         case .openChannel, .openGroup, .openChat:
@@ -408,6 +422,46 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         }
     }
     
+    private func updateDiscussionPeer(interfaceState: ChatPresentationInterfaceState) {
+        var discussionPeerId: EnginePeer.Id?
+        if self.discussionButtonTitle != nil, case .peer = interfaceState.chatLocation,
+           let channel = interfaceState.renderedPeer?.peer as? TelegramChannel,
+           case .broadcast = channel.info, case .member = channel.participationStatus {
+            discussionPeerId = interfaceState.peerDiscussionId
+        }
+        guard discussionPeerId != self.observedDiscussionPeerId else {
+            return
+        }
+        self.observedDiscussionPeerId = discussionPeerId
+        self.availableDiscussionPeerId = nil
+        self.discussionDisposable.set(nil)
+        guard let discussionPeerId, let context = self.context else {
+            return
+        }
+        self.discussionDisposable.set((context.engine.data.subscribe(
+            TelegramEngine.EngineData.Item.Peer.Peer(id: discussionPeerId),
+            TelegramEngine.EngineData.Item.Peer.CachedData(id: discussionPeerId)
+        )
+        |> deliverOnMainQueue).startStrict(next: { [weak self] peer, cachedData in
+            guard let self, self.observedDiscussionPeerId == discussionPeerId else {
+                return
+            }
+            var availablePeerId: EnginePeer.Id?
+            if case let .channel(channel) = peer, case .group = channel.info,
+               channel.participationStatus != .kicked,
+               channel.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) == nil,
+               (cachedData as? CachedChannelData)?.isNotAccessible != true {
+                availablePeerId = discussionPeerId
+            }
+            if self.availableDiscussionPeerId != availablePeerId {
+                self.availableDiscussionPeerId = availablePeerId
+                Queue.mainQueue().async { [weak self] in
+                    self?.relayoutPanel()
+                }
+            }
+        }))
+    }
+
     private func startAddToNews(context: AccountContext, peer: EnginePeer) {
         self.addToNewsRequest = NewsChannelBarRequest(kind: .addToNews)
         self.relayoutPanel()
@@ -854,6 +908,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         }
         
         self.presentationInterfaceState = interfaceState
+        self.updateDiscussionPeer(interfaceState: interfaceState)
         
         // A committed removal stops being pending once the channel shows it.
         if let pendingRemoval = self.pendingRemoval, pendingRemoval.state == .done, let channel = interfaceState.renderedPeer?.peer as? TelegramChannel, channel.participationStatus != .member {
@@ -888,7 +943,11 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         }
         
         var centerAction: (title: String, isAccent: Bool)?
-        if let context = self.context, let peer = interfaceState.renderedPeer?.peer, let action = actionForPeer(context: context, peer: EnginePeer(peer), interfaceState: interfaceState, isJoining: self.isJoining, pending: self.pending, isMuted: interfaceState.peerIsMuted) {
+        if let context = self.context, let peer = interfaceState.renderedPeer?.peer, var action = actionForPeer(context: context, peer: EnginePeer(peer), interfaceState: interfaceState, isJoining: self.isJoining, pending: self.pending, isMuted: interfaceState.peerIsMuted) {
+            if action == .muteNotifications || action == .unmuteNotifications,
+               let discussionPeerId = self.availableDiscussionPeerId, let title = self.discussionButtonTitle {
+                action = .discuss(discussionPeerId, title)
+            }
             self.action = action
             let (title, _) = titleAndColorForAction(action, theme: interfaceState.theme, strings: interfaceState.strings)
             

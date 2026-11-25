@@ -76,12 +76,17 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     public var saveHistory: Bool = true
     public var responseStreaming: Bool = true
     public var temperature: Double = 1.0
+    /// Feature visibility and execution are independent of the editor's backend routing.
+    public var showEditor: Bool = true
+    public var showSummaries: Bool = true
+    public var showInstantViewSummaries: Bool = true
     public var useForTextProcessing: Bool = false
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case services, roles, selectedServiceId, selectedRoleId, saveHistory, responseStreaming, temperature, useForTextProcessing
+        case showEditor, showSummaries, showInstantViewSummaries
     }
 
     public init(from decoder: Decoder) throws {
@@ -93,6 +98,9 @@ public struct ExteraAIConfiguration: Codable, Equatable {
         self.saveHistory = try values.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
         self.responseStreaming = try values.decodeIfPresent(Bool.self, forKey: .responseStreaming) ?? true
         self.temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? 1.0
+        self.showEditor = try values.decodeIfPresent(Bool.self, forKey: .showEditor) ?? true
+        self.showSummaries = try values.decodeIfPresent(Bool.self, forKey: .showSummaries) ?? true
+        self.showInstantViewSummaries = try values.decodeIfPresent(Bool.self, forKey: .showInstantViewSummaries) ?? true
         self.useForTextProcessing = try values.decodeIfPresent(Bool.self, forKey: .useForTextProcessing) ?? false
     }
 

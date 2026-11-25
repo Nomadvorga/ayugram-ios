@@ -18,6 +18,15 @@ public final class ExteraChatSettings {
         case repeatMessage = 7
         case delete = 8
         case translate = 9
+        // AyuGram's explicit read receipt, shown in reference screenshot 85.
+        case read = 10
+    }
+
+    /// Stable values for the channel's bottom action. Existing installations default to mute.
+    public enum ChannelBottomButton: Int, CaseIterable {
+        case hidden = 0
+        case mute = 1
+        case discuss = 2
     }
 
     public enum Keys: String, CaseIterable {
@@ -26,6 +35,7 @@ public final class ExteraChatSettings {
         case hideKeyboardOnScroll
         case swipeToReplyIncoming
         case swipeToReplyOutgoing
+        case channelBottomButton
     }
 
     private let store = AyuSettingsStore.shared
@@ -52,6 +62,22 @@ public final class ExteraChatSettings {
     public var doubleTapOutgoing: DoubleTapAction {
         get { return DoubleTapAction(rawValue: self.store.int(Self.key(.doubleTapOutgoing))) ?? .inherit }
         set { self.store.setInt(newValue.rawValue, Self.key(.doubleTapOutgoing)) }
+    }
+
+    /// Leave the enum key unregistered so its absence can fall back to the legacy preference.
+    public var channelBottomButton: ChannelBottomButton {
+        get {
+            guard self.store.userDefaults.object(forKey: Self.key(.channelBottomButton)) != nil else {
+                return SGSimpleSettings.shared.hideChannelBottomButton ? .hidden : .mute
+            }
+            return ChannelBottomButton(rawValue: self.store.int(Self.key(.channelBottomButton))) ?? .mute
+        }
+        set { self.store.setInt(newValue.rawValue, Self.key(.channelBottomButton)) }
+    }
+
+    /// The legacy hide switch remains an override without discarding the saved mode.
+    public var effectiveChannelBottomButton: ChannelBottomButton {
+        return SGSimpleSettings.shared.hideChannelBottomButton ? .hidden : self.channelBottomButton
     }
 
     /// Resolves the legacy outgoing preference without overwriting it during migration.

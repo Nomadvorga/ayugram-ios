@@ -47,6 +47,7 @@ public protocol SGItemListSection: Equatable {
 
 public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Hashable, OneFromManySetting: Hashable, DisclosureLink: Hashable, ActionType: Hashable> {
     let context: AccountContext
+    public let visualStyle: SGItemListVisualStyle
     //
     let setBoolValue: (BoolSetting, Bool) -> Void
     let updateSliderValue: (SliderSetting, Int32) -> Void
@@ -54,19 +55,23 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
     let openDisclosureLink: (DisclosureLink) -> Void
     let action: (ActionType) -> Void
     let searchInput: (String) -> Void
+    let setExpanded: (BoolSetting, Bool) -> Void
 
     
     public init(
         context: AccountContext,
+        visualStyle: SGItemListVisualStyle = .native,
         //
         setBoolValue: @escaping (BoolSetting, Bool) -> Void = { _,_ in },
         updateSliderValue: @escaping (SliderSetting, Int32) -> Void = { _,_ in },
         setOneFromManyValue: @escaping (OneFromManySetting) -> Void = { _ in },
         openDisclosureLink: @escaping (DisclosureLink) -> Void = { _ in},
         action: @escaping (ActionType) -> Void = { _ in },
-        searchInput: @escaping (String) -> Void = { _ in }
+        searchInput: @escaping (String) -> Void = { _ in },
+        setExpanded: @escaping (BoolSetting, Bool) -> Void = { _, _ in }
     ) {
         self.context = context
+        self.visualStyle = visualStyle
         //
         self.setBoolValue = setBoolValue
         self.updateSliderValue = updateSliderValue
@@ -74,6 +79,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
         self.openDisclosureLink = openDisclosureLink
         self.action = action
         self.searchInput = searchInput
+        self.setExpanded = setExpanded
     }
 }
 
@@ -81,11 +87,15 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
     case header(id: Int, section: Section, text: String, badge: String?)
     case toggle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, enabled: Bool)
     case toggleSubtitle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, subtitle: String, enabled: Bool)
+    /// The controller owns expansion state and inserts/removes separate checkbox entries.
+    case expandableToggle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, selectedCount: Int, totalCount: Int, isExpanded: Bool, enabled: Bool)
+    case checkbox(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, enabled: Bool)
     case notice(id: Int, section: Section, text: String)
     case percentageSlider(id: Int, section: Section, settingName: SliderSetting, value: Int32)
     case appearancePreview(id: Int, section: Section, kind: AyuAppearancePreviewKind, settingName: SliderSetting?)
     case oneFromManySelector(id: Int, section: Section, settingName: OneFromManySetting, text: String, value: String, enabled: Bool)
     case disclosure(id: Int, section: Section, link: DisclosureLink, text: String)
+    case disclosureSubtitle(id: Int, section: Section, link: DisclosureLink, text: String, subtitle: String, iconName: String)
     case peerColorDisclosurePreview(id: Int, section: Section, name: String, color: UIColor)
     case action(id: Int, section: Section, actionType: ActionType, text: String, kind: ItemListActionKind)
     case searchInput(id: Int, section: Section, title: NSAttributedString, text: String, placeholder: String)
@@ -98,10 +108,16 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return sectionId.rawValue
         case let .toggleSubtitle(_, sectionId, _, _, _, _, _):
             return sectionId.rawValue
+        case let .expandableToggle(_, sectionId, _, _, _, _, _, _, _):
+            return sectionId.rawValue
+        case let .checkbox(_, sectionId, _, _, _, _):
+            return sectionId.rawValue
         case let .notice(_, sectionId, _):
             return sectionId.rawValue
             
         case let .disclosure(_, sectionId, _, _):
+            return sectionId.rawValue
+        case let .disclosureSubtitle(_, sectionId, _, _, _, _):
             return sectionId.rawValue
 
         case let .appearancePreview(_, sectionId, _, _):
@@ -130,9 +146,15 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return stableIdValue
         case let .toggleSubtitle(stableIdValue, _, _, _, _, _, _):
             return stableIdValue
+        case let .expandableToggle(stableIdValue, _, _, _, _, _, _, _, _):
+            return stableIdValue
+        case let .checkbox(stableIdValue, _, _, _, _, _):
+            return stableIdValue
         case let .notice(stableIdValue, _, _):
             return stableIdValue
         case let .disclosure(stableIdValue, _, _, _):
+            return stableIdValue
+        case let .disclosureSubtitle(stableIdValue, _, _, _, _, _):
             return stableIdValue
         case let .appearancePreview(stableIdValue, _, _, _):
             return stableIdValue
@@ -162,6 +184,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return id1 == id2 && section1 == section2 && settingName1 == settingName2 && value1 == value2 && text1 == text2 && enabled1 == enabled2
         case let (.toggleSubtitle(id1, section1, settingName1, value1, text1, subtitle1, enabled1), .toggleSubtitle(id2, section2, settingName2, value2, text2, subtitle2, enabled2)):
             return id1 == id2 && section1 == section2 && settingName1 == settingName2 && value1 == value2 && text1 == text2 && subtitle1 == subtitle2 && enabled1 == enabled2
+        case let (.expandableToggle(id1, section1, setting1, value1, text1, selected1, total1, expanded1, enabled1), .expandableToggle(id2, section2, setting2, value2, text2, selected2, total2, expanded2, enabled2)):
+            return id1 == id2 && section1 == section2 && setting1 == setting2 && value1 == value2 && text1 == text2 && selected1 == selected2 && total1 == total2 && expanded1 == expanded2 && enabled1 == enabled2
+        case let (.checkbox(id1, section1, setting1, value1, text1, enabled1), .checkbox(id2, section2, setting2, value2, text2, enabled2)):
+            return id1 == id2 && section1 == section2 && setting1 == setting2 && value1 == value2 && text1 == text2 && enabled1 == enabled2
         
         case let (.notice(id1, section1, text1), .notice(id2, section2, text2)):
             return id1 == id2 && section1 == section2 && text1 == text2
@@ -173,6 +199,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             
         case let (.disclosure(id1, section1, link1, text1), .disclosure(id2, section2, link2, text2)):
             return id1 == id2 && section1 == section2 && link1 == link2 && text1 == text2
+        case let (.disclosureSubtitle(id1, section1, link1, text1, subtitle1, iconName1), .disclosureSubtitle(id2, section2, link2, text2, subtitle2, iconName2)):
+            return id1 == id2 && section1 == section2 && link1 == link2 && text1 == text2 && subtitle1 == subtitle2 && iconName1 == iconName2
 
         case let (.peerColorDisclosurePreview(id1, section1, name1, currentColor1), .peerColorDisclosurePreview(id2, section2, name2, currentColor2)):
             return id1 == id2 && section1 == section2 && name1 == name2 && currentColor1 == currentColor2
@@ -193,6 +221,9 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
     
     public func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! SGItemListArguments<BoolSetting, SliderSetting, OneFromManySetting, DisclosureLink, ActionType>
+        if arguments.visualStyle == .extera, let item = self.exteraItem(presentationData: presentationData, arguments: arguments) {
+            return item
+        }
         switch self {
         case let .header(_, _, string, badge):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: string, badge: badge, sectionId: self.section)
@@ -205,12 +236,26 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, text: subtitle, value: value, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setBoolValue(setting, value)
             })
+        case let .expandableToggle(_, _, setting, value, text, selectedCount, totalCount, isExpanded, enabled):
+            return ItemListExpandableSwitchItem(presentationData: presentationData, title: "\(text)  \(selectedCount)/\(totalCount)", value: value, isExpanded: isExpanded, subItems: [], enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setBoolValue(setting, value)
+            }, selectAction: {
+                if enabled { arguments.setExpanded(setting, !isExpanded) }
+            }, subAction: { _ in })
+        case let .checkbox(_, _, setting, value, text, enabled):
+            return ItemListCheckboxItem(presentationData: presentationData, title: text, style: .left, checked: value, enabled: enabled, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                if enabled { arguments.setBoolValue(setting, !value) }
+            })
         case let .notice(_, _, string):
             return ItemListTextItem(presentationData: presentationData, text: .markdown(string), sectionId: self.section)
         case let .disclosure(_, _, link, text):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: "", sectionId: self.section, style: .blocks) {
                 arguments.openDisclosureLink(link)
             }
+        case let .disclosureSubtitle(_, _, link, text, subtitle, iconName):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: generateTintedImage(image: sgItemListSymbolImage(named: iconName), color: presentationData.theme.list.itemSecondaryTextColor), title: text, label: "", additionalDetailLabel: subtitle, sectionId: self.section, style: .blocks, action: {
+                arguments.openDisclosureLink(link)
+            })
         case let .appearancePreview(_, _, kind, setting):
             return AyuAppearancePreviewItem(theme: presentationData.theme, sectionId: self.section, kind: kind, updated: { value in
                 if let setting {
@@ -271,6 +316,8 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
             return text.lowercased().contains(query)
         case .toggleSubtitle(_, _, _, _, let text, let subtitle, _):
             return text.lowercased().contains(query) || subtitle.lowercased().contains(query)
+        case .expandableToggle(_, _, _, _, let text, _, _, _, _), .checkbox(_, _, _, _, let text, _):
+            return text.lowercased().contains(query)
         case .notice(_, _, let text):
             return text.lowercased().contains(query)
         case let .appearancePreview(_, _, kind, _):
@@ -284,6 +331,8 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
             return text.lowercased().contains(query) || value.lowercased().contains(query)
         case .disclosure(_, _, _, let text):
             return text.lowercased().contains(query)
+        case .disclosureSubtitle(_, _, _, let text, let subtitle, _):
+            return text.lowercased().contains(query) || subtitle.lowercased().contains(query)
         case .peerColorDisclosurePreview:
             return false // Never indexed during search
         case .action(_, _, _, let text, _):

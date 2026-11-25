@@ -283,6 +283,15 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
                 
                 if let mappedMode {
+                    // Translation keeps its own provider and visibility settings. All editor
+                    // requests, including Telegram's backend, honor the separate feature flag.
+                    if case .translate = mappedMode {
+                    } else if !ExteraAISettings.shared.configuration.showEditor {
+                        component.externalState.isProcessing = false
+                        component.externalState.result = (result.language, component.inputText, [])
+                        if !self.isUpdating { self.state?.updated(transition: .immediate) }
+                        return
+                    }
                     component.externalState.isProcessing = true
                     var useCustomAI = ExteraAISettings.shared.configuration.useForTextProcessing
                     if case .translate = mappedMode, SGSimpleSettings.shared.translationBackendEnum != .default {
