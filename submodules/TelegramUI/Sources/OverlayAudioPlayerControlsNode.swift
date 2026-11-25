@@ -295,9 +295,6 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
 
         self.lyricsNode = OverlayAudioPlayerLyricsNode(presentationData: presentationData)
         self.lyricsNode.isHidden = true
-        self.lyricsNode.requestSeek = { [weak self] timestamp in
-            self?.control?(.seek(timestamp))
-        }
         
         self.backwardButton = IconButtonNode()
         self.backwardButton.displaysAsynchronously = false
@@ -347,6 +344,9 @@ final class OverlayAudioPlayerControlsNode: ASDisplayNode {
         self.addSubnode(self.rateButton)
         self.addSubnode(self.lyricsButton)
         self.addSubnode(self.lyricsNode)
+        self.lyricsNode.requestSeek = { [weak self] timestamp in
+            self?.control?(.seek(timestamp))
+        }
         
         //self.addSubnode(self.separatorNode)
         
