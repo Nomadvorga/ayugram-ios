@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Native sticker controls shared by history rendering and the recent-sticker store.
 public final class ExteraStickerSettings: @unchecked Sendable {

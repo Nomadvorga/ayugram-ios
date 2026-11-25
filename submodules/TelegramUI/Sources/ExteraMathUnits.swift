@@ -151,7 +151,7 @@ enum ExteraMathUnits {
         for code in ["d", "h", "min", "s"] {
             guard let unit = self.catalog.units[code] else { return nil }
             let amount = code == "s" ? remaining : floor(remaining / unit.scale)
-            if amount > 0 || code == "s" && parts.isEmpty() {
+            if amount > 0 || code == "s" && parts.isEmpty {
                 guard let value = ExteraMathEngine.format(amount, options: plain) else { return nil }
                 parts.append(value + "\u{00a0}" + unit.label(russian))
                 remaining -= amount * unit.scale

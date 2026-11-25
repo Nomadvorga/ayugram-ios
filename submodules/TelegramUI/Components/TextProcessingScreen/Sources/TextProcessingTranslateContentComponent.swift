@@ -4,6 +4,7 @@ import UIKit
 import SwiftSignalKit
 import Display
 import TelegramPresentationData
+import PresentationDataUtils
 import ComponentFlow
 import AccountContext
 import MultilineTextComponent
