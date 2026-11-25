@@ -377,6 +377,9 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         case .hidePhoneNumber:
             settings.hidePhoneInSettings = value
             askForRestart?()
+        case .hidePhoneInSettings:
+            settings.hidePhoneInSettings = value
+            askForRestart?()
         case .formatTimeWithSeconds:
             settings.secondsInMessages = value
         case .uploadSpeedBoost:
@@ -429,19 +432,34 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             settings.hideChannelBottomButton = !value
         case .quickTransitions:
             settings.disableScrollToNextChannel = !value
+        case .disableScrollToNextChannel:
+            settings.disableScrollToNextChannel = value
         case .quickTransitionsTopics:
             settings.disableScrollToNextTopic = !value
+        case .disableScrollToNextTopic:
+            settings.disableScrollToNextTopic = value
         case .hideSendAsPeer:
+            settings.disableSendAsButton = value
+        case .disableSendAsButton:
             settings.disableSendAsButton = value
         case .hideCameraTile:
             settings.disableGalleryCamera = value
             simplePromise.set(true)
+        case .disableGalleryCamera:
+            settings.disableGalleryCamera = value
+            simplePromise.set(true)
         case .cameraTilePreview:
             settings.disableGalleryCameraPreview = !value
+        case .disableGalleryCameraPreview:
+            settings.disableGalleryCameraPreview = value
         case .recordingButton:
             settings.hideRecordingButton = !value
+        case .hideRecordingButton:
+            settings.hideRecordingButton = value
         case .snapDeletionEffect:
             settings.disableSnapDeletionEffect = !value
+        case .disableSnapDeletionEffect:
+            settings.disableSnapDeletionEffect = value
         case .wideChannelPosts:
             settings.wideChannelPosts = value
         case .hideReactions:
