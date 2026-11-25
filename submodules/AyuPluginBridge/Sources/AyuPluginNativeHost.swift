@@ -553,6 +553,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let method = arguments["method"]?.string ?? arguments["name"]?.string ?? ""
         guard remote.kind == "view", Self.methods(for: remote.className).contains(method), let arity = Self.writeMethods[method] else { throw AyuBridgeFailure.unsupported(remote.className + "." + method) }
         var args = arguments["args"]?.array ?? []
+        var nativeMethod = method
         let validArity = args.count == arity || (method == "addView" && args.count == 2)
         guard validArity else { throw AyuBridgeFailure("invalid_arguments", "Wrong argument count for " + method) }
         try self.validateReferences(.array(args), owner: owner)
@@ -589,6 +590,18 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 throw AyuBridgeFailure("invalid_arguments", "Unsupported LayoutParams class")
             }
             args[0] = .object(layout.fields)
+        } else if method == "setBackground" {
+            if args[0] == .null {
+                args[0] = .integer(0)
+            } else {
+                let drawable = try self.remote(self.handle(args[0]), owner: owner)
+                guard drawable.kind == "adapter", drawable.className == "android.graphics.drawable.ColorDrawable",
+                      let color = drawable.fields["color"]?.integer else {
+                    throw AyuBridgeFailure.unsupported("View.setBackground drawable")
+                }
+                args[0] = .integer(color)
+            }
+            nativeMethod = "setBackgroundColor"
         } else if method == "setOnClickListener" || method == "setOnTouchListener" {
             if args[0] != .null { args[0] = .object(["$callback": .string(try self.callbackID(args[0], owner: owner, method: method == "setOnClickListener" ? "onClick" : "onTouch"))]) }
         } else if method == "setText" {
@@ -626,7 +639,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             if method == "setTextSize", !(1...256).contains(numbers[0]) { throw AyuBridgeFailure("invalid_arguments", "Invalid font size") }
             if method == "setFrame", numbers[2] < 0 || numbers[3] < 0 { throw AyuBridgeFailure("invalid_arguments", "Negative frame size") }
         }
-        return AyuBridgeUI.Command(owner: owner, generation: generation, handle: handle, method: method, arguments: args)
+        return AyuBridgeUI.Command(owner: owner, generation: generation, handle: handle, method: nativeMethod, arguments: args)
     }
 
     private func getField(owner: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue {
@@ -1013,7 +1026,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "java.lang.Runnable": [:], "android.view.View$OnClickListener": [:], "android.view.View$OnTouchListener": [:]
     ]
     private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getAlpha", "getTranslationX", "getTranslationY", "getVisibility", "getText", "getChildCount"]
-    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setHint": 1, "setHintTextColor": 1, "setSingleLine": 1, "setMinLines": 1, "setGravity": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
+    private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setBackgroundColor": 1, "setBackground": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setHint": 1, "setHintTextColor": 1, "setSingleLine": 1, "setMinLines": 1, "setGravity": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "setImageBase64": 1, "unmount": 0, "animate": 1]
     private static func methods(for name: String) -> Set<String> {
         if name == "java.lang.reflect.Method" { return ["getName"] }
         if name.hasSuffix("$LayoutParams") { return ["getClass"] }

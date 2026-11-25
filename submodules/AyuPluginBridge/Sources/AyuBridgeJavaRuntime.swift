@@ -6,12 +6,11 @@ import Foundation
 /// by the integrator via `AyuBridgeClassRegistry.adding(AyuBridgeJavaRuntime.adapters)`.
 
 enum AyuBridgeJavaRuntime {
-    /// Explicit non-visual utility adapters safe to install alongside the
-    /// native-host view registry and application-owned Toast adapter. Canvas,
-    /// Paint, ScrollView and widget adapter models are deliberately excluded:
-    /// their declarations do not provide corresponding native rendering.
+    /// Utility adapters that have an explicit native value/rendering path.
+    /// Canvas, Paint, ScrollView and widget adapter models remain excluded when
+    /// the native-host view registry owns those classes.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.view.MotionEvent", "android.os.Handler"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
@@ -195,6 +194,14 @@ enum AyuBridgeJavaRuntime {
     private static func integer(_ value: AyuBridgeValue, _ what: String) throws -> Int64 {
         guard let number = value.integer else { throw AyuBridgeFailure("invalid_arguments", "Expected \(what)") }
         return number
+    }
+    private static func colorInteger(_ value: AyuBridgeValue, _ what: String) throws -> Int64 {
+        guard let color = value.integer,
+              (color >= Int64(Int32.min) && color <= Int64(Int32.max)) ||
+              (color >= 0 && color <= Int64(UInt32.max)) else {
+            throw AyuBridgeFailure("invalid_arguments", "Expected \(what)")
+        }
+        return color
     }
     private static func optionalInteger(_ value: AyuBridgeValue) -> Int64? { value.integer }
     private static func bool(_ value: AyuBridgeValue, _ what: String) throws -> Bool {
@@ -689,14 +696,13 @@ enum AyuBridgeJavaRuntime {
             constructor: { args, _ in
                 if args.isEmpty { return ["color": .integer(0)] }
                 try Self.arity(args, 1)
-                guard let color = args[0].integer, color >= 0, color <= 0xFFFF_FFFF else { throw Self.unsupported("ColorDrawable.<init>") }
-                return ["color": .integer(color)]
+                return ["color": .integer(try Self.colorInteger(args[0], "ARGB color"))]
             },
             methods: [
                 "getColor": { state, args, _ in try Self.arity(args, 0); return .value(state["color"] ?? .integer(0)) },
                 "setColor": { state, args, _ in
                     try Self.arity(args, 1)
-                    guard let color = args[0].integer, color >= 0, color <= 0xFFFF_FFFF else { throw Self.unsupported("ColorDrawable.setColor") }
+                    let color = try Self.colorInteger(args[0], "ARGB color")
                     var updated = state
                     updated["color"] = .integer(color)
                     state = updated

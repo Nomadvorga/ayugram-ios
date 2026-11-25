@@ -89,6 +89,17 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try adapter.methods["getQueryParameter"]?(state, [.string("")], context()))
     }
 
+    func testColorDrawableAcceptsJavaSignedArgbColors() throws {
+        let adapter = self.runtimeAdapter("android.graphics.drawable.ColorDrawable")
+        var state = try self.constructor(adapter, [.integer(-16_777_216)])
+        XCTAssertEqual(state["color"], .integer(-16_777_216))
+        XCTAssertEqual(try adapter.methods["getColor"]?(state, [], context()), .value(.integer(-16_777_216)))
+        _ = try adapter.methods["setColor"]?(&state, [.integer(0xFFFF_FFFF)], context())
+        XCTAssertEqual(state["color"], .integer(0xFFFF_FFFF))
+        XCTAssertThrowsError(try self.constructor(adapter, [.integer(Int64(Int32.min) - 1)]))
+        XCTAssertThrowsError(try self.constructor(adapter, [.integer(0x1_0000_0000)]))
+    }
+
     // View
 
     func testViewVisibilityAndTransforms() throws {
@@ -155,7 +166,7 @@ final class AyuBridgeJavaRuntimeTests: XCTestCase {
 
     func testRegistryValidatesRuntimeAdapters() {
         XCTAssertFalse(self.registry.adapters.isEmpty)
-        for name in ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.view.MotionEvent", "android.os.Handler"] {
+        for name in ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.drawable.ColorDrawable", "android.view.MotionEvent", "android.os.Handler"] {
             XCTAssertNotNil(self.registry.adapters[name], name)
         }
         for name in ["android.graphics.Canvas", "android.graphics.Paint", "android.widget.ScrollView", "android.widget.CheckBox"] {

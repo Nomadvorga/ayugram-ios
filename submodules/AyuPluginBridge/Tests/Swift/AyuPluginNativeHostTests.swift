@@ -538,6 +538,22 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(waitResult, .completed)
     }
 
+    func testViewBackgroundAcceptsOwnedColorDrawableOnly() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        let textView = try await self.construct(host, "android.widget.TextView")
+        let colorDrawable = try await self.construct(host, "android.graphics.drawable.ColorDrawable", [.integer(-16_777_216)])
+        let applied = try await self.invoke(host, textView["result"], "setBackground", [colorDrawable["result"]])
+        XCTAssertEqual(applied["result"], .null)
+
+        let wrongDrawable = try await self.construct(host, "android.content.Intent")
+        let unsupported = try await self.invoke(host, textView["result"], "setBackground", [wrongDrawable["result"]])
+        XCTAssertEqual(unsupported["error"]["code"], .string("UNSUPPORTED_API"))
+
+        let cleared = try await self.invoke(host, textView["result"], "setBackground", [.null])
+        XCTAssertEqual(cleared["result"], .null)
+    }
+
     func testSettingsReplacementClearsOnlyOwnerAndPersistsAcrossDetach() async throws {
         let host = self.host()
         try await self.authorize(host)
