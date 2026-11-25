@@ -13,7 +13,7 @@ final class DistanceFormattingTests: XCTestCase {
         super.tearDown()
     }
 
-    private func expected(strings: PresentationStrings, distance: Double, style: MKDistanceFormatter.UnitStyle, units: MKDistanceFormatter.Units) -> String {
+    private func expected(strings: PresentationStrings, distance: Double, style: MKDistanceFormatter.DistanceUnitStyle, units: MKDistanceFormatter.Units) -> String {
         let formatter = MKDistanceFormatter()
         formatter.locale = localeWithStrings(strings)
         formatter.unitStyle = style

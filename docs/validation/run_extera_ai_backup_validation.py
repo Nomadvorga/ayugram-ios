@@ -28,7 +28,7 @@ def make_harness(repo):
     ai = ai.replace("private init() {}", "fileprivate init() {}")
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
     start = backup.index("    private static let settings: [Setting] = [")
-    end = backup.index("\n    ]", start) + len("\n    ]")
+    end = backup.index("\n    private static let settingsByName:", start)
     flags = "\n".join(line for line in backup[start:end].splitlines() if any(helper in line for helper in ["aiBoolean(", "aiTemperature(", "aiSummaryPolicy("]))
     backup = backup[:start] + '''    private static let settings: [Setting] = [
 ''' + flags + '''
