@@ -7073,7 +7073,7 @@ private final class ChatListLocationContext {
         // MARK: Swiftgram
         let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
         // MARK: AyuGram — cheap notification-driven value, so the header reacts without polling.
-        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode })
+        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar })
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()
