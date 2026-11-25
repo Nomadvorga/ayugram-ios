@@ -29,10 +29,22 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: false
+      - name: Locate Xcode host test libraries
+        run: |
+          set -euo pipefail
+          HOST_PLATFORM=$(xcrun --sdk macosx --show-sdk-platform-path)
+          HOST_FRAMEWORKS="$HOST_PLATFORM/Developer/Library/Frameworks"
+          HOST_LIBRARIES="$HOST_PLATFORM/Developer/usr/lib"
+          test -d "$HOST_FRAMEWORKS/XCTest.framework"
+          echo "HOST_TEST_FRAMEWORKS=$HOST_FRAMEWORKS" >> "$GITHUB_ENV"
+          echo "HOST_TEST_LIBRARIES=$HOST_LIBRARIES" >> "$GITHUB_ENV"
       - name: Calculator and conversions
         run: |
           set -euo pipefail
-          swiftc -parse-as-library \
+          xcrun --sdk macosx swiftc -parse-as-library \
+            -F "$HOST_TEST_FRAMEWORKS" -I "$HOST_TEST_LIBRARIES" -L "$HOST_TEST_LIBRARIES" \
+            -Xlinker -rpath -Xlinker "$HOST_TEST_FRAMEWORKS" \
+            -Xlinker -rpath -Xlinker "$HOST_TEST_LIBRARIES" \
             submodules/TelegramUI/Sources/ExteraMathEngine.swift \
             submodules/TelegramUI/Sources/ExteraMathUnits.swift \
             submodules/TelegramUI/Sources/ExteraMathTimeZones.swift \
@@ -41,6 +53,7 @@ jobs:
             -o "$RUNNER_TEMP/extera-math-tests"
           "$RUNNER_TEMP/extera-math-tests"
       - name: Lyrics parsers
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           swiftc \
@@ -50,6 +63,7 @@ jobs:
             -o "$RUNNER_TEMP/extera-lyrics-tests"
           "$RUNNER_TEMP/extera-lyrics-tests"
       - name: Settings serialization and validators
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           python3 docs/validation/check_extera_backup.py
@@ -57,15 +71,20 @@ jobs:
           python3 docs/validation/run_extera_backup_validation.py
           python3 docs/validation/run_ayu_settings_store_validation.py
       - name: Local feed persistence
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
-          swiftc -swift-version 5 -parse-as-library -warnings-as-errors -g -sanitize=thread \
+          xcrun --sdk macosx swiftc -swift-version 5 -parse-as-library -warnings-as-errors -g -sanitize=thread \
+            -F "$HOST_TEST_FRAMEWORKS" -I "$HOST_TEST_LIBRARIES" -L "$HOST_TEST_LIBRARIES" \
+            -Xlinker -rpath -Xlinker "$HOST_TEST_FRAMEWORKS" \
+            -Xlinker -rpath -Xlinker "$HOST_TEST_LIBRARIES" \
             Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
             Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
             Tests/ExteraFeed/ExteraFeedSettingsTests.swift \
             -o "$RUNNER_TEMP/extera-feed-tests"
           TSAN_OPTIONS=halt_on_error=1 "$RUNNER_TEMP/extera-feed-tests"
       - name: HTTP pill models
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
@@ -75,6 +94,7 @@ jobs:
             -o "$RUNNER_TEMP/extera-pill-tests"
           "$RUNNER_TEMP/extera-pill-tests"
       - name: Sticker settings and geometry
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
@@ -84,6 +104,7 @@ jobs:
             -o "$RUNNER_TEMP/extera-sticker-tests"
           "$RUNNER_TEMP/extera-sticker-tests"
       - name: Image search protocol
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           swiftc -swift-version 5 -parse-as-library -warnings-as-errors \
@@ -92,6 +113,7 @@ jobs:
             -o "$RUNNER_TEMP/extera-image-tests"
           "$RUNNER_TEMP/extera-image-tests"
       - name: Takeout serialization and ZIP
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           swiftc \
