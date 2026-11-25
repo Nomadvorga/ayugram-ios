@@ -614,7 +614,9 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
                 if dayDifference == 0 || dayDifference == -1 {
                     let day: RelativeTimestampFormatDay
                     if dayDifference == 0 {
-                        if expanded {
+                        // MARK: AyuGram
+                        // "Relative last seen": always show "5 hours ago" instead of "today at 09:20".
+                        if expanded && !ExteraSettings.shared.relativeLastSeen {
                             day = .today
                         } else {
                             let minutes = difference / (60 * 60)

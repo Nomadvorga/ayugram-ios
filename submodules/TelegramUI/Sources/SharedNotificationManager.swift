@@ -7,6 +7,7 @@ import TelegramPresentationData
 import TelegramUIPreferences
 import TelegramCallsUI
 import AccountContext
+import SGSimpleSettings // MARK: Swiftgram
 
 private final class PollStateContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -129,6 +130,11 @@ public final class SharedNotificationManager {
         let previousDisposable = context.disposable
         context.disposable = (account.stateManager.pollStateUpdateCompletion()
         |> mapToSignal { messageIds -> Signal<[EngineMessage.Id], NoError> in
+            // MARK: AyuGram
+            // exteraGram's "Disable notification delay" skips the artificial pause before push updates settle.
+            if ExteraSettings.shared.disableNotificationDelay {
+                return .single(messageIds)
+            }
             return .single(messageIds)
             |> delay(1.0, queue: Queue.mainQueue())
         }

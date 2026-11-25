@@ -2256,7 +2256,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 // MARK: Swiftgram
                 // var translateToLanguage: (fromLang: String, toLang: String)?
                 // if let translationState, (isPremium || autoTranslate)  && translationState.isEnabled {
-                    var languageCode = translationState?.toLang ?? chatPresentationData.strings.baseLanguageCode
+                    var languageCode = translationState?.toLang ?? ExteraSettings.shared.effectiveTranslationTargetLanguage(chatPresentationData.strings.baseLanguageCode)
                     let rawSuffix = "-raw"
                     if languageCode.hasSuffix(rawSuffix) {
                         languageCode = String(languageCode.dropLast(rawSuffix.count))

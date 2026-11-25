@@ -8,6 +8,7 @@ import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
+import SGSimpleSettings // MARK: Swiftgram
 import AccountContext
 import TelegramNotices
 import ContactsPeerItem
@@ -2007,6 +2008,11 @@ public final class ChatListNode: ListViewImpl {
         let hideArchivedFolderByDefault = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.chatArchiveSettings))
         |> map { view -> Bool in
             let settings: ChatArchiveSettings = view?.get(ChatArchiveSettings.self) ?? .default
+            // MARK: AyuGram
+            // "Archive on pull" off keeps the archive folder always visible instead of revealing it on pull.
+            if !ExteraSettings.shared.archiveOnPull {
+                return false
+            }
             return settings.isHiddenByDefault
         }
         |> distinctUntilChanged

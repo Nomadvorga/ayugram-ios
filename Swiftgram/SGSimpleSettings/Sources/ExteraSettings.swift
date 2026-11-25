@@ -17,6 +17,15 @@ public final class ExteraSettings {
         case singleCornerRadius
         case avatarCorners
         case chatListTitle
+        // exteraGram's "General" tab.
+        case disableNotificationDelay
+        case relativeLastSeen
+        case hideArchiveFolder
+        case archiveOnPull
+        case disableUnarchiveSwipe
+        case showIdAndDc
+        case customSavePath
+        case translationTargetLanguage
     }
 
     public enum ChatListTitle: Int, CaseIterable {
@@ -24,6 +33,13 @@ public final class ExteraSettings {
         case fullName = 1
         case firstName = 2
         case chats = 3
+    }
+
+    /// exteraGram's "Show ID and DC": 0 hides it, 1 prints Telegram API ids, 2 prints Bot API ids.
+    public enum ShowIdAndDc: Int, CaseIterable {
+        case hide = 0
+        case telegram = 1
+        case bot = 2
     }
 
     private let store = AyuSettingsStore.shared
@@ -45,6 +61,13 @@ public final class ExteraSettings {
             ExteraSettings.key(.singleCornerRadius): false,
             ExteraSettings.key(.avatarCorners): 28,
             ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
+            ExteraSettings.key(.disableNotificationDelay): false,
+            ExteraSettings.key(.relativeLastSeen): false,
+            ExteraSettings.key(.hideArchiveFolder): false,
+            ExteraSettings.key(.archiveOnPull): true,
+            ExteraSettings.key(.disableUnarchiveSwipe): true,
+            ExteraSettings.key(.customSavePath): "",
+            ExteraSettings.key(.translationTargetLanguage): "",
         ])
     }
 
@@ -134,8 +157,8 @@ public final class ExteraSettings {
     }
 
     // "Filter Zalgo": runs of combining marks beyond what real scripts use are dropped.
-    public func filteredText(_ text: String) -> String {
-        guard self.filterZalgo else {
+    public func filteredText(_ text: String, force: Bool = false) -> String {
+        guard force || self.filterZalgo else {
             return text
         }
         var result = String.UnicodeScalarView()
@@ -161,5 +184,104 @@ public final class ExteraSettings {
             result.append(scalar)
         }
         return changed ? String(result) : text
+    }
+
+    // MARK: General
+
+    public var disableNotificationDelay: Bool {
+        return self.value(.disableNotificationDelay)
+    }
+
+    public var relativeLastSeen: Bool {
+        return self.value(.relativeLastSeen)
+    }
+
+    public var hideArchiveFolder: Bool {
+        return self.value(.hideArchiveFolder)
+    }
+
+    public var archiveOnPull: Bool {
+        return self.value(.archiveOnPull)
+    }
+
+    public var disableUnarchiveSwipe: Bool {
+        return self.value(.disableUnarchiveSwipe)
+    }
+
+    public var showIdAndDc: ShowIdAndDc {
+        get {
+            // Migrate Swiftgram's boolean pair once: it showed the Bot API form.
+            if self.store.userDefaults.object(forKey: ExteraSettings.key(.showIdAndDc)) == nil {
+                return SGSimpleSettings.shared.showProfileId ? .bot : .hide
+            }
+            return ShowIdAndDc(rawValue: self.store.int(ExteraSettings.key(.showIdAndDc))) ?? .hide
+        }
+        set {
+            self.store.setInt(newValue.rawValue, ExteraSettings.key(.showIdAndDc))
+        }
+    }
+
+    /// "Show ID and DC" as text for a peer id, in the API form exteraGram offers.
+    public func idText(namespace: Int32, id: Int64, isChannel: Bool, isGroup: Bool) -> String {
+        switch self.showIdAndDc {
+        case .hide:
+            return ""
+        case .telegram:
+            return "\(id)"
+        case .bot:
+            if isChannel {
+                return "-100\(id)"
+            } else if isGroup {
+                return "-\(id)"
+            } else {
+                return "\(id)"
+            }
+        }
+    }
+
+    public var customSavePath: String {
+        get {
+            return self.store.string(ExteraSettings.key(.customSavePath))
+        }
+        set {
+            let value = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if value != self.customSavePath {
+                self.store.setString(value, ExteraSettings.key(.customSavePath))
+            }
+        }
+    }
+
+    /// exteraGram saves into `Pictures/AyuGram` by default; on iOS the same folder becomes a Photos album.
+    public static let defaultSaveFolderName = "AyuGram"
+
+    /// Name of the Photos album saved media goes to.
+    public var saveFolderName: String {
+        let value = self.customSavePath
+        return value.isEmpty ? ExteraSettings.defaultSaveFolderName : value
+    }
+
+    public var translationTargetLanguage: String {
+        get {
+            return self.store.string(ExteraSettings.key(.translationTargetLanguage))
+        }
+        set {
+            let value = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if value != self.translationTargetLanguage {
+                self.store.setString(value, ExteraSettings.key(.translationTargetLanguage))
+            }
+        }
+    }
+
+    /// The language translations go to when the chat has no choice of its own.
+    public func effectiveTranslationTargetLanguage(_ baseLanguageCode: String) -> String {
+        var code = self.translationTargetLanguage
+        if code.isEmpty {
+            code = baseLanguageCode
+        }
+        let rawSuffix = "-raw"
+        if code.hasSuffix(rawSuffix) {
+            code = String(code.dropLast(rawSuffix.count))
+        }
+        return code
     }
 }

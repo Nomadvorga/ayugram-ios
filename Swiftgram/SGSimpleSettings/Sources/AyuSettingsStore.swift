@@ -60,6 +60,25 @@ final class AyuSettingsStore: @unchecked Sendable {
         NotificationCenter.default.post(name: AyuSettingsStore.didChangeNotification, object: nil)
     }
 
+    func string(_ key: String) -> String {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        if let value = self.values[key] as? String {
+            return value
+        }
+        let value = self.userDefaults.string(forKey: key) ?? ""
+        self.values[key] = value
+        return value
+    }
+
+    func setString(_ value: String, _ key: String) {
+        self.lock.lock()
+        self.values[key] = value
+        self.lock.unlock()
+        self.userDefaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: AyuSettingsStore.didChangeNotification, object: nil)
+    }
+
     func intDictionary(_ key: String) -> [String: Int] {
         self.lock.lock()
         defer { self.lock.unlock() }

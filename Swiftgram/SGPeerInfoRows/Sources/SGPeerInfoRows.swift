@@ -13,22 +13,31 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
     var items: [PeerInfoScreenItem] = []
     var itemId = 0
     var idText = ""
+    var rawId: Int64 = 0
+    var isChannel = false
+    var isGroup = false
     var isMutualContact = false
 
     if case let .user(user) = data.peer {
-        idText = String(user.id.id._internalGetInt64Value())
+        rawId = user.id.id._internalGetInt64Value()
+        idText = String(rawId)
         isMutualContact = user.flags.contains(.mutualContact)
     } else if case let .channel(channel) = data.peer {
-        idText = "-100" + String(channel.id.id._internalGetInt64Value())
+        rawId = channel.id.id._internalGetInt64Value()
+        idText = ExteraSettings.shared.idText(namespace: channel.id.namespace._internalGetInt32Value(), id: rawId, isChannel: true, isGroup: false)
+        isChannel = true
     } else if case let .legacyGroup(group) = data.peer {
-        idText = String(group.id.id._internalGetInt64Value())
+        rawId = group.id.id._internalGetInt64Value()
+        idText = ExteraSettings.shared.idText(namespace: group.id.namespace._internalGetInt32Value(), id: rawId, isChannel: false, isGroup: true)
+        isGroup = true
     }
 
     // MARK: AyuGram
-    // As in AyuGram: the ID is the value and "ID · DC N" its label.
-    if SGSimpleSettings.shared.showProfileId && !idText.isEmpty {
+    // As in exteraGram: "Hide", "Telegram API" (raw ids) or "Bot API" (-100 for channels, - for groups).
+    if ExteraSettings.shared.showIdAndDc != .hide && !idText.isEmpty {
+        idText = ExteraSettings.shared.idText(namespace: data.peer?.id.namespace._internalGetInt32Value() ?? 0, id: rawId, isChannel: isChannel, isGroup: isGroup)
         var label = "ID"
-        if SGSimpleSettings.shared.showDC, let peer = data.peer, let smallProfileImage = peer.smallProfileImage, let cloudResource = smallProfileImage.resource as? CloudPeerPhotoSizeMediaResource {
+        if let peer = data.peer, let smallProfileImage = peer.smallProfileImage, let cloudResource = smallProfileImage.resource as? CloudPeerPhotoSizeMediaResource {
             label += " · DC \(cloudResource.datacenterId)"
         }
         items.append(PeerInfoScreenLabeledValueItem(id: itemId, context: context, label: label, text: idText, textColor: .primary, action: { node, _ in
@@ -102,11 +111,18 @@ func sgPeerInfoProfileItems(nearestChatParticipant: (String?, Int32?), data: Pee
 }
 
 func sgPeerInfoSettingsProfileIdItems(data: PeerInfoScreenData, interaction: PeerInfoInteraction) -> [PeerInfoScreenItem] {
-    guard SGSimpleSettings.shared.showProfileId else {
+    guard ExteraSettings.shared.showIdAndDc != .hide, let peer = data.peer else {
         return []
     }
 
-    let idText = data.peer.map { String($0.id.id._internalGetInt64Value()) } ?? ""
+    var isChannel = false
+    var isGroup = false
+    if case .channel = peer {
+        isChannel = true
+    } else if case .legacyGroup = peer {
+        isGroup = true
+    }
+    let idText = ExteraSettings.shared.idText(namespace: peer.id.namespace._internalGetInt32Value(), id: peer.id.id._internalGetInt64Value(), isChannel: isChannel, isGroup: isGroup)
     return [PeerInfoScreenActionItem(id: 100, text: "ID: \(idText)", color: .accent, action: {
         UIPasteboard.general.string = idText
         interaction.notifyTextCopied()

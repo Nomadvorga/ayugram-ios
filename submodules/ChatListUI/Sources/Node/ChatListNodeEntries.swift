@@ -4,6 +4,7 @@ import TelegramCore
 import TelegramPresentationData
 import MergeLists
 import AccountContext
+import SGSimpleSettings // MARK: Swiftgram
 
 enum ChatListNodeEntryId: Hashable {
     case Header
@@ -931,6 +932,11 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         
         if !view.hasLater, case .chatList = mode {
             for groupReference in groupItems {
+                // MARK: AyuGram
+                // exteraGram's "Hide archive folder": the archive is removed from the chat list entirely.
+                if groupReference.id == .archive && ExteraSettings.shared.hideArchiveFolder {
+                    continue
+                }
                 let messageIndex = EngineMessage.Index(id: EngineMessage.Id(peerId: EnginePeer.Id(0), namespace: 0, id: 0), timestamp: 1)
                 var mappedStoryState: ChatListNodeState.StoryState?
                 if let archiveStoryState = state.archiveStoryState {

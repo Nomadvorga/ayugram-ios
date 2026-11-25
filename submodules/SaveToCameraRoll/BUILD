@@ -16,6 +16,7 @@ swift_library(
         "//submodules/AccountContext:AccountContext",
         "//submodules/DeviceAccess:DeviceAccess",
         "//submodules/LegacyComponents:LegacyComponents",
+        "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

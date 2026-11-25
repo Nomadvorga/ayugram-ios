@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 import DeviceAccess
 import AccountContext
 import LegacyComponents
+import SGSimpleSettings // MARK: Swiftgram
 
 public enum FetchMediaDataState {
     case progress(Float)
@@ -97,6 +98,38 @@ public func fetchMediaData(context: AccountContext, userLocation: MediaResourceU
     }
 }
 
+// MARK: AyuGram
+private func sgSaveToAlbum(named name: String, completion: @escaping (PHAssetCollection?) -> Void) {
+    guard !name.isEmpty else {
+        completion(nil)
+        return
+    }
+    let options = PHFetchOptions()
+    options.predicate = NSPredicate(format: "title == %@", name)
+    if let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options).firstObject {
+        completion(collection)
+        return
+    }
+    PHPhotoLibrary.shared().performChanges({
+        PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: name)
+    }, completionHandler: { _, _ in
+        let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options).firstObject
+        completion(collection)
+    })
+}
+
+private func sgPerformAssetSave(collection: PHAssetCollection?, fill: @escaping (PHAssetCreationRequest) -> Void, completion: @escaping (Error?) -> Void) {
+    PHPhotoLibrary.shared().performChanges({
+        let request = PHAssetCreationRequest.forAsset()
+        fill(request)
+        if let collection, let placeholder = request.placeholderForCreatedAsset, let albumRequest = PHAssetCollectionChangeRequest(for: collection) {
+            albumRequest.addAssets([placeholder] as NSArray)
+        }
+    }, completionHandler: { _, error in
+        completion(error)
+    })
+}
+
 public func saveToCameraRoll(context: AccountContext, userLocation: MediaResourceUserLocation, customUserContentType: MediaResourceUserContentType? = nil, mediaReference: AnyMediaReference, video: AnyMediaReference? = nil) -> Signal<Float, NoError> {
     let mediaData: Signal<(FetchMediaDataState, Bool), NoError> = fetchMediaData(context: context, userLocation: userLocation, customUserContentType: customUserContentType, mediaReference: mediaReference)
     let videoData: Signal<FetchMediaDataState?, NoError>
@@ -153,47 +186,49 @@ public func saveToCameraRoll(context: AccountContext, userLocation: MediaResourc
                     }
 
                     let tempVideoPath = NSTemporaryDirectory() + "\(Int64.random(in: Int64.min ... Int64.max)).mp4"
-                    if isImage, let videoData, let imageData = try? Data(contentsOf: URL(fileURLWithPath: mainData.path)) {
-                        let id = UUID().uuidString
+                    // MARK: AyuGram
+                    // Saved media goes into the album named by exteraGram's "Save folder" ("AyuGram" by default).
+                    sgSaveToAlbum(named: ExteraSettings.shared.saveFolderName) { collection in
+                        if isImage, let videoData, let imageData = try? Data(contentsOf: URL(fileURLWithPath: mainData.path)) {
+                            let id = UUID().uuidString
 
-                        let jpegWithID = addAssetIdentifierToJPEG(imageData, assetIdentifier: id)!
-                        let outputVideoURL = URL(fileURLWithPath: NSTemporaryDirectory() + "\(id).mov")
+                            let jpegWithID = addAssetIdentifierToJPEG(imageData, assetIdentifier: id)!
+                            let outputVideoURL = URL(fileURLWithPath: NSTemporaryDirectory() + "\(id).mov")
 
-                        try? FileManager.default.copyItem(atPath: videoData.path, toPath: tempVideoPath)
+                            try? FileManager.default.copyItem(atPath: videoData.path, toPath: tempVideoPath)
 
-                        addAssetIdentifierToVideo(inputURL: URL(fileURLWithPath: tempVideoPath), outputURL: outputVideoURL, assetIdentifier: id) { success in
-                            guard success else { return }
+                            addAssetIdentifierToVideo(inputURL: URL(fileURLWithPath: tempVideoPath), outputURL: outputVideoURL, assetIdentifier: id) { success in
+                                guard success else { return }
 
-                            PHPhotoLibrary.shared().performChanges({
-                                let request = PHAssetCreationRequest.forAsset()
-
-                                request.addResource(with: .photo, data: jpegWithID, options: nil)
-                                request.addResource(with: .pairedVideo, fileURL: outputVideoURL, options: nil)
-                            }, completionHandler: { _, error in
+                                sgPerformAssetSave(collection: collection, fill: { request in
+                                    request.addResource(with: .photo, data: jpegWithID, options: nil)
+                                    request.addResource(with: .pairedVideo, fileURL: outputVideoURL, options: nil)
+                                }, completion: { _ in
+                                    let _ = try? FileManager.default.removeItem(atPath: tempVideoPath)
+                                    subscriber.putNext(1.0)
+                                    subscriber.putCompletion()
+                                })
+                            }
+                        } else {
+                            sgPerformAssetSave(collection: collection, fill: { request in
+                                if isImage {
+                                    if let imageData = try? Data(contentsOf: URL(fileURLWithPath: mainData.path)) {
+                                        request.addResource(with: .photo, data: imageData, options: nil)
+                                    }
+                                } else {
+                                    if let _ = try? FileManager.default.copyItem(atPath: mainData.path, toPath: tempVideoPath) {
+                                        request.addResource(with: .video, fileURL: URL(fileURLWithPath: tempVideoPath), options: nil)
+                                    }
+                                }
+                            }, completion: { error in
+                                if let error {
+                                    print("\(error)")
+                                }
                                 let _ = try? FileManager.default.removeItem(atPath: tempVideoPath)
                                 subscriber.putNext(1.0)
                                 subscriber.putCompletion()
                             })
                         }
-                    } else {
-                        PHPhotoLibrary.shared().performChanges({
-                            if isImage {
-                                if let imageData = try? Data(contentsOf: URL(fileURLWithPath: mainData.path)) {
-                                    PHAssetCreationRequest.forAsset().addResource(with: .photo, data: imageData, options: nil)
-                                }
-                            } else {
-                                if let _ = try? FileManager.default.copyItem(atPath: mainData.path, toPath: tempVideoPath) {
-                                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: URL(fileURLWithPath: tempVideoPath))
-                                }
-                            }
-                        }, completionHandler: { _, error in
-                            if let error {
-                                print("\(error)")
-                            }
-                            let _ = try? FileManager.default.removeItem(atPath: tempVideoPath)
-                            subscriber.putNext(1.0)
-                            subscriber.putCompletion()
-                        })
                     }
                 })
 

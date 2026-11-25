@@ -2246,7 +2246,7 @@ extension ChatControllerImpl {
                             return chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId)
                             |> map { translationState -> ChatPresentationTranslationState? in
                                 if let translationState, !translationState.fromLang.isEmpty && (translationState.fromLang != baseLanguageCode || translationState.isEnabled) {
-                                    return ChatPresentationTranslationState(isEnabled: translationState.isEnabled, fromLang: translationState.fromLang, toLang: translationState.toLang ?? baseLanguageCode)
+                                    return ChatPresentationTranslationState(isEnabled: translationState.isEnabled, fromLang: translationState.fromLang, toLang: translationState.toLang ?? ExteraSettings.shared.effectiveTranslationTargetLanguage(baseLanguageCode))
                                 } else {
                                     return nil
                                 }
@@ -2273,7 +2273,7 @@ extension ChatControllerImpl {
                         chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId, forcePredict: true)
                         |> map { translationState -> ChatPresentationTranslationState? in
                             if let translationState, !translationState.fromLang.isEmpty {
-                                return ChatPresentationTranslationState(isEnabled: translationState.isEnabled, fromLang: translationState.fromLang, toLang: translationState.toLang ?? baseLanguageCode)
+                                return ChatPresentationTranslationState(isEnabled: translationState.isEnabled, fromLang: translationState.fromLang, toLang: translationState.toLang ?? ExteraSettings.shared.effectiveTranslationTargetLanguage(baseLanguageCode))
                             } else {
                                 return nil
                             }

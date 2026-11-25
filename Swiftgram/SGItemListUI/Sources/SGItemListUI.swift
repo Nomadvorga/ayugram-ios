@@ -80,6 +80,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
 public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable, SliderSetting: Hashable, OneFromManySetting: Hashable, DisclosureLink: Hashable, ActionType: Hashable>: ItemListNodeEntry {
     case header(id: Int, section: Section, text: String, badge: String?)
     case toggle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, enabled: Bool)
+    case toggleSubtitle(id: Int, section: Section, settingName: BoolSetting, value: Bool, text: String, subtitle: String, enabled: Bool)
     case notice(id: Int, section: Section, text: String)
     case percentageSlider(id: Int, section: Section, settingName: SliderSetting, value: Int32)
     case appearancePreview(id: Int, section: Section, kind: AyuAppearancePreviewKind, settingName: SliderSetting?)
@@ -94,6 +95,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         case let .header(_, sectionId, _, _):
             return sectionId.rawValue
         case let .toggle(_, sectionId, _, _, _, _):
+            return sectionId.rawValue
+        case let .toggleSubtitle(_, sectionId, _, _, _, _, _):
             return sectionId.rawValue
         case let .notice(_, sectionId, _):
             return sectionId.rawValue
@@ -125,6 +128,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return stableIdValue
         case let .toggle(stableIdValue, _, _, _, _, _):
             return stableIdValue
+        case let .toggleSubtitle(stableIdValue, _, _, _, _, _, _):
+            return stableIdValue
         case let .notice(stableIdValue, _, _):
             return stableIdValue
         case let .disclosure(stableIdValue, _, _, _):
@@ -155,6 +160,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         
         case let (.toggle(id1, section1, settingName1, value1, text1, enabled1), .toggle(id2, section2, settingName2, value2, text2, enabled2)):
             return id1 == id2 && section1 == section2 && settingName1 == settingName2 && value1 == value2 && text1 == text2 && enabled1 == enabled2
+        case let (.toggleSubtitle(id1, section1, settingName1, value1, text1, subtitle1, enabled1), .toggleSubtitle(id2, section2, settingName2, value2, text2, subtitle2, enabled2)):
+            return id1 == id2 && section1 == section2 && settingName1 == settingName2 && value1 == value2 && text1 == text2 && subtitle1 == subtitle2 && enabled1 == enabled2
         
         case let (.notice(id1, section1, text1), .notice(id2, section2, text2)):
             return id1 == id2 && section1 == section2 && text1 == text2
@@ -192,6 +199,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             
         case let .toggle(_, _, setting, value, text, enabled):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setBoolValue(setting, value)
+            })
+        case let .toggleSubtitle(_, _, setting, value, text, subtitle, enabled):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, text: subtitle, value: value, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setBoolValue(setting, value)
             })
         case let .notice(_, _, string):
@@ -258,6 +269,8 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
             return text.lowercased().contains(query)
         case .toggle(_, _, _, _, let text, _):
             return text.lowercased().contains(query)
+        case .toggleSubtitle(_, _, _, _, let text, let subtitle, _):
+            return text.lowercased().contains(query) || subtitle.lowercased().contains(query)
         case .notice(_, _, let text):
             return text.lowercased().contains(query)
         case let .appearancePreview(_, _, kind, _):
