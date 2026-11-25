@@ -293,7 +293,7 @@ final class TextProcessingTranslateContentComponent: Component {
                         return
                     }
                     component.externalState.isProcessing = true
-                    var useCustomAI = ExteraAISettings.shared.configuration.useForTextProcessing
+                    var useCustomAI = ExteraAISettings.shared.configuration.replacesTelegramEditor(isPremium: component.context.isPremium)
                     if case .translate = mappedMode, SGSimpleSettings.shared.translationBackendEnum != .default {
                         useCustomAI = false
                     }

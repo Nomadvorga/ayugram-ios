@@ -21,7 +21,13 @@ cleared history and separate partial-response/status display. Provider fixtures
 also pin reasoning options and authentication-error redaction without retry.
 Native-summary fixtures cover readiness, account-dependent routing, invalidation
 after policy/service changes, and isolated instructions with the exact source
-text for Chat Completions and Responses. The thirteen tests do not exercise UIKit,
+text for Chat Completions and Responses. The suite additionally pins exact Android
+role suggestions, migration of legacy edits and no-role choice, custom-role CRUD,
+duplicate/stale-edit rejection, failed-mutation isolation, automatic/explicit
+editor policy, exact provider presets, the provider reasoning/token matrix,
+finite reasoning fallback and model discovery. User-Agent fixtures cover legacy
+services, all preset/custom values, persistence, header injection rejection,
+both request paths and retry headers. The tests do not exercise UIKit,
 Postbox writes or composer insertion; those require the iOS host below.
 The existing AI cache/backup harness remains in
 `docs/validation/run_extera_ai_backup_validation.py`; its owner controls backup
@@ -35,6 +41,10 @@ manual/fetched model choice, API Keychain storage, reasoning, explicit service
 testing/cancellation, history opt-out/edit/copy/delete and clear.
 The full Android inventory, defaults, native summary/composer integration and
 root's backup/localization contract are in `docs/extera-ai-settings.md`.
+The current roles/defaults audit is `docs/extera-ai-roles-reference-audit.md`.
+`docs/extera-ai-user-agent.md` documents the service selector, exact header values,
+compatibility limits and expected UI recording paths. The localization mapping
+is maintained in `ExteraAISettingsViews.swift` and the EN/RU string resources.
 
 Syntax-only check (also works on Windows):
 

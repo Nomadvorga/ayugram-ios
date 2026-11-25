@@ -3,30 +3,86 @@
 import Foundation
 import Security
 
+/// HTTP client identifiers only. API dialect, authentication and model selection remain independent.
+public enum ExteraAIUserAgentPreset: String, Codable, CaseIterable {
+    case `default`, openCode, claudeCode, zCode, codex, cursor, cline, rooCode, custom
+
+    public var title: String {
+        switch self {
+        case .default: return "Default"
+        case .openCode: return "OpenCode"
+        case .claudeCode: return "Claude Code"
+        case .zCode: return "ZCode"
+        case .codex: return "Codex"
+        case .cursor: return "Cursor"
+        case .cline: return "Cline"
+        case .rooCode: return "Roo Code"
+        case .custom: return "Custom"
+        }
+    }
+
+    public func resolvedUserAgent(customValue: String) throws -> String? {
+        switch self {
+        case .default: return nil
+        case .openCode: return "opencode"
+        case .claudeCode: return "claude-cli"
+        case .zCode: return "ZCode"
+        case .codex: return "codex_cli_rs"
+        case .cursor: return "Cursor"
+        case .cline: return "Cline"
+        case .rooCode: return "RooCode"
+        case .custom:
+            // Visible ASCII preserves the exact supplied header and rejects CR/LF, NUL and tabs.
+            guard !customValue.isEmpty, customValue.utf8.count <= 512,
+                  customValue == customValue.trimmingCharacters(in: .whitespacesAndNewlines),
+                  customValue.unicodeScalars.allSatisfy({ (32 ... 126).contains($0.value) }) else {
+                throw ExteraAIError.configuration("Enter a User-Agent of 1–512 printable ASCII characters without leading or trailing spaces.")
+            }
+            return customValue
+        }
+    }
+}
+
 public struct ExteraAIService: Codable, Equatable {
     public var id: String
     public var name: String
     public var endpoint: String
     public var model: String
     public var reasoningEnabled: Bool
+    public var userAgentPreset: ExteraAIUserAgentPreset
+    public var customUserAgent: String
 
-    public init(id: String = UUID().uuidString, name: String, endpoint: String, model: String, reasoningEnabled: Bool = false) {
+    public init(id: String = UUID().uuidString, name: String, endpoint: String, model: String, reasoningEnabled: Bool = false, userAgentPreset: ExteraAIUserAgentPreset = .default, customUserAgent: String = "") {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.model = model
         self.reasoningEnabled = reasoningEnabled
+        self.userAgentPreset = userAgentPreset
+        self.customUserAgent = customUserAgent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, endpoint, model, reasoningEnabled, userAgentPreset, customUserAgent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try values.decode(String.self, forKey: .id)
+        self.name = try values.decode(String.self, forKey: .name)
+        self.endpoint = try values.decode(String.self, forKey: .endpoint)
+        self.model = try values.decode(String.self, forKey: .model)
+        self.reasoningEnabled = try values.decodeIfPresent(Bool.self, forKey: .reasoningEnabled) ?? false
+        self.userAgentPreset = try values.decodeIfPresent(ExteraAIUserAgentPreset.self, forKey: .userAgentPreset) ?? .default
+        self.customUserAgent = try values.decodeIfPresent(String.self, forKey: .customUserAgent) ?? ""
     }
 
     public static var presets: [ExteraAIService] {
         return [
-            .init(name: "OpenAI", endpoint: "https://api.openai.com/v1", model: "gpt-4.1-mini"),
-            .init(name: "Google Gemini", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-2.5-flash"),
-            .init(name: "OpenRouter", endpoint: "https://openrouter.ai/api/v1", model: ""),
-            .init(name: "DeepSeek", endpoint: "https://api.deepseek.com/v1", model: "deepseek-chat"),
-            .init(name: "Groq", endpoint: "https://api.groq.com/openai/v1", model: ""),
-            .init(name: "Mistral", endpoint: "https://api.mistral.ai/v1", model: "mistral-small-latest"),
-            .init(name: "Perplexity", endpoint: "https://api.perplexity.ai/chat/completions", model: "sonar"),
+            .init(name: "Gemini", endpoint: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-3.5-flash"),
+            .init(name: "OpenAI", endpoint: "https://api.openai.com/v1", model: "gpt-5.4-mini"),
+            .init(name: "OpenRouter", endpoint: "https://openrouter.ai/api/v1", model: "openai/gpt-5.4-mini"),
+            .init(name: "Perplexity", endpoint: "https://api.perplexity.ai/v1/agent", model: "perplexity/glm-5.3-flash"),
             .init(name: "Custom", endpoint: "", model: "")
         ]
     }
@@ -43,14 +99,33 @@ public struct ExteraAIRole: Codable, Equatable {
         self.prompt = prompt
     }
 
-    public static var defaults: [ExteraAIRole] {
+    /// Immutable Android Suggestions. User roles have independent, persisted IDs.
+    public static var suggestions: [ExteraAIRole] {
         return [
-            .init(id: "assistant", name: "Assistant", prompt: "You are a helpful assistant. Respond in the user's language."),
-            .init(id: "editor", name: "Editor", prompt: "Improve the grammar, spelling and clarity of the supplied text while preserving its meaning, language and formatting. Return only the improved text."),
-            .init(id: "summary", name: "Summarizer", prompt: "Summarize the supplied text accurately and concisely in the same language. Preserve important facts. Return only the summary."),
-            .init(id: "translator", name: "Translator", prompt: "Translate the supplied text into the language requested by the user. Preserve meaning and formatting. Return only the translation.")
+            .init(id: "suggestion.assistant", name: "Assistant", prompt: """
+                You are a helpful personal assistant inside a chat app.
+                Adapt to the user's tone, language, and context. Keep answers practical, concise, and easy to act on.
+                Ask a clarifying question only when the request is ambiguous enough that answering directly would likely be wrong.
+                """),
+            .init(id: "suggestion.summarizer", name: "Summarizer", prompt: """
+                Summarize the provided message or conversation without replying to it.
+                Preserve the important facts, decisions, requests, names, dates, and next steps. Omit filler and repeated details.
+                Keep the summary under 3 short sentences and under 60 words.
+                """),
+            .init(id: "suggestion.proofreader", name: "Proofreader", prompt: """
+                Proofread and improve the user's text while preserving its meaning, language, and intent.
+                Fix grammar, spelling, punctuation, awkward phrasing, and clarity issues. Keep the original tone unless a cleaner wording is clearly better.
+                Return only the revised text unless the user explicitly asks for explanations.
+                """)
         ]
     }
+
+    public static var defaults: [ExteraAIRole] { return self.suggestions }
+    public static let defaultId = "suggestion.assistant"
+    public static let nameLimit = 64
+    public static let promptLimit = 1024
+
+    public var isSuggestion: Bool { return Self.suggestions.contains(where: { $0.id == self.id }) }
 }
 
 public struct ExteraAIMessage: Codable, Equatable {
@@ -70,9 +145,10 @@ public struct ExteraAIMessage: Codable, Equatable {
 
 public struct ExteraAIConfiguration: Codable, Equatable {
     public var services: [ExteraAIService] = []
-    public var roles: [ExteraAIRole] = ExteraAIRole.defaults
+    /// Custom roles only. Existing v1 roles are retained verbatim during decoding.
+    public var roles: [ExteraAIRole] = []
     public var selectedServiceId: String?
-    public var selectedRoleId: String? = "assistant"
+    public var selectedRoleId: String? = ExteraAIRole.defaultId
     public var saveHistory: Bool = true
     public var responseStreaming: Bool = true
     public var temperature: Double = 1.0
@@ -89,7 +165,12 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     public var showEditor: Bool = true
     public var showSummaries: Bool = true
     public var showInstantViewSummaries: Bool = true
-    public var useForTextProcessing: Bool = false
+    /// Missing/null uses Android's account-dependent default; explicit legacy booleans survive.
+    public var useForTextProcessing: Bool?
+
+    public func replacesTelegramEditor(isPremium: Bool) -> Bool {
+        return self.useForTextProcessing ?? !isPremium
+    }
 
     public init() {}
 
@@ -102,9 +183,10 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.services = try values.decodeIfPresent([ExteraAIService].self, forKey: .services) ?? []
-        self.roles = try values.decodeIfPresent([ExteraAIRole].self, forKey: .roles) ?? ExteraAIRole.defaults
+        self.roles = try values.decodeIfPresent([ExteraAIRole].self, forKey: .roles) ?? []
         self.selectedServiceId = try values.decodeIfPresent(String.self, forKey: .selectedServiceId)
-        self.selectedRoleId = try values.decodeIfPresent(String.self, forKey: .selectedRoleId)
+        // An explicit null preserves the existing "No System Role" choice.
+        self.selectedRoleId = values.contains(.selectedRoleId) || values.contains(.roles) ? try values.decodeIfPresent(String.self, forKey: .selectedRoleId) : ExteraAIRole.defaultId
         self.saveHistory = try values.decodeIfPresent(Bool.self, forKey: .saveHistory) ?? true
         self.responseStreaming = try values.decodeIfPresent(Bool.self, forKey: .responseStreaming) ?? true
         self.temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? 1.0
@@ -114,7 +196,26 @@ public struct ExteraAIConfiguration: Codable, Equatable {
         self.showEditor = try values.decodeIfPresent(Bool.self, forKey: .showEditor) ?? true
         self.showSummaries = try values.decodeIfPresent(Bool.self, forKey: .showSummaries) ?? true
         self.showInstantViewSummaries = try values.decodeIfPresent(Bool.self, forKey: .showInstantViewSummaries) ?? true
-        self.useForTextProcessing = try values.decodeIfPresent(Bool.self, forKey: .useForTextProcessing) ?? false
+        self.useForTextProcessing = try values.decodeIfPresent(Bool.self, forKey: .useForTextProcessing)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(self.services, forKey: .services)
+        try values.encode(self.roles, forKey: .roles)
+        try values.encodeIfPresent(self.selectedServiceId, forKey: .selectedServiceId)
+        // Encode nil explicitly: omission means the default role on first launch.
+        try values.encode(self.selectedRoleId, forKey: .selectedRoleId)
+        try values.encode(self.saveHistory, forKey: .saveHistory)
+        try values.encode(self.responseStreaming, forKey: .responseStreaming)
+        try values.encode(self.temperature, forKey: .temperature)
+        try values.encodeIfPresent(self.useForTextProcessing, forKey: .useForTextProcessing)
+        try values.encode(self.showEditor, forKey: .showEditor)
+        try values.encode(self.showSummaries, forKey: .showSummaries)
+        try values.encode(self.showInstantViewSummaries, forKey: .showInstantViewSummaries)
+        try values.encode(self.showResponseOnly, forKey: .showResponseOnly)
+        try values.encode(self.insertAsQuote, forKey: .insertAsQuote)
+        try values.encodeIfPresent(self.replaceTelegramSummaries, forKey: .replaceTelegramSummaries)
     }
 
     public var selectedService: ExteraAIService? {
@@ -122,7 +223,48 @@ public struct ExteraAIConfiguration: Codable, Equatable {
     }
 
     public var selectedRole: ExteraAIRole? {
-        return self.roles.first(where: { $0.id == self.selectedRoleId })
+        guard let id = self.selectedRoleId else { return nil }
+        return self.roles.first(where: { $0.id == id }) ?? ExteraAIRole.suggestions.first(where: { $0.id == id }) ?? ExteraAIRole.suggestions.first
+    }
+
+    public mutating func selectRole(id: String?) throws {
+        guard id == nil || self.roles.contains(where: { $0.id == id }) || ExteraAIRole.suggestions.contains(where: { $0.id == id }) else {
+            throw ExteraAIError.configuration("This AI role no longer exists.")
+        }
+        self.selectedRoleId = id
+    }
+
+    /// Stable IDs keep renaming independent of selection. Editing never creates a deleted role.
+    public mutating func saveRole(_ role: ExteraAIRole, existing: Bool) throws {
+        let index = self.roles.firstIndex(where: { $0.id == role.id })
+        guard !role.isSuggestion, !role.id.isEmpty, existing == (index != nil) else {
+            throw ExteraAIError.configuration("This AI role cannot be edited. Reopen the roles list.")
+        }
+        let name = role.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.utf16.count <= ExteraAIRole.nameLimit,
+              !role.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              role.prompt.utf16.count <= ExteraAIRole.promptLimit else {
+            throw ExteraAIError.configuration("Enter a role name (up to 64 characters) and a system prompt (up to 1,024 characters).")
+        }
+        let keepsLegacyName = index.map { self.roles[$0].name == name } ?? false
+        guard !self.roles.contains(where: { $0.id != role.id && $0.name == name }),
+              keepsLegacyName || !ExteraAIRole.suggestions.contains(where: { $0.name == name }) else {
+            throw ExteraAIError.configuration("An AI role with this name already exists.")
+        }
+        var saved = role
+        saved.name = name
+        if let index { self.roles[index] = saved } else {
+            guard self.roles.count < 100 else { throw ExteraAIError.configuration("The AI role limit has been reached.") }
+            self.roles.insert(saved, at: 0)
+        }
+    }
+
+    public mutating func deleteRole(id: String) throws {
+        guard let index = self.roles.firstIndex(where: { $0.id == id }) else {
+            throw ExteraAIError.configuration("This AI role no longer exists.")
+        }
+        self.roles.remove(at: index)
+        if self.selectedRoleId == id { self.selectedRoleId = ExteraAIRole.defaultId }
     }
 }
 
@@ -183,16 +325,22 @@ public final class ExteraAISettings {
     }
 
     /// Serialize read/modify/write so service edits cannot overwrite a simultaneous role change.
-    public func update(_ body: (inout ExteraAIConfiguration) -> Void) throws {
+    public func update(_ body: (inout ExteraAIConfiguration) throws -> Void) throws {
         try self.persist {
             var value = self.configuration
-            body(&value)
+            try body(&value)
             guard value.temperature.isFinite, (0.0...2.0).contains(value.temperature), value.services.count <= 100, value.roles.count <= 100 else {
                 throw ExteraAIError.configuration("AI preferences exceed their allowed limits.")
             }
             guard Set(value.services.map { $0.id }).count == value.services.count,
                   Set(value.roles.map { $0.id }).count == value.roles.count else {
                 throw ExteraAIError.configuration("AI service and role identifiers must be unique.")
+            }
+            for service in value.services {
+                _ = try service.userAgentPreset.resolvedUserAgent(customValue: service.customUserAgent)
+                if !service.customUserAgent.isEmpty {
+                    _ = try ExteraAIUserAgentPreset.custom.resolvedUserAgent(customValue: service.customUserAgent)
+                }
             }
             let data = try JSONEncoder().encode(value)
             guard data.count <= 1024 * 1024, let json = String(data: data, encoding: .utf8) else {

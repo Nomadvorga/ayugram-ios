@@ -13,7 +13,7 @@ extension ChatControllerImpl {
     /// selected. Opening the screen leaves the draft intact and sends nothing.
     func openExteraAIComposeIfEnabled() -> Bool {
         let configuration = ExteraAISettings.shared.configuration
-        guard configuration.useForTextProcessing else { return false }
+        guard configuration.replacesTelegramEditor(isPremium: self.context.isPremium) else { return false }
         guard configuration.showEditor, self.exteraAIComposerCanWrite else {
             self.presentExteraAIComposerError("The AI editor is unavailable for this chat.", "Редактор ИИ недоступен в этом чате.")
             return true
@@ -31,7 +31,7 @@ extension ChatControllerImpl {
         let controller = exteraAITextProcessingController(context: self.context, text: snapshot.content.plainText, action: .improve, applyResult: { [weak self] result in
             guard let self, self.isNodeLoaded, self.chatLocation == location,
                   ExteraAISettings.shared.configuration.showEditor,
-                  ExteraAISettings.shared.configuration.useForTextProcessing,
+                  ExteraAISettings.shared.configuration.replacesTelegramEditor(isPremium: self.context.isPremium),
                   self.exteraAIComposerCanWrite else {
                 throw ExteraAIError.configuration("You can no longer insert text into this chat. The AI result is still available to copy.")
             }

@@ -79,6 +79,28 @@ public struct ExteraAISummaryPlan: Equatable {
 }
 
 public enum ExteraAIClient {
+    /// Fixed by Android RestBackend, rather than a configurable preference.
+    public static let maximumOutputTokens = 4096
+
+    fileprivate static func disabledReasoningEffort(service: ExteraAIService, endpoint: URL) -> String? {
+        guard !service.reasoningEnabled else { return nil }
+        let host = endpoint.host?.lowercased() ?? ""
+        let model = service.model.lowercased().split(separator: "/").last.map(String.init) ?? ""
+        let gemini = model.hasPrefix("gemini-2.5") || model.hasPrefix("gemini-3") || model.contains("thinking")
+        let openAI = !model.contains("gpt-5-chat") && (model.hasPrefix("gpt-5") || model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4"))
+        if host == "openrouter.ai" { return "none" }
+        if host == "generativelanguage.googleapis.com", gemini {
+            if model.contains("gemini-2.5") && !model.contains("pro") { return "none" }
+            if model.contains("gemini-3") && model.contains("pro") { return "low" }
+            return "minimal"
+        }
+        if host == "api.openai.com", openAI {
+            if model.hasPrefix("o") { return "low" }
+            return ["gpt-5.1", "gpt-5.2", "gpt-5.3", "gpt-5.4", "gpt-5.5"].contains(where: { model.hasPrefix($0) }) ? "none" : "minimal"
+        }
+        if host == "api.perplexity.ai", gemini || openAI { return "minimal" }
+        return nil
+    }
     /// Accept a base URL or an explicit /chat/completions, /responses or /agent endpoint.
     public static func endpoint(for service: ExteraAIService) throws -> URL {
         let value = service.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -111,6 +133,7 @@ public enum ExteraAIClient {
             throw ExteraAIError.configuration("The AI request exceeds its text or history limits.")
         }
         guard !apiKey.contains("\n"), !apiKey.contains("\r"), apiKey.utf8.count <= 16384 else { throw ExteraAIError.configuration("The API key is invalid.") }
+        _ = try service.userAgentPreset.resolvedUserAgent(customValue: service.customUserAgent)
         let request = ExteraAIRequest(service: service, endpoint: try self.endpoint(for: service), apiKey: apiKey, role: role, prompt: prompt, history: history, temperature: temperature, stream: stream, configuration: configuration, update: update, completion: completion)
         try request.start()
         return request
@@ -118,14 +141,15 @@ public enum ExteraAIClient {
 
     /// Fetch a provider's OpenAI-compatible /models catalog. Models may always be entered manually.
     @discardableResult
-    public static func fetchModels(service: ExteraAIService, apiKey: String, completion: @escaping (Result<[String], ExteraAIError>) -> Void) throws -> ExteraAIModelRequest {
+    public static func fetchModels(service: ExteraAIService, apiKey: String, configuration: URLSessionConfiguration = .ephemeral, completion: @escaping (Result<[String], ExteraAIError>) -> Void) throws -> ExteraAIModelRequest {
         guard !apiKey.contains("\n"), !apiKey.contains("\r"), apiKey.utf8.count <= 16384 else { throw ExteraAIError.configuration("The API key is invalid.") }
         let endpoint = try self.endpoint(for: service)
         guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else { throw ExteraAIError.configuration("The AI service URL is invalid.") }
         let suffix = endpoint.path.hasSuffix("/chat/completions") ? "/chat/completions" : (endpoint.path.hasSuffix("/responses") ? "/responses" : "/agent")
         components.path = String(endpoint.path.dropLast(suffix.count)) + "/models"
         guard let url = components.url else { throw ExteraAIError.configuration("The models URL is invalid.") }
-        let request = ExteraAIModelRequest(url: url, apiKey: apiKey, completion: completion)
+        let userAgent = try service.userAgentPreset.resolvedUserAgent(customValue: service.customUserAgent)
+        let request = ExteraAIModelRequest(url: url, apiKey: apiKey, userAgent: userAgent, configuration: configuration, completion: completion)
         request.start()
         return request
     }
@@ -186,7 +210,7 @@ public final class ExteraAIRequest: NSObject, URLSessionDataDelegate, @unchecked
     private var receivedBytes = 0
     private var maxCompletionTokens: Bool
     private var omitTemperature = false
-    private var omitReasoning = false
+    private var reasoningEffort: String?
     private var retries = 0
     private var lastUpdate = Date.distantPast
 
@@ -203,6 +227,7 @@ public final class ExteraAIRequest: NSObject, URLSessionDataDelegate, @unchecked
         self.update = update
         self.completion = completion
         self.maxCompletionTokens = endpoint.host == "api.openai.com"
+        self.reasoningEffort = ExteraAIClient.disabledReasoningEffort(service: service, endpoint: endpoint)
         super.init()
     }
 
@@ -232,25 +257,21 @@ public final class ExteraAIRequest: NSObject, URLSessionDataDelegate, @unchecked
             if self.responsesAPI { body["instructions"] = role.prompt } else { messages.insert(["role": "system", "content": role.prompt], at: 0) }
         }
         body[self.responsesAPI ? "input" : "messages"] = messages
-        body[self.responsesAPI ? "max_output_tokens" : (self.maxCompletionTokens ? "max_completion_tokens" : "max_tokens")] = 4096
+        body[self.responsesAPI ? "max_output_tokens" : (self.maxCompletionTokens ? "max_completion_tokens" : "max_tokens")] = ExteraAIClient.maximumOutputTokens
         if self.responsesAPI { body["store"] = false }
         if !self.omitTemperature { body["temperature"] = self.temperature }
-        if !self.service.reasoningEnabled && !self.omitReasoning {
-            let host = self.endpoint.host ?? ""
-            let model = self.service.model.lowercased().split(separator: "/").last.map(String.init) ?? ""
-            if host == "openrouter.ai" || self.responsesAPI {
-                body["reasoning"] = ["effort": "none"]
-            } else if host == "api.openai.com" && (model.hasPrefix("gpt-5") || model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4")) {
-                body["reasoning_effort"] = model.hasPrefix("o") ? "low" : (model.hasPrefix("gpt-5.") ? "none" : "minimal")
-            } else if host == "generativelanguage.googleapis.com" && (model.hasPrefix("gemini-2.5") || model.hasPrefix("gemini-3")) {
-                body["reasoning_effort"] = model.contains("pro") ? "low" : "none"
-            }
+        if let effort = self.reasoningEffort {
+            if self.endpoint.host == "openrouter.ai" || self.responsesAPI { body["reasoning"] = ["effort": effort] }
+            else { body["reasoning_effort"] = effort }
         }
         var request = URLRequest(url: self.endpoint)
         request.httpMethod = "POST"
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(self.stream ? "text/event-stream, application/json" : "application/json", forHTTPHeaderField: "Accept")
+        if let userAgent = try self.service.userAgentPreset.resolvedUserAgent(customValue: self.service.customUserAgent) {
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        }
         if !self.apiKey.isEmpty { request.setValue("Bearer " + self.apiKey, forHTTPHeaderField: "Authorization") }
         request.setValue("exteraGram iOS", forHTTPHeaderField: "X-Title")
         request.setValue("https://exteragram.app", forHTTPHeaderField: "HTTP-Referer")
@@ -362,12 +383,15 @@ public final class ExteraAIRequest: NSObject, URLSessionDataDelegate, @unchecked
         guard (200..<300).contains(self.statusCode) else {
             let detail = ExteraAIClient.errorDetail(self.data, apiKey: self.apiKey)
             // Android also retries only rejected options; never replay a successful generation.
-            if [400, 422].contains(self.statusCode) && self.retries < 3 {
+            if [400, 422].contains(self.statusCode) && self.retries < 5 {
                 let lower = detail.lowercased()
                 var retry = false
                 if !self.maxCompletionTokens && lower.contains("max_tokens") && lower.contains("max_completion_tokens") { self.maxCompletionTokens = true; retry = true }
                 else if !self.omitTemperature && lower.contains("temperature") { self.omitTemperature = true; retry = true }
-                else if !self.omitReasoning && (lower.contains("reasoning") || lower.contains("thinking") || lower.contains("effort")) { self.omitReasoning = true; retry = true }
+                else if let effort = self.reasoningEffort, lower.contains("reasoning") || lower.contains("thinking") || lower.contains("effort") {
+                    self.reasoningEffort = effort == "none" ? "minimal" : (effort == "minimal" ? "low" : nil)
+                    retry = true
+                }
                 if retry {
                     self.retries += 1
                     self.data.removeAll()
@@ -435,6 +459,8 @@ public final class ExteraAIRequest: NSObject, URLSessionDataDelegate, @unchecked
 public final class ExteraAIModelRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let url: URL
     private let apiKey: String
+    private let userAgent: String?
+    private let configuration: URLSessionConfiguration
     private let completion: (Result<[String], ExteraAIError>) -> Void
     private var session: URLSession?
     private var data = Data()
@@ -442,15 +468,17 @@ public final class ExteraAIModelRequest: NSObject, URLSessionDataDelegate, @unch
     private let lock = NSLock()
     private var finished = false
 
-    fileprivate init(url: URL, apiKey: String, completion: @escaping (Result<[String], ExteraAIError>) -> Void) {
+    fileprivate init(url: URL, apiKey: String, userAgent: String?, configuration: URLSessionConfiguration, completion: @escaping (Result<[String], ExteraAIError>) -> Void) {
         self.url = url
         self.apiKey = apiKey
+        self.userAgent = userAgent
+        self.configuration = configuration
         self.completion = completion
         super.init()
     }
 
     fileprivate func start() {
-        let config = URLSessionConfiguration.ephemeral
+        let config = self.configuration
         config.timeoutIntervalForResource = 60
         config.urlCache = nil
         config.httpCookieStorage = nil
@@ -458,6 +486,7 @@ public final class ExteraAIModelRequest: NSObject, URLSessionDataDelegate, @unch
         queue.maxConcurrentOperationCount = 1
         self.session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
         var request = URLRequest(url: self.url)
+        if let userAgent = self.userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
         if !self.apiKey.isEmpty { request.setValue("Bearer " + self.apiKey, forHTTPHeaderField: "Authorization") }
         self.session?.dataTask(with: request).resume()
     }

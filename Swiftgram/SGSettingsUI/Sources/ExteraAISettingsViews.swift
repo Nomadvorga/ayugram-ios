@@ -19,8 +19,43 @@ enum ExteraAIStrings {
         "Temperature controls randomness: higher values are more creative, lower values more precise. Some models choose their own temperature.": "TemperatureInfo",
         "Try AI": "TryAI", "Improve Text": "Improve", "Summarize Text": "Summarize",
         "Nothing is sent from this page. In AI Chat and text processing, press Send to share the entered text with your selected service. API keys stay in this device’s Keychain.": "SendInfo",
-        "Save Chat History": "SaveHistory", "Copied": "Copied"
+        "Save Chat History": "SaveHistory", "Copied": "Copied",
+        "Suggestions": "RoleSuggestions", "No System Role": "RoleNone",
+        "Add Role": "RoleAdd", "AI Role": "RoleTitle", "Role Name": "RoleName",
+        "Edit System Prompt": "RoleEditPrompt", "System Prompt": "RolePrompt",
+        "Save Role": "RoleSave", "Use Role": "RoleUse", "Use Saved Role": "RoleUseSaved",
+        "Copy Role": "RoleCopy", "Create Copy": "RoleCreateCopy", "Delete Role": "RoleDelete",
+        "Delete this role?": "RoleDeleteConfirm",
+        "Suggestions can be previewed, selected or copied into a new role. Save custom roles separately from selecting them. AI Chat uses the active role; the editor and summarizer keep their own instructions.": "RoleInfo",
+        "The role name must contain between 1 and 64 characters.": "RoleNameLimit",
+        "The prompt must contain no more than 1,024 characters.": "RolePromptLimit",
+        "Custom": "ProviderCustom", "Test and Save Service": "ServiceTestSave",
+        "User-Agent": "UserAgent", "Default": "UserAgentDefault",
+        "OpenCode": "UserAgentOpenCode", "Claude Code": "UserAgentClaudeCode",
+        "ZCode": "UserAgentZCode", "Codex": "UserAgentCodex",
+        "Cursor": "UserAgentCursor", "Cline": "UserAgentCline", "Roo Code": "UserAgentRooCode",
+        "Custom User-Agent": "UserAgentCustom", "Actual User-Agent": "UserAgentActual",
+        "System default (URLSession)": "UserAgentSystemDefault",
+        "Changes the HTTP client identifier for this service. Provider compatibility also depends on its API and authentication.": "UserAgentInfo"
     ]
+
+    static let roleErrors: [String: (String, String)] = [
+        "This AI role no longer exists.": ("RoleMissing", "Эта роль ИИ больше не существует."),
+        "This AI role cannot be edited. Reopen the roles list.": ("RoleStale", "Эту роль ИИ нельзя изменить. Откройте список ролей заново."),
+        "Enter a role name (up to 64 characters) and a system prompt (up to 1,024 characters).": ("RoleInvalid", "Введите название роли (до 64 символов) и системную инструкцию (до 1 024 символов)."),
+        "An AI role with this name already exists.": ("RoleDuplicate", "Роль ИИ с таким названием уже существует."),
+        "The AI role limit has been reached.": ("RoleCountLimit", "Достигнуто максимальное число ролей ИИ."),
+        "Enter a User-Agent of 1–512 printable ASCII characters without leading or trailing spaces.": ("UserAgentInvalid", "Введите User-Agent длиной от 1 до 512 печатных символов ASCII без пробелов в начале и конце.")
+    ]
+
+    static func error(_ error: Error, language: String) -> String {
+        let message = error.localizedDescription
+        guard let (suffix, russian) = self.roleErrors[message] else { return message }
+        let key = "Extera.AISettings." + suffix
+        let value = i18n(key, language)
+        if value != key && !value.isEmpty { return value }
+        return language.hasPrefix("ru") ? russian : message
+    }
 
     static func text(_ english: String, _ russian: String, language: String) -> String {
         if let suffix = self.keys[english] {

@@ -58,6 +58,81 @@ final class ExteraAIClientTests: XCTestCase {
         super.tearDown()
     }
 
+    func testUserAgentLegacyServiceAndAllPresetsRoundTrip() throws {
+        let legacy = #"{"id":"legacy","name":"Existing","endpoint":"https://fixture.invalid/v1","model":"fixture-model","reasoningEnabled":true}"#
+        let decoded = try JSONDecoder().decode(ExteraAIService.self, from: Data(legacy.utf8))
+        XCTAssertEqual(decoded.userAgentPreset, .default)
+        XCTAssertEqual(decoded.customUserAgent, "")
+        XCTAssertTrue(decoded.reasoningEnabled)
+        XCTAssertNil(try decoded.userAgentPreset.resolvedUserAgent(customValue: ""))
+        for preset in ExteraAIUserAgentPreset.allCases {
+            var service = decoded
+            service.userAgentPreset = preset
+            service.customUserAgent = "MyClient/2.0 (iOS)"
+            XCTAssertEqual(service, try JSONDecoder().decode(ExteraAIService.self, from: JSONEncoder().encode(service)))
+        }
+    }
+
+    func testCustomUserAgentRejectsHeaderInjectionAndInvalidValues() throws {
+        for invalid in ["", " ", " leading", "trailing ", "client\r\nAuthorization: bad", "client\u{0}", "client\tversion", "клиент", String(repeating: "a", count: 513)] {
+            XCTAssertThrowsError(try ExteraAIUserAgentPreset.custom.resolvedUserAgent(customValue: invalid), invalid)
+        }
+        XCTAssertEqual(try ExteraAIUserAgentPreset.custom.resolvedUserAgent(customValue: String(repeating: "a", count: 512)), String(repeating: "a", count: 512))
+        XCTAssertEqual(try ExteraAIUserAgentPreset.custom.resolvedUserAgent(customValue: "Client/2.0 (iOS; arm64)"), "Client/2.0 (iOS; arm64)")
+        let before = ExteraAISettings.shared.configuration
+        var invalid = self.service
+        invalid.userAgentPreset = .custom
+        invalid.customUserAgent = "client\r\ninjected: value"
+        XCTAssertThrowsError(try ExteraAISettings.shared.update { $0.services = [invalid] })
+        XCTAssertEqual(ExteraAISettings.shared.configuration, before)
+    }
+
+    func testInvalidUserAgentFailsBothRequestPathsBeforeTransport() throws {
+        var service = self.service
+        service.userAgentPreset = .custom
+        service.customUserAgent = "client\r\ninjected: value"
+        ExteraAIURLProtocol.onStart = { _ in XCTFail("An invalid header must never reach transport") }
+        XCTAssertThrowsError(try ExteraAIClient.generate(service: service, apiKey: "fixture-key", role: nil, prompt: "hello", configuration: self.configuration(), completion: { _ in XCTFail("Synchronous validation must throw") }))
+        XCTAssertThrowsError(try ExteraAIClient.fetchModels(service: service, apiKey: "fixture-key", configuration: self.configuration(), completion: { _ in XCTFail("Synchronous validation must throw") }))
+    }
+
+    func testEveryUserAgentIsSentForGenerationAndModelDiscovery() throws {
+        let fixtures: [(ExteraAIUserAgentPreset, String)] = [
+            (.openCode, "opencode"), (.claudeCode, "claude-cli"), (.zCode, "ZCode"),
+            (.codex, "codex_cli_rs"), (.cursor, "Cursor"), (.cline, "Cline"),
+            (.rooCode, "RooCode"), (.custom, "MyClient/2.0 (iOS)")
+        ]
+        for (preset, expected) in fixtures {
+            var service = self.service
+            service.userAgentPreset = preset
+            service.customUserAgent = "MyClient/2.0 (iOS)"
+            let generation = self.expectation(description: "generation \(preset.rawValue)")
+            ExteraAIURLProtocol.onStart = { transport in
+                XCTAssertEqual(transport.request.value(forHTTPHeaderField: "User-Agent"), expected)
+                XCTAssertEqual(transport.request.value(forHTTPHeaderField: "Authorization"), "Bearer fixture-key")
+                XCTAssertEqual(transport.request.url?.path, "/v1/chat/completions")
+                transport.respond(#"{"choices":[{"message":{"content":"hello"}}]}"#)
+            }
+            let request = try ExteraAIClient.generate(service: service, apiKey: "fixture-key", role: nil, prompt: "hello", stream: false, configuration: self.configuration(), completion: { result in
+                if case let .success(text) = result { XCTAssertEqual(text, "hello") } else { XCTFail("Generation failed: \(result)") }
+                generation.fulfill()
+            })
+            withExtendedLifetime(request) { self.wait(for: [generation], timeout: 5) }
+            let discovery = self.expectation(description: "models \(preset.rawValue)")
+            ExteraAIURLProtocol.onStart = { transport in
+                XCTAssertEqual(transport.request.value(forHTTPHeaderField: "User-Agent"), expected)
+                XCTAssertEqual(transport.request.value(forHTTPHeaderField: "Authorization"), "Bearer fixture-key")
+                XCTAssertEqual(transport.request.url?.path, "/v1/models")
+                transport.respond(#"{"data":[{"id":"fixture-model"}]}"#)
+            }
+            let modelRequest = try ExteraAIClient.fetchModels(service: service, apiKey: "fixture-key", configuration: self.configuration(), completion: { result in
+                if case let .success(models) = result { XCTAssertEqual(models, ["fixture-model"]) } else { XCTFail("Model discovery failed: \(result)") }
+                discovery.fulfill()
+            })
+            withExtendedLifetime(modelRequest) { self.wait(for: [discovery], timeout: 5) }
+        }
+    }
+
     func testLegacyConfigurationUsesExactAndroidGenerationDefaults() throws {
         let config = try JSONDecoder().decode(ExteraAIConfiguration.self, from: Data("{}".utf8))
         XCTAssertTrue(config.responseStreaming)
@@ -77,6 +152,186 @@ final class ExteraAIClientTests: XCTestCase {
         explicit.replaceTelegramSummaries = false
         let disabled = try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(explicit))
         XCTAssertFalse(disabled.replacesTelegramSummaries(isPremium: false))
+    }
+
+    func testRoleSuggestionsAndFreshDefaultsMatchAndroidWithoutPersistingSuggestions() throws {
+        let config = try JSONDecoder().decode(ExteraAIConfiguration.self, from: Data("{}".utf8))
+        XCTAssertEqual(config, ExteraAIConfiguration())
+        XCTAssertTrue(config.roles.isEmpty)
+        XCTAssertEqual(config.selectedRole?.id, ExteraAIRole.defaultId)
+        XCTAssertEqual(ExteraAIRole.suggestions.map { $0.name }, ["Assistant", "Summarizer", "Proofreader"])
+        XCTAssertEqual(ExteraAIRole.suggestions[0].prompt, "You are a helpful personal assistant inside a chat app.\nAdapt to the user's tone, language, and context. Keep answers practical, concise, and easy to act on.\nAsk a clarifying question only when the request is ambiguous enough that answering directly would likely be wrong.")
+        XCTAssertEqual(ExteraAIRole.suggestions[1].prompt, "Summarize the provided message or conversation without replying to it.\nPreserve the important facts, decisions, requests, names, dates, and next steps. Omit filler and repeated details.\nKeep the summary under 3 short sentences and under 60 words.")
+        XCTAssertEqual(ExteraAIRole.suggestions[2].prompt, "Proofread and improve the user's text while preserving its meaning, language, and intent.\nFix grammar, spelling, punctuation, awkward phrasing, and clarity issues. Keep the original tone unless a cleaner wording is clearly better.\nReturn only the revised text unless the user explicitly asks for explanations.")
+        var role = ExteraAIRole.suggestions[0]
+        role.prompt = "Local edit"
+        XCTAssertNotEqual(role.prompt, ExteraAIRole.suggestions[0].prompt)
+        XCTAssertEqual(try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(config)), config)
+    }
+
+    func testLegacyRoleEditsAndOmittedNoRoleSelectionSurviveRoundTrip() throws {
+        let legacy = #"{"roles":[{"id":"assistant","name":"Assistant","prompt":"My edited legacy instruction"},{"id":"translator","name":"Translator","prompt":"Keep my translation role"}],"selectedRoleId":"assistant","useForTextProcessing":false}"#
+        let config = try JSONDecoder().decode(ExteraAIConfiguration.self, from: Data(legacy.utf8))
+        XCTAssertEqual(config.selectedRole?.prompt, "My edited legacy instruction")
+        XCTAssertEqual(config.roles.count, 2)
+        XCTAssertFalse(config.replacesTelegramEditor(isPremium: false))
+        XCTAssertEqual(try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(config)), config)
+        // Old synthesized Codable omitted nil selectedRoleId, but always encoded roles.
+        var none = try JSONDecoder().decode(ExteraAIConfiguration.self, from: Data(#"{"roles":[]}"#.utf8))
+        XCTAssertNil(none.selectedRole)
+        none = try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(none))
+        XCTAssertNil(none.selectedRoleId)
+        XCTAssertNil(none.selectedRole)
+    }
+
+    func testEditorAutomaticAndExplicitPoliciesUseTheCurrentAccount() throws {
+        var config = ExteraAIConfiguration()
+        XCTAssertTrue(config.replacesTelegramEditor(isPremium: false))
+        XCTAssertFalse(config.replacesTelegramEditor(isPremium: true))
+        for value in [false, true] {
+            config.useForTextProcessing = value
+            let decoded = try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(config))
+            XCTAssertEqual(decoded.replacesTelegramEditor(isPremium: false), value)
+            XCTAssertEqual(decoded.replacesTelegramEditor(isPremium: true), value)
+        }
+        config.useForTextProcessing = nil
+        let automatic = try JSONDecoder().decode(ExteraAIConfiguration.self, from: JSONEncoder().encode(config))
+        XCTAssertNil(automatic.useForTextProcessing)
+        XCTAssertTrue(automatic.replacesTelegramEditor(isPremium: false))
+    }
+
+    func testRoleCRUDKeepsSelectionStableAndRejectsDuplicateAndStaleEdits() throws {
+        var config = ExteraAIConfiguration()
+        var role = ExteraAIRole(name: "My role", prompt: "Original instruction")
+        try config.saveRole(role, existing: false)
+        XCTAssertEqual(config.selectedRoleId, ExteraAIRole.defaultId)
+        try config.selectRole(id: role.id)
+        role.name = "Renamed"
+        role.prompt = "Updated instruction"
+        try config.saveRole(role, existing: true)
+        XCTAssertEqual(config.selectedRole, role)
+        XCTAssertThrowsError(try config.saveRole(.init(name: "Renamed", prompt: "Duplicate"), existing: false))
+        XCTAssertThrowsError(try config.saveRole(.init(name: "Assistant", prompt: "Reserved name"), existing: false))
+        XCTAssertThrowsError(try config.saveRole(ExteraAIRole.suggestions[0], existing: false))
+        XCTAssertThrowsError(try config.selectRole(id: "deleted"))
+        let selected = config
+        XCTAssertThrowsError(try config.saveRole(.init(name: String(repeating: "😀", count: 33), prompt: "Too long"), existing: false))
+        XCTAssertThrowsError(try config.saveRole(.init(name: "Long prompt", prompt: String(repeating: "x", count: 1025)), existing: false))
+        XCTAssertEqual(config, selected)
+        try config.deleteRole(id: role.id)
+        XCTAssertEqual(config.selectedRoleId, ExteraAIRole.defaultId)
+        XCTAssertThrowsError(try config.saveRole(role, existing: true))
+        XCTAssertTrue(config.roles.isEmpty)
+        try config.saveRole(role, existing: false)
+        try config.selectRole(id: nil)
+        try config.deleteRole(id: role.id)
+        XCTAssertNil(config.selectedRoleId)
+        XCTAssertThrowsError(try config.deleteRole(id: ExteraAIRole.defaultId))
+    }
+
+    func testThrowingRoleMutationDoesNotPublishPartialConfiguration() throws {
+        let settings = ExteraAISettings.shared
+        let before = settings.configuration
+        XCTAssertThrowsError(try settings.update { config in
+            config.temperature = 0.2
+            try config.selectRole(id: "missing-role")
+        })
+        XCTAssertEqual(settings.configuration, before)
+    }
+
+    func testProviderPresetsMatchReferenceAndDoNotConfigureAServiceOrSecret() throws {
+        let presets = ExteraAIService.presets
+        XCTAssertEqual(presets.map { $0.name }, ["Gemini", "OpenAI", "OpenRouter", "Perplexity", "Custom"])
+        XCTAssertEqual(presets.map { $0.model }, ["gemini-3.5-flash", "gpt-5.4-mini", "openai/gpt-5.4-mini", "perplexity/glm-5.3-flash", ""])
+        XCTAssertEqual(try presets.prefix(4).map { try ExteraAIClient.endpoint(for: $0).absoluteString }, ["https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "https://api.openai.com/v1/chat/completions", "https://openrouter.ai/api/v1/chat/completions", "https://api.perplexity.ai/v1/agent"])
+        XCTAssertTrue(presets.allSatisfy { !$0.reasoningEnabled })
+        XCTAssertNil(ExteraAIConfiguration().selectedService)
+        XCTAssertTrue(ExteraAIConfiguration().services.isEmpty)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(presets)) as? [[String: Any]])
+        XCTAssertTrue(object.allSatisfy { $0["apiKey"] == nil && $0["key"] == nil })
+    }
+
+    func testProviderPayloadMatrixUsesFixedBudgetAndExactReasoningPolicy() throws {
+        let fixtures: [(String, String, String?)] = [
+            ("https://api.openai.com/v1", "gpt-5.4-mini", "none"),
+            ("https://api.openai.com/v1", "gpt-5", "minimal"),
+            ("https://api.openai.com/v1", "gpt-5-chat-latest", nil),
+            ("https://api.openai.com/v1", "o3", "low"),
+            ("https://generativelanguage.googleapis.com/v1beta", "gemini-2.5-flash", "none"),
+            ("https://generativelanguage.googleapis.com/v1beta", "gemini-2.5-pro", "minimal"),
+            ("https://generativelanguage.googleapis.com/v1beta", "gemini-3-flash", "minimal"),
+            ("https://generativelanguage.googleapis.com/v1beta", "gemini-3-pro", "low"),
+            ("https://api.perplexity.ai/v1/agent", "openai/gpt-5.4-mini", "minimal"),
+            ("https://api.perplexity.ai/v1/agent", "perplexity/glm-5.3-flash", nil),
+            ("https://fixture.invalid/responses", "custom-model", nil)
+        ]
+        let finished = self.expectation(description: "Provider payload matrix")
+        finished.expectedFulfillmentCount = fixtures.count
+        ExteraAIURLProtocol.onStart = { mock in
+            XCTAssertEqual(mock.request.value(forHTTPHeaderField: "User-Agent"), "opencode")
+            let body = mock.body()
+            let model = body["model"] as? String
+            let fixture = fixtures.first(where: { $0.1 == model })
+            let responses = mock.request.url?.path.hasSuffix("/agent") == true || mock.request.url?.path.hasSuffix("/responses") == true
+            let effort = responses ? (body["reasoning"] as? [String: String])?["effort"] : body["reasoning_effort"] as? String
+            XCTAssertEqual(effort, fixture?.2)
+            if responses { XCTAssertNil(body["reasoning_effort"]) } else { XCTAssertNil(body["reasoning"]) }
+            let tokenKey = responses ? "max_output_tokens" : (mock.request.url?.host == "api.openai.com" ? "max_completion_tokens" : "max_tokens")
+            XCTAssertEqual(body[tokenKey] as? Int, 4096)
+            XCTAssertEqual(body["temperature"] as? Double, 1)
+            XCTAssertNil(mock.request.value(forHTTPHeaderField: "Authorization"))
+            if responses { mock.respond(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Answer"}]}]}"#) }
+            else { mock.respond(#"{"choices":[{"message":{"content":"Answer"},"finish_reason":"stop"}]}"#) }
+        }
+        var requests: [ExteraAIRequest] = []
+        for (endpoint, model, _) in fixtures {
+            let service = ExteraAIService(name: "Matrix", endpoint: endpoint, model: model, userAgentPreset: .openCode)
+            requests.append(try ExteraAIClient.generate(service: service, apiKey: "", role: ExteraAIConfiguration().selectedRole, prompt: "Question", stream: false, configuration: self.configuration(), completion: { result in
+                XCTAssertEqual(try? result.get(), "Answer")
+                finished.fulfill()
+            }))
+        }
+        self.wait(for: [finished], timeout: 5)
+        requests.forEach { $0.cancel() }
+    }
+
+    func testModelDiscoveryUsesDraftEndpointAndKeyAndReturnsSortedUniqueCatalog() throws {
+        let finished = self.expectation(description: "Model discovery")
+        ExteraAIURLProtocol.onStart = { mock in
+            XCTAssertEqual(mock.request.url?.absoluteString, "https://fixture.invalid/v1/models")
+            XCTAssertEqual(mock.request.value(forHTTPHeaderField: "Authorization"), "Bearer draft-key")
+            XCTAssertNil(mock.request.httpBody)
+            mock.respond(#"{"data":[{"id":"z"},{"id":"a"},{"id":"z"},{"id":""},{}]}"#)
+        }
+        let request = try ExteraAIClient.fetchModels(service: self.service, apiKey: "draft-key", configuration: self.configuration(), completion: { result in
+            XCTAssertTrue(Thread.isMainThread)
+            XCTAssertEqual(try? result.get(), ["a", "z"])
+            finished.fulfill()
+        })
+        self.wait(for: [finished], timeout: 3)
+        request.cancel()
+    }
+
+    func testReasoningFallbackStepsAreFiniteAndPreserveRoleAndOutputBudget() throws {
+        let finished = self.expectation(description: "Finite rejected-option fallback")
+        var count = 0
+        ExteraAIURLProtocol.onStart = { mock in
+            count += 1
+            let body = mock.body()
+            XCTAssertEqual(body["max_tokens"] as? Int, 4096)
+            XCTAssertEqual((body["messages"] as? [[String: String]])?.first?["content"], "Instruction")
+            let effort = (body["reasoning"] as? [String: String])?["effort"]
+            XCTAssertEqual(effort, ["none", "minimal", "low", nil][min(count - 1, 3)])
+            mock.respond(#"{"error":{"message":"Unsupported reasoning effort"}}"#, status: 400)
+        }
+        let service = ExteraAIService(name: "Router", endpoint: "https://openrouter.ai/api/v1", model: "fixture")
+        let request = try ExteraAIClient.generate(service: service, apiKey: "", role: .init(name: "Role", prompt: "Instruction"), prompt: "Question", stream: false, configuration: self.configuration(), completion: { result in
+            guard case .failure(.http(400, _)) = result else { XCTFail("Expected terminal provider error"); finished.fulfill(); return }
+            finished.fulfill()
+        })
+        self.wait(for: [finished], timeout: 3)
+        XCTAssertEqual(count, 4)
+        request.cancel()
     }
 
     func testResponseOnlyAndQuoteArePresentationPoliciesWithUTF16Ranges() {
@@ -311,9 +566,12 @@ final class ExteraAIClientTests: XCTestCase {
 
     func testRejectedTemperatureRetriesOnlyAfterExplicitProviderError() throws {
         let finished = self.expectation(description: "Retry unsupported temperature")
+        var service = self.service
+        service.userAgentPreset = .claudeCode
         var count = 0
         ExteraAIURLProtocol.onStart = { mock in
             count += 1
+            XCTAssertEqual(mock.request.value(forHTTPHeaderField: "User-Agent"), "claude-cli")
             if count == 1 {
                 XCTAssertEqual(mock.body()["temperature"] as? Double, 1.2)
                 mock.respond(#"{"error":{"message":"Unsupported temperature option"}}"#, status: 400)
@@ -322,7 +580,7 @@ final class ExteraAIClientTests: XCTestCase {
                 mock.respond(#"{"choices":[{"message":{"content":"Answer"},"finish_reason":"stop"}]}"#)
             }
         }
-        let request = try ExteraAIClient.generate(service: self.service, apiKey: "", role: nil, prompt: "Question", temperature: 1.2, stream: false, configuration: self.configuration(), completion: { result in
+        let request = try ExteraAIClient.generate(service: service, apiKey: "", role: nil, prompt: "Question", temperature: 1.2, stream: false, configuration: self.configuration(), completion: { result in
             XCTAssertEqual(try? result.get(), "Answer")
             finished.fulfill()
         })

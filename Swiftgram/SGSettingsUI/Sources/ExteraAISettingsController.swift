@@ -96,7 +96,7 @@ private final class ExteraAIHomeController: ExteraAINativeController, UIScrollVi
 
         self.header("Telegram AI", "ИИ Telegram")
         self.stack.addArrangedSubview(ExteraAISettingsViews.card([
-            ExteraAISettingsViews.toggle(title: self.text("Editor", "Редактор"), subtitle: self.text("Translation, style and proofreading of drafts", "Перевод, смена стиля и проверка черновиков"), value: config.useForTextProcessing, theme: theme, update: { [weak self] value in self?.page.change { $0.useForTextProcessing = value } }),
+            ExteraAISettingsViews.toggle(title: self.text("Editor", "Редактор"), subtitle: self.text("Translation, style and proofreading of drafts", "Перевод, смена стиля и проверка черновиков"), value: config.replacesTelegramEditor(isPremium: self.context.isPremium), theme: theme, update: { [weak self] value in self?.page.change { $0.useForTextProcessing = value } }),
             ExteraAISettingsViews.toggle(title: self.text("Summaries", "Краткие сводки"), subtitle: self.text("Short summaries of long messages and posts", "Краткое содержание длинных сообщений и постов"), value: config.replacesTelegramSummaries(isPremium: self.context.isPremium), theme: theme, update: { [weak self] value in self?.page.change { $0.replaceTelegramSummaries = value } })
         ], theme: theme))
         self.note("Selected functions use your AI service instead of Telegram servers. Select and configure a service first. A separate translation provider takes precedence for translation.", "Выбранные функции используют ваш сервис ИИ вместо серверов Telegram. Сначала выберите и настройте сервис. Отдельный провайдер перевода имеет приоритет для перевода.")
@@ -229,7 +229,10 @@ private final class ExteraAIList {
         do { try ExteraAISettings.shared.update(body) } catch { self.showError(error) }
     }
 
-    private func showError(_ error: Error) { self.message(title: self.text("AI Error", "Ошибка ИИ"), message: error.localizedDescription) }
+    private func showError(_ error: Error) {
+        let language = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+        self.message(title: self.text("AI Error", "Ошибка ИИ"), message: ExteraAIStrings.error(error, language: language))
+    }
 
     private func message(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -245,6 +248,7 @@ private final class ExteraAIList {
     }
 
     func input(title: String, value: String, secure: Bool = false, keyboard: UIKeyboardType = .default, save: @escaping (String) throws -> Void) {
+        guard !self.busy else { return }
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         alert.addTextField(configurationHandler: { field in
             field.text = value
@@ -285,12 +289,61 @@ private final class ExteraAIList {
             }
             rows.append(.action(.options, page.text("Add Service", "Добавить сервис"), .generic, {
                 page.choose(title: page.text("Provider", "Провайдер"), options: ExteraAIService.presets.map { service in
-                    (service.name, { [weak page = page] in page?.openService(ExteraAIServiceDraft(service: service, key: "", existing: false)) })
+                    (service.name == "Custom" ? page.text("Custom", "Другой") : service.name, { [weak page = page] in page?.openService(ExteraAIServiceDraft(service: service, key: "", existing: false)) })
                 })
             }))
             rows.append(.notice(.options, page.text("Choose a service to edit its endpoint, model and API key or make it active. Custom services must support OpenAI Chat Completions or Responses. Empty API keys are permitted for servers that do not require authentication.", "Выберите сервис, чтобы изменить адрес, модель, ключ API или сделать его активным. Пользовательские сервисы должны поддерживать OpenAI Chat Completions или Responses. Для серверов без авторизации ключ может быть пустым.")))
             return rows
         }))
+    }
+
+    private func userAgentTitle(_ preset: ExteraAIUserAgentPreset) -> String {
+        switch preset {
+        case .default: return self.text("Default", "По умолчанию")
+        case .openCode: return self.text("OpenCode", "OpenCode")
+        case .claudeCode: return self.text("Claude Code", "Claude Code")
+        case .zCode: return self.text("ZCode", "ZCode")
+        case .codex: return self.text("Codex", "Codex")
+        case .cursor: return self.text("Cursor", "Cursor")
+        case .cline: return self.text("Cline", "Cline")
+        case .rooCode: return self.text("Roo Code", "Roo Code")
+        case .custom: return self.text("Custom User-Agent", "Свой User-Agent")
+        }
+    }
+
+    private func userAgentHeaderValue(_ service: ExteraAIService) -> String {
+        do {
+            return try service.userAgentPreset.resolvedUserAgent(customValue: service.customUserAgent)
+                ?? self.text("System default (URLSession)", "Системный по умолчанию (URLSession)")
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private func editCustomUserAgent(_ draft: ExteraAIServiceDraft) {
+        guard !self.busy else { return }
+        self.input(title: self.text("Custom User-Agent", "Свой User-Agent"), value: draft.service.customUserAgent, keyboard: .asciiCapable, save: { value in
+            _ = try ExteraAIUserAgentPreset.custom.resolvedUserAgent(customValue: value)
+            draft.service.customUserAgent = value
+            draft.service.userAgentPreset = .custom
+        })
+    }
+
+    private func chooseUserAgent(_ draft: ExteraAIServiceDraft) {
+        guard !self.busy else { return }
+        self.choose(title: self.text("User-Agent", "User-Agent"), options: ExteraAIUserAgentPreset.allCases.map { preset in
+            let title = (draft.service.userAgentPreset == preset ? "✓ " : "") + self.userAgentTitle(preset)
+            return (title, { [weak self] in
+                guard let self, !self.busy else { return }
+                if preset == .custom {
+                    // Cancel leaves both the current preset and its saved custom draft intact.
+                    self.editCustomUserAgent(draft)
+                } else {
+                    draft.service.userAgentPreset = preset
+                    self.refresh.set(true)
+                }
+            })
+        })
     }
 
     private func openService(_ draft: ExteraAIServiceDraft) {
@@ -307,15 +360,28 @@ private final class ExteraAIList {
                     guard !value.contains("\n"), !value.contains("\r"), value.utf8.count <= 16384 else { throw ExteraAIError.configuration(page.text("Invalid API key.", "Неверный ключ API.")) }
                     draft.key = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 }) }),
-                .toggle(.main, page.text("Allow Reasoning", "Разрешить рассуждения"), draft.service.reasoningEnabled, { draft.service.reasoningEnabled = $0; page.refresh.set(true) }),
+                .toggle(.main, page.text("Allow Reasoning", "Разрешить рассуждения"), draft.service.reasoningEnabled, { value in
+                    if !page.busy { draft.service.reasoningEnabled = value }
+                    page.refresh.set(true)
+                }),
+                .action(.main, page.text("User-Agent", "User-Agent") + ": " + page.userAgentTitle(draft.service.userAgentPreset), .generic, { page.chooseUserAgent(draft) })
+            ]
+            if draft.service.userAgentPreset == .custom {
+                rows.append(.action(.main, page.text("Custom User-Agent", "Свой User-Agent") + ": " + draft.service.customUserAgent, .generic, { page.editCustomUserAgent(draft) }))
+            }
+            rows.append(.notice(.main, page.text("Actual User-Agent", "Фактический User-Agent") + ": " + page.userAgentHeaderValue(draft.service)))
+            rows.append(.notice(.main, page.text("Changes the HTTP client identifier for this service. Provider compatibility also depends on its API and authentication.", "Меняет HTTP-идентификатор клиента для этого сервиса. Совместимость с провайдером также зависит от его API и авторизации.")))
+            rows += [
                 .action(.options, page.text("Fetch Available Models", "Загрузить доступные модели"), .generic, { page.fetchModels(draft) }),
                 .action(.options, page.text("Test Service", "Проверить сервис"), .generic, { page.test(draft) }),
                 .notice(.options, page.busy ? page.text("Contacting the AI service…", "Подключение к сервису ИИ…") : page.text("You can enter any model ID supported by the provider. Test sends a short request and may use your provider credits. Unsaved edits are discarded when you go back.", "Можно ввести любой ID модели, поддерживаемой провайдером. Проверка отправляет короткий запрос и может расходовать средства провайдера. Несохранённые изменения удаляются при возврате.")),
+                .action(.actions, page.text("Test and Save Service", "Проверить и сохранить сервис"), .generic, { page.test(draft, saveOnSuccess: true) }),
                 .action(.actions, page.text("Save and Use Service", "Сохранить и использовать"), .generic, { page.saveService(draft) })
             ]
             if page.busy { rows.append(.action(.actions, page.text("Cancel Request", "Отменить запрос"), .generic, { page.modelsRequest?.cancel(); page.testRequest?.cancel() })) }
             if draft.existing {
                 rows.append(.action(.actions, page.text("Delete Service", "Удалить сервис"), .destructive, {
+                    guard !page.busy else { return }
                     page.confirm(page.text("Delete this service and its API key?", "Удалить сервис и его ключ API?"), action: {
                         do {
                             try ExteraAISettings.shared.setAPIKey("", serviceId: draft.service.id)
@@ -333,6 +399,7 @@ private final class ExteraAIList {
     }
 
     private func saveService(_ draft: ExteraAIServiceDraft) {
+        guard !self.busy else { return }
         do {
             _ = try ExteraAIClient.endpoint(for: draft.service)
             guard !draft.service.name.isEmpty, !draft.service.model.isEmpty else { throw ExteraAIError.configuration(self.text("Enter a name and model ID.", "Введите название и ID модели.")) }
@@ -374,18 +441,23 @@ private final class ExteraAIList {
         } catch { self.busy = false; self.refresh.set(true); self.showError(error) }
     }
 
-    private func test(_ draft: ExteraAIServiceDraft) {
+    private func test(_ draft: ExteraAIServiceDraft, saveOnSuccess: Bool = false) {
         guard !self.busy else { return }
+        // Persist only the exact draft that passed the test, never later edits.
+        let tested = ExteraAIServiceDraft(service: draft.service, key: draft.key, existing: draft.existing)
         do {
+            if saveOnSuccess && tested.service.name.isEmpty { throw ExteraAIError.configuration(self.text("Enter a name and model ID.", "Введите название и ID модели.")) }
             self.busy = true
             self.refresh.set(true)
-            self.testRequest = try ExteraAIClient.generate(service: draft.service, apiKey: draft.key, role: nil, prompt: "Reply with OK.", stream: false, completion: { [weak self] result in
+            self.testRequest = try ExteraAIClient.generate(service: tested.service, apiKey: tested.key, role: ExteraAIRole.suggestions.first, prompt: "Reply with OK.", stream: false, completion: { [weak self] result in
                 guard let self else { return }
                 self.testRequest = nil
                 self.busy = false
                 self.refresh.set(true)
                 switch result {
-                case let .success(text): self.message(title: self.text("Service Responded", "Ответ сервиса"), message: String(text.prefix(1000)))
+                case let .success(text):
+                    if saveOnSuccess { self.saveService(tested) }
+                    else { self.message(title: self.text("Service Responded", "Ответ сервиса"), message: String(text.prefix(1000))) }
                 case .failure(.cancelled): break
                 case let .failure(error): self.showError(error)
                 }
@@ -396,45 +468,84 @@ private final class ExteraAIList {
     func openRoles() {
         self.push(Self.make(context: self.context, title: self.text("Roles", "Роли"), build: { page in
             let config = ExteraAISettings.shared.configuration
-            var rows: [ExteraAIRow] = [.action(.main, (config.selectedRole == nil ? "✓ " : "") + page.text("No System Role", "Без системной роли"), .generic, { page.change { $0.selectedRoleId = nil } })]
-            rows += config.roles.map { role in
-                .action(.main, (config.selectedRoleId == role.id ? "✓ " : "") + role.name, .generic, { page.openRole(ExteraAIRoleDraft(role: role, existing: true)) })
+            var rows: [ExteraAIRow] = [.header(.main, page.text("Suggestions", "Рекомендации"))]
+            rows += ExteraAIRole.suggestions.map { role in
+                .action(.main, (config.selectedRole?.id == role.id ? "✓ " : "") + role.name, .generic, { page.openRoleSuggestion(role) })
             }
-            rows.append(.action(.options, page.text("Add Role", "Добавить роль"), .generic, { page.openRole(ExteraAIRoleDraft(role: .init(name: "", prompt: ""), existing: false)) }))
-            rows.append(.notice(.options, page.text("A role is a system instruction sent with your request. Select a role to edit or activate it. AI Chat uses the active role; the editor and summarizer use their own explicit instructions.", "Роль — системная инструкция, которая отправляется вместе с запросом. Выберите роль для редактирования или активации. Чат с ИИ использует активную роль; редактор и суммаризатор — собственные инструкции.")))
+            rows.append(.header(.options, page.text("Roles", "Роли")))
+            rows.append(.action(.options, (config.selectedRole == nil ? "✓ " : "") + page.text("No System Role", "Без системной роли"), .generic, {
+                do { try ExteraAISettings.shared.update { try $0.selectRole(id: nil) } } catch { page.showError(error) }
+            }))
+            rows += config.roles.map { role in
+                .action(.options, (config.selectedRole?.id == role.id ? "✓ " : "") + role.name, .generic, { page.openRole(ExteraAIRoleDraft(role: role, existing: true)) })
+            }
+            rows.append(.action(.actions, page.text("Add Role", "Добавить роль"), .generic, { page.openRole(ExteraAIRoleDraft(role: .init(name: "", prompt: ""), existing: false)) }))
+            rows.append(.notice(.actions, page.text("Suggestions can be previewed, selected or copied into a new role. Save custom roles separately from selecting them. AI Chat uses the active role; the editor and summarizer keep their own instructions.", "Рекомендации можно просмотреть, выбрать или скопировать в новую роль. Сохранение пользовательской роли не меняет выбор. Чат с ИИ использует активную роль; редактор и суммаризатор — собственные инструкции.")))
             return rows
+        }))
+    }
+
+    private func useRole(_ role: ExteraAIRole) {
+        do {
+            try ExteraAISettings.shared.update { try $0.selectRole(id: role.id) }
+            self.pop()
+        } catch { self.showError(error) }
+    }
+
+    private func copyRole(_ role: ExteraAIRole) {
+        UIPasteboard.general.string = role.name + "\n" + role.prompt
+    }
+
+    private func openRoleSuggestion(_ role: ExteraAIRole) {
+        self.push(Self.make(context: self.context, title: role.name, build: { page in
+            return [
+                .notice(.main, role.prompt),
+                .action(.options, page.text("Use Role", "Использовать роль"), .generic, { page.useRole(role) }),
+                .action(.options, page.text("Copy Role", "Копировать роль"), .generic, { page.copyRole(role) }),
+                .action(.options, page.text("Create Copy", "Создать копию"), .generic, {
+                    page.openRole(ExteraAIRoleDraft(role: .init(name: "", prompt: role.prompt), existing: false))
+                })
+            ]
         }))
     }
 
     private func openRole(_ draft: ExteraAIRoleDraft) {
         self.push(Self.make(context: self.context, title: self.text("AI Role", "Роль ИИ"), build: { page in
             var rows: [ExteraAIRow] = [
-                .action(.main, page.text("Name", "Название") + ": " + draft.role.name, .generic, { page.input(title: page.text("Role Name", "Название роли"), value: draft.role.name, save: { draft.role.name = String($0.prefix(100)).trimmingCharacters(in: .whitespacesAndNewlines) }) }),
+                .action(.main, page.text("Name", "Название") + ": " + draft.role.name, .generic, { page.input(title: page.text("Role Name", "Название роли"), value: draft.role.name, save: { value in
+                    let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty, name.utf16.count <= ExteraAIRole.nameLimit else { throw ExteraAIError.configuration(page.text("The role name must contain between 1 and 64 characters.", "Название роли должно содержать от 1 до 64 символов.")) }
+                    draft.role.name = name
+                }) }),
                 .action(.main, page.text("Edit System Prompt", "Изменить системную инструкцию"), .generic, {
                     page.push(exteraAITextEditorController(context: page.context, title: page.text("System Prompt", "Системная инструкция"), text: draft.role.prompt, save: { text in
-                        guard text.count <= 32000 else { throw ExteraAIError.configuration(page.text("The prompt must contain no more than 32,000 characters.", "Инструкция должна содержать не более 32 000 символов.")) }
+                        guard text.utf16.count <= ExteraAIRole.promptLimit else { throw ExteraAIError.configuration(page.text("The prompt must contain no more than 1,024 characters.", "Инструкция должна содержать не более 1 024 символов.")) }
                         draft.role.prompt = text
                         page.refresh.set(true)
                     }))
                 }),
-                .notice(.main, String(draft.role.prompt.prefix(500))),
-                .action(.actions, page.text("Save and Use Role", "Сохранить и использовать"), .generic, {
-                    guard !draft.role.name.isEmpty, !draft.role.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { page.showError(ExteraAIError.configuration(page.text("Enter a role name and system prompt.", "Введите название и системную инструкцию."))); return }
-                    do {
-                        try ExteraAISettings.shared.update { config in
-                            if let index = config.roles.firstIndex(where: { $0.id == draft.role.id }) { config.roles[index] = draft.role } else { config.roles.append(draft.role) }
-                            config.selectedRoleId = draft.role.id
-                        }
-                        page.pop()
-                    } catch { page.showError(error) }
-                })
+                .notice(.main, String(draft.role.prompt.prefix(500)))
             ]
-            if draft.existing { rows.append(.action(.actions, page.text("Delete Role", "Удалить роль"), .destructive, {
-                page.confirm(page.text("Delete this role?", "Удалить эту роль?"), action: {
-                    page.change { config in config.roles.removeAll { $0.id == draft.role.id }; if config.selectedRoleId == draft.role.id { config.selectedRoleId = nil } }
+            if draft.existing {
+                rows.append(.action(.options, page.text("Use Saved Role", "Использовать сохранённую роль"), .generic, { page.useRole(draft.role) }))
+                rows.append(.action(.options, page.text("Copy Role", "Копировать роль"), .generic, { page.copyRole(draft.role) }))
+            }
+            rows.append(.action(.actions, page.text("Save Role", "Сохранить роль"), .generic, {
+                do {
+                    try ExteraAISettings.shared.update { try $0.saveRole(draft.role, existing: draft.existing) }
                     page.pop()
-                })
-            })) }
+                } catch { page.showError(error) }
+            }))
+            if draft.existing {
+                rows.append(.action(.actions, page.text("Delete Role", "Удалить роль"), .destructive, {
+                    page.confirm(page.text("Delete this role?", "Удалить эту роль?"), action: {
+                        do {
+                            try ExteraAISettings.shared.update { try $0.deleteRole(id: draft.role.id) }
+                            page.pop()
+                        } catch { page.showError(error) }
+                    })
+                }))
+            }
             return rows
         }))
     }

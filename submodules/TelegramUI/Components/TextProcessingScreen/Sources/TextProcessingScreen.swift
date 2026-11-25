@@ -2328,7 +2328,7 @@ public class TextProcessingScreen: ViewControllerComponentContainer, Translation
         if case .preview = mode {
             usesCustomAI = false
         } else {
-            usesCustomAI = ExteraAISettings.shared.configuration.useForTextProcessing
+            usesCustomAI = ExteraAISettings.shared.configuration.replacesTelegramEditor(isPremium: context.isPremium)
         }
         if usesExternalTranslation || usesCustomAI {
             // HTTP/System providers do not use Telegram's AI style catalogue.
