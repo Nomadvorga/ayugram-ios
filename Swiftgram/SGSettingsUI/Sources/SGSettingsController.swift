@@ -28,6 +28,7 @@ private enum SGControllerSection: Int32, SGItemListSection {
     case folders
     case chatList
     case accountColors
+    case other
     case chats
     case gestures
     case stickers
@@ -74,6 +75,15 @@ private enum SGBoolSetting: String {
     case snapDeletionEffect
     case hideReactions
     case doubleTapOutgoingEdit
+    case wideChannelPosts
+    case hideRecordingButton
+    case disableSnapDeletionEffect
+    case disableSendAsButton
+    case disableGalleryCamera
+    case disableGalleryCameraPreview
+    case disableScrollToNextChannel
+    case disableScrollToNextTopic
+    case hidePhoneInSettings
     case stickerTime
     case forceEmojiTab
     case defaultEmojisFirst
@@ -94,7 +104,6 @@ private enum SGBoolSetting: String {
     case filterZalgoText
     case commaAfterMention
     case combinedMediaViewer
-    case hideAccountInNotifications
     // MARK: AyuGram
     case ayuGhostMode
     case ayuDontReadMessages
@@ -274,17 +283,17 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .other, settingName: .commaAfterMention, value: SGSimpleSettings.shared.commaAfterMention, text: i18n("Settings.CommaAfterMention", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .other, settingName: .swipeForVideoPIP, value: SGSimpleSettings.shared.videoPIPSwipeDirection == SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue, text: i18n("Settings.swipeForVideoPIP", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .other, text: i18n("Settings.swipeForVideoPIP.Notice", lang)))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideChannelBottomButton, value: !SGSimpleSettings.shared.hideChannelBottomButton, text: i18n("Settings.showChannelBottomButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .bottomButton, value: !SGSimpleSettings.shared.hideChannelBottomButton, text: i18n("Settings.showChannelBottomButton", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .other, settingName: .wideChannelPosts, value: SGSimpleSettings.shared.wideChannelPosts, text: i18n("Settings.wideChannelPosts", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .secondsInMessages, value: SGSimpleSettings.shared.secondsInMessages, text: i18n("Settings.secondsInMessages", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .messageDoubleTapActionOutgoingEdit, value: SGSimpleSettings.shared.messageDoubleTapActionOutgoing == SGSimpleSettings.MessageDoubleTapAction.edit.rawValue, text: i18n("Settings.messageDoubleTapActionOutgoingEdit", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hideRecordingButton, value: !SGSimpleSettings.shared.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableSnapDeletionEffect, value: !SGSimpleSettings.shared.disableSnapDeletionEffect, text: i18n("Settings.SnapDeletionEffect", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableSendAsButton, value: !SGSimpleSettings.shared.disableSendAsButton, text: i18n("Settings.SendAsButton", lang, strings.Conversation_SendMesageAs), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableGalleryCamera, value: !SGSimpleSettings.shared.disableGalleryCamera, text: i18n("Settings.GalleryCamera", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableGalleryCameraPreview, value: !SGSimpleSettings.shared.disableGalleryCameraPreview, text: i18n("Settings.GalleryCameraPreview", lang), enabled: !SGSimpleSettings.shared.disableGalleryCamera))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableScrollToNextChannel, value: !SGSimpleSettings.shared.disableScrollToNextChannel, text: i18n("Settings.PullToNextChannel", lang), enabled: true))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .disableScrollToNextTopic, value: !SGSimpleSettings.shared.disableScrollToNextTopic, text: i18n("Settings.PullToNextTopic", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .formatTimeWithSeconds, value: SGSimpleSettings.shared.secondsInMessages, text: i18n("Settings.secondsInMessages", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .doubleTapOutgoingEdit, value: SGSimpleSettings.shared.messageDoubleTapActionOutgoing == SGSimpleSettings.MessageDoubleTapAction.edit.rawValue, text: i18n("Settings.messageDoubleTapActionOutgoingEdit", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .recordingButton, value: !SGSimpleSettings.shared.hideRecordingButton, text: i18n("Settings.RecordingButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .snapDeletionEffect, value: !SGSimpleSettings.shared.disableSnapDeletionEffect, text: i18n("Settings.SnapDeletionEffect", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hideSendAsPeer, value: !SGSimpleSettings.shared.disableSendAsButton, text: i18n("Settings.SendAsButton", lang, strings.Conversation_SendMesageAs), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hideCameraTile, value: !SGSimpleSettings.shared.disableGalleryCamera, text: i18n("Settings.GalleryCamera", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .cameraTilePreview, value: !SGSimpleSettings.shared.disableGalleryCameraPreview, text: i18n("Settings.GalleryCameraPreview", lang), enabled: !SGSimpleSettings.shared.disableGalleryCamera))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .quickTransitions, value: !SGSimpleSettings.shared.disableScrollToNextChannel, text: i18n("Settings.PullToNextChannel", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .quickTransitionsTopics, value: !SGSimpleSettings.shared.disableScrollToNextTopic, text: i18n("Settings.PullToNextTopic", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .other, settingName: .hideReactions, value: SGSimpleSettings.shared.hideReactions, text: i18n("Settings.HideReactions", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .other, settingName: .uploadSpeedBoost, value: SGSimpleSettings.shared.uploadSpeedBoost, text: i18n("Settings.UploadsBoost", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .other, settingName: .downloadSpeedBoost, text: i18n("Settings.DownloadsBoost", lang), value: i18n("Settings.DownloadsBoost.\(SGSimpleSettings.shared.downloadSpeedBoost)", lang), enabled: true))
@@ -293,7 +302,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .other, settingName: .forceEmojiTab, value: SGSimpleSettings.shared.forceEmojiTab, text: i18n("Settings.ForceEmojiTab", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .other, settingName: .defaultEmojisFirst, value: SGSimpleSettings.shared.defaultEmojisFirst, text: i18n("Settings.DefaultEmojisFirst", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .other, text: i18n("Settings.DefaultEmojisFirst.Notice", lang)))
-    entries.append(.toggle(id: id.count, section: .other, settingName: .hidePhoneInSettings, value: SGSimpleSettings.shared.hidePhoneInSettings, text: i18n("Settings.HidePhoneInSettingsUI", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .other, settingName: .hidePhoneNumber, value: SGSimpleSettings.shared.hidePhoneInSettings, text: i18n("Settings.HidePhoneInSettingsUI", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .other, text: i18n("Settings.HidePhoneInSettingsUI.Notice", lang)))
     entries.append(.toggle(id: id.count, section: .other, settingName: .hideAccountInNotifications, value: SGSimpleSettings.shared.hideAccountInNotifications, text: i18n("Settings.HideAccountInNotifications", lang), enabled: true))
     entries.append(.header(id: id.count, section: .profiles, text: i18n("Settings.Profiles.Header", lang), badge: nil))
@@ -433,6 +442,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             settings.hideRecordingButton = !value
         case .snapDeletionEffect:
             settings.disableSnapDeletionEffect = !value
+        case .wideChannelPosts:
+            settings.wideChannelPosts = value
         case .hideReactions:
             settings.hideReactions = value
         case .doubleTapOutgoingEdit:
@@ -458,6 +469,22 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             settings.storyStealthMode = value
         case .combinedMediaViewer:
             SGSimpleSettings.shared.combinedMediaViewer = value
+        case .swipeForVideoPIP:
+            SGSimpleSettings.shared.videoPIPSwipeDirection = value ? SGSimpleSettings.VideoPIPSwipeDirection.up.rawValue : SGSimpleSettings.VideoPIPSwipeDirection.down.rawValue
+        case .enableVoipTcp:
+            let _ = updateExperimentalUISettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
+                var current = current
+                current.enableVoipTcp = value
+                return current
+            }).start()
+        case .nyStyleSnow:
+            ExteraSettings.shared.set(.forceSnow, value)
+            simplePromise.set(true)
+        case .nyStyleLightning:
+            ExteraSettings.shared.set(.forceSnow, value)
+            simplePromise.set(true)
+        case .tabBarSearchEnabled:
+            settings.tabBarSearchEnabled = value
         case .videoControlsInFooter:
             SGSimpleSettings.shared.videoControlsInFooter = value
         case .lyricsInPlayer:
@@ -468,9 +495,22 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             SGSimpleSettings.shared.filterZalgoText = value
         case .commaAfterMention:
             SGSimpleSettings.shared.commaAfterMention = value
-        case .hideAccountInNotifications:
-            SGSimpleSettings.shared.hideAccountInNotifications = value
-            SGSimpleSettings.shared.synchronizeShared()
+        case .ayuGhostMode:
+            AyuGhostSettings.shared.setGhostModeActive(value)
+        case .ayuDontReadMessages:
+            AyuGhostSettings.shared.set(.hideReadMessages, value)
+        case .ayuDontReadStories:
+            AyuGhostSettings.shared.set(.hideReadStories, value)
+        case .ayuDontSendOnline:
+            AyuGhostSettings.shared.set(.hideOnline, value)
+        case .ayuDontSendTyping:
+            AyuGhostSettings.shared.set(.hideTyping, value)
+        case .ayuOfflineAfterSending:
+            AyuGhostSettings.shared.set(.automaticOffline, value)
+        case .ayuSaveDeletedMessages:
+            AyuSaveSettings.shared.saveDeletedMessages = value
+        case .ayuSaveMessagesHistory:
+            AyuSaveSettings.shared.saveMessagesHistory = value
         }
     }, updateSliderValue: { setting, value in
         switch setting {
