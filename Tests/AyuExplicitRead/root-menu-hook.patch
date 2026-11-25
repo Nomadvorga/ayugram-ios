@@ -1,0 +1,17 @@
+diff --git a/submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift b/submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift
+--- a/submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift
++++ b/submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift
+@@ -1579,9 +1579,12 @@
+         if let editHistoryAction = ayuMakeEditHistoryContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+             actions.append(editHistoryAction)
+         }
+-        if let readUntilAction = ayuMakeReadUntilContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
++        if let readUntilAction = ayuMakeReadUntilContextMenuAction(context: context, controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+             actions.append(readUntilAction)
+         }
++        if let readStatusAction = ayuMakeReadStatusContextMenuAction(context: context, controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
++            actions.append(readStatusAction)
++        }
+         if let repeatAction = exteraRepeatMessageContextMenuAction(context: context, state: chatPresentationInterfaceState, messages: selectAll || isImage ? messages : [message], interaction: controllerInteraction, canForward: data.messageActions.options.contains(.forward)) {
+             actions.append(repeatAction)
+         }

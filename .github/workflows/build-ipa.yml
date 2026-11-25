@@ -20,7 +20,8 @@ on:
 
 concurrency:
   group: build-ipa-${{ github.ref }}-${{ inputs.configuration || 'debug_arm64' }}
-  cancel-in-progress: true
+  # Finish the active compiler run while the next port snapshot waits for its turn.
+  cancel-in-progress: false
 
 permissions:
   contents: read

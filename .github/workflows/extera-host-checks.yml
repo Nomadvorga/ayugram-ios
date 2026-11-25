@@ -63,6 +63,12 @@ jobs:
           python3 docs/validation/run_extera_backup_validation.py
           python3 docs/validation/run_extera_ai_backup_validation.py
           python3 docs/validation/run_ayu_settings_store_validation.py
+      - name: Durable explicit read queue
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            submodules/TelegramCore/Sources/Network/AyuExplicitReadQueue.swift \
+            submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadQueueTests.swift
       - name: Local feed persistence
         if: ${{ !cancelled() }}
         run: |

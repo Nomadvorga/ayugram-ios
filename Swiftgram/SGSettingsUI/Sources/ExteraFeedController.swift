@@ -26,6 +26,7 @@ private enum ExteraFeedAction: Equatable {
     case moreChannels
     case selectionMenu(String?)
     case markAllRead
+    case readStatus
     case open(EngineMessage.Id)
 }
 
@@ -124,14 +125,17 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
         case .cellular: return false
         }
     } |> distinctUntilChanged
-    let signal = combineLatest(context.sharedContext.presentationData, snapshots, actions.query.get(), context.engine.stickers.availableReactions(), networkIsWifi, context.sharedContext.automaticMediaDownloadSettings)
+    let signal = combineLatest(context.sharedContext.presentationData, snapshots, actions.query.get(), context.engine.stickers.availableReactions(), networkIsWifi, context.sharedContext.automaticMediaDownloadSettings, ayuReadHistoryState(account: context.account))
     |> deliverOnMainQueue
-    |> map { presentationData, snapshotAndCounters, query, availableReactions, wifi, downloadSettings -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, snapshotAndCounters, query, availableReactions, wifi, downloadSettings, readStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (snapshot, counters) = snapshotAndCounters
         let settings = feed.settings.state
         let appearance = ExteraFeedSettings.shared
         let lang = presentationData.strings.baseLanguageCode
-        func text(_ key: String, _ fallback: String) -> String { return i18n(key, lang, fallback) }
+        func text(_ key: String, _ fallback: String) -> String {
+            let value = i18n(key, lang)
+            return value == key ? fallback : value
+        }
         func unread(_ message: EngineMessage) -> Bool {
             return settings.isUnread(channelId: message.id.peerId.toInt64(), messageId: message.id.id) && !(counters[message.id.peerId]?.isIncomingMessageIndexRead(message.index) ?? false)
         }
@@ -157,6 +161,12 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
             if snapshot.hasEligibleChannels {
                 add("markRead", 1, .action(text("Extera.FeedMarkAllRead", "Read All"), .markAllRead, false))
             }
+            // Account-wide status stays reachable even when categories/channels
+            // were removed while reads were pending or after app relaunch.
+            let readStatusTitle = text("Ayu.ReadStatus.FeedCounts", "Read Receipts: {pending} pending, {errors} errors")
+                .replacingOccurrences(of: "{pending}", with: String(readStatus.pending.count))
+                .replacingOccurrences(of: "{errors}", with: String(readStatus.failures.count))
+            add("readStatus", 1, .action(readStatusTitle, .readStatus, false))
             if settings.effectiveChannelIds.isEmpty {
                 add("empty", 1, .notice(text("Extera.FeedChooseChannelsInfo", "Choose the subscribed channels to include in your feed, or create a category with its own channels.")))
             } else if snapshot.channelsLoaded && !snapshot.hasEligibleChannels {
@@ -205,7 +215,7 @@ private func exteraFeedPageController(context: AccountContext, feed: ExteraFeedC
                     add("limit", 3, .notice(text("Extera.FeedHistoryLimit", "This feed keeps up to 100 posts per channel and displays up to 1,000 posts. Open the original channel for its remaining history.")))
                 }
             }
-            add("info", 4, .notice(text("Extera.FeedMediaReadBehaviorInfo", "Photos and videos use Telegram's media controls and download settings. Opening the original post marks it read in this feed. Read All asks for confirmation before also marking the selected original channels as read.")))
+            add("info", 4, .notice(text("Ayu.ReadStatus.FeedInfo", "Opening a post marks it read locally in this feed. Read All asks before queuing Telegram read receipts. A local read or an accepted request does not confirm delivery; check Read Receipts for pending requests and results.")))
         case let .channels(categoryId):
             let category = settings.categories.first(where: { $0.id == categoryId })
             title = category?.title ?? text("Extera.FeedSettings", "Feed Settings")
@@ -333,7 +343,8 @@ private final class ExteraFeedActions {
     }
 
     func text(_ key: String, _ fallback: String) -> String {
-        return i18n(key, self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode, fallback)
+        let value = i18n(key, self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode)
+        return value == key ? fallback : value
     }
 
     private func push(_ page: ExteraFeedPage) {
@@ -473,6 +484,8 @@ private final class ExteraFeedActions {
             self.controller?.present(alert, animated: true)
         case .markAllRead:
             self.confirmMarkAllRead()
+        case .readStatus:
+            self.controller?.push(ayuReadHistoryController(context: self.context))
         case let .open(id):
             if let message = self.feed.current.messages.first(where: { $0.id == id }) {
                 self.context.engine.messages.ensureMessagesAreLocallyAvailable(messages: [message])
@@ -494,26 +507,28 @@ private final class ExteraFeedActions {
             let peerId = message.id.peerId.toInt64()
             maxIds[peerId] = max(maxIds[peerId] ?? 0, message.id.id)
         }
-        let alert = UIAlertController(title: self.text("Extera.FeedMarkAllRead", "Read All"), message: self.text("Extera.FeedMarkAllReadInfo", "Mark all posts in the feed's channels as read? They will also be marked as read in the original channels."), preferredStyle: .alert)
+        // Read-only preparation freezes both peers and upper bounds before the
+        // confirmation. A later refresh/selection change cannot expand the read.
+        let capturedMaxIds = maxIds
+        self.interactionDisposable.set((ayuReadHistoryKnownBounds(account: self.context.account, peerIdValues: ids.sorted()) |> deliverOnMainQueue).start(next: { [weak self] requests in
+            guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, !requests.isEmpty else { return }
+            self.presentMarkAllRead(requests: requests, maxIds: capturedMaxIds)
+        }))
+    }
+
+    private func presentMarkAllRead(requests: [AyuReadHistoryRequest], maxIds: [Int64: Int32]) {
+        let alert = UIAlertController(title: self.text("Extera.FeedMarkAllRead", "Read All"), message: self.text("Ayu.ReadStatus.FeedConfirmation", "Queue read receipts for the selected channels through their currently known latest messages? Delivery may wait for a connection. Newer messages are not included."), preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_Cancel, style: .cancel))
         alert.addAction(UIAlertAction(title: self.text("Extera.FeedConfirmMarkRead", "Mark as Read"), style: .default, handler: { [weak self] _ in
-            guard let self else { return }
-            let settings = self.feed.settings
-            for id in ids.sorted() {
-                let peerId = EnginePeer.Id(id)
-                if ayuIsReadStateHidden(peerId: peerId) {
-                    // An explicit confirmed read must bypass ghost suppression, just like
-                    // AyuGram's Read Message action. This server-only sentinel is never
-                    // persisted as a local feed cursor; future posts must remain unread.
-                    ayuReadHistoryOnServer(account: self.context.account, peerId: peerId, maxId: Int32.max - 1)
+            guard let self, let controller = self.controller else { return }
+            let feed = self.feed
+            controller.push(ayuReadHistoryController(context: self.context, requests: requests, onAccepted: { [weak feed] request in
+                // Only the captured loaded feed cursor moves locally. Delivery is
+                // independently shown as pending/confirmed in the status screen.
+                if let maxId = maxIds[request.peerIdValue] {
+                    feed?.settings.markRead(channelId: request.peerIdValue, messageId: min(maxId, request.maxId))
                 }
-            }
-            // This is the chat-list read-to-server-top path, not a read of the visible
-            // page or a global markAllChatsAsRead. The engine persists pending sync and
-            // retries normally unless ghost mode suppresses it (explicit bypass above).
-            let _ = self.context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: ids.sorted().map { EnginePeer.Id($0) }, setToValue: false).startStandalone(completed: {
-                settings.update { $0.markRead(maxIds: maxIds) }
-            })
+            }))
         }))
         self.controller?.present(alert, animated: true)
     }

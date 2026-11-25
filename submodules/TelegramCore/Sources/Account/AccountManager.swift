@@ -230,6 +230,7 @@ private var declaredEncodables: Void = {
     declareEncodable(SynchronizeAutosaveItemOperation.self, f: { SynchronizeAutosaveItemOperation(decoder: $0) })
     declareEncodable(TelegramMediaStory.self, f: { TelegramMediaStory(decoder: $0) })
     declareEncodable(SynchronizeViewStoriesOperation.self, f: { SynchronizeViewStoriesOperation(decoder: $0) })
+    declareEncodable(AyuExplicitReadOperation.self, f: { AyuExplicitReadOperation(decoder: $0) })
     declareEncodable(SynchronizePeerStoriesOperation.self, f: { SynchronizePeerStoriesOperation(decoder: $0) })
     declareEncodable(MapVenue.self, f: { MapVenue(decoder: $0) })
     declareEncodable(MapGeoAddress.self, f: { MapGeoAddress(decoder: $0) })
@@ -508,7 +509,13 @@ private func cleanupAccount(networkArguments: NetworkInitializationArguments, ac
                 return .complete()
             case let .authorized(account):
                 account.shouldBeServiceTaskMaster.set(.single(.always))
-                return account.network.request(Api.functions.auth.logOut())
+                // Inactive accounts may have no main-app runner at logout.
+                // Clear their explicit permissions before the cleanup RPC too.
+                return (account.postbox.transaction { transaction -> Void in
+                    updateAyuExplicitReadQueue(transaction: transaction, ownerId: account.peerId, { $0.close() })
+                } |> mapToSignalPromotingError { _ in
+                    account.network.request(Api.functions.auth.logOut())
+                })
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.auth.LoggedOut?, NoError> in
                     return .single(nil)

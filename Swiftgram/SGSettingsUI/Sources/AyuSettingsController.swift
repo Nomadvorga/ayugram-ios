@@ -70,6 +70,7 @@ private enum AyuSliderSetting: String {
 
 private enum AyuDisclosureLink: String {
     case none
+    case readReceipts
 }
 
 private typealias AyuControllerEntry = SGItemListUIEntry<AyuControllerSection, AyuBoolSetting, AyuSliderSetting, AyuOneFromManySetting, AyuDisclosureLink, AnyHashable>
@@ -136,6 +137,7 @@ private func ayuControllerEntries(presentationData: PresentationData) -> [AyuCon
 
     entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .markReadAfterAction, value: ghost.markReadAfterAction, text: i18n("Ayu.MarkReadAfterAction", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.MarkReadAfterActionDescription", lang)))
+    entries.append(.disclosure(id: id.count, section: .ghostOther, link: .readReceipts, text: i18n("Ayu.ReadStatus.Title", lang)))
     entries.append(.toggle(id: id.count, section: .ghostOther, settingName: .useScheduledMessages, value: ghost.value(.useScheduledMessages), text: i18n("Ayu.UseScheduledMessages", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .ghostOther, text: i18n("Ayu.UseScheduledMessagesDescription", lang)))
     entries.append(.oneFromManySelector(id: id.count, section: .ghostOther, settingName: .sendWithoutSound, text: i18n("Ayu.SendWithoutSoundByDefault", lang), value: sendWithoutSoundTitle(ghost.sendWithoutSound, lang: lang), enabled: true))
@@ -212,6 +214,7 @@ public func ayuSettingsController(context: AccountContext, category: AyuSettings
         return exteraSettingsOverviewController(context: context, ayu: true)
     }
     var presentOneFromManyImpl: ((AyuOneFromManySetting, [SGOneFromManyOption]) -> Void)?
+    var pushControllerImpl: ((ViewController) -> Void)?
     let updatePromise = ValuePromise(true, ignoreRepeated: false)
 
     let arguments = SGItemListArguments<AyuBoolSetting, AyuSliderSetting, AyuOneFromManySetting, AyuDisclosureLink, AnyHashable>(
@@ -321,6 +324,10 @@ public func ayuSettingsController(context: AccountContext, category: AyuSettings
                 }
             }
             presentOneFromManyImpl?(setting, options)
+        }, openDisclosureLink: { link in
+            if link == .readReceipts {
+                pushControllerImpl?(ayuReadHistoryController(context: context))
+            }
         }
     )
 
@@ -333,6 +340,9 @@ public func ayuSettingsController(context: AccountContext, category: AyuSettings
     }
 
     let controller = ItemListController(context: context, state: signal)
+    pushControllerImpl = { [weak controller] target in
+        (controller?.navigationController as? NavigationController)?.pushViewController(target)
+    }
     presentOneFromManyImpl = { [weak controller] setting, options in
         guard let controller else {
             return

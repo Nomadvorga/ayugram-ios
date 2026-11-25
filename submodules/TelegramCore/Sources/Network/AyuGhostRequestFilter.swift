@@ -207,48 +207,14 @@ public func ayuIsReadStateHidden(peerId: PeerId) -> Bool {
     return ayuSuppressesReadState(peerId: peerId)
 }
 
-// Marks the chat as read on the server up to maxId, past ghost mode ("Read Message" in AyuGram).
-public func ayuReadHistoryOnServer(account: Account, peerId: PeerId, maxId: Int32) {
-    let network = account.network
-    let stateManager = account.stateManager
-    let _ = (account.postbox.transaction { transaction -> Peer? in
-        return transaction.getPeer(peerId)
-    }
-    |> mapToSignal { peer -> Signal<Void, NoError> in
-        guard let peer else {
-            return .complete()
-        }
-        if peerId.namespace == Namespaces.Peer.CloudChannel {
-            guard let inputChannel = apiInputChannel(peer) else {
-                return .complete()
-            }
-            return network.request(Api.functions.channels.readHistory(channel: inputChannel, maxId: maxId), ayuBypassGhost: true)
-            |> `catch` { _ -> Signal<Api.Bool, NoError> in
-                return .single(.boolFalse)
-            }
-            |> mapToSignal { _ -> Signal<Void, NoError> in
-                return .complete()
-            }
-        } else if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
-            guard let inputPeer = apiInputPeer(peer) else {
-                return .complete()
-            }
-            return network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxId), ayuBypassGhost: true)
-            |> map(Optional.init)
-            |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in
-                return .single(nil)
-            }
-            |> mapToSignal { result -> Signal<Void, NoError> in
-                if let result {
-                    switch result {
-                    case let .affectedMessages(affectedMessagesData):
-                        stateManager?.addUpdateGroups([.updatePts(pts: affectedMessagesData.pts, ptsCount: affectedMessagesData.ptsCount)])
-                    }
-                }
-                return .complete()
-            }
-        } else {
-            return .complete()
-        }
-    }).start()
+/// Persist an explicitly authorized read past ghost mode. Completion confirms
+/// enqueue, not delivery. Network retry belongs to the authorized Account runner;
+/// terminal errors are observable through ayuReadHistoryFailures(account:).
+/// A read-all sentinel is frozen at the highest currently known cloud message id;
+/// it cannot read future arrivals when retried. Completion is on the main queue.
+public func ayuReadHistoryOnServer(account: Account, peerId: PeerId, maxId: Int32, completion: ((AyuReadHistoryEnqueueResult) -> Void)? = nil) {
+    let ownerId = account.peerId
+    let _ = (account.postbox.transaction { transaction in
+        enqueueAyuExplicitRead(transaction: transaction, ownerId: ownerId, peerId: peerId, maxId: maxId)
+    } |> deliverOnMainQueue).start(next: { result in completion?(result) })
 }

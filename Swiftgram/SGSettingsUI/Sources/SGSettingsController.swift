@@ -239,6 +239,7 @@ private enum SGSliderSetting: String {
 }
 
 private enum SGDisclosureLink: String {
+    case readReceipts
     case energySettings
     case uiIconPacks
     case speechRecognition
@@ -595,6 +596,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.oneFromManySelector(id: id.count, section: .gestures, settingName: .doubleTapOutgoing, text: i18n("Extera.DoubleTapOutgoing", lang), value: doubleTapActionTitle(ExteraChatSettings.shared.effectiveDoubleTapAction(incoming: false), lang: lang), enabled: true))
     entries.append(.disclosure(id: id.count, section: .gestures, link: .swipeActions, text: i18n("Extera.SwipeActions", lang)))
     entries.append(.notice(id: id.count, section: .gestures, text: i18n("Extera.DoubleTapInfo", lang)))
+    entries.append(.disclosure(id: id.count, section: .gestures, link: .readReceipts, text: i18n("Ayu.ReadStatus.Title", lang)))
 
     entries.append(.header(id: id.count, section: .chats, text: i18n("Ayu.CategoryChats", lang), badge: nil))
     entries.append(.oneFromManySelector(id: id.count, section: .chats, settingName: .channelBottomButton, text: i18n("Extera.Chat.ChannelBottomButton", lang), value: channelBottomButtonTitle(ExteraChatSettings.shared.effectiveChannelBottomButton, lang: lang), enabled: true))
@@ -1460,6 +1462,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             pushControllerImpl?(exteraUIIconPacksController(context: context))
         case .energySettings:
             pushControllerImpl?(exteraEnergySettingsController(context: context))
+        case .readReceipts:
+            pushControllerImpl?(ayuReadHistoryController(context: context))
         case .navigationSettings:
             pushControllerImpl?(exteraNavigationSettingsController(context: context))
         case .chatSettings:

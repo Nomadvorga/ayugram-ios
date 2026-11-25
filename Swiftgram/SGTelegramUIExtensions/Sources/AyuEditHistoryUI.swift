@@ -7,6 +7,7 @@ import AccountContext
 import ContextUI
 import SGStrings
 import SGSimpleSettings
+import SGSettingsUI
 import ChatControllerInteraction
 import ChatPresentationInterfaceState
 
@@ -40,7 +41,7 @@ func ayuMakeEditHistoryContextMenuAction(controllerInteraction: ChatControllerIn
 }
 
 // "Read Message": with the chat's read receipts hidden, marks it as read on the server up to this message.
-func ayuMakeReadUntilContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+func ayuMakeReadUntilContextMenuAction(context: AccountContext, controllerInteraction: ChatControllerInteraction, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
     if !message.flags.contains(.Incoming) || message.id.namespace != Namespaces.Message.Cloud || !ayuIsReadStateHidden(peerId: message.id.peerId) {
         return nil
     }
@@ -48,8 +49,24 @@ func ayuMakeReadUntilContextMenuAction(context: AccountContext, chatPresentation
     return .action(ContextMenuActionItem(text: i18n("Ayu.ReadUntilMenuText", lang), icon: { theme in
         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
     }, action: { _, f in
-        ayuReadHistoryOnServer(account: context.account, peerId: message.id.peerId, maxId: message.id.id)
+        guard let navigation = controllerInteraction.navigationController() else { f(.default); return }
         f(.default)
+        navigation.pushViewController(ayuReadHistoryController(context: context, peerId: message.id.peerId, requests: [AyuReadHistoryRequest(peerIdValue: message.id.peerId.toInt64(), maxId: message.id.id)]))
+    }))
+}
+
+// Available even after read hiding was disabled or the selected message became
+// outgoing: reopening status never enqueues a read and survives app relaunch.
+func ayuMakeReadStatusContextMenuAction(context: AccountContext, controllerInteraction: ChatControllerInteraction, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+    guard message.id.namespace == Namespaces.Message.Cloud else { return nil }
+    let lang = chatPresentationInterfaceState.strings.baseLanguageCode
+    let localizedTitle = i18n("Ayu.ReadStatus.Title", lang)
+    return .action(ContextMenuActionItem(text: localizedTitle == "Ayu.ReadStatus.Title" ? "Read Receipts" : localizedTitle, icon: { theme in
+        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
+    }, action: { _, f in
+        guard let navigation = controllerInteraction.navigationController() else { f(.default); return }
+        f(.default)
+        navigation.pushViewController(ayuReadHistoryController(context: context, peerId: message.id.peerId))
     }))
 }
 

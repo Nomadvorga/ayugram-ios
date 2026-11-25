@@ -1,0 +1,59 @@
+{
+  "status": "frozen for root checkpoint; Swift/iOS execution outstanding",
+  "baseRoot": "136a2a1b",
+  "rootHeadObservedDuringHandoff": "f33d6382",
+  "production": [
+    "submodules/TelegramCore/Sources/Network/AyuExplicitReadQueue.swift",
+    "submodules/TelegramCore/Sources/Network/AyuExplicitReadOperation.swift",
+    "submodules/TelegramCore/Sources/Network/ManagedAyuExplicitReadOperations.swift",
+    "submodules/TelegramCore/Sources/Network/AyuGhostRequestFilter.swift",
+    "submodules/TelegramCore/Sources/Account/Account.swift",
+    "submodules/TelegramCore/Sources/Account/AccountManager.swift",
+    "submodules/TelegramCore/Sources/SyncCore/SyncCore_Namespaces.swift",
+    "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    "Swiftgram/SGSettingsUI/Sources/ExteraFeedController.swift",
+    "Swiftgram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
+    "submodules/TelegramUI/Sources/Chat/ChatControllerExteraGestures.swift",
+    "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift"
+  ],
+  "tests": [
+    "submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadQueueTests.swift",
+    "submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadPersistenceTests.swift"
+  ],
+  "artifacts": [
+    "Tests/AyuExplicitRead/README.md",
+    "Tests/AyuExplicitRead/verify_swift_syntax.py",
+    "Tests/AyuExplicitRead/strings-handoff.json",
+    "Tests/AyuExplicitRead/root-menu-hook.patch",
+    "Tests/AyuExplicitRead/changed-manifest.json",
+    "docs/ayu-explicit-read-queue.md"
+  ],
+  "uiWaveDelta": [
+    "submodules/TelegramCore/Sources/Network/AyuExplicitReadQueue.swift",
+    "submodules/TelegramCore/Sources/Network/AyuExplicitReadOperation.swift",
+    "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    "Swiftgram/SGSettingsUI/Sources/ExteraFeedController.swift",
+    "Swiftgram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
+    "submodules/TelegramUI/Sources/Chat/ChatControllerExteraGestures.swift",
+    "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift",
+    "submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadQueueTests.swift",
+    "submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadPersistenceTests.swift",
+    "Tests/AyuExplicitRead/README.md",
+    "Tests/AyuExplicitRead/verify_swift_syntax.py",
+    "Tests/AyuExplicitRead/strings-handoff.json",
+    "Tests/AyuExplicitRead/root-menu-hook.patch",
+    "Tests/AyuExplicitRead/changed-manifest.json",
+    "docs/ayu-explicit-read-queue.md"
+  ],
+  "sharedMenuHook": "already present in root f33d6382; reference patch only; no ChatController.swift patch required",
+  "rootIntegration": {
+    "route": "ayuReadHistoryController(context: context)",
+    "module": "SGSettingsUI",
+    "titleKey": "Ayu.ReadStatus.Title",
+    "strings": "Tests/AyuExplicitRead/strings-handoff.json",
+    "hostTestCommand": "python3 tools/run_extera_xctests.py --warnings-as-errors submodules/TelegramCore/Sources/Network/AyuExplicitReadQueue.swift submodules/TelegramCore/Tests/AyuExplicitRead/AyuExplicitReadQueueTests.swift",
+    "iosTestTarget": "//submodules/TelegramCore:TelegramCoreTests",
+    "buildDependencyChanges": "none"
+  },
+  "exclusions": "No task edits to ChatController.swift, SGSettingsController.swift, backup, en/ru resources, BUILD, workflows or frozen AI files. Unrelated shared-tree edits belong to root/other work."
+}

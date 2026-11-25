@@ -4,6 +4,7 @@ import ChatControllerInteraction
 import ChatMessageItemCommon
 import ChatPresentationInterfaceState
 import SGSimpleSettings
+import SGSettingsUI
 import SwiftSignalKit
 import TelegramCore
 import TranslateUI
@@ -71,7 +72,7 @@ extension ChatControllerImpl {
             guard message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud else {
                 return true
             }
-            ayuReadHistoryOnServer(account: self.context.account, peerId: message.id.peerId, maxId: message.id.id)
+            self.push(ayuReadHistoryController(context: self.context, peerId: message.id.peerId, requests: [AyuReadHistoryRequest(peerIdValue: message.id.peerId.toInt64(), maxId: message.id.id)]))
         case .reply:
             if case .reply = self.exteraReplyAction(for: message) {
                 self.interfaceInteraction?.setupReplyMessage(message.id, nil, { _, completion in completion() })
