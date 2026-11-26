@@ -2,6 +2,7 @@ import AccountContext
 import Display
 import Foundation
 import ItemListUI
+import SGItemListUI
 import SGSimpleSettings
 import SGStrings
 import SwiftSignalKit
@@ -69,7 +70,7 @@ private struct ExteraFeedEntry: ItemListNodeEntry {
         case let .action(title, action, destructive):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { actions.perform(action) })
         case let .toggle(title, value, toggle):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: false, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { actions.toggle(toggle, value: $0) })
+            return sgExteraToggleItem(presentationData: presentationData, sectionId: self.section, appearance: exteraSettingsAppearance(), title: title, value: value, animationIdentity: AnyHashable(self.stableId), updated: { actions.toggle(toggle, value: $0) })
         case let .search(query, placeholder):
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: ""), text: query, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { actions.query.set($0) }, action: {}, dismissKeyboardOnEnter: true)
         case let .channel(peer, title, selected, categoryId):

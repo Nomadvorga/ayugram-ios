@@ -1,6 +1,7 @@
 import AccountContext
 import Display
 import Foundation
+import SGItemListUI
 import SGSimpleSettings
 import SGStrings
 import SwiftSignalKit
@@ -11,18 +12,6 @@ import UIKit
 /// Navigation editor; the root tab host consumes this same persisted configuration live.
 public func exteraNavigationSettingsController(context: AccountContext) -> ViewController {
     return ExteraNavigationSettingsController(context: context)
-}
-
-private final class ExteraNavigationSwitch: UISwitch {
-    var update: ((Bool) -> Void)?
-    init(value: Bool, update: @escaping (Bool) -> Void) {
-        super.init(frame: .zero)
-        self.isOn = value
-        self.update = update
-        self.addTarget(self, action: #selector(self.changed), for: .valueChanged)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    @objc private func changed() { self.update?(self.isOn) }
 }
 
 private final class ExteraNavigationSettingsController: ViewController, UITableViewDataSource, UITableViewDelegate {
@@ -180,7 +169,11 @@ private final class ExteraNavigationSettingsController: ViewController, UITableV
                 cell.detailTextLabel?.text = [self.text("Show", "Show", "Показывать"), self.text("Hide", "Hide", "Скрывать"), self.text("Floating", "Floating", "Плавающая")][config.barMode.rawValue]
             } else {
                 cell.textLabel?.text = self.text("HideLabels", "Hide Labels", "Скрыть подписи")
-                cell.accessoryView = ExteraNavigationSwitch(value: config.hideLabels, update: { [weak self] value in self?.settings.update { $0.hideLabels = value } })
+                let toggle = SGExteraToggleControl(value: config.hideLabels, theme: self.data.theme, style: exteraSettingsAppearance().controlStyle)
+                toggle.onTintColor = self.data.theme.list.itemAccentColor
+                toggle.accessibilityLabel = cell.textLabel?.text
+                toggle.valueUpdated = { [weak self] value in self?.settings.update { $0.hideLabels = value } }
+                cell.accessoryView = toggle
             }
         case 1:
             if let tab = ExteraNavigationSettings.Tab(rawValue: config.tabs[indexPath.row]) {
@@ -192,9 +185,13 @@ private final class ExteraNavigationSettingsController: ViewController, UITableV
             cell.imageView?.image = UIImage(systemName: "plus.circle")
         case 3:
             cell.textLabel?.text = indexPath.row == 0 ? self.text("Sidebar", "Sidebar", "Боковое меню") : self.text("Immersive", "Immersive Animation", "Иммерсивная анимация")
-            cell.accessoryView = ExteraNavigationSwitch(value: indexPath.row == 0 ? config.sidebar : config.immersiveSidebar, update: { [weak self] value in
+            let toggle = SGExteraToggleControl(value: indexPath.row == 0 ? config.sidebar : config.immersiveSidebar, theme: self.data.theme, style: exteraSettingsAppearance().controlStyle)
+            toggle.onTintColor = self.data.theme.list.itemAccentColor
+            toggle.accessibilityLabel = cell.textLabel?.text
+            toggle.valueUpdated = { [weak self] value in
                 self?.settings.update { if indexPath.row == 0 { $0.sidebar = value } else { $0.immersiveSidebar = value } }
-            })
+            }
+            cell.accessoryView = toggle
         case 4:
             if indexPath.row == config.menu.count {
                 cell.textLabel?.text = self.text("AddDivider", "Add Divider", "Добавить разделитель")

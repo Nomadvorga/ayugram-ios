@@ -798,6 +798,7 @@
 "Extera.TabCounter.AllChats" = "All Chats";
 "Extera.TabCounter.Unmuted" = "Unmuted Only";
 "Extera.TabCounter.Off" = "Off";
+"Extera.FolderTabBackgrounds" = "Use folder color for selected tab";
 
 "Extera.CategoryMedia" = "Media";
 "Extera.HideSideShareButton" = "Hide Side Share Button";

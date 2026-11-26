@@ -2,6 +2,7 @@ import AccountContext
 import Display
 import Foundation
 import SGMath
+import SGItemListUI
 import SGSimpleSettings
 import SGStrings
 import SwiftSignalKit
@@ -103,20 +104,6 @@ private final class ExteraInlineButton: UIButton {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     @objc private func pressed() { self.action?() }
-}
-
-private final class ExteraInlineSwitch: UISwitch {
-    var update: ((Bool) -> Void)?
-
-    init(value: Bool, update: @escaping (Bool) -> Void) {
-        super.init(frame: .zero)
-        self.isOn = value
-        self.update = update
-        self.addTarget(self, action: #selector(self.changed), for: .valueChanged)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    @objc private func changed() { self.update?(self.isOn) }
 }
 
 private final class ExteraInlineSettingsController: ViewController {
@@ -263,7 +250,8 @@ private final class ExteraInlineSettingsController: ViewController {
 
     private func toggle(_ title: String, symbol: String? = nil, value: Bool, master: Bool = false, isNew: Bool = false, update: @escaping (Bool) -> Void) -> UIView {
         let label = self.label(title)
-        let control = ExteraInlineSwitch(value: value, update: update)
+        let control = SGExteraToggleControl(value: value, theme: self.data.theme, style: exteraSettingsAppearance().controlStyle)
+        control.valueUpdated = update
         control.onTintColor = master && value ? UIColor.white.withAlphaComponent(0.35) : self.accent
         control.accessibilityLabel = title
         let row = UIStackView()

@@ -1257,7 +1257,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     if let filterEntries = self.tabContainerData?.0 {
                         for filter in filterEntries {
-                            if case let .filter(filterId, _, unread) = filter, filterId == id {
+                            if case let .filter(filterId, _, unread, _) = filter, filterId == id {
                                 if unread.value > 0 {
                                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ReadAll, textColor: .primary, icon: { theme in
                                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReadAll"), color: theme.contextMenu.primaryColor)
@@ -3807,7 +3807,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             switch entry {
             case .all:
                 return 0
-            case let .filter(id, _, _):
+            case let .filter(id, _, _, _):
                 return id
             }
         }
@@ -4286,8 +4286,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         } else {
                             filterItems.append(.all(unreadCount: 0))
                         }
-                    case let .filter(id, title, _, _):
-                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+                    case let .filter(id, title, _, data):
+                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread), color: data.color))
                 }
             }
             
@@ -7153,7 +7153,7 @@ private final class ChatListLocationContext {
         // MARK: Swiftgram
         let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
         // MARK: AyuGram — cheap notification-driven value, so the header reacts without polling.
-        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar }, ayuSettingValueSignal { ExteraStyleSettings.shared.controlStyle.rawValue })
+        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar }, ayuSettingValueSignal { ExteraStyleSettings.shared.controlStyle.rawValue }, ayuSettingSignal { ExteraSettings.shared.folderTabBackgrounds })
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()

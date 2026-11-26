@@ -318,6 +318,7 @@ public enum ExteraSettingsBackup {
         exteraBoolean(.hideFloatingButton),
         exteraBoolean(.hideDialogsSearchBar),
         exteraBoolean(.senderMiniAvatars),
+        exteraBoolean(.folderTabBackgrounds),
         exteraBoolean(.disableNotificationDelay),
         exteraBoolean(.relativeLastSeen),
         exteraBoolean(.hideArchiveFolder),

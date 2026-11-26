@@ -242,3 +242,21 @@ jobs:
             -o "$RUNNER_TEMP/extera-takeout-tests"
           "$RUNNER_TEMP/extera-takeout-tests" "$RUNNER_TEMP/extera-takeout-fixture.zip"
           python3 Tests/ExteraTakeout/validate_source.py "$RUNNER_TEMP/extera-takeout-fixture.zip"
+
+  vosk-native-simulator-smoke:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - name: Link pinned native SDK and recognize pinned audio on a fresh simulator
+        run: python3 Tests/ExteraVosk/run_simulator_smoke.py --output "$RUNNER_TEMP/extera-vosk-simulator-smoke"
+      - name: Upload native link and recognition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extera-vosk-native-simulator-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/extera-vosk-simulator-smoke/
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,4 +1,5 @@
 import Foundation
+import SGItemListUI
 import SGStrings
 import TelegramPresentationData
 import UIKit
@@ -75,18 +76,6 @@ final class ExteraAISettingsButton: UIButton {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     @objc private func pressed() { self.action?() }
-}
-
-final class ExteraAISettingsSwitch: UISwitch {
-    var update: ((Bool) -> Void)?
-    init(value: Bool, update: @escaping (Bool) -> Void) {
-        super.init(frame: .zero)
-        self.isOn = value
-        self.update = update
-        self.addTarget(self, action: #selector(self.changed), for: .valueChanged)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    @objc private func changed() { self.update?(self.isOn) }
 }
 
 /// Native slider with the same twenty 0.1 steps and 0...2 range as Android.
@@ -256,7 +245,8 @@ enum ExteraAISettingsViews {
         column.axis = .vertical
         column.spacing = 4
         if let subtitle { column.addArrangedSubview(self.label(subtitle, theme: theme, style: .footnote, secondary: true)) }
-        let control = ExteraAISettingsSwitch(value: value, update: update)
+        let control = SGExteraToggleControl(value: value, theme: theme, style: exteraSettingsAppearance().controlStyle)
+        control.valueUpdated = update
         control.accessibilityLabel = title
         control.accessibilityHint = subtitle
         control.onTintColor = theme.list.itemAccentColor

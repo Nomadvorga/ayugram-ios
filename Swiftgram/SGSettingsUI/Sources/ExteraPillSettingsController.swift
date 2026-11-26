@@ -2,6 +2,7 @@ import AccountContext
 import ChatListUI
 import Display
 import Foundation
+import SGItemListUI
 import SGSimpleSettings
 import UIKit
 import UniformTypeIdentifiers
@@ -25,7 +26,7 @@ private final class ExteraPillEditorController: UITableViewController, UITextFie
     private var spec: ExteraPillSpec
     private let fields: [UITextField] = (0 ..< 7).map { _ in UITextField() }
     private let format = UISegmentedControl(items: ["", "", "", ""])
-    private let enabled = UISwitch()
+    private let enabled: SGExteraToggleControl
     private var names: [String] {
         return [self.text("Label", "Название"), self.text("HTTP URL", "HTTP URL"), self.text("JSON Path", "Путь JSON"), self.text("Refresh (seconds)", "Обновление (секунды)"), self.text("Decimal places", "Знаков после запятой"), self.text("Prefix", "Префикс"), self.text("Suffix", "Суффикс")]
     }
@@ -33,6 +34,8 @@ private final class ExteraPillEditorController: UITableViewController, UITextFie
     init(context: AccountContext, spec: ExteraPillSpec) {
         self.context = context
         self.spec = spec
+        let theme = context.sharedContext.currentPresentationData.with { $0 }.theme
+        self.enabled = SGExteraToggleControl(value: spec.enabled, theme: theme, style: exteraSettingsAppearance().controlStyle)
         super.init(style: .insetGrouped)
         self.title = spec.label.isEmpty ? self.text("New HTTP Pill", "Новая HTTP-плашка") : self.text("Edit HTTP Pill", "Настройка HTTP-плашки")
     }
@@ -74,7 +77,7 @@ private final class ExteraPillEditorController: UITableViewController, UITextFie
         for index in formats.indices { self.format.setTitle(formats[index], forSegmentAt: index) }
         self.format.selectedSegmentIndex = ExteraPillSpec.Format.allCases.firstIndex(of: self.spec.format) ?? 0
         self.format.accessibilityLabel = self.text("Value format", "Формат значения")
-        self.enabled.isOn = self.spec.enabled
+        self.enabled.setOn(self.spec.enabled, animated: false)
         self.enabled.accessibilityLabel = self.text("Enable pill", "Включить плашку")
     }
 

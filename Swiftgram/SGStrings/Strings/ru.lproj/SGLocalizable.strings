@@ -783,6 +783,7 @@
 "Extera.TabCounter.AllChats" = "Все чаты";
 "Extera.TabCounter.Unmuted" = "Только со звуком";
 "Extera.TabCounter.Off" = "Откл.";
+"Extera.FolderTabBackgrounds" = "Цвет папки для выбранной вкладки";
 
 "Extera.CategoryMedia" = "Медиа";
 "Extera.HideSideShareButton" = "Скрыть боковую кнопку пересылки";

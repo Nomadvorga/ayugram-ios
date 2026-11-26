@@ -1759,6 +1759,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                         let id: HorizontalTabsComponent.Tab.Id
                         let title: HorizontalTabsComponent.Tab.Title
                         var badge: HorizontalTabsComponent.Tab.Badge?
+                        var selectionTintColor: UIColor?
                         var accessibilityValue: String?
                         var isMainTab = false
                         switch entry {
@@ -1766,10 +1767,13 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                             id = Int32.min
                             title = HorizontalTabsComponent.Tab.Title(text: sgUseShortAllChatsTitle(true) ? self.presentationData.strings.ChatList_Tabs_All : self.presentationData.strings.ChatList_Tabs_AllChats /* MARK: Swiftgram */, entities: [], enableAnimations: false)
                             isMainTab = true
-                        case let .filter(idValue, text, unread):
+                        case let .filter(idValue, text, unread, folderColor):
                             id = AnyHashable(idValue)
                             let tabTitle = ayuFolderTabTitle(text) // MARK: AyuGram
                             title = HorizontalTabsComponent.Tab.Title(text: tabTitle.text, entities: tabTitle.entities, enableAnimations: tabTitle.enableAnimations)
+                            if ExteraSettings.shared.folderTabBackgrounds, let folderColor {
+                                selectionTintColor = self.context.peerNameColors.getChatFolderTag(folderColor, dark: self.presentationData.theme.overallDarkAppearance).main.withMultipliedAlpha(0.18)
+                            }
                             let showsBadge: Bool
                             switch ExteraSettings.shared.tabCounterMode { // MARK: AyuGram
                             case .allChats:
@@ -1792,6 +1796,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                             id: id,
                             content: .title(title),
                             badge: badge,
+                            selectionTintColor: selectionTintColor,
                             action: { [weak self] in
                                 guard let self, let tabContainerData = self.controller?.tabContainerData else {
                                     return
@@ -1842,7 +1847,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                 switch entry {
                                 case .all:
                                     mappedId = nil
-                                case let .filter(idValue, _, _):
+                                case let .filter(idValue, _, _, _):
                                     mappedId = idValue
                                 }
                                 
@@ -2409,7 +2414,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 break
             case let .filter(id):
                 if let value = folders.first(where: { $0.id == .filter(id) }) {
-                    if case let .filter(_, text, _) = value {
+                    if case let .filter(_, text, _, _) = value {
                         folder = (id, text.text)
                     }
                 }

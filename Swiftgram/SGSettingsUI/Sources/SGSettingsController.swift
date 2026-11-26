@@ -94,6 +94,7 @@ private enum SGBoolSetting: String {
     case wideTabBar
     case hideAllChats
     case foldersAtBottom
+    case folderTabBackgrounds
     case compactFolderNames
     case rememberLastFolder
     case compactChatList
@@ -581,6 +582,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.notice(id: id.count, section: .folders, text: i18n("Settings.Folders.IconSyncInfo", lang)))
     entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabTitleStyle, text: i18n("Extera.TabTitleStyle", lang), value: tabTitleStyleTitle(ExteraSettings.shared.tabTitleStyle, lang: lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabCounterMode, text: i18n("Extera.TabCounter", lang), value: tabCounterModeTitle(ExteraSettings.shared.tabCounterMode, lang: lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .folders, settingName: .folderTabBackgrounds, value: ExteraSettings.shared.folderTabBackgrounds, text: i18n("Extera.FolderTabBackgrounds", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .foldersAtBottom, value: experimentalUISettings.foldersTabAtBottom, text: i18n("Settings.Folders.BottomTab", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .compactFolderNames, value: settings.compactFolderNames, text: i18n("Settings.Folders.CompactNames", lang), enabled: true))
@@ -1054,6 +1056,9 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         case .hideAllChats:
             settings.allChatsHidden = value
             askForRestart?()
+        case .folderTabBackgrounds:
+            ExteraSettings.shared.folderTabBackgrounds = value
+            simplePromise.set(true)
         case .foldersAtBottom:
             let _ = updateExperimentalUISettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
                 var current = current

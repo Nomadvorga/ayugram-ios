@@ -243,6 +243,7 @@ public final class HorizontalTabsComponent: Component {
         public let id: AnyHashable
         public let content: Content
         public let badge: Badge?
+        public let selectionTintColor: UIColor?
         public let action: () -> Void
         public let contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)?
         public let deleteAction: (() -> Void)?
@@ -255,10 +256,11 @@ public final class HorizontalTabsComponent: Component {
         /// The name of the VoiceOver custom action that opens the long-press menu (`contextAction`).
         public let contextAccessibilityLabel: String?
         
-        public init(id: AnyHashable, content: Content, badge: Badge?, action: @escaping () -> Void, contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)? = nil, deleteAction: (() -> Void)? = nil, accessibilityLabel: String? = nil, accessibilityValue: String? = nil, deleteAccessibilityLabel: String? = nil, contextAccessibilityLabel: String? = nil) {
+        public init(id: AnyHashable, content: Content, badge: Badge?, selectionTintColor: UIColor? = nil, action: @escaping () -> Void, contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)? = nil, deleteAction: (() -> Void)? = nil, accessibilityLabel: String? = nil, accessibilityValue: String? = nil, deleteAccessibilityLabel: String? = nil, contextAccessibilityLabel: String? = nil) {
             self.id = id
             self.content = content
             self.badge = badge
+            self.selectionTintColor = selectionTintColor
             self.action = action
             self.contextAction = contextAction
             self.deleteAction = deleteAction
@@ -276,6 +278,9 @@ public final class HorizontalTabsComponent: Component {
                 return false
             }
             if lhs.badge != rhs.badge {
+                return false
+            }
+            if lhs.selectionTintColor != rhs.selectionTintColor {
                 return false
             }
             if (lhs.contextAction == nil) != (rhs.contextAction == nil) {
@@ -407,6 +412,7 @@ public final class HorizontalTabsComponent: Component {
         private let lensView: LiquidLensView
         private let scrollView: ScrollView
         private let selectedScrollView: UIView
+        private let selectionTintView: UIView
         private var itemViews: [Tab.Id: ItemView] = [:]
         
         private var ignoreScrolling: Bool = false
@@ -438,6 +444,8 @@ public final class HorizontalTabsComponent: Component {
             
             self.selectedScrollView = UIView()
             self.selectedScrollView.clipsToBounds = true
+            self.selectionTintView = UIView()
+            self.selectionTintView.isUserInteractionEnabled = false
             
             super.init(frame: frame)
             
@@ -468,6 +476,7 @@ public final class HorizontalTabsComponent: Component {
             self.addSubview(self.lensView)
             
             self.lensView.contentView.addSubview(self.scrollView)
+            self.lensView.selectedContentView.addSubview(self.selectionTintView)
             self.lensView.selectedContentView.addSubview(self.selectedScrollView)
             /*self.lensView.onUpdatedIsAnimating = { [weak self] _ in
                 guard let self else {
@@ -813,10 +822,22 @@ public final class HorizontalTabsComponent: Component {
                 isLifted = false
             }
             let lensSize = layoutData.lensSize
+            self.updateSelectionTint(component: component, layoutData: layoutData, transition: transition)
             self.lensView.update(size: lensSize, selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width, height: lensSize.height), inset: 0.0, liftedInset: 6.0, isDark: component.theme.overallDarkAppearance, isLifted: isLifted, isCollapsed: layoutData.isSelectionHidden, transition: transition)
             
             transition.setPosition(view: self.selectedScrollView, position: CGRect(origin: CGPoint(), size: lensSize).center)
             transition.setBounds(view: self.selectedScrollView, bounds: CGRect(origin: CGPoint(x: self.scrollView.contentOffset.x, y: 0.0), size: lensSize))
+        }
+
+        private func updateSelectionTint(component: HorizontalTabsComponent, layoutData: LayoutData, transition: ComponentTransition) {
+            let selectedTab = component.selectedTab.flatMap { selectedId in
+                component.tabs.first(where: { $0.id == selectedId })
+            }
+            self.selectionTintView.backgroundColor = selectedTab?.selectionTintColor
+            self.selectionTintView.layer.cornerRadius = layoutData.lensSize.height * 0.5
+            let tintFrame = layoutData.selectedItemFrame.offsetBy(dx: -self.scrollView.contentOffset.x, dy: 0.0)
+            transition.setFrame(view: self.selectionTintView, frame: tintFrame)
+            transition.setAlpha(view: self.selectionTintView, alpha: selectedTab?.selectionTintColor == nil || layoutData.isSelectionHidden ? 0.0 : 1.0)
         }
         
         func update(component: HorizontalTabsComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {

@@ -25,6 +25,7 @@ public final class ExteraSettings {
         case senderMiniAvatars
         case tabTitleStyle
         case tabCounterMode
+        case folderTabBackgrounds
         case singleCornerRadius
         case avatarCorners
         case chatListTitle
@@ -90,6 +91,7 @@ public final class ExteraSettings {
             ExteraSettings.key(.senderMiniAvatars): false,
             ExteraSettings.key(.tabTitleStyle): TabTitleStyle.textWithIcons.rawValue,
             ExteraSettings.key(.tabCounterMode): TabCounterMode.allChats.rawValue,
+            ExteraSettings.key(.folderTabBackgrounds): false,
             ExteraSettings.key(.singleCornerRadius): false,
             ExteraSettings.key(.avatarCorners): 28,
             ExteraSettings.key(.chatListTitle): ChatListTitle.ayuGram.rawValue,
@@ -171,6 +173,12 @@ public final class ExteraSettings {
                 self.store.setInt(newValue.rawValue, ExteraSettings.key(.tabCounterMode))
             }
         }
+    }
+
+    /// Use each Telegram folder's configured color for the selected tab background.
+    public var folderTabBackgrounds: Bool {
+        get { return self.value(.folderTabBackgrounds) }
+        set { self.set(.folderTabBackgrounds, newValue) }
     }
 
     public var singleCornerRadius: Bool {

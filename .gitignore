@@ -40,6 +40,8 @@ AppBundle.xcworkspace/*
 *.xcworkspace
 *.xcodeproj
 !*_Xcode.xcodeproj
+!Tests/ExteraVosk/SimulatorSmoke/VoskNativeSmoke.xcodeproj/
+!Tests/ExteraVosk/SimulatorSmoke/VoskNativeSmoke.xcodeproj/**
 .idea
 */.idea/*
 submodules/MtProtoKit/TON/macOS/lib/libtonlibjson.0.5.dylib

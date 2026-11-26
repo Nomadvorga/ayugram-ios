@@ -45,6 +45,11 @@ func sgSegmentedSelectorItem(presentationData: ItemListPresentationData, section
     return SGExteraItem(presentationData: presentationData, sectionId: sectionId, visualStyle: visualStyle, appearance: appearance, title: "", content: .segmentedSelector(value: value, options: options), enabled: enabled, segmentedValueUpdated: updated)
 }
 
+/// Extera-rendered toggle row for settings entries that are not SGItemListUIEntry values.
+public func sgExteraToggleItem(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, appearance: SGExteraAppearance = SGExteraAppearance(), title: String, value: Bool, enabled: Bool = true, animationIdentity: AnyHashable, updated: @escaping (Bool) -> Void) -> ListViewItem {
+    return SGExteraItem(presentationData: presentationData, sectionId: sectionId, appearance: appearance, title: title, content: .toggle(value), enabled: enabled, animationIdentity: animationIdentity, toggle: updated)
+}
+
 func sgSettingsPreviewItem(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle, appearance: SGExteraAppearance = SGExteraAppearance(), kind: SGSettingsPreviewKind, sliderUpdated: ((Int32) -> Void)?, selectionUpdated: ((Int) -> Void)?) -> ListViewItem {
     return SGExteraItem(presentationData: presentationData, sectionId: sectionId, visualStyle: visualStyle, appearance: appearance, title: "", content: .settingsPreview(kind), segmentedValueUpdated: selectionUpdated, sliderValueUpdated: sliderUpdated)
 }

@@ -463,13 +463,13 @@ public struct ChatListFilterTabEntryUnreadCount: Equatable {
 
 public enum ChatListFilterTabEntry: Equatable {
     case all(unreadCount: Int)
-    case filter(id: Int32, text: ChatFolderTitle, unread: ChatListFilterTabEntryUnreadCount)
+    case filter(id: Int32, text: ChatFolderTitle, unread: ChatListFilterTabEntryUnreadCount, color: PeerNameColor?)
     
     public var id: ChatListFilterTabEntryId {
         switch self {
         case .all:
             return .all
-        case let .filter(id, _, _):
+        case let .filter(id, _, _, _):
             return .filter(id)
         }
     }
@@ -478,7 +478,7 @@ public enum ChatListFilterTabEntry: Equatable {
         switch self {
         case .all:
             return ChatFolderTitle(text: strings.ChatList_Tabs_AllChats, entities: [], enableAnimations: true)
-        case let .filter(_, text, _):
+        case let .filter(_, text, _, _):
             return text
         }
     }
@@ -487,7 +487,7 @@ public enum ChatListFilterTabEntry: Equatable {
         switch self {
         case .all:
             return ChatFolderTitle(text: strings.ChatList_Tabs_All, entities: [], enableAnimations: true)
-        case let .filter(_, text, _):
+        case let .filter(_, text, _, _):
             return text
         }
     }
@@ -710,6 +710,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
     
     private var previousSelectedAbsFrame: CGRect?
     private var previousSelectedFrame: CGRect?
+    private var selectedBackgroundColor: UIColor?
     
     public func cancelAnimations() {
         self.selectedBackgroundNode.layer.removeAllAnimations()
@@ -737,8 +738,18 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         let previousScrollBounds = self.scrollNode.bounds
         let previousContentWidth = self.scrollNode.view.contentSize.width
         
-        if self.currentParams?.presentationData.theme !== presentationData.theme {
-            self.selectedBackgroundNode.image = generateStretchableFilledCircleImage(diameter: 36.0, color: presentationData.theme.chatList.itemHighlightedBackgroundColor)
+        let resolvedSelectedBackgroundColor: UIColor
+        if ExteraSettings.shared.folderTabBackgrounds,
+           let selectedFilter,
+           case let .filter(_, _, _, color)? = filters.first(where: { $0.id == selectedFilter }),
+           let color {
+            resolvedSelectedBackgroundColor = self.context.peerNameColors.getChatFolderTag(color, dark: presentationData.theme.overallDarkAppearance).main.withMultipliedAlpha(0.18)
+        } else {
+            resolvedSelectedBackgroundColor = presentationData.theme.chatList.itemHighlightedBackgroundColor
+        }
+        if self.selectedBackgroundColor != resolvedSelectedBackgroundColor || self.currentParams?.presentationData.theme !== presentationData.theme {
+            self.selectedBackgroundColor = resolvedSelectedBackgroundColor
+            self.selectedBackgroundNode.image = generateStretchableFilledCircleImage(diameter: 36.0, color: resolvedSelectedBackgroundColor)
         }
         
         if isReordering {
@@ -810,7 +821,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
                     strongSelf.scrollNode.view.panGestureRecognizer.isEnabled = true
                     strongSelf.scrollNode.view.setContentOffset(strongSelf.scrollNode.view.contentOffset, animated: false)
                     switch filter {
-                    case let .filter(id, _, _):
+                    case let .filter(id, _, _, _):
                         strongSelf.contextGesture?(id, sourceNode, gesture, isDisabled)
                     default:
                         strongSelf.contextGesture?(nil, sourceNode, gesture, isDisabled)
@@ -827,7 +838,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
                 unreadCount = count
                 unreadHasUnmuted = true
                 isNoFilter = true
-            case let .filter(_, _, unread):
+            case let .filter(_, _, unread, _):
                 unreadCount = unread.value
                 unreadHasUnmuted = unread.hasUnmuted
                 

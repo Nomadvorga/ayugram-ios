@@ -1,0 +1,98 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+		A10000000000000000000001 /* NativeSmokeApp.m in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* NativeSmokeApp.m */; };
+		A10000000000000000000002 /* NativeSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* NativeSmoke.c */; };
+
+		A20000000000000000000001 /* NativeSmokeApp.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NativeSmokeApp.m; sourceTree = "<group>"; };
+		A20000000000000000000002 /* NativeSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ../NativeSmoke.c; sourceTree = "<group>"; };
+		A20000000000000000000003 /* NativeSmokeBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeSmokeBridge.h; sourceTree = "<group>"; };
+		A20000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000005 /* VoskNativeSmoke.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoskNativeSmoke.app; sourceTree = BUILT_PRODUCTS_DIR; };
+
+		A30000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* NativeSmokeApp.m in Sources */,
+				A10000000000000000000002 /* NativeSmoke.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A30000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+
+		A40000000000000000000001 /* VoskNativeSmoke */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A50000000000000000000002 /* Build configuration list for PBXNativeTarget */;
+			buildPhases = (
+				A30000000000000000000001 /* Sources */,
+				A30000000000000000000002 /* Frameworks */,
+				A30000000000000000000003 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = VoskNativeSmoke;
+			productName = VoskNativeSmoke;
+			productReference = A20000000000000000000005 /* VoskNativeSmoke.app */;
+			productType = "com.apple.product-type.application";
+		};
+
+		A60000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = { BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2700; TargetAttributes = { A40000000000000000000001 = { CreatedOnToolsVersion = 27.0; }; }; };
+			buildConfigurationList = A50000000000000000000001 /* Build configuration list for PBXProject */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base,);
+			mainGroup = A70000000000000000000001;
+			productRefGroup = A70000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A40000000000000000000001 /* VoskNativeSmoke */,);
+		};
+
+		A70000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001 /* NativeSmokeApp.m */, A20000000000000000000002 /* NativeSmoke.c */, A20000000000000000000003 /* NativeSmokeBridge.h */, A20000000000000000000004 /* Info.plist */, A70000000000000000000002 /* Products */,); sourceTree = "<group>"; };
+		A70000000000000000000002 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000005 /* VoskNativeSmoke.app */,); name = Products; sourceTree = "<group>"; };
+
+		A50000000000000000000001 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (A80000000000000000000001 /* Debug */, A80000000000000000000002 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		A50000000000000000000002 /* Build configuration list for PBXNativeTarget */ = {isa = XCConfigurationList; buildConfigurations = (A80000000000000000000003 /* Debug */, A80000000000000000000004 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+
+		A80000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_CXX_LANGUAGE_STANDARD = "gnu++17"; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 14.0; SDKROOT = iphoneos; }; name = Debug; };
+		A80000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_CXX_LANGUAGE_STANDARD = "gnu++17"; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 14.0; SDKROOT = iphoneos; }; name = Release; };
+		A80000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../../../submodules/VoskNative/include";
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				OTHER_LDFLAGS = ("$(inherited)", "-lvosk", "-lc++", "-framework", Accelerate, "-framework", UIKit, "-framework", Foundation, "-lz",);
+				PRODUCT_BUNDLE_IDENTIFIER = org.ayugram.extera.vosk-native-smoke;
+				PRODUCT_NAME = VoskNativeSmoke;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				TARGETED_DEVICE_FAMILY = 1;
+			}; name = Debug; };
+		A80000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../../../submodules/VoskNative/include";
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				OTHER_LDFLAGS = ("$(inherited)", "-lvosk", "-lc++", "-framework", Accelerate, "-framework", UIKit, "-framework", Foundation, "-lz",);
+				PRODUCT_BUNDLE_IDENTIFIER = org.ayugram.extera.vosk-native-smoke;
+				PRODUCT_NAME = VoskNativeSmoke;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				TARGETED_DEVICE_FAMILY = 1;
+			}; name = Release; };
+	};
+	rootObject = A60000000000000000000001 /* Project object */;
+}

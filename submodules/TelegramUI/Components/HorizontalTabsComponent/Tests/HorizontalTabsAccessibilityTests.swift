@@ -81,6 +81,13 @@ final class HorizontalTabsAccessibilityTests: XCTestCase {
         let described = (componentView.view!.accessibilityElements ?? []).compactMap { $0 as? UIAccessibilityElement }
         XCTAssertEqual(described.map { $0.accessibilityValue }, ["267 unread messages"])
     }
+
+    func testSelectionTintParticipatesInTabEquality() {
+        let content = HorizontalTabsComponent.Tab.Content.title(HorizontalTabsComponent.Tab.Title(text: "Forums", entities: [], enableAnimations: false))
+        let plain = HorizontalTabsComponent.Tab(id: AnyHashable(1), content: content, badge: nil, action: {})
+        let tinted = HorizontalTabsComponent.Tab(id: AnyHashable(1), content: content, badge: nil, selectionTintColor: UIColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 0.18), action: {})
+        XCTAssertNotEqual(plain, tinted)
+    }
     
     // In edit mode a folder's delete badge is a custom action on its tab that runs the same delete action.
     func testDeleteBadgeIsACustomAction() {

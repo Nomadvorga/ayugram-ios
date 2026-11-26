@@ -533,8 +533,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
                         } else {
                             filterItems.append(.all(unreadCount: 0))
                         }
-                    case let .filter(id, title, _, _):
-                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+                    case let .filter(id, title, _, data):
+                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread), color: data.color))
                 }
             }
             

@@ -1,6 +1,7 @@
 import AccountContext
 import Display
 import Foundation
+import SGItemListUI
 import SGStrings
 import SwiftSignalKit
 import TelegramCore
@@ -20,11 +21,11 @@ private final class ExteraTakeoutController: ViewController {
     private let format = UISegmentedControl(items: ["JSON", "HTML", "JSON + HTML"])
     private let media = UISegmentedControl(items: [])
     private let size = UISegmentedControl(items: ["8 MB", "32 MB", "128 MB", "512 MB"])
-    private let dateEnabled = UISwitch()
+    private let dateEnabled: SGExteraToggleControl
     private let fromDate = UIDatePicker()
     private let untilDate = UIDatePicker()
-    private let leftChannels = UISwitch()
-    private var chatSwitches: [(ExteraTakeoutOptions.ChatTypes, UISwitch)] = []
+    private let leftChannels: SGExteraToggleControl
+    private var chatSwitches: [(ExteraTakeoutOptions.ChatTypes, SGExteraToggleControl)] = []
     private let setup = UIStackView()
     private let status = UILabel()
     private let activity = UIActivityIndicatorView(style: .medium)
@@ -41,6 +42,9 @@ private final class ExteraTakeoutController: ViewController {
     init(context: AccountContext) {
         self.context = context
         let data = context.sharedContext.currentPresentationData.with { $0 }
+        let style = exteraSettingsAppearance().controlStyle
+        self.dateEnabled = SGExteraToggleControl(value: false, theme: data.theme, style: style)
+        self.leftChannels = SGExteraToggleControl(value: false, theme: data.theme, style: style)
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: NavigationBarTheme(rootControllerTheme: data.theme), strings: NavigationBarStrings(presentationStrings: data.strings)))
         self.title = self.text("Title", "Export Cloud Chats")
         self.backgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
@@ -93,11 +97,13 @@ private final class ExteraTakeoutController: ViewController {
             (.privateChannels, "PrivateChannels", "Private channels"), (.publicChannels, "PublicChannels", "Public channels")
         ]
         for (type, key, fallback) in choices {
-            let toggle = UISwitch()
-            toggle.isOn = type == .personal || type == .privateGroups
+            let toggle = SGExteraToggleControl(value: type == .personal || type == .privateGroups, theme: self.context.sharedContext.currentPresentationData.with { $0 }.theme, style: exteraSettingsAppearance().controlStyle)
+            toggle.onTintColor = self.context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor
             self.chatSwitches.append((type, toggle))
             self.setup.addArrangedSubview(self.row(self.text(key, fallback), control: toggle))
         }
+        self.leftChannels.onTintColor = self.context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor
+        self.dateEnabled.onTintColor = self.context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor
         self.setup.addArrangedSubview(self.row(self.text("LeftChannels", "Include left groups and channels"), control: self.leftChannels))
         self.setup.addArrangedSubview(self.label(self.text("Format", "Output format")))
         self.format.selectedSegmentIndex = 0
@@ -173,6 +179,11 @@ private final class ExteraTakeoutController: ViewController {
             for child in view.subviews { apply(child) }
         }
         apply(self.stack)
+        let style = exteraSettingsAppearance().controlStyle
+        for toggle in [self.dateEnabled, self.leftChannels] + self.chatSwitches.map({ $0.1 }) {
+            toggle.update(theme: data.theme, style: style)
+            toggle.onTintColor = data.theme.list.itemAccentColor
+        }
     }
 
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
