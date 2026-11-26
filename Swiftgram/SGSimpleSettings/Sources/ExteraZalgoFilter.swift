@@ -5,11 +5,11 @@ enum ExteraZalgoFilter {
         let scalars: [Unicode.Scalar]
 
         var marks: [Unicode.Scalar] {
-            return self.scalars.filter(Self.isZalgoMark)
+            return self.scalars.filter(ExteraZalgoFilter.isZalgoMark)
         }
 
         var hasBase: Bool {
-            return self.scalars.contains { !Self.isCombiningMark($0) }
+            return self.scalars.contains { !ExteraZalgoFilter.isCombiningMark($0) }
         }
     }
 
@@ -38,7 +38,7 @@ enum ExteraZalgoFilter {
                 .precomposedStringWithCanonicalMapping
                 .unicodeScalars
                 .contains(where: Self.isZalgoMark)
-            if !cluster.hasBase || hasOverlay || marks.count >= 3 || remainsUncomposed {
+            if !cluster.hasBase || hasOverlay || marks.count >= 3 || (marks.count >= 2 && remainsUncomposed) {
                 removeMarks[index] = true
             }
         }
