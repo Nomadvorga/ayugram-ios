@@ -1,0 +1,987 @@
+ # -*- coding: utf-8 -*-
+__id__ = "chat_stats"
+__name__ = "Статистика чата"
+__description__ = "Статистика сообщений в чате, группе или канале"
+__author__ = "@MKC_KOCMOC"
+__version__ = "1.2.1"
+__icon__ = "msg_list"
+__min_version__ = "13.1.1"
+__category__ = ["chats", "tools"]
+
+from base_plugin import BasePlugin, MenuItemData, MenuItemType
+from client_utils import send_request
+from android_utils import run_on_ui_thread
+from ui.bulletin import BulletinHelper
+from ui.alert import AlertDialogBuilder
+
+from org.telegram.tgnet import TLRPC
+from org.telegram.messenger import UserConfig, MessagesController, AndroidUtilities, ChatObject
+from org.telegram.ui import LaunchActivity
+from org.telegram.ui.ActionBar import Theme
+from android.app import ProgressDialog
+from android.content import DialogInterface
+from android.widget import ScrollView, TextView, LinearLayout, RadioGroup, RadioButton, EditText, ProgressBar
+from android.graphics.drawable import GradientDrawable, ClipDrawable, LayerDrawable
+from android.animation import ObjectAnimator
+from android.view.animation import DecelerateInterpolator
+from android.view import Gravity
+from android.graphics import Typeface
+
+import re
+import random
+import threading
+from datetime import datetime
+
+MIN_WORD_LEN = 3
+
+STOP_WORDS = {
+    "the", "and", "for", "that", "this", "with", "are", "was", "have", "not",
+    "you", "from", "they", "will", "been", "can", "its",
+    "это", "как", "что", "но", "или", "для", "все", "так", "уже", "его",
+    "она", "они", "мне", "тебе", "нас", "вас", "был", "была", "были", "есть",
+    "нет", "да", "ну", "вот", "ещё", "еще", "тут", "там", "при", "без",
+    "под", "над", "про", "бы", "же", "ли", "кто", "чем", "где", "когда",
+    "только", "если", "меня", "тебя", "себя", "мой", "твой", "наш", "ваш"
+}
+
+TELEGRAM_FACTS = [
+    "Факт 1: Telegram был запущен 14 августа 2013 года.",
+    "Факт 2: Основателем Telegram является Павел Дуров.",
+    "Факт 3: Telegram создавался как быстрый и защищённый мессенджер.",
+    "Факт 4: Первой платформой Telegram стала iOS.",
+    "Факт 5: Android-версия появилась в 2013 году.",
+    "Факт 6: Павел Дуров ранее основал социальную сеть ВКонтакте.",
+    "Факт 7: Telegram имеет более 1 миллиарда активных пользователей в месяц.",
+    "Факт 8: Telegram входит в число самых скачиваемых приложений мира.",
+    "Факт 9: Telegram доступен на Android и iOS.",
+    "Факт 10: У Telegram есть версии для Windows, macOS и Linux.",
+    "Факт 11: Telegram поддерживает одновременную работу на нескольких устройствах.",
+    "Факт 12: Переписки Telegram синхронизируются через облако.",
+    "Факт 13: Telegram позволяет отправлять файлы различных форматов.",
+    "Факт 14: Telegram поддерживает создание групп численностью до 200 000 участников.",
+    "Факт 15: Telegram позволяет создавать каналы с неограниченным количеством подписчиков.",
+    "Факт 16: В Telegram можно использовать публичные имена пользователей вместо номера телефона.",
+    "Факт 17: Telegram поддерживает секретные чаты.",
+    "Факт 18: Секретные чаты используют сквозное шифрование.",
+    "Факт 19: Обычные облачные чаты Telegram не имеют сквозного шифрования.",
+    "Факт 20: Секретные чаты привязаны к конкретным устройствам.",
+    "Факт 21: В Telegram можно устанавливать таймер самоуничтожения сообщений.",
+    "Факт 22: Telegram поддерживает исчезающие фотографии и видео.",
+    "Факт 23: В Telegram можно редактировать отправленные сообщения.",
+    "Факт 24: Telegram позволяет удалять сообщения у обоих собеседников.",
+    "Факт 25: В Telegram можно отправлять сообщения без звукового уведомления.",
+    "Факт 26: Telegram поддерживает отложенную отправку сообщений.",
+    "Факт 27: В Telegram есть функция отправки сообщений по расписанию.",
+    "Факт 28: Telegram поддерживает опросы с несколькими вариантами ответов.",
+    "Факт 29: В Telegram можно создавать викторины.",
+    "Факт 30: Telegram поддерживает видеозвонки.",
+    "Факт 31: Telegram поддерживает групповые видеозвонки.",
+    "Факт 32: В Telegram существуют голосовые чаты.",
+    "Факт 33: Голосовые чаты могут работать в группах и каналах.",
+    "Факт 34: Telegram поддерживает трансляции с большим количеством зрителей.",
+    "Факт 35: В Telegram можно создавать собственные стикеры.",
+    "Факт 36: Telegram поддерживает анимированные стикеры.",
+    "Факт 37: В Telegram существуют видеостикеры.",
+    "Факт 38: Telegram поддерживает GIF-анимации.",
+    "Факт 39: В Telegram есть встроенный редактор фотографий.",
+    "Факт 40: Telegram позволяет создавать собственные темы оформления.",
+    "Факт 41: Telegram поддерживает автоматическую ночную тему.",
+    "Факт 42: В Telegram можно менять иконку приложения.",
+    "Факт 43: Telegram поддерживает папки для организации чатов.",
+    "Факт 44: В Telegram можно закреплять несколько сообщений в группах.",
+    "Факт 45: Telegram поддерживает архивирование переписок.",
+    "Факт 46: В Telegram есть встроенный поиск по сообщениям.",
+    "Факт 47: Telegram позволяет искать публичные каналы и группы.",
+    "Факт 48: В Telegram можно создавать ботов.",
+    "Факт 49: Для создания ботов существует официальный Bot API.",
+    "Факт 50: Telegram-боты могут автоматически отвечать на сообщения.",
+    "Факт 51: Боты могут работать с внешними сервисами и базами данных.",
+    "Факт 52: Telegram поддерживает встроенные мини-приложения.",
+    "Факт 53: Мини-приложения Telegram могут запускаться прямо внутри мессенджера.",
+    "Факт 54: В Telegram существует игровая экосистема.",
+    "Факт 55: Telegram поддерживает интеграцию с блокчейном TON.",
+    "Факт 56: В Telegram существует собственная внутренняя валюта Telegram Stars.",
+    "Факт 57: Telegram Stars используются для оплаты цифровых товаров и услуг.",
+    "Факт 58: В Telegram можно покупать цифровые подарки.",
+    "Факт 59: Некоторые подарки Telegram можно превращать в коллекционные предметы.",
+    "Факт 60: В Telegram существует система платной подписки Premium.",
+    "Факт 61: Telegram Premium появился в июне 2022 года.",
+    "Факт 62: Telegram Premium предоставляет увеличенные лимиты на многие функции.",
+    "Факт 63: Premium-пользователи могут загружать файлы размером до 4 ГБ.",
+    "Факт 64: Бесплатные пользователи могут загружать файлы размером до 2 ГБ.",
+    "Факт 65: Telegram Premium позволяет расшифровывать голосовые сообщения в текст.",
+    "Факт 66: Premium-подписка открывает дополнительные реакции.",
+    "Факт 67: В Telegram есть система историй (Stories).",
+    "Факт 68: Истории Telegram появились в июле 2023 года.",
+    "Факт 69: Пользователи могут выбирать аудиторию своих историй.",
+    "Факт 70: В Telegram можно публиковать истории от имени каналов.",
+    "Факт 71: Telegram поддерживает трансляцию геопозиции в реальном времени.",
+    "Факт 72: В Telegram есть функция поиска людей и групп поблизости, которая ранее существовала в приложении.",
+    "Факт 73: Telegram поддерживает двухэтапную аутентификацию.",
+    "Факт 74: Для защиты аккаунта можно установить дополнительный облачный пароль.",
+    "Факт 75: Telegram поддерживает вход по QR-коду.",
+    "Факт 76: Telegram позволяет завершать активные сеансы на других устройствах.",
+    "Факт 77: В Telegram можно скрывать номер телефона от других пользователей.",
+    "Факт 78: Telegram поддерживает прокси-серверы SOCKS5.",
+    "Факт 79: Telegram поддерживает протокол MTProto.",
+    "Факт 80: Исходный код Telegram-клиентов доступен публично.",
+    "Факт 81: Telegram предоставляет открытый API для разработчиков.",
+    "Факт 82: Telegram позволяет создавать собственные клиентские приложения.",
+    "Факт 83: Telegram поддерживает авторизацию на сторонних сайтах через Telegram Login.",
+    "Факт 84: В Telegram есть официальная платформа для публикации рекламных объявлений.",
+    "Факт 85: Владельцы публичных каналов могут получать доход от рекламы.",
+    "Факт 86: Telegram предоставляет администраторам каналов статистику аудитории.",
+    "Факт 87: В Telegram существуют комментарии к публикациям каналов через привязанные группы.",
+    "Факт 88: Каналы Telegram могут иметь нескольких администраторов.",
+    "Факт 89: Администраторы могут назначать другим участникам отдельные права.",
+    "Факт 90: В Telegram есть система ограничений и блокировок пользователей.",
+    "Факт 91: Telegram поддерживает автоматическую модерацию через ботов.",
+    "Факт 92: В Telegram можно создавать публичные и приватные каналы.",
+    "Факт 93: Публичные каналы могут иметь собственные ссылки.",
+    "Факт 94: Telegram поддерживает несколько аккаунтов в одном приложении.",
+    "Факт 95: Telegram позволяет переносить историю переписки из некоторых других мессенджеров.",
+    "Факт 96: В Telegram есть встроенный перевод сообщений.",
+    "Факт 97: Telegram поддерживает распознавание и преобразование голосовых сообщений в текст.",
+    "Факт 98: Telegram регулярно выпускает обновления с новыми функциями.",
+    "Факт 99: В 2024 году Telegram впервые сообщил о выходе на прибыльность.",
+    "Факт 100: В марте 2025 года Павел Дуров объявил, что аудитория Telegram превысила 1 миллиард активных пользователей в месяц.",
+    "Факт 101: exteraGram является сторонним модифицированным клиентом Telegram.",
+    "Факт 102: exteraGram основан на исходном коде официального Telegram для Android.",
+    "Факт 103: Проект имеет собственный официальный сайт exteragram.app.",
+    "Факт 104: Исходный код проекта опубликован на GitHub.",
+    "Факт 105: exteraGram распространяется под лицензией GNU GPL v2.0.",
+    "Факт 106: exteraGram разработан для операционной системы Android.",
+    "Факт 107: Проект поддерживает Android 12 и выше для динамических тем Monet.",
+    "Факт 108: В разработке exteraGram используется язык Java.",
+    "Факт 109: В проекте также используется язык C++.",
+    "Факт 110: exteraGram имеет собственную команду разработчиков.",
+    "Факт 111: Основатель проекта указан под ником itsv1eds.",
+    "Факт 112: В команде проекта есть отдельный ведущий разработчик.",
+    "Факт 113: В команде проекта есть ведущий дизайнер.",
+    "Факт 114: exteraGram использует дизайн-систему Telegram.",
+    "Факт 115: В интерфейсе exteraGram реализованы элементы Google Material 3.",
+    "Факт 116: Приложение поддерживает динамические цвета Monet.",
+    "Факт 117: Цветовая схема может адаптироваться к обоям Android.",
+    "Факт 118: В exteraGram предусмотрена расширенная настройка интерфейса.",
+    "Факт 119: Приложение использует собственные наборы иконок.",
+    "Факт 120: В exteraGram переработан интерфейс музыкального проигрывателя.",
+    "Факт 121: Клиент поддерживает расширенные настройки камеры.",
+    "Факт 122: В приложении реализована интеграция Camera2 API.",
+    "Факт 123: exteraGram поддерживает CameraX.",
+    "Факт 124: В приложении предусмотрены дополнительные настройки камеры.",
+    "Факт 125: Клиент имеет экспериментальную функцию ускорения загрузки и отправки файлов.",
+    "Факт 126: В exteraGram предусмотрен встроенный браузер.",
+    "Факт 127: Встроенный браузер поддерживает блокировку рекламы.",
+    "Факт 128: В приложении предусмотрена интеграция с Яндекс Картами.",
+    "Факт 129: exteraGram поддерживает распознавание голосовых сообщений.",
+    "Факт 130: Для распознавания речи используется Vosk API.",
+    "Факт 131: Vosk позволяет выполнять распознавание речи локально.",
+    "Факт 132: В клиенте предусмотрена фильтрация Zalgo-текста.",
+    "Факт 133: exteraGram поддерживает подключение нейросетей через API.",
+    "Факт 134: Среди поддерживаемых вариантов интеграции ИИ упоминаются ChatGPT и Gemini.",
+    "Факт 135: В приложении предусмотрена система плагинов.",
+    "Факт 136: Плагины exteraGram могут создаваться на Python.",
+    "Факт 137: Для выполнения Python-кода используется Чакуопи (Chaquopy).",
+    "Факт 138: В документации SDK указан Python 3.11.",
+    "Факт 139: Для плагинов существует собственный SDK.",
+    "Факт 140: Плагины могут добавлять собственные страницы настроек.",
+    "Факт 141: Плагины могут создавать диалоговые окна.",
+    "Факт 142: Плагины могут взаимодействовать с сообщениями.",
+    "Факт 143: Плагины могут отправлять и редактировать сообщения.",
+    "Факт 144: Плагины могут работать с медиафайлами.",
+    "Факт 145: SDK предоставляет инструменты для работы с системными классами Java.",
+    "Факт 146: Плагины могут использовать механизм перехвата методов.",
+    "Факт 147: Для плагинов предусмотрены специальные инструменты управления событиями.",
+    "Факт 148: В exteraGram существует встроенный каталог плагинов.",
+    "Факт 149: Каталог плагинов поддерживает подключение Telegram-каналов в качестве репозиториев.",
+    "Факт 150: Каталог также поддерживает Git-репозитории.",
+    "Факт 151: Telegram Premium появился в июне 2022 года.",
+    "Факт 152: Telegram Premium предоставляет увеличенные лимиты на многие функции.",
+    "Факт 153: Premium-пользователи могут загружать файлы размером до 4 ГБ.",
+    "Факт 154: Бесплатные пользователи могут загружать файлы размером до 2 ГБ.",
+    "Факт 155: Telegram Premium позволяет расшифровывать голосовые сообщения в текст.",
+    "Факт 156: Premium-подписка открывает дополнительные реакции.",
+    "Факт 157: В Telegram есть система историй (Stories).",
+    "Факт 158: Истории Telegram появились в июле 2023 года.",
+    "Факт 159: Пользователи могут выбирать аудиторию своих историй.",
+    "Факт 160: В Telegram можно публиковать истории от имени каналов.",
+    "Факт 161: Telegram поддерживает трансляцию геопозиции в реальном времени.",
+    "Факт 162: В Telegram есть функция поиска людей и групп поблизости, которая ранее существовала в приложении.",
+    "Факт 163: Telegram поддерживает двухэтапную аутентификацию.",
+    "Факт 164: Для защиты аккаунта можно установить дополнительный облачный пароль.",
+    "Факт 165: Telegram поддерживает вход по QR-коду.",
+    "Факт 166: Telegram позволяет завершать активные сеансы на других устройствах.",
+    "Факт 167: В Telegram можно скрывать номер телефона от других пользователей.",
+    "Факт 168: Telegram поддерживает прокси-серверы SOCKS5.",
+    "Факт 169: Telegram поддерживает протокол MTProto.",
+    "Факт 170: Исходный код Telegram-клиентов доступен публично.",
+    "Факт 171: Telegram предоставляет открытый API для разработчиков.",
+    "Факт 172: Telegram позволяет создавать собственные клиентские приложения.",
+    "Факт 173: Telegram поддерживает авторизацию на сторонних сайтах через Telegram Login.",
+    "Факт 174: В Telegram есть официальная платформа для публикации рекламных объявлений.",
+    "Факт 175: Владельцы публичных каналов могут получать доход от рекламы.",
+    "Факт 176: Telegram предоставляет администраторам каналов статистику аудитории.",
+    "Факт 177: В Telegram существуют комментарии к публикациям каналов через привязанные группы.",
+    "Факт 178: Каналы Telegram могут иметь нескольких администраторов.",
+    "Факт 179: Администраторы могут назначать другим участникам отдельные права.",
+    "Факт 180: В Telegram есть система ограничений и блокировок пользователей.",
+    "Факт 181: Telegram поддерживает автоматическую модерацию через ботов.",
+    "Факт 182: В Telegram можно создавать публичные и приватные каналы.",
+    "Факт 183: Публичные каналы могут иметь собственные ссылки.",
+    "Факт 184: Telegram поддерживает несколько аккаунтов в одном приложении.",
+    "Факт 185: Telegram позволяет переносить историю переписки из некоторых других мессенджеров.",
+    "Факт 186: В Telegram есть встроенный перевод сообщений.",
+    "Факт 187: Telegram поддерживает распознавание и преобразование голосовых сообщений в текст.",
+    "Факт 188: Telegram регулярно выпускает обновления с новыми функциями.",
+    "Факт 189: В 2024 году Telegram впервые сообщил о выходе на прибыльность.",
+    "Факт 190: В марте 2025 года Павел Дуров объявил, что аудитория Telegram превысила 1 миллиард активных пользователей в месяц.",
+    "Факт 191: AyuGram является сторонним клиентом Telegram.",
+    "Факт 192: Проект AyuGram развивается командой Radolyn Labs.",
+    "Факт 193: У AyuGram есть версии для Android и компьютеров.",
+    "Факт 194: Android-версия AyuGram основана на exteraGram.",
+    "Факт 195: AyuGram Desktop основан на Telegram Desktop.",
+    "Факт 196: Android-версия использует наработки проекта Telegraher.",
+    "Факт 197: Главная особенность AyuGram заключается в Ghost Mode.",
+    "Факт 198: Ghost Mode позволяет скрывать факт прочтения сообщений.",
+    "Факт 199: Ghost Mode позволяет скрывать статус онлайн.",
+    "Факт 200: AyuGram умеет скрывать индикатор набора текста."
+]
+def to_color(hex_val):
+    return int(hex_val - 0x100000000) if hex_val > 0x7FFFFFFF else hex_val
+
+
+def get_theme_colors():
+    is_dark = False
+    try:
+        is_dark = Theme.isCurrentThemeDark()
+    except Exception:
+        pass
+
+    if is_dark:
+        return {
+            "primary": to_color(0xFFFFFFFF),
+            "secondary": to_color(0xFFB0B0B0),
+            "accent": to_color(0xFFA8C7FA),
+            "track": to_color(0xFF333942),
+            "hint": to_color(0xFF888888),
+            "divider": to_color(0x33FFFFFF)
+        }
+    else:
+        return {
+            "primary": to_color(0xFF1F1F1F),
+            "secondary": to_color(0xFF5E5E5E),
+            "accent": to_color(0xFF0B57D0),
+            "track": to_color(0xFFD3E3FD),
+            "hint": to_color(0xFF888888),
+            "divider": to_color(0x22000000)
+        }
+
+
+def create_md3_progress_drawable(track_color, indicator_color, radius_px):
+    track = GradientDrawable()
+    track.setShape(GradientDrawable.RECTANGLE)
+    track.setCornerRadius(float(radius_px))
+    track.setColor(track_color)
+
+    fill = GradientDrawable()
+    fill.setShape(GradientDrawable.RECTANGLE)
+    fill.setCornerRadius(float(radius_px))
+    fill.setColor(indicator_color)
+
+    clip = ClipDrawable(fill, Gravity.START, ClipDrawable.HORIZONTAL)
+    layers = LayerDrawable([track, clip])
+    layers.setId(0, 0x01020000)
+    layers.setId(1, 0x0102000d)
+    return layers
+
+
+def fmt_date(ts):
+    if not ts:
+        return "—"
+    try:
+        return datetime.fromtimestamp(ts).strftime("%d.%m.%Y")
+    except Exception:
+        return "—"
+
+
+def count_words(text, counter):
+    if not text:
+        return
+    words = re.findall(r"[а-яёa-z]{%d,}" % MIN_WORD_LEN, text.lower())
+    for w in words:
+        if w not in STOP_WORDS:
+            counter[w] = counter.get(w, 0) + 1
+
+
+def detect_chat_mode(account, dialog_id):
+    if dialog_id > 0:
+        return "dialog"
+    controller = MessagesController.getInstance(account)
+    chat_id = -dialog_id
+    chat = None
+
+    if chat_id > 1000000000000:
+        chat = controller.getChat(chat_id - 1000000000000)
+    elif chat_id > 1000000000:
+        chat = controller.getChat(chat_id)
+        if not chat:
+            chat = controller.getChat(chat_id - 1000000000)
+    else:
+        chat = controller.getChat(chat_id)
+
+    if chat and (ChatObject.isChannel(chat) and not chat.megagroup):
+        return "channel"
+    return "group"
+
+
+def classify_media(msg):
+    m = getattr(msg, "media", None)
+    if not m or isinstance(m, (TLRPC.TL_messageMediaEmpty, TLRPC.TL_messageMediaWebPage)):
+        return None
+
+    if isinstance(m, TLRPC.TL_messageMediaPhoto):
+        return "Фото"
+    if isinstance(m, (TLRPC.TL_messageMediaGeo, TLRPC.TL_messageMediaGeoLive, TLRPC.TL_messageMediaVenue)):
+        return "Геолокация"
+    if isinstance(m, TLRPC.TL_messageMediaPoll):
+        return "Опросы"
+    if isinstance(m, TLRPC.TL_messageMediaContact):
+        return "Контакты"
+
+    if isinstance(m, TLRPC.TL_messageMediaDocument):
+        doc = getattr(m, "document", None)
+        if not doc:
+            return "Файлы"
+
+        is_sticker = False
+        is_animated = False
+        is_round = False
+        is_video = False
+        is_voice = False
+        is_audio = False
+
+        attrs = getattr(doc, "attributes", None)
+        if attrs:
+            for j in range(attrs.size()):
+                attr = attrs.get(j)
+                if isinstance(attr, (TLRPC.TL_documentAttributeSticker, TLRPC.TL_documentAttributeCustomEmoji)):
+                    is_sticker = True
+                elif isinstance(attr, TLRPC.TL_documentAttributeAnimated):
+                    is_animated = True
+                elif isinstance(attr, TLRPC.TL_documentAttributeVideo):
+                    if getattr(attr, "round_message", False):
+                        is_round = True
+                    else:
+                        is_video = True
+                elif isinstance(attr, TLRPC.TL_documentAttributeAudio):
+                    if getattr(attr, "voice", False):
+                        is_voice = True
+                    else:
+                        is_audio = True
+
+        mime = (getattr(doc, "mime_type", "") or "").lower()
+        if not is_sticker and ("webp" in mime or "tgsticker" in mime):
+            is_sticker = True
+
+        if is_sticker:
+            return "Стикеры"
+        if is_round:
+            return "Кружочки"
+        if is_voice:
+            return "Голосовые"
+        if is_animated or "gif" in mime:
+            return "GIF"
+        if is_video:
+            return "Видео"
+        if is_audio:
+            return "Аудио / Музыка"
+        return "Файлы"
+
+    return "Другое медиа"
+
+
+class ChatStatsPlugin(BasePlugin):
+
+    def __init__(self):
+        super().__init__()
+        self.is_processing = False
+        self.cancelled = False
+        self.progress_dialog = None
+        self.progress_pct_tv = None
+        self.progress_count_tv = None
+        self.fact_tv = None
+        self.progress_bar = None
+        self._fact_timer = None
+        self._start_time = 0
+        self._facts_shuffled = []
+        self._fact_index = 0
+
+    def on_plugin_load(self):
+        self.add_menu_item(MenuItemData(
+            menu_type=MenuItemType.CHAT_ACTION_MENU,
+            text="Статистика чата",
+            icon="msg_stats",
+            on_click=self.on_menu_click
+        ))
+
+    def on_menu_click(self, param):
+        if self.is_processing:
+            BulletinHelper.show_error("Сканирование уже идёт...")
+            return
+
+        dialog_id = param.get("dialog_id")
+        account = UserConfig.selectedAccount
+        self_id = UserConfig.getInstance(account).getClientUserId()
+        mode = detect_chat_mode(account, dialog_id)
+
+        def _show_setup_dialog():
+            act = LaunchActivity.instance
+            if not act:
+                return
+
+            colors = get_theme_colors()
+            opts = [500, 1000, 5000, 10000, 0]
+            labels = ["500", "1 000", "5 000", "10 000", "MAX (все)"]
+            dp = AndroidUtilities.dp
+
+            container = LinearLayout(act)
+            container.setOrientation(LinearLayout.VERTICAL)
+            container.setPadding(dp(20), dp(12), dp(20), dp(4))
+
+            hint_tv = TextView(act)
+            hint_tv.setText("Сколько сообщений просканировать:")
+            hint_tv.setTextSize(14.0)
+            hint_tv.setTextColor(colors["primary"])
+            hint_tv.setPadding(0, 0, 0, dp(8))
+            container.addView(hint_tv)
+
+            rg = RadioGroup(act)
+            rg.setOrientation(LinearLayout.VERTICAL)
+            for idx, lbl in enumerate(labels):
+                rb = RadioButton(act)
+                rb.setId(idx)
+                rb.setText(lbl)
+                rb.setTextSize(14.0)
+                rb.setTextColor(colors["primary"])
+                rg.addView(rb)
+            rg.check(1)
+            container.addView(rg)
+
+            cust_lbl = TextView(act)
+            cust_lbl.setText("Или укажи своё число:")
+            cust_lbl.setTextSize(13.0)
+            cust_lbl.setTextColor(colors["secondary"])
+            cust_lbl.setPadding(0, dp(8), 0, dp(4))
+            container.addView(cust_lbl)
+
+            cust_edit = EditText(act)
+            cust_edit.setHint("Например: 3000")
+            cust_edit.setHintTextColor(colors["hint"])
+            cust_edit.setTextSize(14.0)
+            cust_edit.setTextColor(colors["primary"])
+            cust_edit.setInputType(0x00000002)
+            container.addView(cust_edit)
+
+            def on_start(dlg, _w):
+                dlg.dismiss()
+                raw = cust_edit.getText().toString().strip()
+                if raw:
+                    try:
+                        limit = max(0, int(raw))
+                    except ValueError:
+                        checked = rg.getCheckedRadioButtonId()
+                        limit = opts[checked] if 0 <= checked < len(opts) else 1000
+                else:
+                    checked = rg.getCheckedRadioButtonId()
+                    limit = opts[checked] if 0 <= checked < len(opts) else 1000
+
+                self.is_processing = True
+                self.cancelled = False
+                self._start_time = datetime.now().timestamp()
+                self._facts_shuffled = list(TELEGRAM_FACTS)
+                random.shuffle(self._facts_shuffled)
+                self._fact_index = 0
+
+                state = {
+                    "dialog_id": dialog_id,
+                    "self_id": self_id,
+                    "mode": mode,
+                    "account": account,
+                    "limit": limit,
+                    "my_count": 0,
+                    "their_count": 0,
+                    "my_chars": 0,
+                    "their_chars": 0,
+                    "total_posts": 0,
+                    "word_counter": {},
+                    "first_date": None,
+                    "last_date": None,
+                    "offset_id": 0,
+                    "total_scanned": 0,
+                    "day_counts": {},
+                    "media_types": {},
+                    "hours": [0] * 24,
+                }
+
+                self._show_progress_ui(limit)
+                self._fetch_chunk(state)
+
+            b = AlertDialogBuilder(act)
+            b.set_title("Chat Stats")
+            b.set_view(container)
+            b.set_positive_button("Старт", on_start)
+            b.set_negative_button("Отмена", lambda dlg, _w: dlg.dismiss())
+            b.show()
+
+        run_on_ui_thread(_show_setup_dialog)
+    def _show_progress_ui(self, limit):
+        def _run():
+            try:
+                act = LaunchActivity.instance
+                if not act:
+                    return
+
+                colors = get_theme_colors()
+                dp = AndroidUtilities.dp
+
+                container = LinearLayout(act)
+                container.setOrientation(LinearLayout.VERTICAL)
+                container.setPadding(dp(24), dp(16), dp(24), dp(12))
+
+                top_row = LinearLayout(act)
+                top_row.setOrientation(LinearLayout.HORIZONTAL)
+                top_row.setGravity(Gravity.BOTTOM)
+
+                self.progress_count_tv = TextView(act)
+                self.progress_count_tv.setText("Прочитано: 0")
+                self.progress_count_tv.setTextSize(17.0)
+                self.progress_count_tv.setTypeface(None, Typeface.BOLD)
+                self.progress_count_tv.setTextColor(colors["primary"])
+                cnt_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+                self.progress_count_tv.setLayoutParams(cnt_lp)
+                top_row.addView(self.progress_count_tv)
+
+                # Если лимит MAX (0), убираем проценты
+                self.progress_pct_tv = TextView(act)
+                if limit == 0:
+                    self.progress_pct_tv.setText("")
+                else:
+                    self.progress_pct_tv.setText("0%")
+                    self.progress_pct_tv.setTextSize(22.0)
+                    self.progress_pct_tv.setTypeface(None, Typeface.BOLD)
+                    self.progress_pct_tv.setTextColor(colors["accent"])
+                top_row.addView(self.progress_pct_tv)
+
+                container.addView(top_row)
+
+                # Если MAX (0) — бесконечный круговой ProgressBar, иначе капсульный Material 3
+                if limit == 0:
+                    self.progress_bar = ProgressBar(act, None, 0x01010077) # android.R.attr.progressBarStyleLarge
+                    self.progress_bar.setIndeterminate(True)
+                    pb_lp = LinearLayout.LayoutParams(dp(48), dp(48))
+                    pb_lp.gravity = Gravity.CENTER_HORIZONTAL
+                    pb_lp.topMargin = dp(12)
+                    pb_lp.bottomMargin = dp(12)
+                    self.progress_bar.setLayoutParams(pb_lp)
+                else:
+                    self.progress_bar = ProgressBar(act, None, 0x01010078)
+                    self.progress_bar.setMax(1000)
+                    self.progress_bar.setProgress(0)
+                    md3_drawable = create_md3_progress_drawable(
+                        colors["track"],
+                        colors["accent"],
+                        dp(8)
+                    )
+                    self.progress_bar.setProgressDrawable(md3_drawable)
+                    pb_lp = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(14)
+                    )
+                    pb_lp.topMargin = dp(12)
+                    pb_lp.bottomMargin = dp(12)
+                    self.progress_bar.setLayoutParams(pb_lp)
+
+                container.addView(self.progress_bar)
+
+                self.fact_tv = TextView(act)
+                self.fact_tv.setText("")
+                self.fact_tv.setTextSize(12.0)
+                self.fact_tv.setTextColor(colors["secondary"])
+                self.fact_tv.setAlpha(0.5)
+                self.fact_tv.setPadding(0, dp(12), 0, dp(4))
+                container.addView(self.fact_tv)
+
+                def on_stop_click(dlg, _w):
+                    self.cancelled = True
+
+                builder = AlertDialogBuilder(act)
+                builder.set_title("Chat Stats")
+                builder.set_view(container)
+                builder.set_negative_button("Стоп", on_stop_click)
+                self.progress_dialog = builder.show()
+
+                self._schedule_fact_rotation()
+            except Exception:
+                pass
+        run_on_ui_thread(_run)
+
+    def _schedule_fact_rotation(self):
+        if not self.is_processing or not self.progress_dialog:
+            return
+
+        def _rotate():
+            if not self.is_processing or not self.progress_dialog:
+                return
+            elapsed = datetime.now().timestamp() - self._start_time
+            if elapsed >= 5.0 and self.fact_tv:
+                if self._facts_shuffled:
+                    fact_text = self._facts_shuffled[self._fact_index % len(self._facts_shuffled)]
+                    self._fact_index += 1
+                    run_on_ui_thread(lambda: self.fact_tv.setText(fact_text))
+            
+            self._fact_timer = threading.Timer(3.0, self._rotate_fact_loop)
+            self._fact_timer.start()
+
+        _rotate()
+
+    def _rotate_fact_loop(self):
+        if self.is_processing and self.progress_dialog:
+            self._schedule_fact_rotation()
+
+    def _update_progress(self, scanned, limit=0):
+        def _run():
+            try:
+                if self.progress_count_tv:
+                    lim_str = str(limit) if limit else "MAX"
+                    self.progress_count_tv.setText(f"Прочитано: {scanned} / {lim_str}")
+
+                if self.progress_bar and limit > 0:
+                    pct = min(100, int((scanned / float(limit)) * 100))
+                    target_val = min(1000, int((scanned / float(limit)) * 1000))
+
+                    if self.progress_pct_tv:
+                        self.progress_pct_tv.setText(f"{pct}%")
+
+                    try:
+                        anim = ObjectAnimator.ofInt(
+                            self.progress_bar,
+                            "progress",
+                            self.progress_bar.getProgress(),
+                            target_val
+                        )
+                        anim.setDuration(260)
+                        anim.setInterpolator(DecelerateInterpolator())
+                        anim.start()
+                    except Exception:
+                        self.progress_bar.setProgress(target_val)
+            except Exception:
+                pass
+        run_on_ui_thread(_run)
+
+    def _hide_progress(self):
+        def _run():
+            if self._fact_timer:
+                try:
+                    self._fact_timer.cancel()
+                except Exception:
+                    pass
+                self._fact_timer = None
+
+            if self.progress_dialog:
+                try:
+                    self.progress_dialog.dismiss()
+                except Exception:
+                    pass
+                self.progress_dialog = None
+
+            self.progress_pct_tv = None
+            self.progress_count_tv = None
+            self.fact_tv = None
+            self.progress_bar = None
+        run_on_ui_thread(_run)
+
+    def _fetch_chunk(self, state):
+        if self.cancelled:
+            self._finish(state)
+            return
+
+        limit = state["limit"]
+        if limit and state["total_scanned"] >= limit:
+            self._finish(state)
+            return
+
+        account = state["account"]
+        controller = MessagesController.getInstance(account)
+
+        remaining = (limit - state["total_scanned"]) if limit else 100
+        batch_size = min(100, remaining) if limit else 100
+
+        req = TLRPC.TL_messages_getHistory()
+        req.peer = controller.getInputPeer(state["dialog_id"])
+        req.offset_id = state["offset_id"]
+        req.limit = batch_size
+        req.add_offset = 0
+        req.min_id = 0
+        req.max_id = 0
+        req.hash = 0
+
+        def on_response(response, error):
+            if self.cancelled:
+                self._finish(state)
+                return
+
+            if error:
+                err_text = getattr(error, "text", "Unknown error")
+                if "FLOOD_WAIT" in err_text and state["total_scanned"] > 0:
+                    run_on_ui_thread(lambda: BulletinHelper.show_error(f"Лимит запросов ({err_text}). Данные собраны."))
+                    self._finish(state)
+                else:
+                    self.is_processing = False
+                    self._hide_progress()
+                    run_on_ui_thread(lambda: BulletinHelper.show_error(f"Ошибка: {err_text}"))
+                return
+
+            messages = response.messages
+            if messages.isEmpty():
+                self._finish(state)
+                return
+
+            mode = state["mode"]
+            scanned_in_batch = 0
+
+            for i in range(messages.size()):
+                if self.cancelled or (limit and state["total_scanned"] + scanned_in_batch >= limit):
+                    break
+
+                msg = messages.get(i)
+                state["offset_id"] = msg.id
+                scanned_in_batch += 1
+
+                if getattr(msg, "action", None) is not None:
+                    continue
+                if not hasattr(msg, "message"):
+                    continue
+
+                if msg.date:
+                    if state["last_date"] is None or msg.date > state["last_date"]:
+                        state["last_date"] = msg.date
+                    if state["first_date"] is None or msg.date < state["first_date"]:
+                        state["first_date"] = msg.date
+
+                    try:
+                        dt_loc = datetime.fromtimestamp(msg.date)
+                        day_key = dt_loc.strftime("%d.%m.%Y")
+                        state["day_counts"][day_key] = state["day_counts"].get(day_key, 0) + 1
+                        state["hours"][dt_loc.hour] += 1
+                    except Exception:
+                        pass
+
+                mtp = classify_media(msg)
+                if mtp:
+                    state["media_types"][mtp] = state["media_types"].get(mtp, 0) + 1
+
+                txt = msg.message or ""
+
+                if mode == "channel":
+                    state["total_posts"] += 1
+                    count_words(txt, state["word_counter"])
+                else:
+                    from_id = None
+                    if getattr(msg, "from_id", None):
+                        if isinstance(msg.from_id, TLRPC.TL_peerUser):
+                            from_id = msg.from_id.user_id
+
+                    if from_id == state["self_id"] or getattr(msg, "out", False):
+                        state["my_count"] += 1
+                        state["my_chars"] += len(txt)
+                    else:
+                        state["their_count"] += 1
+                        state["their_chars"] += len(txt)
+
+                    count_words(txt, state["word_counter"])
+
+            state["total_scanned"] += scanned_in_batch
+            self._update_progress(state["total_scanned"], limit)
+
+            if messages.size() < batch_size or (limit and state["total_scanned"] >= limit) or self.cancelled:
+                self._finish(state)
+            else:
+                threading.Timer(0.15, self._fetch_chunk, args=[state]).start()
+
+        send_request(req, on_response)
+
+    def _finish(self, state):
+        self.is_processing = False
+        self._hide_progress()
+        run_on_ui_thread(lambda: self._show_result(state))
+
+    def _show_result(self, state):
+        act = LaunchActivity.instance
+        if not act:
+            return
+
+        colors = get_theme_colors()
+        mode = state["mode"]
+        top_words = sorted(state["word_counter"].items(), key=lambda x: x[1], reverse=True)[:10]
+        first_ts = state["first_date"]
+        last_ts = state["last_date"]
+
+        days_span = 1
+        if first_ts and last_ts and last_ts >= first_ts:
+            days_span = max(1, int((last_ts - first_ts) // 86400) + 1)
+
+        day_counts = state["day_counts"]
+        active_days = len(day_counts)
+
+        max_day_str = None
+        min_day_str = None
+        if day_counts:
+            best_day, best_cnt = max(day_counts.items(), key=lambda x: x[1])
+            worst_day, worst_cnt = min(day_counts.items(), key=lambda x: x[1])
+            unit = "постов" if mode == "channel" else "сообщ."
+            max_day_str = f"{best_day} ({best_cnt} {unit})"
+            min_day_str = f"{worst_day} ({worst_cnt} {unit})"
+
+        hours = state["hours"]
+        peak_active_str = None
+        peak_inactive_str = None
+        if any(hours):
+            max_hr_cnt = max(hours)
+            peak_hr = hours.index(max_hr_cnt)
+            peak_active_str = "%02d:00–%02d:00 (%d)" % (peak_hr, (peak_hr + 1) % 24, max_hr_cnt)
+
+            min_hr_cnt = min(hours)
+            quiet_hr = hours.index(min_hr_cnt)
+            peak_inactive_str = "%02d:00–%02d:00 (%d)" % (quiet_hr, (quiet_hr + 1) % 24, min_hr_cnt)
+
+        lines = []
+
+        if mode == "channel":
+            total = state["total_posts"]
+            per_day = round(total / days_span, 1)
+            lines.append(("Постов учтено", str(total), False))
+            lines.append(("Первый пост", fmt_date(first_ts), False))
+            lines.append(("Последний пост", fmt_date(last_ts), False))
+            lines.append(("Период (дней)", str(days_span), False))
+            lines.append(("Активных дней", str(active_days), False))
+            lines.append(("В среднем в день", str(per_day), False))
+        else:
+            my = state["my_count"]
+            their = state["their_count"]
+            total = my + their
+            my_pct = round(my / total * 100, 1) if total > 0 else 0.0
+            their_pct = round(their / total * 100, 1) if total > 0 else 0.0
+            per_day = round(total / days_span, 1)
+
+            label_their = "Собеседник" if mode == "dialog" else "Остальные"
+            my_avg = round(state["my_chars"] / my) if my else 0
+            their_avg = round(state["their_chars"] / their) if their else 0
+
+            lines.append(("Сообщений", str(total), False))
+            lines.append(("Первое", fmt_date(first_ts), False))
+            lines.append(("Последнее", fmt_date(last_ts), False))
+            lines.append(("Период (дней)", str(days_span), False))
+            lines.append(("Активных дней", str(active_days), False))
+            lines.append(("Сообщений в день", str(per_day), False))
+            lines.append(("", "", True))
+            lines.append(("Я", f"{my} ({my_pct}%)", False))
+            lines.append((label_their, f"{their} ({their_pct}%)", False))
+            lines.append(("", "", True))
+
+            if my > their:
+                leader = f"Вы ({my_pct}% vs {their_pct}%)"
+            elif their > my:
+                leader = f"{label_their} ({their_pct}% vs {my_pct}%)"
+            else:
+                leader = "Поровну"
+            lines.append(("Кто пишет больше", leader, False))
+            lines.append(("Ср. длина (я)", f"{my_avg} симв.", False))
+            lines.append((f"Ср. длина ({label_their.lower()})", f"{their_avg} симв.", False))
+
+        if max_day_str or peak_active_str:
+            lines.append(("", "", True))
+            lines.append(("Особые дни и часы", "", False))
+            if max_day_str:
+                lines.append(("Макс. за день", max_day_str, False))
+            if min_day_str:
+                lines.append(("Мин. за день", min_day_str, False))
+            if peak_active_str:
+                lines.append(("Пик активности", peak_active_str, False))
+            if peak_inactive_str:
+                lines.append(("Пик неактивности", peak_inactive_str, False))
+
+        mt = state["media_types"]
+        if mt:
+            lines.append(("", "", True))
+            lines.append(("Медиа и вложения", "", False))
+            for mtp, cnt in sorted(mt.items(), key=lambda x: -x[1]):
+                lines.append((mtp, str(cnt), False))
+
+        lines.append(("", "", True))
+        lim = state["limit"]
+        status_suffix = " (остановлено)" if self.cancelled else ""
+        lines.append(("Просканировано", f"{state['total_scanned']} / {lim if lim else 'MAX'}{status_suffix}", False))
+
+        if top_words:
+            lines.append(("", "", True))
+            lines.append(("Топ-10 слов", "", False))
+            for rank, (word, cnt) in enumerate(top_words, 1):
+                lines.append((f"{rank}. {word}", str(cnt), False))
+
+        dp = AndroidUtilities.dp
+        main = LinearLayout(act)
+        main.setOrientation(LinearLayout.VERTICAL)
+        scroll = ScrollView(act)
+        scroll.setPadding(dp(20), dp(8), dp(20), dp(8))
+        inner = LinearLayout(act)
+        inner.setOrientation(LinearLayout.VERTICAL)
+
+        for label, value, is_divider in lines:
+            if is_divider:
+                div = TextView(act)
+                div.setHeight(dp(1))
+                div.setBackgroundColor(colors["divider"])
+                lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+                lp.topMargin = dp(6)
+                lp.bottomMargin = dp(6)
+                div.setLayoutParams(lp)
+                inner.addView(div)
+                continue
+
+            row = LinearLayout(act)
+            row.setOrientation(LinearLayout.HORIZONTAL)
+            row.setGravity(Gravity.CENTER_VERTICAL)
+            lp_row = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp_row.topMargin = dp(4)
+            lp_row.bottomMargin = dp(4)
+            row.setLayoutParams(lp_row)
+
+            lbl = TextView(act)
+            lbl.setText(label)
+            lbl.setTextSize(14.0)
+            lbl.setTextColor(colors["secondary"] if value else colors["primary"])
+            if not value:
+                lbl.setTypeface(None, Typeface.BOLD)
+            lbl_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+            lbl.setLayoutParams(lbl_lp)
+            row.addView(lbl)
+
+            if value:
+                val = TextView(act)
+                val.setText(value)
+                val.setTextSize(14.0)
+                val.setTextColor(colors["primary"])
+                val.setTypeface(None, Typeface.BOLD)
+                val.setGravity(Gravity.END)
+                row.addView(val)
+
+            inner.addView(row)
+
+        scroll.addView(inner)
+        main.addView(scroll)
+
+        builder = AlertDialogBuilder(act)
+        builder.set_title("Статистика чата")
+        builder.set_view(main)
+        builder.set_positive_button("Закрыть", lambda b, w: b.dismiss())
+        builder.show()

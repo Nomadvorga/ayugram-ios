@@ -1,0 +1,3392 @@
+import os
+import struct
+import threading
+import time
+from array import array
+from collections import OrderedDict, deque
+from typing import Any, List, Optional
+
+try:
+    import audioop
+    HAS_AUDIOOP = True
+except ImportError:
+    audioop = None
+    HAS_AUDIOOP = False
+
+from android.graphics import Color
+from android.view import Gravity, View
+from android.widget import FrameLayout, LinearLayout, ScrollView, SeekBar, TextView
+
+from android_utils import OnClickListener, R, copy_to_clipboard, run_on_ui_thread
+from base_plugin import BasePlugin, HookResult, HookStrategy, MenuItemData, MenuItemType, MethodHook
+from client_utils import get_last_fragment
+from file_utils import ensure_dir_exists, get_plugins_dir
+from ui.bulletin import BulletinHelper
+from ui.settings import Divider, Header, Input, Selector, Switch, Text
+
+__id__ = "voice_soundpad"
+__name__ = "Voice Soundpad"
+__description__ = "Soundpad для голосовых сообщений: панель со звуками выезжает над строкой сообщения при записи, звуки подмешиваются в запись и играют в динамик. Команда .sounds N отправляет звук из слота N голосовым. / Soundpad for voice messages: a panel above the input bar opens while recording, sounds are mixed into the recording and played through the speaker. Command .sounds N sends the sound from slot N as a voice message."
+__author__ = "@TapeSix"
+__version__ = "2.0.0"
+__icon__ = "Idi_gahuy/8"
+__app_version__ = ">=12.10.6"
+__category__ = ["media"]
+
+MAX_SLOTS = 30
+RAIL_MIN_SOUNDS = 10  # с такого числа звуков справа появляется ползунок прокрутки
+ACCENTS = [
+    ("Как в Telegram", None),
+    ("Синий", "#3390EC"),
+    ("Жёлтый", "#F2B90C"),
+    ("Зелёный", "#2EB872"),
+    ("Красный", "#E5484D"),
+    ("Фиолетовый", "#8E63F0"),
+    ("Розовый", "#E8559A"),
+    ("Оранжевый", "#F07D2B"),
+]
+AUDIO_EXTENSIONS = (".wav", ".pcm", ".raw", ".mp3", ".aac", ".m4a", ".ogg", ".opus")
+IMPORT_REQUEST_CODE = 42711
+VOICE_RATE = 48000          # частота голосовых сообщений Telegram
+VOICE_FRAME_BYTES = 960 * 2  # кадр Opus: 20 мс, 16 бит, моно
+VOICE_MAX_SECONDS = 600
+PANEL_HEIGHT_RATIO = 0.38  # высота панели над строкой сообщения — доля экрана
+PANEL_GAP_DP = 4           # зазор между панелью и строкой сообщения
+PANEL_MIN_DP = 72          # ниже этой высоты (клавиатура) панель прячется
+PANEL_BOTTOM_RATIO = 0.45  # запасной вариант (под шапкой): нижний край на 45% высоты
+PANEL_COLUMNS = 3
+COLLAPSED_DP = 26  # высота свёрнутой панели: виден только «язычок»
+STATE_PRESSED = 16842919  # android.R.attr.state_pressed
+
+
+def _argb(value: int) -> int:
+    return value - (1 << 32) if value >= (1 << 31) else value
+
+
+COLOR_PLAYING = _argb(0xFF34C759)     # зелёный: звук играет
+COLOR_LOADING = _argb(0xFFFFCC00)     # жёлтый: звук ещё обрабатывается
+COLOR_ON_LOADING = _argb(0xFF2B2B2B)  # тёмный текст на жёлтом
+
+# Хуки звонков и войс-чатов оставлены в коде, но по умолчанию выключены.
+CALL_HOOKS_ENABLED = False
+
+
+# ───────────────────────────── журнал ─────────────────────────────
+
+_logger = None
+_debug_enabled = False
+_debug_lines = deque(maxlen=300)
+_log_file = None  # журнал пишется в файл сразу, чтобы пережить вылет приложения
+LOG_MAX_BYTES = 200_000
+
+
+def debug_log(msg: str):
+    if _logger is not None:
+        try:
+            _logger.debug(msg)
+        except Exception:
+            pass
+    if _debug_enabled:
+        line = f"[{time.strftime('%H:%M:%S')}] {msg}"
+        _debug_lines.append(line)
+        if _log_file:
+            try:
+                with open(_log_file, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except Exception:
+                pass
+
+
+_crash_logger_installed = False
+_crash_logger_handler = None
+
+
+def install_crash_logger():
+    """Если приложение упадёт, стек ошибки попадёт в файл журнала (работает при включённой отладке)."""
+    global _crash_logger_installed
+    if _crash_logger_installed:
+        return
+    try:
+        from java import dynamic_proxy
+        from java.io import PrintWriter, StringWriter
+        from java.lang import Thread
+
+        class CrashLogger(dynamic_proxy(Thread.UncaughtExceptionHandler)):
+            def __init__(self, previous):
+                super().__init__()
+                self.previous = previous
+
+            def uncaughtException(self, thread, error):
+                try:
+                    writer = StringWriter()
+                    error.printStackTrace(PrintWriter(writer))
+                    debug_log(f"!!! КРАШ в потоке {thread.getName()}:\n{writer.toString()}")
+                except Exception:
+                    pass
+                if self.previous is not None:
+                    self.previous.uncaughtException(thread, error)
+
+        global _crash_logger_handler
+        _crash_logger_handler = CrashLogger(Thread.getDefaultUncaughtExceptionHandler())
+        Thread.setDefaultUncaughtExceptionHandler(_crash_logger_handler)
+        _crash_logger_installed = True
+        debug_log("перехват крашей включён")
+    except Exception as e:
+        debug_log(f"перехват крашей недоступен: {e}")
+
+
+def remove_crash_logger():
+    """Возвращает прежний обработчик крашей, когда плагин выгружается."""
+    global _crash_logger_installed, _crash_logger_handler
+    if not _crash_logger_installed:
+        return
+    try:
+        from java.lang import Thread
+        handler = _crash_logger_handler
+        if handler is not None and Thread.getDefaultUncaughtExceptionHandler() == handler:
+            Thread.setDefaultUncaughtExceptionHandler(handler.previous)
+    except Exception:
+        pass
+    _crash_logger_installed = False
+    _crash_logger_handler = None
+
+
+def clear_log():
+    _debug_lines.clear()
+    try:
+        if _log_file and os.path.isfile(_log_file):
+            open(_log_file, "w").close()
+    except Exception:
+        pass
+
+
+def read_log_tail(limit: int = 300) -> str:
+    try:
+        if _log_file and os.path.isfile(_log_file):
+            with open(_log_file, "r", encoding="utf-8", errors="replace") as f:
+                return "".join(f.readlines()[-limit:])
+    except Exception:
+        pass
+    return "\n".join(_debug_lines)
+
+
+# ───────────────────────────── аудио ─────────────────────────────
+
+class LoadCancelled(Exception):
+    pass
+
+
+class SendCancelled(Exception):
+    pass
+
+
+def _checkpoint(cancel_cb):
+    time.sleep(0)
+    if cancel_cb and cancel_cb():
+        raise LoadCancelled()
+
+
+def parse_wav_pcm16(data: bytes, name: str = ""):
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        debug_log(f"wav({name}): не RIFF/WAVE")
+        return None
+    pos = 12
+    channels, rate, bits = 1, 44100, 16
+    audio = None
+    fmt_found = False
+    while pos + 8 <= len(data):
+        chunk_id = data[pos:pos + 4]
+        size = struct.unpack("<I", data[pos + 4:pos + 8])[0]
+        body = pos + 8
+        if chunk_id == b"fmt " and size >= 16:
+            _, channels, rate, _, _, bits = struct.unpack("<HHIIHH", data[body:body + 16])
+            fmt_found = True
+        elif chunk_id == b"data":
+            audio = data[body:body + size]
+        pos = body + size + (size % 2)
+    if not fmt_found or audio is None or bits != 16:
+        debug_log(f"wav({name}): нужен 16-bit PCM WAV (fmt={fmt_found}, data={audio is not None}, bits={bits})")
+        return None
+    samples = array("h")
+    samples.frombytes(audio[: len(audio) - (len(audio) % 2)])
+    return samples, channels, rate
+
+
+def to_mono(samples: array, channels: int, cancel_cb=None) -> array:
+    if channels <= 1:
+        return samples
+    if HAS_AUDIOOP and channels == 2:
+        try:
+            mono = array("h")
+            mono.frombytes(audioop.tomono(samples.tobytes(), 2, 0.5, 0.5))
+            return mono
+        except Exception as e:
+            debug_log(f"to_mono: audioop упал ({e}), считаю вручную")
+    mono = array("h")
+    for i in range(len(samples) // channels):
+        base = i * channels
+        mono.append(sum(samples[base:base + channels]) // channels)
+        if i % 2000 == 0:
+            _checkpoint(cancel_cb)
+    return mono
+
+
+def resample(samples: array, src_rate: int, dst_rate: int, cancel_cb=None) -> array:
+    if src_rate == dst_rate or len(samples) < 2:
+        return samples
+    if HAS_AUDIOOP:
+        try:
+            converted, _ = audioop.ratecv(samples.tobytes(), 2, 1, src_rate, dst_rate, None)
+            out = array("h")
+            out.frombytes(converted)
+            return out
+        except Exception as e:
+            debug_log(f"resample: audioop упал ({e}), считаю вручную")
+    ratio = dst_rate / src_rate
+    last = len(samples) - 1
+    out = array("h")
+    for i in range(max(1, int(len(samples) * ratio))):
+        pos = i / ratio
+        idx = int(pos)
+        if idx >= last:
+            out.append(samples[last])
+        else:
+            a, b = samples[idx], samples[idx + 1]
+            out.append(int(a + (b - a) * (pos - idx)))
+        if i % 2000 == 0:
+            _checkpoint(cancel_cb)
+    return out
+
+
+def scale_pcm(raw: bytes, gain: float) -> bytes:
+    if gain == 1.0:
+        return raw
+    if HAS_AUDIOOP:
+        try:
+            return audioop.mul(raw, 2, gain)
+        except Exception as e:
+            debug_log(f"scale_pcm: audioop упал ({e})")
+    samples = array("h")
+    samples.frombytes(raw[: len(raw) - (len(raw) % 2)])
+    return array("h", (max(-32768, min(32767, int(s * gain))) for s in samples)).tobytes()
+
+
+def mix_pcm(base: bytes, chunk: array, gain: float) -> bytes:
+    if HAS_AUDIOOP:
+        try:
+            data = scale_pcm(chunk.tobytes(), gain)
+            data += b"\x00" * (len(base) - len(data))
+            return audioop.add(base, data, 2)
+        except Exception as e:
+            debug_log(f"mix_pcm: audioop упал ({e}), микширую вручную")
+    out = array("h")
+    out.frombytes(base)
+    for i, s in enumerate(chunk):
+        out[i] = max(-32768, min(32767, out[i] + int(s * gain)))
+    return out.tobytes()
+
+
+def decode_via_mediacodec(path: str, name: str = "", cancel_cb=None):
+    extractor = None
+    codec = None
+    try:
+        from android.media import MediaCodec, MediaExtractor, MediaFormat
+
+        extractor = MediaExtractor()
+        extractor.setDataSource(path)
+
+        track_format = None
+        for i in range(extractor.getTrackCount()):
+            fmt = extractor.getTrackFormat(i)
+            mime = fmt.getString(MediaFormat.KEY_MIME)
+            if mime is not None and mime.startswith("audio/"):
+                extractor.selectTrack(i)
+                track_format = fmt
+                break
+        if track_format is None:
+            debug_log(f"mediacodec({name}): аудиодорожка не найдена")
+            return None
+
+        mime = track_format.getString(MediaFormat.KEY_MIME)
+        channels = track_format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        rate = track_format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+
+        codec = MediaCodec.createDecoderByType(mime)
+        codec.configure(track_format, None, None, 0)
+        codec.start()
+
+        timeout_us = 10000
+        chunks = []
+        input_done = False
+        output_done = False
+        info = MediaCodec.BufferInfo()
+
+        while not output_done:
+            if cancel_cb and cancel_cb():
+                raise LoadCancelled()
+            if not input_done:
+                in_index = codec.dequeueInputBuffer(timeout_us)
+                if in_index >= 0:
+                    in_buf = codec.getInputBuffer(in_index)
+                    in_buf.clear()
+                    size = extractor.readSampleData(in_buf, 0)
+                    if size < 0:
+                        codec.queueInputBuffer(in_index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        input_done = True
+                    else:
+                        codec.queueInputBuffer(in_index, 0, size, extractor.getSampleTime(), 0)
+                        extractor.advance()
+
+            out_index = codec.dequeueOutputBuffer(info, timeout_us)
+            if out_index >= 0:
+                out_buf = codec.getOutputBuffer(out_index)
+                if info.size > 0:
+                    chunk = bytearray(info.size)
+                    out_buf.position(info.offset)
+                    out_buf.limit(info.offset + info.size)
+                    out_buf.get(chunk, 0, info.size)
+                    chunks.append(bytes(chunk))
+                codec.releaseOutputBuffer(out_index, False)
+                if (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0:
+                    output_done = True
+            elif out_index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
+                new_format = codec.getOutputFormat()
+                channels = new_format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                rate = new_format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+
+        raw = b"".join(chunks)
+        if not raw:
+            debug_log(f"mediacodec({name}): пустой результат")
+            return None
+        samples = array("h")
+        samples.frombytes(raw[: len(raw) - (len(raw) % 2)])
+        debug_log(f"mediacodec({name}): {len(samples)} сэмплов, {channels} кан., {rate} Гц")
+        return samples, channels, rate
+    except LoadCancelled:
+        raise
+    except Exception as e:
+        import traceback
+        debug_log(f"mediacodec({name}): ошибка {e}\n{traceback.format_exc()}")
+        return None
+    finally:
+        for obj, action in ((codec, "stop"), (codec, "release"), (extractor, "release")):
+            try:
+                if obj is not None:
+                    getattr(obj, action)()
+            except Exception:
+                pass
+
+
+class Voice:
+    __slots__ = ("samples", "pos", "gain", "on_start", "on_end", "started")
+
+    def __init__(self, samples: array, gain: float = 1.0, on_start=None, on_end=None):
+        self.samples = samples
+        self.pos = 0
+        self.gain = gain
+        self.on_start = on_start
+        self.on_end = on_end
+        self.started = False
+
+
+class SoundEngine:
+    MAX_CACHED = 24
+    MAX_CACHED_SAMPLES = 60_000_000  # ~120 МБ декодированного звука
+    FRAME_FRESH_SEC = 0.5
+
+    def __init__(self):
+        self._cache: "OrderedDict[tuple, array]" = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._load_locks: dict = {}
+        self._mix_lock = threading.Lock()
+        self.active: List[Voice] = []
+        self.master_gain = 1.0
+        self.sample_rate = 48000
+        self._cancel_gen: dict = {}
+        self.encoding = False  # идёт наше кодирование: хуки записи молчат
+        self.last_frame = 0.0
+        self.stopped_at = 0.0
+
+    @property
+    def recording(self) -> bool:
+        """Идёт ли запись прямо сейчас — судим по свежим кадрам с микрофона."""
+        return time.time() - self.last_frame < self.FRAME_FRESH_SEC
+
+    def cancel_loading(self, path: str):
+        """Прерывает загрузку одного звука (остальные, например предзагрузка, не трогает)."""
+        self._cancel_gen[path] = self._cancel_gen.get(path, 0) + 1
+
+    def forget(self, path: str):
+        with self._cache_lock:
+            for key in [k for k in self._cache if k[0] == path]:
+                self._cache.pop(key, None)
+        self._load_locks.pop(path, None)
+
+    def _cached(self, key):
+        with self._cache_lock:
+            samples = self._cache.get(key)
+            if samples is not None:
+                self._cache.move_to_end(key)
+            return samples
+
+    def load_sample(self, path: str) -> Optional[array]:
+        key = (path, self.sample_rate)
+        samples = self._cached(key)
+        if samples is not None:
+            return samples
+
+        with self._load_locks.setdefault(path, threading.Lock()):
+            samples = self._cached(key)
+            if samples is not None:
+                return samples
+            generation = self._cancel_gen.get(path, 0)
+
+            def cancelled():
+                return self._cancel_gen.get(path, 0) != generation
+
+            try:
+                name = os.path.basename(path)
+                with open(path, "rb") as f:
+                    data = f.read()
+                if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+                    parsed = parse_wav_pcm16(data, name)
+                else:
+                    parsed = decode_via_mediacodec(path, name, cancel_cb=cancelled)
+                if parsed is None:
+                    return None
+                samples, channels, src_rate = parsed
+                if len(samples) // max(channels, 1) > src_rate * 15:
+                    debug_log(f"load({name}): файл длиннее ~15 сек, обработка может быть долгой")
+                samples = to_mono(samples, channels, cancelled)
+                samples = resample(samples, src_rate, self.sample_rate, cancelled)
+            except LoadCancelled:
+                debug_log(f"load({os.path.basename(path)}): прервано")
+                return None
+            except Exception as e:
+                import traceback
+                debug_log(f"load({path}): ошибка {e}\n{traceback.format_exc()}")
+                return None
+
+            with self._cache_lock:
+                self._cache[key] = samples
+                while len(self._cache) > 1 and (len(self._cache) > self.MAX_CACHED
+                                               or sum(len(v) for v in self._cache.values()) > self.MAX_CACHED_SAMPLES):
+                    self._cache.popitem(last=False)
+            return samples
+
+    def trigger(self, samples: array, gain: float = 1.0, on_start=None, on_end=None):
+        voice = Voice(samples, gain, on_start, on_end)
+        with self._mix_lock:
+            self.active.append(voice)
+        return voice
+
+    def clear(self):
+        with self._mix_lock:
+            self.active.clear()
+
+    def mix_into(self, pcm: bytes) -> bytes:
+        started = []
+        finished = []
+        with self._mix_lock:
+            if not self.active:
+                return pcm
+            mixed = pcm[: len(pcm) - (len(pcm) % 2)]
+            frame_len = len(mixed) // 2
+            alive = []
+            for voice in self.active:
+                if not voice.started:
+                    voice.started = True
+                    debug_log(f"микс: голос стартовал ({len(voice.samples)} сэмплов)")
+                    if voice.on_start is not None:
+                        started.append(voice.on_start)
+                end = min(voice.pos + frame_len, len(voice.samples))
+                chunk = voice.samples[voice.pos:end]
+                if chunk:
+                    mixed = mix_pcm(mixed, chunk, voice.gain * self.master_gain)
+                voice.pos = end
+                if end < len(voice.samples):
+                    alive.append(voice)
+                elif voice.on_end is not None:
+                    finished.append(voice.on_end)
+            self.active = alive
+
+        for callback in started + finished:
+            try:
+                callback()
+            except Exception as e:
+                debug_log(f"колбэк микшера упал: {e}")
+        return mixed
+
+
+sound_engine = SoundEngine()
+
+
+# ───────────────────────────── динамик ─────────────────────────────
+
+_active_tracks = []
+_active_tracks_lock = threading.Lock()
+
+
+def stop_speaker():
+    with _active_tracks_lock:
+        tracks = list(_active_tracks)
+        _active_tracks.clear()
+    for track in tracks:
+        try:
+            track.stop()
+            track.release()
+        except Exception:
+            pass
+
+
+def set_speaker_volume(gain: float):
+    with _active_tracks_lock:
+        tracks = list(_active_tracks)
+    for track in tracks:
+        try:
+            track.setVolume(float(gain))
+        except Exception:
+            pass
+
+
+def arm_speaker(samples: array, rate: int):
+    """Готовит AudioTrack, не запуская его — чтобы стартовать синхронно с микрофоном."""
+    try:
+        from android.media import AudioFormat, AudioManager, AudioTrack
+        from java import jarray
+
+        raw = samples.tobytes()
+        channel = AudioFormat.CHANNEL_OUT_MONO
+        encoding = AudioFormat.ENCODING_PCM_16BIT
+        buf_size = max(AudioTrack.getMinBufferSize(rate, channel, encoding), len(raw))
+        track = AudioTrack(AudioManager.STREAM_MUSIC, rate, channel, encoding, buf_size, AudioTrack.MODE_STATIC)
+        track.write(jarray("B")(raw), 0, len(raw))
+        try:
+            track.setVolume(float(sound_engine.master_gain))
+        except Exception:
+            pass
+        debug_log(f"AudioTrack готов: {len(raw)} байт, буфер {buf_size}")
+        return track, (len(raw) // 2) / float(rate)
+    except Exception as e:
+        import traceback
+        debug_log(f"arm_speaker: ошибка {e}\n{traceback.format_exc()}")
+        return None, 0.0
+
+
+def fire_speaker(track, duration: float, on_end=None, frames: int = 0):
+    if track is None:
+        return
+    try:
+        track.play()
+        debug_log("AudioTrack запущен")
+    except Exception as e:
+        debug_log(f"fire_speaker: ошибка {e}")
+        return
+    with _active_tracks_lock:
+        _active_tracks.append(track)
+
+    def cleanup():
+        # конец определяем по позиции головки: после перемотки длительность уже другая
+        total = int(frames) if frames else 0
+        last, stalled = -1, 0
+        deadline = time.time() + duration * 3 + 30
+        while time.time() < deadline:
+            time.sleep(0.05)
+            with _active_tracks_lock:
+                if track not in _active_tracks:
+                    return  # остановлено снаружи (stop_speaker), колбэк не нужен
+            try:
+                pos = int(track.getPlaybackHeadPosition()) & 0xFFFFFFFF
+            except Exception:
+                return
+            if total and pos >= total - 1:
+                break
+            stalled = stalled + 1 if pos == last else 0
+            last = pos
+            if stalled > 40:  # ~2 с без движения (не считая паузу на перемотку)
+                break
+        with _active_tracks_lock:
+            if track in _active_tracks:
+                _active_tracks.remove(track)
+        try:
+            track.stop()
+            track.release()
+        except Exception:
+            pass
+        if on_end is not None:
+            try:
+                on_end()
+            except Exception as e:
+                debug_log(f"on_end динамика: {e}")
+
+    threading.Thread(target=cleanup, daemon=True).start()
+
+
+class Playback:
+    """Текущее воспроизведение: позиция и перемотка (микшер и/или динамик)."""
+
+    def __init__(self, path: str, total: int, rate: int, track=None):
+        self.path = path
+        self.total = max(1, int(total))
+        self.rate = rate
+        self.track = track
+        self.voice = None
+
+    @property
+    def duration(self) -> float:
+        return self.total / float(self.rate)
+
+    def position(self) -> float:
+        voice = self.voice
+        if voice is not None and voice.started:
+            return min(voice.pos, self.total) / float(self.rate)
+        if self.track is not None:
+            try:
+                return min(int(self.track.getPlaybackHeadPosition()) & 0xFFFFFFFF, self.total) / float(self.rate)
+            except Exception:
+                pass
+        return 0.0
+
+    def seek(self, fraction: float):
+        frame = max(0, min(int(fraction * self.total), self.total - 1))
+        if self.voice is not None:
+            with sound_engine._mix_lock:
+                self.voice.pos = frame
+        if self.track is not None:
+            try:
+                self.track.pause()
+                self.track.setPlaybackHeadPosition(frame)
+                self.track.play()
+            except Exception as e:
+                debug_log(f"перемотка динамика: {e}")
+
+
+def format_time(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+# ───────────────────────────── хуки ─────────────────────────────
+
+def get_class(name: str):
+    from java.lang import Class
+    return Class.forName(name)
+
+
+class HookGroup:
+    def __init__(self, plugin: "VoiceSoundpadPlugin"):
+        self.plugin = plugin
+        self.unhooks = []
+
+    def hook(self, java_class, name: str, param_types: list, hook) -> bool:
+        try:
+            method = java_class.getDeclaredMethod(name, *param_types)
+            method.setAccessible(True)
+            unhook = self.plugin.hook_method(method, hook)
+            if unhook:
+                self.unhooks.append(unhook)
+                debug_log(f"{name} захукан")
+                return True
+            debug_log(f"{name}: hook_method вернул пусто")
+        except Exception as e:
+            debug_log(f"{name}: не удалось захукать ({e})")
+        return False
+
+    def uninstall(self):
+        for unhook in self.unhooks:
+            try:
+                self.plugin.unhook_method(unhook)
+            except Exception:
+                pass
+        self.unhooks.clear()
+
+
+class WriteFrameHook(MethodHook):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def before_hooked_method(self, param):
+        if sound_engine.encoding:
+            return
+        now = time.time()
+        fresh = now - sound_engine.last_frame < SoundEngine.FRAME_FRESH_SEC
+        sound_engine.last_frame = now
+        if not fresh and now - sound_engine.stopped_at > 1.0:
+            self.plugin.on_recording_started()  # первый кадр новой записи
+        if not sound_engine.active:
+            return
+        try:
+            buf = param.args[0]
+            length = min(param.args[1], buf.capacity())
+            if length <= 0:
+                return
+            position, limit = buf.position(), buf.limit()
+            buf.position(0)
+            buf.limit(length)
+            raw = bytearray(length)
+            buf.get(raw, 0, length)
+            raw = bytes(raw)
+            mixed = sound_engine.mix_into(raw)
+            if mixed != raw:
+                buf.position(0)
+                buf.put(mixed, 0, len(mixed))
+            buf.limit(limit)
+            buf.position(position)
+        except Exception as e:
+            import traceback
+            debug_log(f"writeFrame: ошибка {e}\n{traceback.format_exc()}")
+
+
+class StartRecordHook(MethodHook):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def after_hooked_method(self, param):
+        if sound_engine.encoding:
+            return
+        rate = int(param.args[1])
+        debug_log(f"startRecord: {rate} Гц")
+        sound_engine.sample_rate = rate
+        self.plugin.preload_samples()
+        self.plugin.on_recording_started()
+
+
+class StopRecordHook(MethodHook):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def before_hooked_method(self, param):
+        if self.plugin.in_call or sound_engine.encoding:
+            return
+        sound_engine.last_frame = 0.0
+        sound_engine.stopped_at = time.time()
+        sound_engine.clear()
+        stop_speaker()
+        self.plugin.on_recording_stopped()
+
+
+class RecordHooks(HookGroup):
+    def install(self):
+        try:
+            from java.lang import Boolean, Integer, Long, String
+            from java.nio import ByteBuffer
+        except Exception as e:
+            debug_log(f"java-типы недоступны: {e}")
+            return
+
+        # Новый рекордер Telegram (AudioRecorderV2): кадры идут через AudioRecorderNative.
+        try:
+            native = get_class("org.telegram.utils.recorder.audio.AudioRecorderNative")
+            self.hook(native, "writeFrame", [ByteBuffer, Integer.TYPE], WriteFrameHook(self.plugin))
+        except Exception as e:
+            debug_log(f"AudioRecorderNative недоступен (старая версия Telegram?): {e}")
+
+        # Старый путь записи и общие точки остановки.
+        try:
+            cls = get_class("org.telegram.messenger.MediaController")
+        except Exception as e:
+            debug_log(f"MediaController недоступен: {e}")
+            return
+        stop = StopRecordHook(self.plugin)
+        self.hook(cls, "writeFrame", [ByteBuffer, Integer.TYPE], WriteFrameHook(self.plugin))
+        self.hook(cls, "startRecord", [String, Integer.TYPE], StartRecordHook(self.plugin))
+        self.hook(cls, "stopRecord", [], stop)
+        self.hook(cls, "stopRecording", [Integer.TYPE, Boolean.TYPE, Integer.TYPE, Boolean.TYPE, Long.TYPE], stop)
+        self.hook(cls, "cleanRecording", [Boolean.TYPE], stop)
+
+
+class ImportResultHook(MethodHook):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def before_hooked_method(self, param):
+        try:
+            if param.args[0] != IMPORT_REQUEST_CODE or param.args[2] is None:
+                return
+            data = param.args[2]
+            uris = []
+            clip = data.getClipData()
+            if clip is not None:
+                uris = [clip.getItemAt(i).getUri() for i in range(clip.getItemCount())]
+            elif data.getData() is not None:
+                uris = [data.getData()]
+            if uris:
+                self.plugin.import_uris(param.thisObject.getContentResolver(), uris)
+        except Exception as e:
+            import traceback
+            debug_log(f"импорт: ошибка {e}\n{traceback.format_exc()}")
+            self.plugin.notify(f"Ошибка импорта: {e}")
+
+    @staticmethod
+    def _display_name(resolver, uri) -> Optional[str]:
+        try:
+            from android.provider import OpenableColumns
+            cursor = resolver.query(uri, None, None, None, None)
+            if cursor is None:
+                return None
+            try:
+                idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if idx >= 0 and cursor.moveToFirst():
+                    return cursor.getString(idx)
+            finally:
+                cursor.close()
+        except Exception as e:
+            debug_log(f"имя файла: {e}")
+        return None
+
+    @staticmethod
+    def _read(resolver, uri) -> Optional[bytes]:
+        try:
+            stream = resolver.openInputStream(uri)
+            if stream is None:
+                return None
+            chunks = []
+            buf = bytearray(65536)
+            while True:
+                n = stream.read(buf)
+                if n == -1:
+                    break
+                chunks.append(bytes(buf[:n]))
+            stream.close()
+            return b"".join(chunks)
+        except Exception as e:
+            debug_log(f"чтение файла: {e}")
+            return None
+
+
+class ImportHooks(HookGroup):
+    def install(self):
+        try:
+            from android.content import Intent
+            from java.lang import Integer
+            cls = get_class("org.telegram.ui.LaunchActivity")
+        except Exception as e:
+            debug_log(f"LaunchActivity недоступен: {e}")
+            return
+        self.hook(cls, "onActivityResult", [Integer.TYPE, Integer.TYPE, Intent], ImportResultHook(self.plugin))
+
+
+def open_plugin_settings(plugin_id: str) -> bool:
+    """Открывает экран настроек плагина. Публичного API нет, поэтому перебираем известные варианты
+    и пишем в журнал, что нашли, чтобы можно было дописать точный вызов."""
+    try:
+        from java.lang import Class
+        fragment = get_last_fragment()
+        if fragment is None:
+            return False
+
+        controller_cls = None
+        for name in ("com.exteragram.messenger.plugins.PluginsController",):
+            try:
+                controller_cls = Class.forName(name)
+                break
+            except Exception:
+                continue
+        controller = controller_cls.getMethod("getInstance").invoke(None) if controller_cls is not None else None
+
+        if controller is not None:
+            for method in controller_cls.getDeclaredMethods():
+                name = str(method.getName())
+                if "ettings" in name:
+                    debug_log(f"PluginsController.{name}({[str(t.getSimpleName()) for t in method.getParameterTypes()]})")
+
+        # 1) готовый экран настроек плагина
+        for name in ("com.exteragram.messenger.plugins.ui.PluginSettingsActivity",
+                     "com.exteragram.messenger.plugins.PluginSettingsActivity"):
+            try:
+                cls = Class.forName(name)
+            except Exception:
+                continue
+            plugin = None
+            if controller is not None:
+                for getter in ("getPlugin", "getPluginById"):
+                    try:
+                        plugin = controller_cls.getMethod(getter, Class.forName("java.lang.String")).invoke(controller, plugin_id)
+                        break
+                    except Exception:
+                        continue
+            for ctor in cls.getConstructors():
+                types = [str(t.getSimpleName()) for t in ctor.getParameterTypes()]
+                debug_log(f"{name}({types})")
+                try:
+                    if types == ["String"]:
+                        fragment.presentFragment(ctor.newInstance(plugin_id))
+                        return True
+                    if len(types) == 1 and plugin is not None:
+                        fragment.presentFragment(ctor.newInstance(plugin))
+                        return True
+                except Exception as e:
+                    debug_log(f"{name}: {e}")
+
+        # 2) метод контроллера
+        if controller is not None:
+            for method in controller_cls.getDeclaredMethods():
+                name = str(method.getName())
+                types = [str(t.getSimpleName()) for t in method.getParameterTypes()]
+                if "ettings" in name and name.lower().startswith(("open", "show", "present")) and types in (["String"], ["String", "BaseFragment"], ["BaseFragment", "String"]):
+                    method.setAccessible(True)
+                    args = [plugin_id if t == "String" else fragment for t in types]
+                    method.invoke(controller, *args)
+                    return True
+    except Exception as e:
+        import traceback
+        debug_log(f"открытие настроек: {e}\n{traceback.format_exc()}")
+    return False
+
+
+def start_import_picker(context):
+    from android.content import Intent
+    intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+    intent.addCategory(Intent.CATEGORY_OPENABLE)
+    intent.setType("audio/*")
+    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, True)
+    context.startActivityForResult(intent, IMPORT_REQUEST_CODE)
+
+
+# ─────────────── звонки и войс-чаты (сейчас отключено) ───────────────
+# Оставлено на будущее. Включается флагом CALL_HOOKS_ENABLED.
+
+VOIP_SERVICE = "org.telegram.messenger.voip.VoIPService"
+VOIP_AUDIO_CANDIDATES = [
+    "org.webrtc.voiceengine.WebRtcAudioRecord",
+    "org.webrtc.audio.WebRtcAudioRecord",
+    "org.webrtc.audio.JavaAudioDeviceModule$WebRtcAudioRecord",
+]
+VOIP_END_FIELDS = [("STATE_ENDED", 11), ("STATE_FAILED", 4), ("STATE_BUSY", 17), ("STATE_HANGING_UP", 10)]
+
+
+class VoipWriteFrameHook(MethodHook):
+    _field = None
+
+    def before_hooked_method(self, param):
+        try:
+            sound_engine.last_frame = time.time()
+            bytes_read = param.args[0]
+            if not sound_engine.active or bytes_read is None or bytes_read <= 0:
+                return
+            instance = param.thisObject
+            if VoipWriteFrameHook._field is None:
+                field = instance.getClass().getDeclaredField("byteBuffer")
+                field.setAccessible(True)
+                VoipWriteFrameHook._field = field
+            buf = VoipWriteFrameHook._field.get(instance)
+            if buf is None:
+                return
+            capacity = buf.capacity()
+            length = min(bytes_read, capacity)
+            buf.position(0)
+            buf.limit(length)
+            raw = bytearray(length)
+            buf.get(raw, 0, length)
+            raw = bytes(raw)
+            mixed = sound_engine.mix_into(raw)
+            if mixed != raw:
+                buf.position(0)
+                buf.put(mixed, 0, len(mixed))
+            buf.position(0)
+            buf.limit(capacity)
+        except Exception as e:
+            debug_log(f"voip writeFrame: ошибка {e}")
+
+
+class VoipStateHook(MethodHook):
+    def __init__(self, plugin, established: int, end_states: set):
+        self.plugin = plugin
+        self.established = established
+        self.end_states = end_states
+
+    def after_hooked_method(self, param):
+        state = param.args[0]
+        if state == self.established:
+            self.plugin.in_call = True
+            sound_engine.sample_rate = 48000
+            self.plugin.preload_samples()
+        elif state in self.end_states:
+            self.plugin.in_call = False
+            sound_engine.clear()
+            stop_speaker()
+
+
+class VoipHooks(HookGroup):
+    def install(self):
+        try:
+            from java.lang import Integer, Long
+            service = get_class(VOIP_SERVICE)
+        except Exception as e:
+            debug_log(f"VoIPService недоступен: {e}")
+            return
+
+        def static_int(name, fallback):
+            try:
+                field = service.getDeclaredField(name)
+                field.setAccessible(True)
+                return field.getInt(None)
+            except Exception:
+                return fallback
+
+        established = static_int("STATE_ESTABLISHED", 3)
+        end_states = {static_int(name, fallback) for name, fallback in VOIP_END_FIELDS}
+        self.hook(service, "dispatchStateChanged", [Integer.TYPE], VoipStateHook(self.plugin, established, end_states))
+
+        for class_name in VOIP_AUDIO_CANDIDATES:
+            try:
+                cls = get_class(class_name)
+            except Exception:
+                continue
+            if self.hook(cls, "nativeDataIsRecorded", [Integer.TYPE, Long.TYPE], VoipWriteFrameHook()):
+                break
+
+
+# ───────────────────────────── утилиты ─────────────────────────────
+
+def dp(value: int) -> int:
+    try:
+        from org.telegram.messenger import AndroidUtilities
+        return AndroidUtilities.dp(value)
+    except Exception:
+        return value * 2
+
+
+def theme_color(key_name: str, fallback: int) -> int:
+    try:
+        from org.telegram.ui.ActionBar import Theme
+        return Theme.getColor(getattr(Theme, key_name))
+    except Exception:
+        return fallback
+
+
+def status_bar_height() -> int:
+    try:
+        from org.telegram.messenger import AndroidUtilities
+        return int(AndroidUtilities.statusBarHeight)
+    except Exception:
+        return dp(24)
+
+
+def panel_top_offset(fragment) -> int:
+    """Верх панели — сразу под шапкой чата, чтобы не закрывать кнопки Telegram."""
+    try:
+        bar = fragment.getActionBar()
+        if bar is not None and bar.getBottom() > 0:
+            return int(bar.getBottom())
+    except Exception:
+        pass
+    try:
+        from org.telegram.ui.ActionBar import ActionBar
+        return status_bar_height() + int(ActionBar.getCurrentActionBarHeight())
+    except Exception:
+        return status_bar_height() + dp(56)
+
+
+def screen_y(view, bottom: bool = False) -> int:
+    try:
+        from java import jarray
+        loc = jarray("I")([0, 0])
+        view.getLocationOnScreen(loc)
+        return int(loc[1]) + (int(view.getHeight()) if bottom else 0)
+    except Exception:
+        return 0
+
+
+def tint(color: int, alpha: int) -> int:
+    value = (alpha << 24) | (color & 0xFFFFFF)
+    return value - (1 << 32) if value >= (1 << 31) else value
+
+
+def style_chip(view, color: int, text_color: int, fill: int = 0x33, press: int = 0x77, radius: int = 12, label=None):
+    """Фон-«таблетка» с нажатым состоянием (StateListDrawable: RippleDrawable ронял Telegram)."""
+    from android.graphics.drawable import GradientDrawable, StateListDrawable
+    from java import jarray
+
+    def shape(alpha):
+        drawable = GradientDrawable()
+        drawable.setColor(tint(color, alpha))
+        drawable.setCornerRadius(float(dp(radius)))
+        return drawable
+
+    states = StateListDrawable()
+    states.addState(jarray("I")([STATE_PRESSED]), shape(press))
+    states.addState(jarray("I")([]), shape(fill))
+    view.setBackground(states)
+    (label if label is not None else view).setTextColor(text_color)
+
+
+def jarray_bytes(data: bytes):
+    from java import jarray
+    return jarray("B")([b - 256 if b > 127 else b for b in data])
+
+
+def sounds_dir() -> str:
+    path = os.path.join(get_plugins_dir(), "voice_soundpad_sounds")
+    ensure_dir_exists(path)
+    return path
+
+
+def sound_files() -> List[str]:
+    try:
+        return sorted(
+            f for f in os.listdir(sounds_dir())
+            if f.lower().endswith(AUDIO_EXTENSIONS) and os.path.isfile(os.path.join(sounds_dir(), f))
+        )
+    except Exception:
+        return []
+
+
+def make_waveform(samples: array, bars: int = 64) -> bytes:
+    """Волна для голосового сообщения Telegram: 5-битные значения, упакованные подряд."""
+    step = max(1, len(samples) // bars)
+    out = bytearray((bars * 5 + 7) // 8 + 1)
+    for i in range(bars):
+        peak = max((abs(s) for s in samples[i * step:(i + 1) * step]), default=0)
+        value = min(31, peak * 31 // 32768)
+        bit = i * 5
+        index, shift = bit // 8, bit % 8
+        out[index] |= (value << shift) & 0xFF
+        if shift > 3:
+            out[index + 1] |= value >> (8 - shift)
+    return bytes(out[: (bars * 5 + 7) // 8])
+
+
+# ───────────────────────────── плагин ─────────────────────────────
+
+class VoiceSoundpadPlugin(BasePlugin):
+    def on_plugin_load(self):
+        global _logger, _debug_enabled
+        global _log_file
+        _logger = getattr(self, "logger", None)
+        _debug_enabled = bool(self.get_setting("debug_log", False))
+        _log_file = os.path.join(get_plugins_dir(), "voice_soundpad_debug.log")
+        try:
+            if os.path.isfile(_log_file) and os.path.getsize(_log_file) > LOG_MAX_BYTES:
+                os.remove(_log_file)
+        except Exception:
+            pass
+        debug_log(f"=== запуск плагина {__version__} ===")
+        if _debug_enabled:
+            install_crash_logger()
+
+        self.in_call = False
+        self._installed = False
+        self._menu_id = None
+        self._states = {}    # путь -> "loading" | "playing"
+        self._tokens = {}    # путь -> номер запуска (отсекает устаревшие колбэки)
+        self._chips = {}     # путь -> части кнопки в открытой панели
+        self._playback = None
+        self._touch = None
+        self._touch_cls = None
+        self._text_color = Color.WHITE
+        self._accent = Color.parseColor("#2F6FED")
+        self._token_seq = 0
+        self._collapsed = False
+        self._collapse_frac = 0.0
+        self._collapse_anim = None
+        self._natural_height = 0
+        self._rail = None
+        self._rail_update = None
+        self._scroll_cls = None
+        self._anim_cls = None
+        self._panel_body = None
+        self._handle_label = None
+        self._full_height = 0
+        self._processing = set()  # файлы, которые обрабатываются после импорта
+        self._job_lock = threading.Lock()  # импорт и пересборка идут по очереди
+        self._send_job = None   # идущая подготовка голосового для .sounds
+        self._toast_view = None
+        self._toast_parent = None
+        self._encode_lock = threading.Lock()
+        self._panel_view = None
+        self._panel_parent = None
+        self._panel_dy = 0
+        self._dock_fragment = None
+        self._following = False
+        self._auto_opened = False
+        self._watching = False
+        self._egg_count = 0
+        self._egg_last = 0.0
+        self.record_hooks = None
+        self.import_hooks = None
+        self.voip_hooks = None
+
+        self._apply_volume(self.get_setting("volume_pct", 100))
+        self.add_on_send_message_hook()
+        if self.get_setting("plugin_enabled", True):
+            self._install()
+
+    def on_plugin_unload(self):
+        try:
+            self.stop_all()
+            if self._send_job is not None:
+                self._send_job["cancel"] = True
+            run_on_ui_thread(self.hide_panel)
+            run_on_ui_thread(self._hide_send_toast)
+        except Exception as e:
+            debug_log(f"выгрузка: {e}")
+        self._uninstall()
+        remove_crash_logger()
+
+    # ── включение / выключение ──
+
+    def _install(self):
+        if self._installed:
+            return
+        self._installed = True
+
+        self.record_hooks = RecordHooks(self)
+        self.record_hooks.install()
+        self.import_hooks = ImportHooks(self)
+        self.import_hooks.install()
+        if CALL_HOOKS_ENABLED:
+            self.voip_hooks = VoipHooks(self)
+            self.voip_hooks.install()
+
+        for icon in ("msg_unmute", None):
+            try:
+                kwargs = {"icon": icon} if icon else {}
+                self._menu_id = self.add_menu_item(MenuItemData(
+                    menu_type=MenuItemType.CHAT_ACTION_MENU,
+                    text="Звуки",
+                    on_click=lambda ctx: run_on_ui_thread(self.open_settings),
+                    **kwargs,
+                ))
+                break
+            except Exception as e:
+                debug_log(f"пункт меню (icon={icon}): {e}")
+        self.preload_samples()
+
+    def _uninstall(self):
+        if not self._installed:
+            return
+        self._installed = False
+        for group in (self.record_hooks, self.import_hooks, self.voip_hooks):
+            if group is not None:
+                group.uninstall()
+        self.record_hooks = self.import_hooks = self.voip_hooks = None
+        if self._menu_id is not None:
+            try:
+                self.remove_menu_item(self._menu_id)
+            except Exception:
+                pass
+            self._menu_id = None
+        run_on_ui_thread(self.hide_panel)
+        self.stop_all()
+
+    def _on_enabled_change(self, enabled: bool):
+        if enabled:
+            self._install()
+        else:
+            self._uninstall()
+        self.notify("Voice Soundpad включён" if enabled else "Voice Soundpad выключен")
+
+    # ── команды в чате ──
+
+    def on_send_message_hook(self, account: int, params: Any) -> HookResult:
+        text = getattr(params, "message", None)
+        if not isinstance(text, str):
+            return HookResult()
+        text = text.strip()
+        cancel = HookResult(strategy=HookStrategy.CANCEL)
+
+        if text == ".soundpad":
+            enabled = not self.get_setting("plugin_enabled", True)
+            self.set_setting("plugin_enabled", enabled, reload_settings=True)
+            self._on_enabled_change(enabled)
+            return cancel
+
+        if not text.startswith(".sounds") or not self.get_setting("plugin_enabled", True):
+            return HookResult()
+
+        arg = text[len(".sounds"):].strip()
+        if not arg.isdigit() or not 1 <= int(arg) <= MAX_SLOTS:
+            self.notify(f"Использование: .sounds 1-{MAX_SLOTS}")
+            return cancel
+        filename = self.get_setting(f"slot_{int(arg) - 1}_file", "")
+        path = os.path.join(sounds_dir(), filename) if filename else ""
+        if not os.path.isfile(path):
+            self.notify(f"Слот {arg} пуст — назначьте звук в настройках плагина")
+            return cancel
+        peer = getattr(params, "peer", None)
+        if peer is None:
+            self.notify("Не удалось определить чат")
+            return cancel
+
+        threading.Thread(target=self._send_sound, args=(account, peer, path), daemon=True).start()
+        return cancel
+
+    def _send_sound(self, account: int, peer, path: str):
+        if self._send_job is not None:
+            self.notify("Уже готовлю другой звук — подождите или отмените")
+            return
+        job = {"cancel": False, "done": False, "path": path}
+        self._send_job = job
+
+        def show_later():
+            time.sleep(0.3)  # если голосовое уже в кэше, плашка не мелькает
+            if not job["done"]:
+                run_on_ui_thread(lambda: self._show_send_toast(job))
+
+        threading.Thread(target=show_later, daemon=True).start()
+        try:
+            if self._send_as_voice(account, peer, path):
+                return
+            if job["cancel"]:
+                raise SendCancelled()
+            from client_utils import send_audio
+            self.notify("Голосовое не собралось, отправляю как аудио")
+            send_audio(peer, path)
+        except SendCancelled:
+            self.notify("Отправка отменена")
+        except Exception as e:
+            debug_log(f".sounds: ошибка отправки {e}")
+            self.notify("Не удалось отправить звук")
+        finally:
+            job["done"] = True
+            self._send_job = None
+            run_on_ui_thread(self._hide_send_toast)
+
+    def _check_cancel(self):
+        job = self._send_job
+        if job is not None and job["cancel"]:
+            raise SendCancelled()
+
+    def _cancel_send(self, job):
+        job["cancel"] = True
+        sound_engine.cancel_loading(job["path"])
+        self._hide_send_toast()
+        self.notify("Отменяю…")
+
+    def _show_send_toast(self, job):
+        """Плашка над чатом: круговая загрузка и крестик для отмены."""
+        if job["done"] or self._toast_view is not None:
+            return
+        try:
+            from android import R as AndroidR
+            from android.graphics.drawable import GradientDrawable
+            from android.widget import ProgressBar
+
+            fragment = get_last_fragment()
+            activity = fragment.getParentActivity() if fragment is not None else None
+            if activity is None:
+                return
+            parent = activity.getWindow().getDecorView().findViewById(AndroidR.id.content)
+            background = theme_color("key_chat_messagePanelBackground", theme_color("key_dialogBackground", Color.parseColor("#1F1F1F")))
+            text_color = theme_color("key_windowBackgroundWhiteBlackText", theme_color("key_dialogTextBlack", Color.WHITE))
+            muted = theme_color("key_windowBackgroundWhiteGrayText", theme_color("key_dialogTextGray2", Color.GRAY))
+            accent = self._accent_color(theme_color("key_chat_messagePanelVoiceBackground", Color.parseColor("#2F6FED")))
+
+            row = LinearLayout(activity)
+            row.setOrientation(LinearLayout.HORIZONTAL)
+            row.setGravity(Gravity.CENTER_VERTICAL)
+            row.setPadding(dp(14), dp(8), dp(4), dp(8))
+            shape = GradientDrawable()
+            shape.setColor(tint(background, 0xF2))
+            shape.setCornerRadius(float(dp(22)))
+            row.setBackground(shape)
+            row.setElevation(float(dp(6)))
+            row.setClickable(True)
+
+            spinner = ProgressBar(activity)
+            spinner.setIndeterminate(True)
+            try:
+                from android.graphics import PorterDuff
+                spinner.getIndeterminateDrawable().setColorFilter(accent, PorterDuff.Mode.SRC_IN)
+            except Exception:
+                pass
+            row.addView(spinner, LinearLayout.LayoutParams(dp(22), dp(22)))
+
+            label = TextView(activity)
+            label.setText("Готовлю голосовое…")
+            label.setTextColor(text_color)
+            label.setTextSize(14.0)
+            label.setSingleLine(True)
+            label_lp = LinearLayout.LayoutParams(-2, -2)
+            label_lp.leftMargin = dp(10)
+            row.addView(label, label_lp)
+
+            close = TextView(activity)
+            close.setText("✕")
+            close.setTextColor(muted)
+            close.setTextSize(16.0)
+            close.setPadding(dp(14), dp(6), dp(12), dp(6))
+            close.setOnClickListener(self._safe_click(lambda v: self._cancel_send(job)))
+            row.addView(close)
+
+            lp = FrameLayout.LayoutParams(-2, -2)
+            lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL
+            lp.topMargin = panel_top_offset(fragment) + dp(8)
+            parent.addView(row, lp)
+            row.setAlpha(0.0)
+            row.setTranslationY(float(-dp(16)))
+            row.animate().alpha(1.0).translationY(0.0).setDuration(260).setInterpolator(self._interpolator()).start()
+            self._toast_view, self._toast_parent = row, parent
+        except Exception as e:
+            import traceback
+            debug_log(f"плашка отправки: {e}\n{traceback.format_exc()}")
+
+    def _hide_send_toast(self):
+        view, parent = self._toast_view, self._toast_parent
+        self._toast_view = self._toast_parent = None
+        if view is None:
+            return
+
+        def remove():
+            try:
+                parent.removeView(view)
+            except Exception:
+                pass
+
+        try:
+            view.animate().alpha(0.0).translationY(float(-dp(16))).setDuration(200).setInterpolator(self._interpolator()).withEndAction(R(remove)).start()
+        except Exception:
+            remove()
+
+    def _voice_file(self, path: str) -> Optional[str]:
+        """Кодирует звук в Opus-файл голосового сообщения встроенным кодировщиком Telegram (с кэшем)."""
+        from java.lang import Class, Integer
+        from java.nio import ByteBuffer, ByteOrder
+        from org.telegram.messenger import MediaController
+
+        cache_dir = os.path.join(sounds_dir(), ".voice")
+        ensure_dir_exists(cache_dir)
+        stamp = int(os.path.getmtime(path))
+        out = os.path.join(cache_dir, f"{os.path.splitext(os.path.basename(path))[0]}_{stamp}.ogg")
+        if os.path.isfile(out) and os.path.getsize(out) > 0:
+            return out
+
+        started = time.time()
+        samples = sound_engine.load_sample(path)
+        self._check_cancel()
+        if not samples:
+            return None
+        if sound_engine.sample_rate != VOICE_RATE:
+            samples = resample(samples, sound_engine.sample_rate, VOICE_RATE)
+        raw = samples.tobytes()[:VOICE_MAX_SECONDS * VOICE_RATE * 2]
+
+        controller = MediaController.getInstance()
+        cls = controller.getClass()
+        string_class = Class.forName("java.lang.String")
+        buffer_class = Class.forName("java.nio.ByteBuffer")
+        start = cls.getDeclaredMethod("startRecord", string_class, Integer.TYPE)
+        write = cls.getDeclaredMethod("writeFrame", buffer_class, Integer.TYPE)
+        stop = cls.getDeclaredMethod("stopRecord")
+        for method in (start, write, stop):
+            method.setAccessible(True)
+
+        tmp = out + ".part"
+        with self._encode_lock:
+            if sound_engine.recording:
+                debug_log("кодирование отложено: идёт запись")
+                return None
+            sound_engine.encoding = True
+            try:
+                if int(start.invoke(controller, tmp, Integer(VOICE_RATE))) == 0:
+                    debug_log("startRecord вернул 0")
+                    return None
+                try:
+                    buffer = ByteBuffer.allocateDirect(VOICE_FRAME_BYTES)
+                    buffer.order(ByteOrder.nativeOrder())
+                    from java import jarray
+                    frame_size = Integer(VOICE_FRAME_BYTES)
+                    padded = raw + b"\x00" * (-len(raw) % VOICE_FRAME_BYTES)
+                    data = jarray("B")(padded)  # один раз на весь звук, а не по байтам на каждый кадр
+                    cancelled = False
+                    for i in range(0, len(padded), VOICE_FRAME_BYTES):
+                        job = self._send_job
+                        if job is not None and job["cancel"]:
+                            cancelled = True
+                            break
+                        buffer.clear()
+                        buffer.put(data, i, VOICE_FRAME_BYTES)
+                        buffer.rewind()
+                        write.invoke(controller, buffer, frame_size)
+                finally:
+                    stop.invoke(controller)
+                if cancelled:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+                    raise SendCancelled()
+            finally:
+                sound_engine.encoding = False
+        if not os.path.isfile(tmp) or os.path.getsize(tmp) == 0:
+            return None
+        os.replace(tmp, out)
+        debug_log(f"голосовое готово за {time.time() - started:.1f} с")
+        return out
+
+    def _send_as_voice(self, account: int, peer, path: str) -> bool:
+        try:
+            from org.telegram.messenger import MediaController, SendMessagesHelper, SharedConfig, UserConfig
+            from org.telegram.tgnet import ConnectionsManager, TLRPC
+            from java import jarray
+
+            ogg = self._voice_file(path)
+            self._check_cancel()
+            if not ogg:
+                return False
+            decoded = sound_engine.load_sample(path)
+            duration = len(decoded) / float(sound_engine.sample_rate) if decoded else 0.0
+
+            document = TLRPC.TL_document()
+            document.file_reference = jarray("B")([])
+            document.dc_id = -2147483648  # Integer.MIN_VALUE: локальный файл, как у записанных гс
+            document.id = SharedConfig.getLastLocalId()
+            document.user_id = UserConfig.getInstance(account).getClientUserId()
+            document.mime_type = "audio/ogg"
+            document.date = ConnectionsManager.getInstance(account).getCurrentTime()
+            document.size = int(os.path.getsize(ogg))
+
+            audio = TLRPC.TL_documentAttributeAudio()
+            audio.voice = True
+            audio.duration = float(duration)
+            waveform = MediaController.getWaveform(ogg)
+            if waveform is not None:
+                audio.waveform = waveform
+                audio.flags |= 4
+            document.attributes.add(audio)
+            SharedConfig.saveConfig()
+
+            def send():
+                try:
+                    params = SendMessagesHelper.SendMessageParams.of(
+                        document, None, ogg, int(peer), None, None, None, None, None, None,
+                        True, 0, 0, 0, None, None, False)
+                    SendMessagesHelper.getInstance(account).sendMessage(params)
+                except Exception as e:
+                    import traceback
+                    debug_log(f".sounds: sendMessage упал {e}\n{traceback.format_exc()}")
+                    self.notify("Не удалось отправить голосовое")
+
+            self._check_cancel()
+            run_on_ui_thread(send)
+            debug_log(f".sounds: голосовое отправлено ({os.path.basename(ogg)}, {duration:.1f} с)")
+            return True
+        except SendCancelled:
+            raise
+        except Exception as e:
+            import traceback
+            debug_log(f".sounds: голосовое не собралось ({e})\n{traceback.format_exc()}")
+            return False
+
+    # ── панель со звуками ──
+
+    def open_settings(self):
+        """Пункт «Звуки» в меню чата ведёт в настройки плагина."""
+        if open_plugin_settings(__id__):
+            return
+        self.notify("Не удалось открыть настройки — открываю панель")
+        self.toggle_panel()
+
+    def toggle_panel(self):
+        if self._panel_view is not None:
+            self.hide_panel()
+        else:
+            self.show_panel()
+
+    def on_recording_started(self):
+        if self._watching or self.in_call or self._panel_view is not None:
+            return
+        if not self.get_setting("auto_panel", True):
+            return
+        self._watching = True
+        debug_log("запись началась — открываю панель")
+        run_on_ui_thread(lambda: self.show_panel(True))
+        threading.Thread(target=self._watch_recording, daemon=True).start()
+
+    def on_recording_stopped(self):
+        debug_log("запись остановлена")
+        self._reset_states()
+        if self._auto_opened:
+            run_on_ui_thread(self.hide_panel)
+
+    def _watch_recording(self):
+        """Страховка: если хуки остановки не сработали, закрываем панель, когда кадры пропали."""
+        try:
+            time.sleep(1.0)
+            while self._panel_view is not None and self._auto_opened:
+                if not sound_engine.recording:
+                    sound_engine.stopped_at = time.time()
+                    run_on_ui_thread(self.hide_panel)
+                    break
+                time.sleep(0.3)
+        finally:
+            self._watching = False
+
+    def show_panel(self, auto: bool = False):
+        if self._panel_view is not None:
+            return
+        if not auto:
+            self._collapsed = False  # из меню всегда открываем развёрнутой
+        self._collapse_frac = 1.0 if self._collapsed else 0.0
+        self._natural_height = 0
+        try:
+            fragment = get_last_fragment()
+            activity = fragment.getParentActivity() if fragment is not None else None
+            if activity is None:
+                return
+            placement = self._dock_layout(fragment)
+            if placement is not None:
+                parent, index, docked, lp, dy = placement
+            else:
+                self._dock_fragment = None
+                # Запасной вариант: панель под шапкой чата.
+                from android import R as AndroidR
+                parent = activity.getWindow().getDecorView().findViewById(AndroidR.id.content)
+                index, docked = -1, False
+                top = panel_top_offset(fragment)
+                height = max(dp(200), int(parent.getHeight() * PANEL_BOTTOM_RATIO) - top)
+                self._full_height = height
+                lp = FrameLayout.LayoutParams(-1, self._panel_height(height))
+                lp.gravity = Gravity.TOP
+                lp.topMargin = top
+                dy = -dp(24)
+            view = self._build_panel(activity, docked)
+            self._measure_natural(view, parent, docked, lp)
+            if docked and self._natural_height:
+                bottom, height, _ = self._dock_metrics(parent, fragment)
+                lp.height = self._panel_height(height)
+                lp.topMargin = bottom - lp.height
+            elif not docked and self._natural_height:
+                self._full_height = min(self._full_height, self._natural_height)
+                lp.height = self._panel_height(self._full_height)
+            parent.addView(view, index, lp)
+            view.setAlpha(0.0)
+            view.setTranslationY(float(dy))
+            view.animate().alpha(1.0).translationY(0.0).setDuration(260).setInterpolator(self._interpolator()).start()
+            self._panel_dy = dy
+            self._panel_view, self._panel_parent = view, parent
+            self._auto_opened = auto
+            if docked and not self._following:
+                self._following = True
+                threading.Thread(target=self._follow_input, daemon=True).start()
+        except Exception as e:
+            import traceback
+            debug_log(f"панель: ошибка {e}\n{traceback.format_exc()}")
+
+    def _dock_metrics(self, container, fragment):
+        """(нижний край, высота): панель стоит над строкой сообщения и не заходит под шапку чата."""
+        bottom = int(container.getInputBubbleTop()) - dp(7) - dp(PANEL_GAP_DP)
+        bar = fragment.getActionBar()
+        limit = max(0, screen_y(bar, True) - screen_y(container)) if bar is not None else 0
+        available = bottom - limit
+        height = min(int(container.getHeight() * PANEL_HEIGHT_RATIO), available)
+        if self._natural_height:
+            height = min(height, self._natural_height)  # панель не занимает пустое место
+        return bottom, height, available
+
+    def _measure_natural(self, view, parent, docked: bool, lp):
+        """Высота панели по содержимому: пустое место не занимаем."""
+        try:
+            width = parent.getWidth() - (dp(16) if docked else 0)
+            if width <= 0:
+                return
+            body = self._panel_body
+            if body is not None:
+                body.setVisibility(View.VISIBLE)
+            view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            self._natural_height = int(view.getMeasuredHeight())
+            self._apply_collapsed_ui()
+        except Exception as e:
+            debug_log(f"замер панели: {e}")
+            self._natural_height = 0
+
+    def _dock_layout(self, fragment):
+        """Положение над строкой сообщения; None, если контейнера нет (старая версия Telegram) или он не подошёл."""
+        try:
+            container = getattr(fragment, "chatInputViewsContainer", None)
+            if container is None or container.getHeight() <= 0:
+                return None
+            bottom, height, _ = self._dock_metrics(container, fragment)
+            height = self._panel_height(height)
+            lp = FrameLayout.LayoutParams(-1, height)
+            lp.gravity = Gravity.TOP
+            lp.topMargin = bottom - height
+            lp.leftMargin = lp.rightMargin = dp(8)
+            self._dock_fragment = fragment
+            return container, 0, True, lp, dp(40)
+        except Exception as e:
+            debug_log(f"стыковка со строкой сообщения не удалась ({e}), панель встанет под шапкой")
+            return None
+
+    def _sync_panel(self):
+        """Подгоняет панель под строку сообщения: при клавиатуре она поднимается и сжимается."""
+        view, container, fragment = self._panel_view, self._panel_parent, self._dock_fragment
+        if view is None or fragment is None or container is None:
+            return
+        try:
+            if container.getHeight() <= 0:
+                return
+            bottom, height, available = self._dock_metrics(container, fragment)
+            if available < dp(COLLAPSED_DP if self._collapse_frac > 0.5 else PANEL_MIN_DP):
+                if view.getVisibility() != View.GONE:
+                    view.setVisibility(View.GONE)
+                return
+            if view.getVisibility() != View.VISIBLE:
+                view.setVisibility(View.VISIBLE)
+            height = self._panel_height(height)
+            lp = view.getLayoutParams()
+            if lp.height != height or lp.topMargin != bottom - height:
+                lp.height = height
+                lp.topMargin = bottom - height
+                view.setLayoutParams(lp)
+            if self._rail_update is not None:
+                self._rail_update()
+        except Exception as e:
+            debug_log(f"подгонка панели: {e}")
+
+    def _follow_input(self):
+        """Пока панель открыта, следим за положением строки сообщения (клавиатура, многострочный текст)."""
+        try:
+            while True:
+                while self._panel_view is not None and self._dock_fragment is not None:
+                    run_on_ui_thread(self._sync_panel)
+                    time.sleep(0.04)
+                time.sleep(0.05)
+                if self._panel_view is None or self._dock_fragment is None:
+                    break
+        finally:
+            self._following = False
+
+    def hide_panel(self):
+        view, parent = self._panel_view, self._panel_parent
+        self._panel_view = self._panel_parent = None
+        self._dock_fragment = None
+        self._auto_opened = False
+        self._rail = self._rail_update = None
+        if self._collapse_anim is not None:
+            try:
+                self._collapse_anim.cancel()
+            except Exception:
+                pass
+        if view is None:
+            return
+
+        def remove():
+            try:
+                parent.removeView(view)
+            except Exception:
+                pass
+
+        try:
+            view.animate().alpha(0.0).translationY(float(self._panel_dy)).setDuration(200).setInterpolator(self._interpolator()).withEndAction(R(remove)).start()
+        except Exception:
+            remove()
+
+    def _build_panel(self, context, docked: bool = False):
+        from android.graphics.drawable import GradientDrawable, StateListDrawable
+        from android.text import TextUtils
+        from java import jarray
+
+        # цвета панели ввода и кнопки записи, чтобы панель выглядела родной
+        background_color = theme_color("key_chat_messagePanelBackground",
+                                       theme_color("key_dialogBackground", Color.parseColor("#1F1F1F")))
+        title_color = theme_color("key_windowBackgroundWhiteBlackText",
+                                  theme_color("key_dialogTextBlack", Color.WHITE))
+        muted = theme_color("key_windowBackgroundWhiteGrayText",
+                            theme_color("key_dialogTextGray2", Color.GRAY))
+        accent = self._accent_color(theme_color("key_chat_messagePanelVoiceBackground",
+                                                theme_color("key_featuredStickers_addButton", Color.parseColor("#2F6FED"))))
+        red = theme_color("key_text_RedBold", Color.parseColor("#E64C3C"))
+        self._accent = accent
+        self._chips = {}
+        self._text_color = title_color
+
+        def button(text, color, on_click):
+            view = TextView(context)
+            view.setText(text)
+            view.setTextSize(14.0)
+            view.setGravity(Gravity.CENTER)
+            view.setSingleLine(True)
+            view.setEllipsize(TextUtils.TruncateAt.END)
+            view.setPadding(dp(8), dp(12), dp(8), dp(12))
+            style_chip(view, color, color)
+            view.setOnClickListener(self._safe_click(lambda v: (self._tap_feedback(v), on_click(v))))
+            return view
+
+        def sound_chip(text, path):
+            """Кнопка звука: внутри полоса прогресса и время; удержание и движение пальцем перематывает."""
+            chip = FrameLayout(context)
+            fill = View(context)
+            fill_bg = GradientDrawable()
+            fill_bg.setColor(tint(COLOR_PLAYING, 0xDD))
+            fill.setBackground(fill_bg)  # без скругления: по краям обрезает сама кнопка
+            fill.setVisibility(View.INVISIBLE)
+            chip.setClipToOutline(True)
+            chip.addView(fill, FrameLayout.LayoutParams(0, -1))
+
+            box = LinearLayout(context)
+            box.setOrientation(LinearLayout.VERTICAL)
+            box.setPadding(dp(8), dp(9), dp(8), dp(9))
+            name = TextView(context)
+            name.setText(text)
+            name.setTextSize(14.0)
+            name.setGravity(Gravity.CENTER)
+            name.setSingleLine(True)
+            name.setEllipsize(TextUtils.TruncateAt.END)
+            clock = TextView(context)
+            clock.setText("0:00 / 0:00")
+            clock.setTextSize(11.0)
+            clock.setGravity(Gravity.CENTER)
+            clock.setSingleLine(True)
+            clock.setVisibility(View.INVISIBLE)
+            box.addView(name, LinearLayout.LayoutParams(-1, -2))
+            box.addView(clock, LinearLayout.LayoutParams(-1, -2))
+            chip.addView(box, FrameLayout.LayoutParams(-1, -2))
+
+            style_chip(chip, accent, accent, label=name)
+            chip.setClickable(True)
+            chip.setOnClickListener(self._safe_click(lambda v: (self._tap_feedback(v), self.play(path))))
+            chip.setTag(path)
+            chip.setOnTouchListener(self._make_touch(path))
+            self._chips[path] = (chip, fill, name, clock)
+            return chip
+
+        def cell(weight=0.0):
+            lp = LinearLayout.LayoutParams(0 if weight else -1, -2, weight)
+            lp.setMargins(dp(4), dp(4), dp(4), dp(4))
+            return lp
+
+        shape = GradientDrawable()
+        if docked:
+            # скруглена со всех сторон, как остров строки сообщения
+            glass = int(self.get_setting("panel_style_index", 0)) == 0
+            shape.setColor(tint(background_color, 0xE6 if glass else 0xFF))
+            shape.setCornerRadius(float(dp(12 if int(self.get_setting("corner_index", 0)) == 1 else 22)))
+        else:
+            radius = float(dp(18))
+            shape.setColor(background_color)
+            shape.setCornerRadii(jarray("F")([0.0, 0.0, 0.0, 0.0, radius, radius, radius, radius]))
+
+        root = LinearLayout(context)
+        root.setOrientation(LinearLayout.VERTICAL)
+        root.setBackground(shape)
+        if not docked:
+            root.setElevation(float(dp(8)))
+        root.setClickable(True)
+        root.setPadding(dp(16), 0, dp(16), dp(12))
+
+        # язычок сверху по центру: сворачивает панель вниз, повторное нажатие разворачивает
+        handle = FrameLayout(context)
+        handle_label = TextView(context)
+        handle_label.setTextColor(muted)
+        handle_label.setTextSize(11.0)
+        handle_label.setGravity(Gravity.CENTER)
+        handle.addView(handle_label, FrameLayout.LayoutParams(-1, -1))
+        handle.setOnClickListener(self._safe_click(lambda v: (self._tap_feedback(v), self._toggle_collapse())))
+        root.addView(handle, LinearLayout.LayoutParams(-1, dp(COLLAPSED_DP)))
+        self._handle_label = handle_label
+
+        body = LinearLayout(context)
+        body.setOrientation(LinearLayout.VERTICAL)
+        self._panel_body = body
+
+        header = LinearLayout(context)
+        header.setOrientation(LinearLayout.HORIZONTAL)
+        header.setGravity(Gravity.CENTER_VERTICAL)
+        title = TextView(context)
+        title.setText("Звуки")
+        title.setTextColor(title_color)
+        title.setTextSize(17.0)
+        title.setTypeface(title.getTypeface(), 1)
+        close = TextView(context)
+        close.setText("✕")
+        close.setTextColor(muted)
+        close.setTextSize(18.0)
+        close.setPadding(dp(12), dp(8), dp(4), dp(8))
+        close.setOnClickListener(self._safe_click(lambda v: self.hide_panel()))
+        header.addView(title, LinearLayout.LayoutParams(0, -2, 1.0))
+        try:
+            header.addView(self._build_volume(context, title_color, accent), LinearLayout.LayoutParams(dp(116), dp(32)))
+        except Exception as e:
+            import traceback
+            debug_log(f"слайдер громкости не создан: {e}\n{traceback.format_exc()}")
+        header.addView(close)
+        body.addView(header)
+
+        slots = self.get_slots()
+        if not slots or not sound_engine.recording:
+            hint = TextView(context)
+            hint.setTextColor(muted)
+            hint.setTextSize(13.0)
+            hint.setPadding(dp(4), 0, dp(4), dp(8))
+            hint.setText("Звуков пока нет. Добавьте их в настройках плагина." if not slots
+                         else "Запись не идёт — звук играет через динамик.")
+            body.addView(hint)
+
+        grid = LinearLayout(context)
+        grid.setOrientation(LinearLayout.VERTICAL)
+        for i in range(0, len(slots), PANEL_COLUMNS):
+            row = LinearLayout(context)
+            row.setOrientation(LinearLayout.HORIZONTAL)
+            chunk = slots[i:i + PANEL_COLUMNS]
+            for path, label in chunk:
+                chip = sound_chip(label, path)
+                self._paint(path)
+                row.addView(chip, cell(1.0))
+            for _ in range(PANEL_COLUMNS - len(chunk)):
+                row.addView(View(context), cell(1.0))
+            grid.addView(row)
+        scroll = ScrollView(context)
+        scroll.setVerticalScrollBarEnabled(False)
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER)
+        scroll.setNestedScrollingEnabled(True)
+        scroll.addView(grid)
+        self._rail = self._rail_update = None
+        if len(slots) >= RAIL_MIN_SOUNDS:
+            area = LinearLayout(context)
+            area.setOrientation(LinearLayout.HORIZONTAL)
+            area.addView(scroll, LinearLayout.LayoutParams(0, -1, 1.0))
+            area.addView(self._build_rail(context, scroll, grid, muted), LinearLayout.LayoutParams(dp(16), -1))
+            body.addView(area, LinearLayout.LayoutParams(-1, 0, 1.0))
+        else:
+            body.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1.0))
+
+        if slots:
+            body.addView(button("Стоп", red, lambda v: self.stop_all()), cell())
+        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1.0))
+        self._apply_collapsed_ui()
+        return root
+
+    def _build_volume(self, context, text_color, accent):
+        """Слайдер громкости: таблетка с заливкой, внутри значок динамика и процент."""
+        from android.graphics.drawable import ColorDrawable, GradientDrawable
+        from java import dynamic_proxy, jarray
+
+        percent = max(0, min(100, int(self.get_setting("volume_pct", 100))))
+        radius = float(dp(16))
+
+        pill = FrameLayout(context)
+        pill_bg = GradientDrawable()
+        pill_bg.setColor(tint(text_color, 0x1F))
+        pill_bg.setCornerRadius(radius)
+        pill.setBackground(pill_bg)
+
+        width = dp(116)
+        fill = View(context)
+        fill_bg = GradientDrawable()
+        fill_bg.setColor(tint(accent, 0xAA))
+        fill.setBackground(fill_bg)
+        pill.setClipToOutline(True)  # заливка обрезается по скруглению таблетки
+
+        def set_fill(value):
+            lp = fill.getLayoutParams()
+            lp.width = int(width * value / 100.0)
+            fill.setLayoutParams(lp)
+
+        bar = SeekBar(context)  # прозрачный, только принимает касания
+        bar.setMax(100)
+        bar.setPadding(0, 0, 0, 0)
+        bar.setProgressDrawable(ColorDrawable(0))
+        bar.setThumb(None)
+        bar.setProgress(percent)
+
+        label = TextView(context)
+        label.setTextColor(text_color)
+        label.setTextSize(13.0)
+        label.setGravity(Gravity.CENTER)
+        label.setSingleLine(True)
+
+        def show(value):
+            label.setText(("🔇 " if value == 0 else "🔊 ") + f"{value}%")
+            set_fill(value)
+
+        pill.addView(fill, FrameLayout.LayoutParams(int(width * percent / 100.0), -1))
+        show(percent)
+        plugin = self
+
+        class VolumeListener(dynamic_proxy(SeekBar.OnSeekBarChangeListener)):
+            def onProgressChanged(self, seek_bar, progress, from_user):
+                try:
+                    show(int(progress))
+                    if from_user:
+                        plugin._apply_volume(int(progress))
+                except Exception as e:
+                    debug_log(f"слайдер: {e}")
+
+            def onStartTrackingTouch(self, seek_bar):
+                try:
+                    seek_bar.getParent().requestDisallowInterceptTouchEvent(True)
+                except Exception:
+                    pass
+
+            def onStopTrackingTouch(self, seek_bar):
+                try:
+                    plugin.set_setting("volume_pct", int(seek_bar.getProgress()))
+                except Exception as e:
+                    debug_log(f"слайдер: сохранение {e}")
+
+        bar.setOnSeekBarChangeListener(VolumeListener())
+        pill.addView(label, FrameLayout.LayoutParams(-1, -1))
+        pill.addView(bar, FrameLayout.LayoutParams(-1, -1))
+        return pill
+
+    def _apply_volume(self, percent):
+        try:
+            gain = max(0, min(100, int(percent))) / 100.0
+        except Exception:
+            gain = 1.0
+        sound_engine.master_gain = gain
+        set_speaker_volume(gain)
+
+    # ── состояния кнопок ──
+
+    def _set_state(self, path: str, state: Optional[str], token: Optional[int] = None):
+        if token is not None and self._tokens.get(path) != token:
+            return  # колбэк от уже остановленного запуска
+        if state is None:
+            self._states.pop(path, None)
+        else:
+            self._states[path] = state
+        run_on_ui_thread(lambda: self._paint(path))
+
+    def _paint(self, path: str):
+        parts = self._chips.get(path)
+        if parts is None:
+            return
+        chip, fill, name, clock = parts
+        try:
+            state = "loading" if path in self._processing else self._states.get(path)
+            if state == "playing":
+                style_chip(chip, COLOR_PLAYING, self._text_color, 0x40, 0x66, label=name)
+                fill.setVisibility(View.VISIBLE)
+                clock.setVisibility(View.VISIBLE)
+                self._update_progress(path)
+                return
+            if state == "loading":
+                style_chip(chip, COLOR_LOADING, COLOR_ON_LOADING, 0xE6, 0xFF, label=name)
+            else:
+                style_chip(chip, self._accent, self._accent, label=name)
+            fill.setVisibility(View.INVISIBLE)
+            clock.setVisibility(View.INVISIBLE)
+        except Exception as e:
+            debug_log(f"перекраска кнопки: {e}")
+
+    def _update_progress(self, path: str, fraction: Optional[float] = None):
+        parts = self._chips.get(path)
+        playback = self._playback
+        if parts is None or playback is None or playback.path != path:
+            return
+        chip, fill, name, clock = parts
+        try:
+            position = playback.position() if fraction is None else fraction * playback.duration
+            ratio = max(0.0, min(1.0, position / playback.duration))
+            width = int(chip.getWidth() * ratio)
+            lp = fill.getLayoutParams()
+            if lp.width != width:
+                lp.width = width
+                fill.setLayoutParams(lp)
+            clock.setText(f"{format_time(position)} / {format_time(playback.duration)}")
+        except Exception as e:
+            debug_log(f"прогресс: {e}")
+
+    def _start_ticker(self, path: str, token: int):
+        def tick():
+            while self._tokens.get(path) == token and self._states.get(path) == "playing":
+                touch = self._touch
+                if not (touch and touch.get("path") == path and touch.get("seek")):
+                    run_on_ui_thread(lambda: self._update_progress(path))
+                time.sleep(0.1)
+
+        threading.Thread(target=tick, daemon=True).start()
+
+    def _make_touch(self, path: str):
+        from java import dynamic_proxy
+        if self._touch_cls is None:
+            plugin = self
+
+            class ChipTouch(dynamic_proxy(View.OnTouchListener)):
+                def onTouch(self, view, event):
+                    try:
+                        tag = str(view.getTag())
+                        if tag == "__rail__":
+                            return bool(plugin._on_rail_touch(view, event))
+                        return bool(plugin._on_chip_touch(tag, view, event))
+                    except Exception as e:
+                        import traceback
+                        debug_log(f"касание: {e}\n{traceback.format_exc()}")
+                        return False
+
+            self._touch_cls = ChipTouch
+        return self._touch_cls()
+
+    def _build_rail(self, context, scroll, grid, color):
+        """Узкий вертикальный ползунок прокрутки справа: тянешь вверх-вниз, список едет."""
+        from android.graphics.drawable import GradientDrawable
+        from java import dynamic_proxy
+
+        rail = FrameLayout(context)
+        rail.setTag("__rail__")
+        track = View(context)
+        track_bg = GradientDrawable()
+        track_bg.setColor(tint(color, 0x30))
+        track_bg.setCornerRadius(float(dp(2)))
+        track.setBackground(track_bg)
+        track_lp = FrameLayout.LayoutParams(dp(4), -1)
+        track_lp.gravity = Gravity.CENTER_HORIZONTAL
+        rail.addView(track, track_lp)
+
+        thumb = View(context)
+        thumb_bg = GradientDrawable()
+        thumb_bg.setColor(tint(color, 0xCC))
+        thumb_bg.setCornerRadius(float(dp(3)))
+        thumb.setBackground(thumb_bg)
+        thumb_lp = FrameLayout.LayoutParams(dp(6), dp(28))
+        thumb_lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP
+        rail.addView(thumb, thumb_lp)
+
+        def update():
+            try:
+                rail_h, view_h, total = int(rail.getHeight()), int(scroll.getHeight()), int(grid.getHeight())
+                if rail_h <= 0 or total <= 0:
+                    return
+                size = max(dp(24), int(rail_h * min(1.0, view_h / float(total))))
+                span = max(1, total - view_h)
+                frac = min(1.0, max(0.0, scroll.getScrollY() / float(span)))
+                lp = thumb.getLayoutParams()
+                top = int(frac * (rail_h - size))
+                if lp.height != size or lp.topMargin != top:
+                    lp.height, lp.topMargin = size, top
+                    thumb.setLayoutParams(lp)
+            except Exception as e:
+                debug_log(f"ползунок прокрутки: {e}")
+
+        if self._scroll_cls is None:
+            class RailScroll(dynamic_proxy(View.OnScrollChangeListener)):
+                def onScrollChange(self, view, x, y, old_x, old_y):
+                    fn = plugin_ref._rail_update
+                    if fn is not None:
+                        fn()
+
+            plugin_ref = self
+            self._scroll_cls = RailScroll
+        scroll.setOnScrollChangeListener(self._scroll_cls())
+        rail.setOnTouchListener(self._make_touch("__rail__"))
+        self._rail = (scroll, grid)
+        self._rail_update = update
+        rail.post(R(update))
+        return rail
+
+    def _on_rail_touch(self, view, event) -> bool:
+        rail = self._rail
+        if rail is None:
+            return False
+        scroll, grid = rail
+        action = int(event.getActionMasked())
+        if action == 0:
+            try:
+                view.getParent().requestDisallowInterceptTouchEvent(True)
+            except Exception:
+                pass
+        if action in (0, 2):
+            height = max(1, int(view.getHeight()))
+            frac = max(0.0, min(1.0, float(event.getY()) / height))
+            scroll.scrollTo(0, int(frac * max(0, int(grid.getHeight()) - int(scroll.getHeight()))))
+        return True
+
+    def _on_chip_touch(self, path: str, view, event) -> bool:
+        """Пока звук играет: касание останавливает его, а удержание с движением перематывает."""
+        action = int(event.getActionMasked())
+        touch = self._touch
+        if action == 0:  # DOWN
+            if self._states.get(path) != "playing":
+                self._touch = None
+                return False
+            self._touch = {"path": path, "x": float(event.getX()), "seek": False, "fraction": 0.0}
+            try:
+                view.getParent().requestDisallowInterceptTouchEvent(True)
+                view.setPressed(True)
+            except Exception:
+                pass
+            return True
+        if not touch or touch.get("path") != path:
+            return False
+        if action == 2:  # MOVE
+            if not touch["seek"] and abs(float(event.getX()) - touch["x"]) > dp(6):
+                touch["seek"] = True
+            if touch["seek"]:
+                width = max(1, int(view.getWidth()))
+                touch["fraction"] = max(0.0, min(1.0, float(event.getX()) / width))
+                self._update_progress(path, touch["fraction"])
+            return True
+        if action in (1, 3):  # UP / CANCEL
+            self._touch = None
+            try:
+                view.setPressed(False)
+            except Exception:
+                pass
+            if action == 1:
+                if touch["seek"]:
+                    touch["fraction"] = max(0.0, min(1.0, float(event.getX()) / max(1, int(view.getWidth()))))
+                    playback = self._playback
+                    if playback is not None and playback.path == path:
+                        playback.seek(touch["fraction"])
+                else:
+                    self._tap_feedback(view)
+                    self.stop_all()
+            return True
+        return True
+
+    def _reset_states(self):
+        paths = list(self._states)
+        self._states.clear()
+        self._tokens.clear()
+        self._playback = None
+        self._touch = None
+        for path in paths:
+            run_on_ui_thread(lambda p=path: self._paint(p))
+
+    @staticmethod
+    def _interpolator():
+        """Кривая, как в анимациях Telegram (ease-out quint)."""
+        try:
+            from org.telegram.ui.Components import CubicBezierInterpolator
+            return CubicBezierInterpolator.EASE_OUT_QUINT
+        except Exception:
+            from android.view.animation import DecelerateInterpolator
+            return DecelerateInterpolator(2.0)
+
+    def _accent_color(self, default: int) -> int:
+        try:
+            value = ACCENTS[int(self.get_setting("accent_index", 0))][1]
+        except Exception:
+            value = None
+        return Color.parseColor(value) if value else default
+
+    def _panel_height(self, expanded: int) -> int:
+        expanded = max(dp(PANEL_MIN_DP), expanded)
+        collapsed = dp(COLLAPSED_DP)
+        return int(expanded + (collapsed - expanded) * self._collapse_frac)
+
+    def _apply_collapsed_ui(self):
+        body, label = self._panel_body, self._handle_label
+        frac = self._collapse_frac
+        if body is not None:
+            body.setVisibility(View.GONE if frac >= 0.98 else View.VISIBLE)
+            body.setAlpha(max(0.0, 1.0 - frac * 1.4))
+        if label is not None:
+            label.setRotation(180.0 * frac)
+
+    def _toggle_collapse(self):
+        self._collapsed = not self._collapsed
+        self._animate_collapse(1.0 if self._collapsed else 0.0)
+
+    def _animate_collapse(self, target: float):
+        from android.animation import ValueAnimator
+        from java import dynamic_proxy, jarray
+
+        if self._collapse_anim is not None:
+            try:
+                self._collapse_anim.cancel()
+            except Exception:
+                pass
+        if self._anim_cls is None:
+            plugin = self
+
+            class CollapseUpdate(dynamic_proxy(ValueAnimator.AnimatorUpdateListener)):
+                def onAnimationUpdate(self, animator):
+                    try:
+                        plugin._set_collapse_frac(float(animator.getAnimatedValue()))
+                    except Exception as e:
+                        debug_log(f"анимация сворачивания: {e}")
+
+            self._anim_cls = CollapseUpdate
+        try:
+            animator = ValueAnimator.ofFloat(jarray("F")([float(self._collapse_frac), float(target)]))
+            animator.setDuration(280)
+            animator.setInterpolator(self._interpolator())
+            animator.addUpdateListener(self._anim_cls())
+            self._collapse_anim = animator
+            animator.start()
+        except Exception as e:
+            debug_log(f"анимация не запустилась ({e}), сворачиваю сразу")
+            self._set_collapse_frac(float(target))
+
+    def _set_collapse_frac(self, frac: float):
+        self._collapse_frac = max(0.0, min(1.0, frac))
+        self._apply_collapsed_ui()
+        view = self._panel_view
+        if view is None:
+            return
+        if self._dock_fragment is not None:
+            self._sync_panel()
+        else:
+            lp = view.getLayoutParams()
+            lp.height = self._panel_height(self._full_height)
+            view.setLayoutParams(lp)
+
+    def _safe_click(self, fn):
+        """Ошибка в обработчике не должна долетать до интерфейсного потока и ронять Telegram."""
+        def handler(view):
+            try:
+                fn(view)
+            except Exception as e:
+                import traceback
+                debug_log(f"клик: ошибка {e}\n{traceback.format_exc()}")
+        return OnClickListener(handler)
+
+    def _tap_feedback(self, view):
+        """Вибро-отклик (подсветку нажатия даёт сама кнопка)."""
+        if not self.get_setting("haptics", True):
+            return
+        try:
+            from android.view import HapticFeedbackConstants
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        except Exception as e:
+            debug_log(f"вибро: {e}")
+
+    def play(self, path: str):
+        """Нажатие на активный звук останавливает его, на другой — глушит текущий и включает новый."""
+        if path in self._processing:
+            return  # ещё обрабатывается после импорта
+        if path in self._states:
+            self.stop_all()
+            return
+        if self._states:
+            self.stop_all()
+        recording = sound_engine.recording
+        mode = self._mode() if recording else "speaker"
+        name = os.path.basename(path)
+        debug_log(f"play {name}: режим={mode}, запись={recording}")
+        self._token_seq += 1
+        token = self._token_seq
+        self._tokens[path] = token
+        self._set_state(path, "loading", token)
+
+        def ended():
+            self._set_state(path, None, token)
+
+        def started():
+            self._set_state(path, "playing", token)
+            self._start_ticker(path, token)
+
+        def work():
+            try:
+                samples = sound_engine.load_sample(path)
+                if self._tokens.get(path) != token:
+                    return  # пока грузилось, нажали стоп или другой звук
+                if not samples:
+                    debug_log(f"play {name}: сэмплы не загрузились")
+                    self._set_state(path, None, token)
+                    return
+                rate = sound_engine.sample_rate
+                debug_log(f"play {name}: сэмплов {len(samples)}, {rate} Гц")
+                if mode == "mic":
+                    playback = Playback(path, len(samples), rate)
+                    self._playback = playback
+                    playback.voice = sound_engine.trigger(samples, on_start=started, on_end=ended)
+                elif mode == "speaker":
+                    track, duration = arm_speaker(samples, rate)
+                    self._playback = Playback(path, len(samples), rate, track)
+                    started()
+                    fire_speaker(track, duration, on_end=ended, frames=len(samples))
+                else:
+                    track, duration = arm_speaker(samples, rate)
+                    playback = Playback(path, len(samples), rate, track)
+                    self._playback = playback
+
+                    def start_both():
+                        started()
+                        fire_speaker(track, duration, on_end=ended, frames=len(samples))
+
+                    playback.voice = sound_engine.trigger(samples, on_start=start_both)
+                debug_log(f"play {name}: запущено ({mode})")
+            except Exception as e:
+                import traceback
+                debug_log(f"play {name}: ошибка {e}\n{traceback.format_exc()}")
+                self._set_state(path, None, token)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def stop_all(self):
+        for path in list(self._states):
+            sound_engine.cancel_loading(path)
+        sound_engine.clear()
+        stop_speaker()
+        self._reset_states()
+
+    def _mode(self) -> str:
+        return {0: "mic", 1: "speaker"}.get(self.get_setting("playback_mode_index", 2), "both")
+
+    # ── слоты и файлы ──
+
+    def get_slots(self) -> List[tuple]:
+        slots, seen = [], set()
+        for i in range(MAX_SLOTS):
+            filename = self.get_setting(f"slot_{i}_file", "")
+            if not filename or filename in seen:
+                continue  # один звук — одна кнопка
+            path = os.path.join(sounds_dir(), filename)
+            if os.path.isfile(path):
+                seen.add(filename)
+                label = self.get_setting(f"slot_{i}_label", "") or os.path.splitext(filename)[0]
+                slots.append((path, label))
+        return slots
+
+    def slot_of(self, filename: str) -> Optional[int]:
+        for i in range(MAX_SLOTS):
+            if self.get_setting(f"slot_{i}_file", "") == filename:
+                return i
+        return None
+
+    def assign_free_slot(self, filename: str) -> Optional[int]:
+        if self.slot_of(filename) is not None:
+            return None
+        for i in range(MAX_SLOTS):
+            if not self.get_setting(f"slot_{i}_file", ""):
+                self.set_setting(f"slot_{i}_file", filename)
+                return i
+        return None
+
+    def assign_slot(self, index: int, filename: str) -> bool:
+        """Назначает звук на слот; один звук нельзя повесить на два слота."""
+        if filename:
+            other = self.slot_of(filename)
+            if other is not None and other != index:
+                self.notify(f"Этот звук уже назначен на слот {other + 1}")
+                self._refresh_settings()
+                return False
+        self.set_setting(f"slot_{index}_file", filename)
+        self._refresh_settings()
+        return True
+
+    def preload_samples(self):
+        def work():
+            for path, _ in self.get_slots()[:8]:
+                sound_engine.load_sample(path)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _process_file(self, filename: str) -> bool:
+        """Декодирует звук в кэш; пока идёт обработка, кнопка жёлтая и не нажимается."""
+        path = os.path.join(sounds_dir(), filename)
+        sound_engine.forget(path)
+        self._processing.add(path)
+        run_on_ui_thread(lambda: self._paint(path))
+        try:
+            return bool(sound_engine.load_sample(path))
+        except Exception as e:
+            import traceback
+            debug_log(f"обработка {filename}: {e}\n{traceback.format_exc()}")
+            return False
+        finally:
+            self._processing.discard(path)
+            run_on_ui_thread(lambda: self._paint(path))
+
+    def import_uris(self, resolver, uris: list):
+        """Импорт одного или нескольких файлов в фоне, по очереди; уведомления без спама."""
+        threading.Thread(target=self._import_job, args=(resolver, list(uris)), daemon=True).start()
+
+    def _import_job(self, resolver, uris: list):
+        with self._job_lock:
+            total = len(uris)
+            added, same, no_slot, failed = [], [], [], []
+            if total > 1:
+                self.notify(f"Импорт: {total} файлов, это займёт немного времени…")
+            for uri in uris:
+                try:
+                    raw = ImportResultHook._read(resolver, uri)
+                    if raw is None:
+                        failed.append("?")
+                        continue
+                    name = ImportResultHook._display_name(resolver, uri) or f"sound_{int(time.time())}.wav"
+                    safe = "".join(c for c in name if c.isalnum() or c in "._- ").strip(" .") or f"sound_{int(time.time())}"
+                    path = os.path.join(sounds_dir(), safe)
+                    if os.path.isfile(path) and os.path.getsize(path) == len(raw):
+                        with open(path, "rb") as f:
+                            if f.read() == raw:
+                                same.append(safe)
+                                if self.slot_of(safe) is None and self.assign_free_slot(safe) is None:
+                                    no_slot.append(safe)
+                                continue
+                    with open(path, "wb") as f:
+                        f.write(raw)
+                    slot = self.slot_of(safe)
+                    if slot is None:
+                        slot = self.assign_free_slot(safe)
+                        if slot is None:
+                            no_slot.append(safe)
+                    where = f" · слот {slot + 1}" if slot is not None else ""
+                    if total == 1:
+                        self.notify(f"Обрабатываю звук: {safe}{where}…")
+                    if self._process_file(safe):
+                        added.append(safe)
+                        if total == 1:
+                            self.notify(f"Звук обработан: {safe}{where}")
+                    else:
+                        failed.append(safe)
+                        if total == 1:
+                            self.notify(f"Не удалось обработать звук: {safe}")
+                except Exception as e:
+                    import traceback
+                    debug_log(f"импорт: {e}\n{traceback.format_exc()}")
+                    failed.append("?")
+            if total == 1:
+                if same and not added and not failed:
+                    slot = self.slot_of(same[0])
+                    self.notify(f"Такой звук уже есть: {same[0]}" + (f" · слот {slot + 1}" if slot is not None else ""))
+                elif no_slot:
+                    self.notify(f"Нет свободных слотов (всего {MAX_SLOTS}) — освободите слот в настройках")
+            else:
+                parts = [f"добавлено {len(added)}"]
+                if same:
+                    parts.append(f"уже было {len(same)}")
+                if no_slot:
+                    parts.append(f"без слота {len(no_slot)}")
+                if failed:
+                    parts.append(f"с ошибкой {len(failed)}")
+                self.notify("Импорт завершён: " + ", ".join(parts))
+        self._refresh_settings()
+
+    def reprocess_all(self):
+        """Обрабатывает все звуки заново (после обновления плагина или если звук играет с задержкой)."""
+        files = sound_files()
+        if not files:
+            self.notify("Звуков пока нет")
+            return
+
+        def work():
+            with self._job_lock:
+                self.notify(f"Обрабатываю звуки заново: {len(files)}…")
+                ok = sum(1 for f in files if self._process_file(f))
+                self.notify(f"Обработано: {ok} из {len(files)}")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def clear_voice_cache(self):
+        removed = 0
+        folder = os.path.join(sounds_dir(), ".voice")
+        try:
+            for name in os.listdir(folder):
+                try:
+                    os.remove(os.path.join(folder, name))
+                    removed += 1
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        self.notify(f"Кэш голосовых очищен: {removed}")
+
+    def delete_sound(self, filename: str):
+        try:
+            os.remove(os.path.join(sounds_dir(), filename))
+            sound_engine.forget(os.path.join(sounds_dir(), filename))
+            for i in range(MAX_SLOTS):
+                if self.get_setting(f"slot_{i}_file", "") == filename:
+                    self.set_setting(f"slot_{i}_file", "")
+            self.notify(f"Удалено: {filename}")
+        except Exception as e:
+            debug_log(f"удаление {filename}: {e}")
+            self.notify(f"Не удалось удалить {filename}")
+        self._refresh_settings()
+
+    # ── настройки ──
+
+    def create_settings(self) -> List[Any]:
+        return [
+            Header(text="Voice Soundpad"),
+            Switch(
+                key="plugin_enabled",
+                text="Включить плагин",
+                subtext="Панель выезжает сверху при записи, её можно открыть и из меню чата (⋮). Команды: .sounds 1-8, .soundpad",
+                default=True,
+                on_change=self._on_enabled_change,
+            ),
+            Divider(),
+            Header(text="Звуки"),
+            Text(text="Слоты", subtext="Назначить звуки на кнопки", icon="msg_folder", create_sub_fragment=self._slots_page),
+            Text(text="Добавить звуки", icon="msg_addbot", accent=True, on_click=self._on_import_click),
+            Text(text="Импорт", subtext="Пачкой, пересборка, кэш", icon="msg_download", create_sub_fragment=self._import_page),
+            Text(text="Удалить звуки", icon="msg_delete", create_sub_fragment=self._delete_page),
+            Divider(),
+            Text(text="Оформление", subtext="Цвет, фон, скругление", icon="msg_theme", create_sub_fragment=self._theme_page),
+            Divider(),
+            Header(text="Воспроизведение"),
+            Switch(key="auto_panel", text="Открывать при записи", subtext="Панель со звуками выезжает сама, когда начинается запись", default=True),
+            Switch(key="haptics", text="Вибро-отклик", subtext="Короткий отклик при нажатии на звук. Если вибрацию слышно в записи — отключите", default=True),
+            Selector(
+                key="playback_mode_index",
+                text="Куда играть при записи",
+                default=2,
+                items=["В микрофон", "В динамик", "В микрофон и динамик"],
+            ),
+            Divider(),
+            Header(text="Отладка"),
+            Switch(key="debug_log", text="Журнал отладки", default=False, on_change=self._on_debug_change),
+            Text(text="Скопировать журнал", icon="msg_copy", on_click=self._copy_log),
+            Text(text="Очистить журнал", icon="msg_delete", on_click=self._clear_log),
+            Divider(),
+            Text(text="made by @tapesix", on_click=self._egg_tap),
+        ]
+
+    def _slots_page(self) -> List[Any]:
+        files = sound_files()
+        rows: List[Any] = []
+        for i in range(MAX_SLOTS):
+            current = self.get_setting(f"slot_{i}_file", "")
+            # уже занятые другими слотами звуки скрыты, чтобы не назначить один звук дважды
+            taken = {self.get_setting(f"slot_{j}_file", "") for j in range(MAX_SLOTS) if j != i}
+            available = [f for f in files if f not in taken]
+            index = available.index(current) + 1 if current in available else 0
+            self.set_setting(f"slot_{i}_file_index", index)
+            rows += [
+                Header(text=f"Слот {i + 1}"),
+                Selector(
+                    key=f"slot_{i}_file_index",
+                    text="Звук",
+                    default=index,
+                    items=["(не выбрано)"] + available,
+                    on_change=lambda n, i=i, f=available: self.assign_slot(i, f[n - 1] if n > 0 else ""),
+                ),
+                Input(key=f"slot_{i}_label", text="Подпись", default="", subtext="По умолчанию — имя файла"),
+                Divider(),
+            ]
+        return rows
+
+    def _import_page(self) -> List[Any]:
+        files = sound_files()
+        used = sum(1 for i in range(MAX_SLOTS) if self.get_setting(f"slot_{i}_file", ""))
+        return [
+            Header(text="Импорт"),
+            Text(text="Добавить звуки", subtext="Можно сразу несколько файлов", icon="msg_addbot", accent=True, on_click=self._on_import_click),
+            Text(text="Обработать все заново", subtext="После обновления или при задержке", icon="msg_retry", on_click=lambda v: self.reprocess_all()),
+            Text(text="Очистить кэш голосовых", subtext="Для .sounds, пересоберётся само", icon="msg_clear", on_click=lambda v: self.clear_voice_cache()),
+            Divider(),
+            Text(text=f"Звуков: {len(files)}"),
+            Text(text=f"Занято слотов: {used} из {MAX_SLOTS}"),
+        ]
+
+    def _theme_page(self) -> List[Any]:
+        def reopen(_value):
+            run_on_ui_thread(self.hide_panel)  # новое оформление видно при следующем открытии
+
+        return [
+            Header(text="Оформление"),
+            Selector(key="accent_index", text="Цвет", default=0, items=[name for name, _ in ACCENTS], on_change=reopen),
+            Selector(key="panel_style_index", text="Фон панели", default=0, items=["Полупрозрачный", "Сплошной"], on_change=reopen),
+            Selector(key="corner_index", text="Скругление", default=0, items=["Мягкое", "Строгое"], on_change=reopen),
+            Text(text="Зелёная кнопка — звук играет"),
+            Text(text="Жёлтая — звук обрабатывается"),
+        ]
+
+    def _delete_page(self) -> List[Any]:
+        files = sound_files()
+        if not files:
+            return [Header(text="Удаление звуков"), Text(text="Нет сохранённых звуков")]
+        rows: List[Any] = [Header(text="Нажмите на звук, чтобы удалить")]
+        for filename in files:
+            slot = self.slot_of(filename)
+            rows.append(Text(
+                text=filename,
+                subtext=f"Слот {slot + 1}" if slot is not None else None,
+                icon="msg_delete",
+                red=True,
+                on_click=lambda v, f=filename: self.delete_sound(f),
+            ))
+        return rows
+
+    def _refresh_settings(self):
+        try:
+            self.set_setting("_refresh", str(time.time()), reload_settings=True)
+        except Exception:
+            pass
+
+    def _on_debug_change(self, enabled: bool):
+        global _debug_enabled
+        _debug_enabled = bool(enabled)
+        if enabled:
+            install_crash_logger()
+
+    def _clear_log(self, view):
+        clear_log()
+        self.notify("Журнал очищен")
+
+    def _copy_log(self, view):
+        copy_to_clipboard(read_log_tail() or "(журнал пуст — включите его и повторите действие)")
+
+    def _on_import_click(self, view):
+        try:
+            start_import_picker(view.getContext())
+        except Exception as e:
+            debug_log(f"пикер файлов: {e}")
+            self.notify("Не удалось открыть выбор файла")
+
+    # ── пасхалка ──
+
+    def _egg_tap(self, view):
+        now = time.time()
+        if now - self._egg_last > 2.0:
+            self._egg_count = 0
+        self._egg_last = now
+        self._egg_count += 1
+        if self._egg_count >= 5:
+            self._egg_count = 0
+            self._easter_egg()
+
+    def _easter_egg(self):
+        run_on_ui_thread(self._show_egg)
+
+    def _show_egg(self):
+        try:
+            from android.app import Dialog
+            from android.graphics import BitmapFactory
+            from android.graphics.drawable import ColorDrawable, GradientDrawable
+            from android.util import Base64
+            from android.widget import ImageView
+
+            fragment = get_last_fragment()
+            context = fragment.getParentActivity() if fragment is not None else None
+            if context is None:
+                return
+            data = Base64.decode(EGG_IMAGE, Base64.DEFAULT)
+            bitmap = BitmapFactory.decodeByteArray(data, 0, len(data))
+            if bitmap is None:
+                return
+
+            image = ImageView(context)
+            image.setImageBitmap(bitmap)
+            image.setAdjustViewBounds(True)
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER)
+            frame = FrameLayout(context)
+            shape = GradientDrawable()
+            shape.setColor(Color.BLACK)
+            shape.setCornerRadius(float(dp(16)))
+            frame.setBackground(shape)
+            frame.setClipToOutline(True)
+            frame.setPadding(dp(2), dp(2), dp(2), dp(2))
+            frame.addView(image, FrameLayout.LayoutParams(-1, -2))
+
+            dialog = Dialog(context)
+            dialog.requestWindowFeature(1)
+            dialog.setContentView(frame)
+            window = dialog.getWindow()
+            if window is not None:
+                window.setBackgroundDrawable(ColorDrawable(0))
+                window.setLayout(int(context.getResources().getDisplayMetrics().widthPixels * 0.88), -2)
+            frame.setOnClickListener(self._safe_click(lambda v: dialog.dismiss()))
+            dialog.setCanceledOnTouchOutside(True)
+            dialog.show()
+        except Exception as e:
+            import traceback
+            debug_log(f"пасхалка: {e}\n{traceback.format_exc()}")
+            self.notify("🥚")
+
+    # ── прочее ──
+
+    def notify(self, text: str):
+        try:
+            run_on_ui_thread(lambda: BulletinHelper.show_info(text))
+        except Exception:
+            debug_log(text)
+
+
+# Картинка пасхалки (JPEG, base64)
+EGG_IMAGE = (
+    "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"
+    "PusJ/wAJrVPoE34TWqfQZ/wGtTXnZTfaprUh/wCxm/Ca1NxkWU/4DWqKufeM/wCA1qx5adP+GtX/ANOn/Aa1f/T5/wABrV/9Pn/A"
+    "a1i8hCrYTBlOeKGtawC9tMD9Q1f4JezmbzQ1exeppsgP1DWqoMDTpvwGtX+gTfgNa3cSiOOwlye8jAFfkPfnnYPcyKOXJPZRcMp5"
+    "cRQ0b3S9MjHCKa7SWOrgXl0FhyVkYZ+01eyoW3TU5QB5GUeGaRDnrj99QKoHWOfI4qAHOCfPjW76opnPaNdnGBTNyphzqCVyzRqc"
+    "+yrOIgi3UGlHAAUy53BVwamSJ2K5wOVGRfhIdxsZ8ajPdUJ5oCajcZRFoo2BApburUS/AhEqXdw77wq2cdpKZmLRsQO4ipCe1cti"
+    "rdOJck0itmMnHhmgDukAGt3kaaQ4po85qPUo/f8Aq6t1D4MUH6weJq0soI7e1gSGJBgIgwOkGnX0AOdBmPChUaAjANKilggGOJNJ"
+    "d2ETZywGDSmsdoUX1i2h7o4ifxdA76XxpR30vj8ckGs3FqXCmeIlfNKJ5n028fQxXwkQ3uFIe1RzkDhRPT+ytfsrRzXiB0+wV7BX"
+    "sHQ3hT3msaFeooDWtwuW/ZrTJt+V0JZ3LH7a0thgo/4q0s80f8VaT4S/jrSf+7+KtJ8JfxVpP/d/FWk+Ev460rwl/HWk/wDd/HWk"
+    "/wDd/HWk/wDd/FWk/wDd/HWkeEv460jwl/HWk/8Ad/HWkMpBEhH1q0MOWxL+OtE8Jvx1onhN+OtGH678daGzht6f+ZWheEx85K0D"
+    "9VJ+OtnSOMcv462fPfP+Otm2GCk/82tmR8if+ZWzPzJ/5tbMS80n/mVsr3xz/wAytle6Gf8AmVs0siOY5m3e4yVEiRxouERQqjwA"
+    "pKSkpKTxNRVF4mofbVseYP31aN3GrJu41prEkqa0e6jZHEmD7a0nRoGhs+tCscnLZqFfGoiMca2d1a8a7ukmMpAHB8Vsn+rn/mVs"
+    "n+rn/mVsn+rn/mVsn8yf+ZWyf6uf+ZWyn6qf+ZWyf6uf+ZWyf6uf+ZWyf6uf+ZWyf6uf+ZWyf6uf+ZWyf6uf+ZWyH6mf+bWyajPV"
+    "T/za2V7kn/m1st+rn/m1sl3xT/zK2Q/Uz/za2W06/ivoIZ+tiOUzKSKi8KiqKoqg8DUPhVsea1Ae41b/ALX31APH76gFQkEYqxnI"
+    "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"
+    "ZYoNn2pn25DVCF/S9hsv0X1j024TFFs+3Ijh+RYoojA1JRHiQ4VxZfr2Nj4bNzdCYuZdlwxj4x401ZGCNUuKFy0ShZPw+F6LfNFd"
+    "GuJEuN2fckLJI+5IUr5YuEyx8pEI1FCPcrvl/LhP1WVwxssZJD8CHzEsvrQ+YeZJCVJddkbItc5X/LhP0a5svmQ30mX6djHxhVz5"
+    "eSPyZM7ukPNP5Hll8n3n8i+ofyR+oZGaaszP+Rfq2bGxsOQ/PLJ8WbCkIyZ4Y/dk/wDI44ukYcn3Ip83w2PjC6ZsZMiROVkpDmSm"
+    "Obo2Mc5bIjJkuV6LfS+zJjL4RF+D/It7C90fR/8AkuLEyxsQ3Rh8o2pWZMlsb8E+GKFjxxKUWYn4HJF3xH+k2WT6wP8AIxk5+EYv"
+    "pc0mvB9PFwxpPpZYnxGTQ8kqGXL9DU37j8DYmfobMc/0Tl4IeVwuLF6DfRyLG+LJj5QnRKEZO2Ril3b5on4Nhyb4YmbDZF+S7Mft"
+    "wuF6Tkbln1EpRmqZjncUbWN8SGuK5ZaL9KXklzLlkSCtCVcLlMv0JkRexmipMxx1VDZZY2XwuGWWJiZY5GxsWbGxYybE+GNDZZDy"
+    "Y/Coa4T6plllmxsRzRboqxRQ14JqmWqNiy+tjY2XwmXw+lifE+ESGx8Y/MiMX0ssssss2LFxgdzXObPKMqRu5e5ZYmJ8JcVwyivS"
+    "XEkNUxMbGxIoxfmjUcWVXe+iMM1CTsjkndv2I5E0fUfkYoWrJwooSYvcS6Ma6PuotijIjjbFiX7M0akxIaNeIxbdIw4P2yhocD7b"
+    "KfdIYiK2Zij/AAHiiZotPyYvaia8DQmfsRsrrpL0VFsWFshhoWJEcaJRo+oh5vhChJ/ojgb9yGFRfCjZoNFDRoiUPgrsiKUJJsxy"
+    "Tj44zQcmQVIabHBs+3I0lxrbK4pk1XMfcmqfTHByfghhaFA1EhImrRkx2ieEw4lt5NIoS4iRXDiOBqajGrHErrKbkfS+3DGihIo1"
+    "Q1FMjGJrH4NUJIzryuKI+5N2+YqzBBRiJFCXDmkSyxJTiN2J0KRYnJ+xji0vJXjmyholEaKNENGpqKAoH03hVzJcJcuNsXjpkjY4"
+    "GkjWRoxY2LGiGNMhGl0bMsvJKXbF+Ql3onHlRbHGiiiKt0Y4qK5lIiWX3y3o69yOaanTZF2ijUoUSCI9JSMj/l2swr9+jJDRq37H"
+    "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"
+)
