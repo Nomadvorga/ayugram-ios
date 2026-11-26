@@ -97,6 +97,28 @@ private enum ExteraChatAppearanceEntry: ItemListNodeEntry {
 
     static func < (lhs: Self, rhs: Self) -> Bool { return lhs.stableId < rhs.stableId }
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.setting(lhs), .setting(rhs)):
+            return lhs == rhs
+        case let (.preview(lhsId, lhsValue), .preview(rhsId, rhsValue)):
+            return lhsId == rhsId && lhsValue == rhsValue
+        case let (.inlineThemes(lhsId, lhsValue, lhsSettings, lhsNight), .inlineThemes(rhsId, rhsValue, rhsSettings, rhsNight)):
+            // PresentationThemeSettings defines == without declaring Equatable conformance.
+            return lhsId == rhsId && lhsValue == rhsValue && lhsSettings == rhsSettings && lhsNight == rhsNight
+        case let (.fontSize(lhsId, lhsValue, lhsEnabled, lhsTitle), .fontSize(rhsId, rhsValue, rhsEnabled, rhsTitle)):
+            return lhsId == rhsId && lhsValue == rhsValue && lhsEnabled == rhsEnabled && lhsTitle == rhsTitle
+        case let (.radius(lhsId, lhsValue, lhsEnabled, lhsTitle), .radius(rhsId, rhsValue, rhsEnabled, rhsTitle)):
+            return lhsId == rhsId && lhsValue == rhsValue && lhsEnabled == rhsEnabled && lhsTitle == rhsTitle
+        case let (.lines(lhsId, lhsValue, lhsTwo, lhsThree), .lines(rhsId, rhsValue, rhsTwo, rhsThree)):
+            return lhsId == rhsId && lhsValue == rhsValue && lhsTwo == rhsTwo && lhsThree == rhsThree
+        case let (.swipe(lhsId, lhsValue, lhsTitles), .swipe(rhsId, rhsValue, rhsTitles)):
+            return lhsId == rhsId && lhsValue == rhsValue && lhsTitles == rhsTitles
+        default:
+            return false
+        }
+    }
+
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! ExteraChatAppearanceArguments
         switch self {

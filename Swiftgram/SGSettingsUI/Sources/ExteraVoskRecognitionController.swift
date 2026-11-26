@@ -133,7 +133,7 @@ private final class VoskRecognitionPage {
         self.progress = nil
         self.title = self.name(model) + " · " + self.text("Working")
         self.operation = Task { [weak self] in
-            var failure: Error?
+            let failure: Error?
             do {
                 try Task.checkCancellation()
                 switch action {
@@ -147,6 +147,7 @@ private final class VoskRecognitionPage {
                 case .use: try await VoskModelStore.shared.use(language: model.language)
                 case .delete: try await VoskModelStore.shared.delete(language: model.language)
                 }
+                failure = nil
             } catch { failure = error }
             // Successful deletion has already committed and updated preferences,
             // even if Cancel arrives after unlink began.
