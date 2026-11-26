@@ -44,8 +44,20 @@ def select_device(runtimes, devices, minimum):
             and encoded <= device.get("maxRuntimeVersion", 0xFFFFFFFF)
         ]
         if candidates:
-            # Stable preference for a standard non-folding phone; no hard-coded runtime version.
-            candidates.sort(key=lambda item: item["name"], reverse=True)
+            # Prefer the newest ordinary iPhone generation, not a lexical-name winner
+            # such as the much older "iPhone SE". Prefer the base model within a
+            # generation; newer runtimes can omit it, in which case a Pro/Plus remains valid.
+            def device_preference(item):
+                name = item["name"]
+                match = re.match(r"^iPhone (\d+)(?:\s|$)", name)
+                if match:
+                    generation = int(match.group(1))
+                    suffix = name[match.end():].strip()
+                    model_rank = 2 if not suffix else 1 if suffix.startswith("Pro") else 0
+                    return generation, model_rank, name
+                return 0, 0, name
+
+            candidates.sort(key=device_preference, reverse=True)
             return runtime, candidates[0]
     raise RuntimeError(f"No available iOS runtime / iPhone pair supports minimum iOS {minimum}")
 

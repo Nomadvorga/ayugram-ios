@@ -31,7 +31,10 @@ introduced by simulator validation.
    `iPhoneSimulator` in the app plist. `lipo -archs` alone is insufficient because
    physical-device binaries can also be arm64.
 3. Select the newest **available** iOS runtime compatible with `MinimumOSVersion`
-   and a supported ordinary iPhone device type. Create a uniquely named
+   and a supported ordinary iPhone device type. Within that runtime, prefer the
+   newest numbered base iPhone model (falling back to a compatible Pro/Plus model
+   when the base model is unavailable); do not use reverse lexical ordering, which
+   can prefer an older `iPhone SE`. Create a uniquely named
    `AyuGram-CI-*` device, boot it with a bounded wait, and install the extracted
    `.app`. No pre-existing simulator is used or altered.
 4. Start an app/SpringBoard/runningboard log stream and native
@@ -88,9 +91,11 @@ This single fresh-install CI capture places most of the blank interval before
 `didFinishLaunching`; it does not identify why the process becomes visible/logging
 late, establish a repeatable app defect, or measure a normal device's cold launch.
 Do not attribute it to a specific app initializer or the simulator without a repeat
-capture. A second isolated `debug_sim_arm64` run is in progress to collect another
-sample; it has no login or UI interaction and cannot replace an authorized
-device/runtime check. Original local evidence from the first sample is under
+capture. The second attempt in the same historical `debug_sim_arm64` run has since
+passed its onboarding smoke, but it remains an unauthenticated cold-launch sample
+and cannot replace an authorized device/runtime check. Current-revision build and
+smoke results are tracked in the [reference matrix](extera-reference-matrix.md).
+Original local evidence from the first sample is under
 `%LOCALAPPDATA%/Temp/opencode/sim-c56af00f-evidence-attempt2/` and
 `%LOCALAPPDATA%/Temp/opencode/sim-c56af00f-onboarding-sheet/`.
 
