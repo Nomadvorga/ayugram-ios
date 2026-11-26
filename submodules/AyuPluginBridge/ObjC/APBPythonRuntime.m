@@ -1,14 +1,44 @@
 #define PY_SSIZE_T_CLEAN
 #import "APBPythonRuntime.h"
 #include <Python/Python.h>
+#include "APBPythonRuntimeQueueBudget.h"
 
 static NSString *const APBErrorDomain = @"AyuPluginPython";
 static APBPythonRuntime *APBProcessRuntime;
 static __thread void *APBTrustedOwner;
 
+/// NSString length is measured in UTF-16 code units. Charge four bytes per
+/// unit (twice UTF-16 storage) plus object/array overhead so ASCII-backed
+/// NSStrings, callbacks, event JSON and source strings are conservatively
+/// represented before their retaining job is admitted.
+static NSUInteger APBQueuePayloadCost(NSArray<NSString *> *strings) {
+    size_t total = apb_queue_payload_cost_begin();
+    for (NSString *string in strings) {
+        if (!apb_queue_payload_cost_add_string(&total, (size_t)string.length)) return NSUIntegerMax;
+    }
+    return (NSUInteger)total;
+}
+
+@interface APBQueuedJob : NSObject
+@property (nonatomic, copy) void (^block)(NSUInteger outstandingCost);
+@property (nonatomic) NSUInteger outstandingCost;
+@end
+
+@implementation APBQueuedJob
+@end
+
+@interface APBCompletionPayload : NSObject
+@property (nonatomic, strong) NSString *result;
+@property (nonatomic, strong) NSError *error;
+@end
+
+@implementation APBCompletionPayload
+@end
+
 @interface APBPythonRuntime () {
     NSCondition *_condition;
-    NSMutableArray<dispatch_block_t> *_jobs;
+    NSMutableArray<APBQueuedJob *> *_jobs;
+    APBQueueBudget _queueBudget;
     NSThread *_worker;
     APBHostDispatch _hostDispatch;
     PyObject *_sdk;
@@ -16,6 +46,8 @@ static __thread void *APBTrustedOwner;
     BOOL _starting;
 }
 - (NSString *)dispatchRequest:(NSString *)request owner:(NSString *)owner;
+- (void)completeAdmitted:(APBCompletion)completion result:(NSString *)result error:(NSError *)error outstandingCost:(NSUInteger)outstandingCost;
+- (void)rejectWithoutQueue:(APBCompletion)completion error:(NSError *)error;
 @end
 
 static NSError *APBError(NSInteger code, NSString *message) {
@@ -24,14 +56,23 @@ static NSError *APBError(NSInteger code, NSString *message) {
 
 static NSError *APBPythonError(void) {
     // Do not print traceback/source/locals: plugins may contain user credentials.
-    PyObject *exception = PyErr_GetRaisedException();
-    PyObject *name = exception ? PyObject_GetAttrString((PyObject *)Py_TYPE(exception), "__name__") : NULL;
-    const char *typeName = name ? PyUnicode_AsUTF8(name) : NULL;
-    NSString *message = typeName ? [NSString stringWithFormat:@"Python %@. See the plugin compatibility report.", [NSString stringWithUTF8String:typeName]] : @"Python operation failed";
-    Py_XDECREF(name);
-    Py_XDECREF(exception);
     PyErr_Clear();
-    return APBError(2, message);
+    return APBError(2, @"Python operation failed. See the plugin compatibility report.");
+}
+
+static BOOL APBUTF8LengthExceedsResultLimit(PyObject *string) {
+    Py_ssize_t length = PyUnicode_GetLength(string);
+    if (length < 0) return NO; // Preserve the Python error for the caller.
+    if ((NSUInteger)length > APB_QUEUE_MAXIMUM_RESULT_UTF8_BYTES) return YES;
+
+    int kind = PyUnicode_KIND(string);
+    void *characters = PyUnicode_DATA(string);
+    size_t utf8Length = 0;
+    for (Py_ssize_t index = 0; index < length; index++) {
+        Py_UCS4 character = PyUnicode_READ(kind, characters, index);
+        if (!apb_result_utf8_size_add(&utf8Length, character, APB_QUEUE_MAXIMUM_RESULT_UTF8_BYTES)) return YES;
+    }
+    return NO;
 }
 
 static PyObject *APBDispatch(PyObject *self, PyObject *args) {
@@ -83,6 +124,10 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
     if (self) {
         _condition = [[NSCondition alloc] init];
         _jobs = [[NSMutableArray alloc] init];
+        apb_queue_budget_init(&_queueBudget,
+                              APB_QUEUE_MAXIMUM_JOBS,
+                              APB_QUEUE_MAXIMUM_BYTES,
+                              APB_QUEUE_MAXIMUM_RESULT_RETAINED_BYTES);
         _worker = [[NSThread alloc] initWithTarget:self selector:@selector(workerMain) object:nil];
         _worker.name = @"AyuGram.PluginPython";
         _worker.qualityOfService = NSQualityOfServiceUtility;
@@ -91,14 +136,19 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
     return self;
 }
 
-- (BOOL)enqueue:(dispatch_block_t)job {
+- (BOOL)enqueue:(void (^)(NSUInteger outstandingCost))job payloadCost:(NSUInteger)payloadCost {
     [_condition lock];
-    // Bound retained source/callback work even when Python is slow or blocked in I/O.
-    if (_jobs.count >= 64) {
+    // The same locked budget covers queued work, the executing job, and jobs
+    // whose results are waiting for main-thread completion delivery.
+    size_t outstandingCost = 0;
+    if (!apb_queue_budget_admit(&_queueBudget, (size_t)payloadCost, &outstandingCost)) {
         [_condition unlock];
         return NO;
     }
-    [_jobs addObject:[job copy]];
+    APBQueuedJob *queued = [[APBQueuedJob alloc] init];
+    queued.block = job;
+    queued.outstandingCost = (NSUInteger)outstandingCost;
+    [_jobs addObject:queued];
     [_condition signal];
     [_condition unlock];
     return YES;
@@ -110,16 +160,52 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
         @autoreleasepool {
             [_condition lock];
             while (_jobs.count == 0) [_condition wait];
-            dispatch_block_t job = _jobs.firstObject;
+            APBQueuedJob *queued = _jobs.firstObject;
             [_jobs removeObjectAtIndex:0];
             [_condition unlock];
-            job();
+            queued.block(queued.outstandingCost);
         }
     }
 }
 
-- (void)complete:(APBCompletion)completion result:(NSString *)result error:(NSError *)error {
-    dispatch_async(dispatch_get_main_queue(), ^{ completion(result, error); });
+- (void)completeAdmitted:(APBCompletion)completion result:(NSString *)result error:(NSError *)error outstandingCost:(NSUInteger)outstandingCost {
+    // The output has already passed the UTF-8 limit. Charge its maximum UTF-16
+    // storage plus a fixed object allowance (or bounded error objects), and
+    // return unused temporary-result headroom before putting it on main.
+    size_t actualResultBytes = result ? (size_t)result.length * 2 + 256 : 512;
+    size_t reservationCost = (size_t)outstandingCost;
+    [_condition lock];
+    BOOL adjusted = apb_queue_budget_adjust_result(&_queueBudget, &reservationCost, actualResultBytes);
+    NSCAssert(adjusted, @"Python runtime result exceeded its reserved queue budget");
+    [_condition unlock];
+    outstandingCost = (NSUInteger)reservationCost;
+
+    APBCompletionPayload *payload = [[APBCompletionPayload alloc] init];
+    payload.result = result;
+    payload.error = error;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            completion(payload.result, payload.error);
+        } @finally {
+            // Keep both the job slot and its payload/result reservation until
+            // client delivery returns. A stalled main queue therefore applies
+            // backpressure instead of moving retention into an unbounded queue.
+            payload.result = nil;
+            payload.error = nil;
+            [self->_condition lock];
+            BOOL released = apb_queue_budget_complete(&self->_queueBudget, (size_t)outstandingCost);
+            NSCAssert(released, @"Python runtime queue accounting underflow");
+            [self->_condition unlock];
+        }
+    });
+}
+
+- (void)rejectWithoutQueue:(APBCompletion)completion error:(NSError *)error {
+    // There is deliberately no async fallback here: rejected calls have no
+    // reservation, so dispatching their captured completions to main could
+    // create an unbounded secondary queue precisely when admission is full.
+    // Successful operations retain the established asynchronous main delivery.
+    completion(nil, error);
 }
 
 - (NSString *)dispatchRequest:(NSString *)request owner:(NSString *)owner {
@@ -127,34 +213,42 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
 }
 
 - (void)startWithPythonHome:(NSString *)pythonHome sdkPath:(NSString *)sdkPath dispatchHandler:(APBHostDispatch)dispatchHandler completion:(APBCompletion)completion {
+    NSString *stablePythonHome = [pythonHome copy];
+    NSString *stableSDKPath = [sdkPath copy];
+    BOOL alreadyStarted = NO;
     @synchronized(self) {
         if (_starting || _ready) {
-            [self complete:completion result:nil error:APBError(1, @"Python runtime has already been started")];
-            return;
+            alreadyStarted = YES;
+        } else {
+            _starting = YES;
         }
-        _starting = YES;
     }
-    BOOL queued = [self enqueue:^{
+    if (alreadyStarted) {
+        [self rejectWithoutQueue:completion error:APBError(1, @"Python runtime has already been started")];
+        return;
+    }
+    NSUInteger payloadCost = APBQueuePayloadCost(@[stablePythonHome, stableSDKPath]);
+    BOOL queued = [self enqueue:^(NSUInteger outstandingCost) {
         @synchronized([APBPythonRuntime class]) {
             if (APBProcessRuntime || Py_IsInitialized()) {
-                self->_starting = NO;
-                [self complete:completion result:nil error:APBError(1, @"Only one plugin interpreter may own the process")];
+                @synchronized(self) { self->_starting = NO; }
+                [self completeAdmitted:completion result:nil error:APBError(1, @"Only one plugin interpreter may own the process") outstandingCost:outstandingCost];
                 return;
             }
             APBProcessRuntime = self;
         }
-        if (![[NSFileManager defaultManager] fileExistsAtPath:[pythonHome stringByAppendingPathComponent:@"lib/python3.15/encodings/__init__.py"]] || ![[NSFileManager defaultManager] fileExistsAtPath:[sdkPath stringByAppendingPathComponent:@"ayu_bridge.py"]]) {
-            APBProcessRuntime = nil;
-            self->_starting = NO;
-            [self complete:completion result:nil error:APBError(1, @"Python resources or plugin SDK are missing from the app bundle")];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:[stablePythonHome stringByAppendingPathComponent:@"lib/python3.15/encodings/__init__.py"]] || ![[NSFileManager defaultManager] fileExistsAtPath:[stableSDKPath stringByAppendingPathComponent:@"ayu_bridge.py"]]) {
+            @synchronized([APBPythonRuntime class]) { APBProcessRuntime = nil; }
+            @synchronized(self) { self->_starting = NO; }
+            [self completeAdmitted:completion result:nil error:APBError(1, @"Python resources or plugin SDK are missing from the app bundle") outstandingCost:outstandingCost];
             return;
         }
         self->_hostDispatch = [dispatchHandler copy];
         if (PyImport_AppendInittab("_ayu_host", APBInitHost) < 0) {
             @synchronized([APBPythonRuntime class]) { APBProcessRuntime = nil; }
             self->_hostDispatch = nil;
-            self->_starting = NO;
-            [self complete:completion result:nil error:APBError(1, @"Unable to register the native Python bridge")];
+            @synchronized(self) { self->_starting = NO; }
+            [self completeAdmitted:completion result:nil error:APBError(1, @"Unable to register the native Python bridge") outstandingCost:outstandingCost];
             return;
         }
         PyPreConfig preconfig;
@@ -169,11 +263,11 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
         config.use_environment = 0;
         config.site_import = 0;
         config.buffered_stdio = 0;
-        if (!PyStatus_Exception(status)) status = PyConfig_SetBytesString(&config, &config.home, pythonHome.UTF8String);
+        if (!PyStatus_Exception(status)) status = PyConfig_SetBytesString(&config, &config.home, stablePythonHome.UTF8String);
         NSString *executable = NSBundle.mainBundle.executablePath;
         if (!PyStatus_Exception(status) && executable) status = PyConfig_SetBytesString(&config, &config.executable, executable.UTF8String);
         config.module_search_paths_set = 1;
-        NSArray<NSString *> *paths = @[[pythonHome stringByAppendingPathComponent:@"lib/python3.15"], [pythonHome stringByAppendingPathComponent:@"lib/python3.15/lib-dynload"], sdkPath];
+        NSArray<NSString *> *paths = @[[stablePythonHome stringByAppendingPathComponent:@"lib/python3.15"], [stablePythonHome stringByAppendingPathComponent:@"lib/python3.15/lib-dynload"], stableSDKPath];
         for (NSString *path in paths) {
             if (PyStatus_Exception(status)) break;
             wchar_t *wide = Py_DecodeLocale(path.UTF8String, NULL);
@@ -185,21 +279,24 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
         BOOL failed = PyStatus_Exception(status);
         PyConfig_Clear(&config);
         if (failed) {
-            self->_starting = NO;
-            [self complete:completion result:nil error:APBError(1, @"Unable to initialize embedded Python")];
+            @synchronized(self) { self->_starting = NO; }
+            [self completeAdmitted:completion result:nil error:APBError(1, @"Unable to initialize embedded Python") outstandingCost:outstandingCost];
             return;
         }
         self->_sdk = PyImport_ImportModule("ayu_bridge");
         NSError *error = self->_sdk ? nil : APBPythonError();
-        self->_ready = self->_sdk != NULL;
-        self->_starting = NO;
+        BOOL ready = self->_sdk != NULL;
+        @synchronized(self) {
+            self->_ready = ready;
+            self->_starting = NO;
+        }
         // Release between jobs. Every entry below reacquires on this same OS thread.
         PyEval_SaveThread();
-        [self complete:completion result:self->_ready ? @"true" : nil error:error];
-    }];
+        [self completeAdmitted:completion result:ready ? @"true" : nil error:error outstandingCost:outstandingCost];
+    } payloadCost:payloadCost];
     if (!queued) {
         @synchronized(self) { _starting = NO; }
-        [self complete:completion result:nil error:APBError(4, @"Plugin runtime queue is full")];
+        [self rejectWithoutQueue:completion error:APBError(4, @"Plugin runtime queue is full")];
     }
 }
 
@@ -220,60 +317,127 @@ static PyObject *APBInitHost(void) { return PyModule_Create(&APBModule); }
     return result;
 }
 
-- (NSString *)jsonForResult:(PyObject *)result {
+- (NSString *)jsonForResult:(PyObject *)result resultTooLarge:(BOOL *)resultTooLarge {
+    if (resultTooLarge) *resultTooLarge = NO;
     if (!result) return nil;
-    if (PyUnicode_Check(result)) {
-        const char *utf8 = PyUnicode_AsUTF8(result);
-        return utf8 ? [NSString stringWithUTF8String:utf8] : nil;
+
+    PyObject *encoded = NULL;
+    PyObject *string = result;
+    if (!PyUnicode_Check(result)) {
+        PyObject *json = PyImport_ImportModule("json");
+        encoded = json ? PyObject_CallMethod(json, "dumps", "O", result) : NULL;
+        Py_XDECREF(json);
+        if (!encoded) return nil;
+        string = encoded;
     }
-    PyObject *json = PyImport_ImportModule("json");
-    PyObject *encoded = json ? PyObject_CallMethod(json, "dumps", "O", result) : NULL;
-    const char *utf8 = encoded ? PyUnicode_AsUTF8(encoded) : NULL;
-    NSString *output = utf8 ? [NSString stringWithUTF8String:utf8] : nil;
+
+    // Count UTF-8 bytes before CPython allocates its UTF-8 cache and before
+    // creating the result NSString retained by the completion block.
+    if (APBUTF8LengthExceedsResultLimit(string)) {
+        if (resultTooLarge) *resultTooLarge = YES;
+        PyErr_Clear();
+        Py_XDECREF(encoded);
+        return nil;
+    }
+    Py_ssize_t length = 0;
+    const char *utf8 = PyUnicode_AsUTF8AndSize(string, &length);
+    NSString *output = utf8 ? [[NSString alloc] initWithBytes:utf8 length:(NSUInteger)length encoding:NSUTF8StringEncoding] : nil;
     Py_XDECREF(encoded);
-    Py_XDECREF(json);
     return output;
 }
 
 - (void)invoke:(const char *)name arguments:(NSArray<NSString *> *)arguments owner:(NSString *)owner completion:(APBCompletion)completion {
     // Copy a C selector name before escaping (all callers currently pass literals).
     NSString *functionName = [NSString stringWithUTF8String:name];
-    BOOL queued = [self enqueue:^{
-        if (!self->_ready) { [self complete:completion result:nil error:APBError(1, @"Python runtime is not ready")]; return; }
+    NSString *stableOwner = [owner copy];
+    NSArray<NSString *> *stableArguments = [[NSArray alloc] initWithArray:arguments copyItems:YES];
+    NSUInteger payloadCost = APBQueuePayloadCost([@[functionName, stableOwner] arrayByAddingObjectsFromArray:stableArguments]);
+    BOOL queued = [self enqueue:^(NSUInteger outstandingCost) {
+        if (!self->_ready) { [self completeAdmitted:completion result:nil error:APBError(1, @"Python runtime is not ready") outstandingCost:outstandingCost]; return; }
         PyGILState_STATE gil = PyGILState_Ensure();
-        APBTrustedOwner = (__bridge void *)owner;
-        PyObject *result = [self call:functionName.UTF8String arguments:arguments];
-        NSString *json = [self jsonForResult:result];
-        NSError *error = json ? nil : APBPythonError();
+        APBTrustedOwner = (__bridge void *)stableOwner;
+        PyObject *result = [self call:functionName.UTF8String arguments:stableArguments];
+        BOOL resultTooLarge = NO;
+        NSString *json = [self jsonForResult:result resultTooLarge:&resultTooLarge];
+        NSError *error = json ? nil : (resultTooLarge ? APBError(5, @"Plugin runtime result exceeds the 1 MiB limit") : APBPythonError());
         Py_XDECREF(result);
         APBTrustedOwner = NULL;
         PyGILState_Release(gil);
-        [self complete:completion result:json error:error];
-    }];
-    if (!queued) [self complete:completion result:nil error:APBError(4, @"Plugin runtime queue is full")];
+        [self completeAdmitted:completion result:json error:error outstandingCost:outstandingCost];
+    } payloadCost:payloadCost];
+    if (!queued) [self rejectWithoutQueue:completion error:APBError(4, @"Plugin runtime queue is full")];
 }
 
 - (void)inspectPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
-    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
-    [self invoke:"inspect_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
+    NSString *stableSource = [source copy];
+    NSString *normalizedFilename = [filename.lastPathComponent copy];
+    if ([stableSource lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self rejectWithoutQueue:completion error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
+    [self invoke:"inspect_plugin_json" arguments:@[stableSource, normalizedFilename] owner:@"$inspection" completion:completion];
 }
 
 - (void)preflightPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
-    if ([source lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self complete:completion result:nil error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
-    [self invoke:"preflight_plugin_json" arguments:@[source, filename.lastPathComponent] owner:@"$inspection" completion:completion];
+    NSString *stableSource = [source copy];
+    NSString *normalizedFilename = [filename.lastPathComponent copy];
+    if ([stableSource lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) { [self rejectWithoutQueue:completion error:APBError(3, @"Plugin exceeds the 4 MiB source limit")]; return; }
+    [self invoke:"preflight_plugin_json" arguments:@[stableSource, normalizedFilename] owner:@"$inspection" completion:completion];
 }
 
 - (void)loadPluginSource:(NSString *)source filename:(NSString *)filename completion:(APBCompletion)completion {
-    // Inspection is AST-only. Establish owner before executing any code from the source.
-    [self inspectPluginSource:source filename:filename completion:^(NSString *inspection, NSError *error) {
-        if (error || !inspection) { completion(nil, error); return; }
-        NSData *data = [inspection dataUsingEncoding:NSUTF8StringEncoding];
-        id value = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        id metadata = [value isKindOfClass:[NSDictionary class]] ? value[@"metadata"] : nil;
-        id owner = [metadata isKindOfClass:[NSDictionary class]] ? metadata[@"__id__"] : nil;
-        if (![owner isKindOfClass:[NSString class]] || [(NSString *)owner length] == 0) { completion(nil, APBError(3, @"Plugin has no literal identity")); return; }
-        [self invoke:"load_plugin" arguments:@[source, filename.lastPathComponent, owner] owner:owner completion:completion];
-    }];
+    NSString *stableSource = [source copy];
+    NSString *normalizedFilename = [filename.lastPathComponent copy];
+    if ([stableSource lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4194304) {
+        [self rejectWithoutQueue:completion error:APBError(3, @"Plugin exceeds the 4 MiB source limit")];
+        return;
+    }
+    NSUInteger payloadCost = APBQueuePayloadCost(@[stableSource, normalizedFilename, @"$inspection"]);
+    BOOL queued = [self enqueue:^(NSUInteger outstandingCost) {
+        if (!self->_ready) { [self completeAdmitted:completion result:nil error:APBError(1, @"Python runtime is not ready") outstandingCost:outstandingCost]; return; }
+        PyGILState_STATE gil = PyGILState_Ensure();
+
+        // Keep inspection and load in one admitted job. Splitting them across a
+        // main-queue completion briefly retained a 4 MiB source outside queue
+        // accounting and could admit another full source before re-enqueueing.
+        APBTrustedOwner = (__bridge void *)@"$inspection";
+        PyObject *inspectionResult = [self call:"inspect_plugin_json" arguments:@[stableSource, normalizedFilename]];
+        BOOL inspectionTooLarge = NO;
+        NSString *inspection = [self jsonForResult:inspectionResult resultTooLarge:&inspectionTooLarge];
+        Py_XDECREF(inspectionResult);
+        NSError *error = inspection ? nil : (inspectionTooLarge ? APBError(5, @"Plugin runtime result exceeds the 1 MiB limit") : APBPythonError());
+        NSString *resultJSON = nil;
+        NSString *owner = nil;
+
+        if (inspection) {
+            @autoreleasepool {
+                NSData *data = [inspection dataUsingEncoding:NSUTF8StringEncoding];
+                id value = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                id metadata = [value isKindOfClass:[NSDictionary class]] ? value[@"metadata"] : nil;
+                id ownerValue = [metadata isKindOfClass:[NSDictionary class]] ? metadata[@"__id__"] : nil;
+                if (![ownerValue isKindOfClass:[NSString class]] || [(NSString *)ownerValue length] == 0) {
+                    error = APBError(3, @"Plugin has no literal identity");
+                } else {
+                    owner = [ownerValue copy];
+                }
+            }
+        }
+        // Drop the bounded inspection string and parsed metadata before building
+        // the activation result, so they cannot coexist in the main completion.
+        inspection = nil;
+
+        if (owner) {
+            APBTrustedOwner = (__bridge void *)owner;
+            PyObject *loadResult = [self call:"load_plugin" arguments:@[stableSource, normalizedFilename, owner]];
+            BOOL loadResultTooLarge = NO;
+            resultJSON = [self jsonForResult:loadResult resultTooLarge:&loadResultTooLarge];
+            error = resultJSON ? nil : (loadResultTooLarge ? APBError(5, @"Plugin runtime result exceeds the 1 MiB limit") : APBPythonError());
+            Py_XDECREF(loadResult);
+            owner = nil;
+        }
+
+        APBTrustedOwner = NULL;
+        PyGILState_Release(gil);
+        [self completeAdmitted:completion result:resultJSON error:error outstandingCost:outstandingCost];
+    } payloadCost:payloadCost];
+    if (!queued) [self rejectWithoutQueue:completion error:APBError(4, @"Plugin runtime queue is full")];
 }
 
 - (void)unloadPlugin:(NSString *)pluginID completion:(APBCompletion)completion {

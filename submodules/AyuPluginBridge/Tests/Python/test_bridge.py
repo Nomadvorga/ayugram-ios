@@ -17,7 +17,7 @@ sys.path.insert(0, str(SDK))
 
 import ayu_bridge as bridge
 from base_plugin import BasePlugin, HookResult, HookStrategy
-from java import jarray, jclass, jint, jlong
+from java import dynamic_proxy, jarray, jclass, jint, jlong
 from ui.settings import Header, Input, Selector, Switch, Text
 
 
@@ -38,7 +38,13 @@ class FakeHost:
         self.reject_authorization = False
         self.response_override = None
         self.capabilities = {"operations": list(OPERATIONS),
-                             "classes": ["example.Native", "example.Array", "example.Listener", "android.view.View"],
+                             "classes": ["example.Native", "example.Array", "example.Listener", "android.view.View",
+                                         "android.text.Spanned", "android.text.SpannableString", "android.text.SpannableStringBuilder",
+                                         "android.text.style.StyleSpan", "android.text.style.UnderlineSpan",
+                                         "android.text.style.StrikethroughSpan", "android.text.style.TypefaceSpan",
+                                         "android.text.style.ForegroundColorSpan", "android.text.style.CharacterStyle",
+                                         "android.text.style.MetricAffectingSpan", "android.text.style.UpdateAppearance",
+                                         "android.text.style.UpdateLayout"],
                              "modules": [], "proxy_interfaces": {"example.Listener": ["onClick"]}}
 
     def dispatch(self, text):
@@ -200,6 +206,29 @@ class BridgeTests(unittest.TestCase):
             bridge.load_plugin(text)
         self.assertEqual(self.host.active, {})
 
+    def test_registered_android_text_classes_import_from_native_packages(self):
+        scope = self.load("text_values")
+        with bridge.runtime.context(scope):
+            from android.text import Spanned, SpannableString, SpannableStringBuilder
+            from android.text.style import (CharacterStyle, ForegroundColorSpan, MetricAffectingSpan,
+                                            StrikethroughSpan, StyleSpan, TypefaceSpan, UnderlineSpan,
+                                            UpdateAppearance, UpdateLayout)
+
+            self.assertEqual(Spanned._name, "android.text.Spanned")
+            self.assertEqual(SpannableString._name, "android.text.SpannableString")
+            self.assertEqual(SpannableStringBuilder._name, "android.text.SpannableStringBuilder")
+            self.assertEqual(StyleSpan._name, "android.text.style.StyleSpan")
+            self.assertEqual(UnderlineSpan._name, "android.text.style.UnderlineSpan")
+            self.assertEqual(StrikethroughSpan._name, "android.text.style.StrikethroughSpan")
+            self.assertEqual(TypefaceSpan._name, "android.text.style.TypefaceSpan")
+            self.assertEqual(ForegroundColorSpan._name, "android.text.style.ForegroundColorSpan")
+            self.assertEqual(CharacterStyle._name, "android.text.style.CharacterStyle")
+            self.assertEqual(MetricAffectingSpan._name, "android.text.style.MetricAffectingSpan")
+            self.assertEqual(UpdateAppearance._name, "android.text.style.UpdateAppearance")
+            self.assertEqual(UpdateLayout._name, "android.text.style.UpdateLayout")
+            with self.assertRaises(bridge.UnsupportedAPI):
+                from android.text.style import URLSpanNoUnderline
+
     def test_preflight_does_not_hide_dynamic_class_lookup(self):
         text = source(imports="from java import jclass\nname = 'example.Native'\nNative = jclass(name)\n")
         report = json.loads(bridge.preflight_plugin_json(text))
@@ -298,6 +327,50 @@ class BridgeTests(unittest.TestCase):
         bridge.unload_plugin("left")
         with self.assertRaises(bridge.BridgeError):
             bridge.invoke_callback_json(event)
+
+    def test_text_watcher_proxy_requires_all_declared_callbacks(self):
+        self.host.capabilities["classes"].append("android.text.TextWatcher")
+        self.host.capabilities["proxy_interfaces"]["android.text.TextWatcher"] = [
+            "beforeTextChanged", "onTextChanged", "afterTextChanged",
+        ]
+        scope = self.load()
+        with bridge.runtime.context(scope):
+            interface = jclass("android.text.TextWatcher")
+            proxy_type = dynamic_proxy(interface)
+
+            class Watcher(proxy_type):
+                def beforeTextChanged(self, text, start, count, after):
+                    return None
+
+                def onTextChanged(self, text, start, before, count):
+                    return None
+
+                def afterTextChanged(self, text):
+                    return None
+
+            bridge.runtime.encode(Watcher())
+        request = next(item for item in reversed(self.host.requests) if item["operation"] == "java.proxy")
+        self.assertEqual(request["arguments"]["interfaces"], ["android.text.TextWatcher"])
+        self.assertEqual(set(request["arguments"]["callbacks"]), {
+            "beforeTextChanged", "onTextChanged", "afterTextChanged",
+        })
+
+    def test_text_watcher_proxy_rejects_an_incomplete_implementation(self):
+        self.host.capabilities["classes"].append("android.text.TextWatcher")
+        self.host.capabilities["proxy_interfaces"]["android.text.TextWatcher"] = [
+            "beforeTextChanged", "onTextChanged", "afterTextChanged",
+        ]
+        scope = self.load()
+        with bridge.runtime.context(scope):
+            interface = jclass("android.text.TextWatcher")
+            proxy_type = dynamic_proxy(interface)
+
+            class IncompleteWatcher(proxy_type):
+                def beforeTextChanged(self, text, start, count, after):
+                    return None
+
+            with self.assertRaises(bridge.UnsupportedAPI):
+                bridge.runtime.encode(IncompleteWatcher())
 
     def test_static_field_helper_uses_class_target_and_preserves_scope(self):
         from hook_utils import get_static_private_field

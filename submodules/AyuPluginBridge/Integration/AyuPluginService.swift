@@ -78,6 +78,7 @@ public struct AyuPluginImportPreview: Sendable {
     public let requirements: [String]
     public let sourceSHA256: String
     public let isUpdate: Bool
+    public let batchBlockers: [AyuPluginBatchBlocker]
 }
 
 @MainActor public final class AyuPluginService {
@@ -99,12 +100,15 @@ public struct AyuPluginImportPreview: Sendable {
     private let sendHookSource: AyuPluginSendHookSource?
     private let defaults: UserDefaults
     private let root: URL
+    private let batchLogRoot: URL
+    private var cachedLatestBatchLogURL: URL?
     private var preparation: Task<Void, Error>?
     private var runtimePreparation: Task<Void, Error>?
     private var atmosphericAdapter: AyuAtmosphericPluginAdapter?
     private var nativeAdapters: [String: AyuNativePluginAdapter] = [:]
     private var pending: Set<String> = []
     private var pendingImportSlots = 0
+    private var currentBatchID: String?
     private var classes: Set<String> = []
     private var modules: Set<String> = []
     private var pythonGenerations: [String: String] = [:]
@@ -119,6 +123,7 @@ public struct AyuPluginImportPreview: Sendable {
         self.sendHookSource = provider as? AyuPluginSendHookSource
         self.host = AyuPluginNativeHost(defaults: defaults, provider: provider, classRegistry: classRegistry, limits: limits, trustedOwner: { nil }, callback: { owner, callback, arguments in relay.deliver(owner, callback, arguments) })
         self.root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AyuPlugins", isDirectory: true)
+        self.batchLogRoot = self.root.appendingPathComponent("BatchLogs", isDirectory: true)
         relay.attach(self.runtime) { [weak self] owner, generation in Task { @MainActor in
             guard let self, let generation, self.pythonGenerations[owner] == generation,
                   self.plugins.contains(where: { $0.id == owner && $0.isEnabled && !$0.isBusy }) else { return }
@@ -167,7 +172,7 @@ public struct AyuPluginImportPreview: Sendable {
                 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
                 guard (try root.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true else { throw Failure.storage }
                 let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-                return files.filter { $0.pathExtension == "json" }.prefix(64).compactMap { url -> AyuInstalledPlugin? in
+                return AyuPluginCapacity.boundedMetadataURLs(files).compactMap { url -> AyuInstalledPlugin? in
                     guard let data = try? Self.read(url, limit: 65_536), var record = try? JSONDecoder().decode(AyuInstalledPlugin.self, from: data), Self.validID(record.id), url.deletingPathExtension().lastPathComponent == record.id else { return nil }
                     record.isEnabled = false; record.isBusy = false; record.error = nil
                     record.nativeAdapter = nil
@@ -237,14 +242,15 @@ public struct AyuPluginImportPreview: Sendable {
             description: record.description ?? String((metadata["__description__"].string ?? "").prefix(8192)),
             requirements: record.requirements ?? [],
             sourceSHA256: Self.digest(source),
-            isUpdate: self.plugins.contains(where: { $0.id == record.id }))
+            isUpdate: self.plugins.contains(where: { $0.id == record.id }),
+            batchBlockers: Self.batchBlockers(record: record, report: report))
     }
 
     /// Re-inspects the selected bytes before committing. Updating preserves the
     /// existing settings namespace and always leaves the new version disabled.
     public func importPlugin(from url: URL, replacingExisting: Bool = false, expectedSHA256: String? = nil) async throws {
         try await self.prepare()
-        guard self.pendingImportSlots < 64 else { throw Failure.operation("RESOURCE_LIMIT") }
+        guard AyuPluginCapacity.canReserveImport(installed: self.plugins.count, pending: self.pendingImportSlots, replacingExisting: replacingExisting) else { throw Failure.operation("RESOURCE_LIMIT") }
         self.pendingImportSlots += 1
         defer { self.pendingImportSlots -= 1 }
         let source = try await Self.importSource(from: url)
@@ -256,7 +262,7 @@ public struct AyuPluginImportPreview: Sendable {
             guard !existing.isEnabled else { throw Failure.updateRequiresDisable }
         } else {
             guard !replacingExisting else { throw Failure.identity }
-            guard self.plugins.count + self.pendingImportSlots <= 64 else { throw Failure.operation("RESOURCE_LIMIT") }
+            guard AyuPluginCapacity.canImport(installed: self.plugins.count, reserved: self.pendingImportSlots) else { throw Failure.operation("RESOURCE_LIMIT") }
         }
         guard self.pending.insert(record.id).inserted else { throw Failure.busy }
         defer { self.pending.remove(record.id) }
@@ -310,28 +316,44 @@ public struct AyuPluginImportPreview: Sendable {
     }
 
     /// Call only after the user explicitly trusts this installed plugin for this process.
-    public func enable(_ id: String) async throws {
+    public func enable(_ id: String) async throws { _ = try await self.enable(id, phaseReporter: { _, _ in }) }
+
+    private func enable(_ id: String, phaseReporter: AyuPluginBatchRunner.PhaseReporter) async throws -> AyuPluginBatchLoadContext {
         try await self.prepare()
-        if self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) { return }
+        if self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) {
+            return AyuPluginBatchLoadContext(sourceSHA256: nil, pluginVersion: nil, blockers: [])
+        }
         try self.begin(id)
         defer { self.finish(id) }
         let url = self.root.appendingPathComponent(id + ".plugin")
         do {
+            try await phaseReporter(.readSource, nil)
             let source = try await Task.detached(priority: .utility) { guard let text = String(data: try Self.read(url, limit: Self.maximumSourceBytes), encoding: .utf8) else { throw Failure.source }; return text }.value
-            let (inspection, _) = try await self.inspect(source)
+            let sourceSHA256 = Self.digest(source)
+            var context = AyuPluginBatchLoadContext(sourceSHA256: sourceSHA256, pluginVersion: nil, blockers: [])
+            try await phaseReporter(.inspect, context)
+            let (inspection, report) = try await self.inspect(source)
+            let blockers = Self.batchBlockers(record: inspection, report: report)
+            context = AyuPluginBatchLoadContext(sourceSHA256: sourceSHA256, pluginVersion: inspection.version,
+                blockers: !inspection.blockers.isEmpty && blockers.isEmpty
+                    ? [AyuPluginBatchBlocker.sanitized(code: "ADAPTER_SOURCE", identifier: "source_pin")!]
+                    : blockers)
+            try await phaseReporter(.inspect, context)
             guard inspection.id == id else { throw Failure.identity }
             self.update(id) { $0.blockers = inspection.blockers; $0.error = nil; $0.nativeAdapter = inspection.nativeAdapter }
             guard inspection.blockers.isEmpty else { throw Failure.operation("UNSUPPORTED_API") }
             if inspection.nativeAdapter == AyuAtmosphericPluginAdapter.adapterID {
+                try await phaseReporter(.nativeEnable, context)
                 let adapter = AyuAtmosphericPluginAdapter(defaults: self.defaults, reportError: { [weak self] message in
                     self?.update(id) { $0.error = message }
                 })
                 try adapter.enable()
                 self.atmosphericAdapter = adapter
                 self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
-                return
+                return context
             }
             if let descriptor = AyuNativePluginCatalog.descriptor(id: id), inspection.nativeAdapter == descriptor.adapterID {
+                try await phaseReporter(.nativeEnable, context)
                 let adapter = descriptor.make(self.defaults, AyuNativePluginReporter { [weak self] message in
                     self?.update(id) { $0.error = message }
                 })
@@ -339,9 +361,11 @@ public struct AyuPluginImportPreview: Sendable {
                 try adapter.enable()
                 self.nativeAdapters[id] = adapter
                 self.update(id) { $0.isEnabled = true; $0.nativeAdapter = inspection.nativeAdapter }
-                return
+                return context
             }
+            try await phaseReporter(.runtimePrepare, context)
             try await self.prepareRuntime()
+            try await phaseReporter(.runtimeLoad, context)
             let json = try await self.complete { self.runtime.load(source: source, filename: id + ".plugin", completion: $0) }
             let loaded = try self.decode(json)
             guard loaded["plugin_id"].string == id, let generation = loaded["generation"].string,
@@ -350,7 +374,9 @@ public struct AyuPluginImportPreview: Sendable {
             self.update(id) { $0.isEnabled = true }
             self.relay.event(id, generation: generation, name: "START")
             if self.appIsActive { self.relay.event(id, generation: generation, name: "RESUME") }
+            return context
         } catch {
+            try? await phaseReporter(.cleanup, nil)
             self.pythonGenerations.removeValue(forKey: id)
             // Also handle a successful load followed by a malformed result: revoke both layers.
             if id == AyuAtmosphericPluginAdapter.pluginID {
@@ -360,6 +386,177 @@ public struct AyuPluginImportPreview: Sendable {
             if self.runtimePreparation != nil { _ = try? await self.complete { self.runtime.unload(pluginID: id, completion: $0) } }
             await self.detach(id); self.update(id) { $0.isEnabled = false; $0.error = self.message(error) }; throw error
         }
+    }
+
+    /// Batch consent is supplied by the manager. Plugin owners still pass through
+    /// the normal begin/finish and generation cleanup paths one at a time.
+    public func enableBatch(_ ids: [String], isCancelled: @escaping @MainActor () -> Bool = { false },
+                            progress: @escaping @MainActor (Int, Int) -> Void = { _, _ in }) async throws -> AyuPluginBatchSummary {
+        try await self.prepare()
+        guard self.currentBatchID == nil else { throw Failure.busy }
+        let batchID = UUID().uuidString.lowercased()
+        self.currentBatchID = batchID
+        defer { self.currentBatchID = nil }
+        let journal = AyuPluginBatchJournal(root: self.batchLogRoot, sourceRoot: self.root, batchID: batchID)
+        self.cachedLatestBatchLogURL = journal.url
+        let summary = try await AyuPluginBatchRunner.run(ids: ids, journal: journal,
+            isEnabled: { id in self.plugins.contains(where: { $0.id == id && $0.isEnabled }) },
+            isCancelled: isCancelled,
+            pluginName: { id in self.plugins.first(where: { $0.id == id })?.name ?? "[redacted]" },
+            diagnostic: Self.batchDiagnostic,
+            progress: progress,
+            enable: { id, report in
+                let context = try await self.enable(id, phaseReporter: report)
+                return AyuPluginBatchLoadResult(generation: self.pythonGenerations[id], context: context)
+            })
+        return summary
+    }
+
+    /// Application Support path for the most recent report. Directory metadata
+    /// is enumerated on a utility executor and cached by the manager.
+    public func latestBatchLog() async throws -> URL? {
+        let root = self.batchLogRoot
+        if let cachedLatestBatchLogURL {
+            let isReadable = await Task.detached(priority: .utility) {
+                (try? AyuPluginBatchJournal.readReport(at: cachedLatestBatchLogURL, within: root)) != nil
+            }.value
+            return isReadable ? cachedLatestBatchLogURL : nil
+        }
+        let latest = try await Task.detached(priority: .utility) { try AyuPluginBatchJournal.latestReport(in: root) }.value
+        self.cachedLatestBatchLogURL = latest
+        return latest
+    }
+    /// Opens only a validated generated report inside the private log directory.
+    public func batchLogData(at url: URL) async throws -> Data {
+        let root = self.batchLogRoot
+        return try await Task.detached(priority: .utility) { try AyuPluginBatchJournal.readReport(at: url, within: root) }.value
+    }
+
+    /// Multi-file import performs static inspection and hash-verified installs
+    /// sequentially. It never enables a plugin; trust is a separate later action.
+    public func importBatch(from urls: [URL], isCancelled: @escaping @MainActor () -> Bool = { false },
+                            progress: @escaping @MainActor (Int, Int) -> Void = { _, _ in }) async throws -> AyuPluginBatchSummary {
+        guard !urls.isEmpty, urls.count <= AyuPluginCapacity.maximumInstalledPlugins else { throw Failure.operation("RESOURCE_LIMIT") }
+        try await self.prepare()
+        guard self.currentBatchID == nil else { throw Failure.busy }
+        let batchID = UUID().uuidString.lowercased()
+        self.currentBatchID = batchID
+        defer { self.currentBatchID = nil }
+        let journal = AyuPluginBatchJournal(root: self.batchLogRoot, sourceRoot: self.root, batchID: batchID)
+        self.cachedLatestBatchLogURL = journal.url
+        let started = ProcessInfo.processInfo.systemUptime
+        var summary = AyuPluginBatchSummary(batchID: batchID, requested: urls.count, logPath: journal.url.lastPathComponent)
+        try await journal.open()
+        try await journal.append(phase: .batch, result: "import_started", totals: summary)
+        var logFailed = false
+        for (index, url) in urls.enumerated() {
+            let fileName = Self.safeImportFileName(url)
+            if Task.isCancelled || isCancelled() {
+                summary.cancelled += 1
+                do { try await journal.append(fileName: fileName, phase: .readSource, result: "cancelled", diagnostic: .cancelled, fileIndex: index + 1) }
+                catch { logFailed = true }
+                progress(index + 1, urls.count)
+                continue
+            }
+            let itemStarted = ProcessInfo.processInfo.systemUptime
+            var phase = AyuPluginBatchPhase.readSource
+            var pluginID: String?
+            var pluginName: String?
+            var context: AyuPluginBatchLoadContext?
+            do {
+                try await journal.append(fileName: fileName, phase: phase, result: "started", fileIndex: index + 1)
+                phase = .inspect
+                let preview = try await self.previewPlugin(from: url)
+                pluginID = preview.plugin.id
+                pluginName = preview.plugin.name
+                context = AyuPluginBatchLoadContext(sourceSHA256: preview.sourceSHA256,
+                    pluginVersion: preview.plugin.version, blockers: preview.batchBlockers)
+                try await journal.append(pluginID: pluginID, pluginName: pluginName, fileName: fileName,
+                    phase: .inspect, result: "validated_disabled", context: context, fileIndex: index + 1)
+                phase = .importPlugin
+                try await journal.append(pluginID: pluginID, pluginName: pluginName, fileName: fileName,
+                    phase: phase, result: "started", context: context, fileIndex: index + 1)
+                // Existing IDs fail closed rather than being replaced by a batch.
+                try await self.importPlugin(from: url, replacingExisting: false, expectedSHA256: preview.sourceSHA256)
+                summary.succeeded += 1
+                do {
+                    try await journal.append(pluginID: pluginID, pluginName: pluginName, fileName: fileName,
+                        phase: phase, result: "installed_disabled", durationMilliseconds: Self.elapsedMilliseconds(since: itemStarted),
+                        context: context, fileIndex: index + 1)
+                } catch { logFailed = true }
+            } catch {
+                let skipped: Bool
+                if let failure = error as? Failure {
+                    switch failure {
+                    case .duplicate, .updateRequiresDisable: skipped = true
+                    default: skipped = false
+                    }
+                } else {
+                    skipped = false
+                }
+                if skipped { summary.skipped += 1 } else { summary.failed += 1 }
+                do { try await journal.append(pluginID: pluginID, pluginName: pluginName, fileName: fileName,
+                    phase: phase, result: skipped ? "skipped" : "failed", diagnostic: Self.batchDiagnostic(error),
+                    durationMilliseconds: Self.elapsedMilliseconds(since: itemStarted), context: context, fileIndex: index + 1) }
+                catch { logFailed = true }
+            }
+            progress(index + 1, urls.count)
+        }
+        summary.durationMilliseconds = Self.elapsedMilliseconds(since: started)
+        try await journal.append(phase: .summary, result: logFailed ? "log_incomplete" : (summary.cancelled > 0 ? "cancelled" : "import_completed"),
+            diagnostic: logFailed ? .storage : nil, durationMilliseconds: summary.durationMilliseconds, totals: summary)
+        if logFailed { throw Failure.storage }
+        return summary
+    }
+
+    nonisolated private static let maximumPendingImports = AyuPluginCapacity.maximumInstalledPlugins
+
+    private nonisolated static func batchDiagnostic(_ error: Error) -> AyuPluginBatchDiagnostic {
+        guard let failure = error as? Failure else { return .runtime }
+        switch failure {
+        case .resources: return .resources
+        case .pythonResources: return .pythonResources
+        case .sdkResources: return .sdkResources
+        case .runtimeStartup: return .runtimeStartup
+        case .sdkStartup: return .sdkStartup
+        case .runtimeQueue: return .runtimeQueue
+        case .source: return .source
+        case .identity: return .identity
+        case .duplicate: return .duplicate
+        case .storage: return .storage
+        case .inactive: return .inactive
+        case .busy: return .busy
+        case .runtime: return .runtime
+        case .protocolError: return .protocolError
+        case .sourceChanged: return .sourceChanged
+        case .updateRequiresDisable: return .updateRequiresDisable
+        case .unsupportedPlugin: return .unsupported
+        case let .operation(code): return .operation(code)
+        }
+    }
+
+    private static func batchBlockers(record: AyuInstalledPlugin, report: AyuBridgeValue) -> [AyuPluginBatchBlocker] {
+        var safe: [AyuPluginBatchBlocker] = []
+        for finding in (report["blockers"].array ?? []).prefix(32) {
+            guard let blocker = AyuPluginBatchBlocker.sanitized(code: finding["code"].string, identifier: finding["detail"].string) else { continue }
+            if !safe.contains(blocker) { safe.append(blocker) }
+        }
+        if !record.blockers.isEmpty && safe.isEmpty {
+            let isVersionPolicy = record.blockers.contains { $0.hasPrefix("VERSION_POLICY:") }
+            let fallback = AyuPluginBatchBlocker.sanitized(code: isVersionPolicy ? "VERSION_POLICY" : "ADAPTER_SOURCE",
+                identifier: isVersionPolicy ? "app_version" : "source_pin")
+            if let fallback { safe.append(fallback) }
+        }
+        return safe
+    }
+
+    private static func safeImportFileName(_ url: URL) -> String {
+        let basename = url.lastPathComponent
+        return String(basename.unicodeScalars.filter { CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " _-.()")).contains($0) }.prefix(80))
+    }
+
+    private static func elapsedMilliseconds(since started: TimeInterval) -> Int {
+        Int(max(0, ProcessInfo.processInfo.systemUptime - started) * 1000)
     }
 
     public func disable(_ id: String) async throws {

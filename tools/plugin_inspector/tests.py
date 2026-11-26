@@ -38,6 +38,23 @@ def fixture_manifest():
                 "getInstance": implemented(returns="self"),
                 "createView": implemented(),
             }),
+            "org.telegram.messenger.LocaleController": implemented(members={
+                "getInstance": implemented(returns="self"),
+                "getCurrentLocaleInfo": implemented(returns="org.telegram.messenger.LocaleController$LocaleInfo"),
+            }),
+            "org.telegram.messenger.LocaleController$LocaleInfo": implemented(members={
+                "pluralLangCode": implemented(),
+            }),
+            "android.view.View": implemented(members={
+                "animate": implemented(returns="android.view.ViewPropertyAnimator"),
+            }),
+            "android.view.ViewPropertyAnimator": implemented(members={
+                "alpha": implemented(returns="self"),
+                "rotationX": implemented(returns="self"),
+                "setDuration": implemented(returns="self"),
+                "start": implemented(),
+                "cancel": implemented(),
+            }),
         },
         "features": {},
         "dependencies": {},
@@ -128,6 +145,20 @@ plugin.hook_all_methods(Activity, method_name, Hook())
         source = 'from java import jclass\nA = jclass("org.telegram.ui.MainTabsActivity")\ninstance = A.getInstance()\ninstance.createView()\n'
         report = inspect_source(source, fixture_manifest())
         self.assertEqual(report["status"], "supported")
+
+    def test_declared_locale_and_view_animator_return_chains_resolve(self):
+        source = '''from java import jclass
+LocaleController = jclass("org.telegram.messenger.LocaleController")
+plural = LocaleController.getInstance().getCurrentLocaleInfo().pluralLangCode
+View = jclass("android.view.View")
+view = View()
+animator = view.animate().alpha(0.5).rotationX(12).setDuration(180)
+animator.start()
+animator.cancel()
+'''
+        report = inspect_source(source, fixture_manifest())
+        self.assertEqual(report["status"], "supported")
+        self.assertEqual(self.findings(report, "feature", "dynamic_java_members"), [])
 
     def test_sdk_instance_method_requires_its_own_manifest_entry(self):
         source = '''from base_plugin import BasePlugin

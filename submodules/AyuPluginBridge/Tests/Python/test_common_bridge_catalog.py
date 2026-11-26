@@ -93,6 +93,30 @@ class CommonBridgeCatalogTests(unittest.TestCase):
         for plugin in self.catalog["plugins"]:
             self.assertTrue(set(plugin["java_classes"]).isdisjoint(forbidden))
 
+    def test_bounded_widget_and_view_configuration_routes_match_static_inventory(self):
+        audit = runpy.run_path(str(BRIDGE / "Build/audit-plugin-requirements.py"))
+        host_classes = audit["HOST_CLASSES"]
+        application_classes = audit["APPLICATION_CLASSES"]
+        for name in (
+            "android.os.SystemClock", "android.view.View$MeasureSpec", "android.view.ViewConfiguration", "android.view.HapticFeedbackConstants",
+            "java.lang.reflect.Array", "android.view.ViewPropertyAnimator",
+            "android.widget.ProgressBar", "android.widget.CheckBox",
+            "android.widget.CompoundButton$OnCheckedChangeListener",
+        ):
+            self.assertIn(name, host_classes)
+        self.assertIn("org.telegram.messenger.LocaleController$LocaleInfo", application_classes)
+
+        plugins = {item["file"]: item for item in self.catalog["plugins"]}
+        self.assertIn("android.view.ViewConfiguration", plugins["side_panel.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.view.HapticFeedbackConstants", plugins["passguard.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.widget.ProgressBar", plugins["message_cleaner.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.widget.ProgressBar", plugins["spekgram.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.widget.CheckBox", plugins["side_panel.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.widget.CompoundButton$OnCheckedChangeListener", plugins["side_panel.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.view.View$MeasureSpec", plugins["player_below.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertIn("android.os.SystemClock", plugins["quick_stickers.plugin"]["declared_ui_or_reference_subsets"])
+        self.assertEqual(self.catalog["plugins_runtime_verified"], [])
+
     def test_swift_source_wires_schema_validation_on_each_state_path(self):
         text = (BRIDGE / "Sources/AyuPluginNativeHost.swift").read_text()
         for anchor in ["validateAdapterState(fields, className: name, owner: owner)",

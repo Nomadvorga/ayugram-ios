@@ -20,15 +20,35 @@ BRIDGE = Path(__file__).resolve().parents[1]
 
 SOURCE_COMMIT = "a4b6bb472fd657e0f659531dae090e12c02a0aaa"
 SNOW_SHA256 = "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763"
-VALUE_CLASSES = {"java.lang.Integer", "java.lang.Long", "java.lang.Boolean", "java.lang.System",
-                 "java.util.ArrayList", "java.util.HashMap", "java.util.concurrent.atomic.AtomicLong",
-                 "java.util.concurrent.atomic.AtomicBoolean", "int", "long", "boolean", "byte",
+VALUE_CLASSES = {"java.lang.Byte", "java.lang.Short", "java.lang.Integer", "java.lang.Long", "java.lang.Boolean", "java.lang.System",
+                  "java.util.ArrayList", "java.util.HashMap", "java.util.concurrent.atomic.AtomicLong",
+                  "java.util.concurrent.atomic.AtomicBoolean", "java.net.URL", "java.net.URLEncoder",
+                  "java.util.Scanner", "java.io.ByteArrayOutputStream", "java.util.Collections",
+                  "java.lang.String", "java.lang.Float", "java.lang.Object", "java.lang.CharSequence", "java.lang.ref.WeakReference",
+                  "android.content.res.ColorStateList", "android.text.Spanned", "android.text.SpannableString",
+                  "android.text.SpannableStringBuilder", "android.text.style.StyleSpan", "android.text.style.UnderlineSpan",
+                  "android.text.style.StrikethroughSpan", "android.text.style.TypefaceSpan",
+                  "android.text.style.ForegroundColorSpan", "android.text.style.CharacterStyle",
+                  "android.text.style.MetricAffectingSpan", "android.text.style.UpdateAppearance",
+                  "android.text.style.UpdateLayout", "int", "long", "boolean", "byte",
                  "short", "char", "float", "double", "void"}
-HOST_CLASSES = {"android.view.View", "android.view.Gravity", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView",
-                 "android.widget.TextView", "android.widget.ImageView", "android.widget.FrameLayout$LayoutParams",
-                 "android.widget.LinearLayout$LayoutParams", "java.lang.reflect.Method", "[B", "[S", "[C", "[I", "[J", "[F", "[D", "[Z",
-                  "android.os.Bundle", "android.content.Intent", "android.view.MotionEvent", "android.os.Handler",
-                  "java.lang.Runnable", "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
+HOST_CLASSES = {"android.os.SystemClock", "android.view.View", "android.view.View$MeasureSpec", "android.view.ViewGroup", "android.view.Gravity", "android.view.HapticFeedbackConstants", "android.view.ViewConfiguration", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView", "android.widget.HorizontalScrollView", "android.widget.ProgressBar", "android.widget.CheckBox", "android.widget.CompoundButton$OnCheckedChangeListener",
+                 "android.widget.TextView", "android.widget.EditText", "android.widget.ImageView", "android.widget.ImageButton", "android.widget.ImageView$ScaleType",
+                 "android.view.ViewOutlineProvider", "android.graphics.PorterDuff$Mode", "android.graphics.PorterDuffColorFilter",
+                 "android.widget.FrameLayout$LayoutParams",
+                  "android.widget.LinearLayout$LayoutParams", "java.lang.reflect.Method", "java.lang.reflect.Array", "[B", "[S", "[C", "[I", "[J", "[F", "[D", "[Z",
+                  "android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.view.MotionEvent", "android.os.Handler",
+                  "android.graphics.Color", "android.graphics.Typeface", "android.graphics.drawable.ColorDrawable",
+                 "android.graphics.Rect", "android.graphics.RectF", "android.graphics.drawable.GradientDrawable",
+                 "android.graphics.Paint", "android.graphics.Paint$Cap", "android.graphics.Paint$Join", "android.graphics.Paint$Style",
+                  "android.graphics.Path",
+                  "android.graphics.Matrix",
+                  "android.view.animation.LinearInterpolator", "android.view.animation.DecelerateInterpolator",
+                  "android.view.animation.OvershootInterpolator", "android.animation.ValueAnimator",
+                  "android.view.ViewPropertyAnimator",
+                  "android.text.TextUtils", "android.text.TextUtils$TruncateAt", "android.text.TextWatcher", "android.text.InputType", "java.util.Locale",
+                  "java.nio.ByteBuffer", "java.lang.Runnable", "java.lang.Class",
+                  "android.view.View$OnClickListener", "android.view.View$OnTouchListener"}
 APPLICATION_CLASSES = {"org.telegram.messenger.UserConfig", "org.telegram.tgnet.TLRPC$User",
                         "org.telegram.ui.ActionBar.BaseFragment", "android.content.Context", "org.telegram.ui.ActionBar.AlertDialog",
                         "org.telegram.messenger.AccountInstance", "org.telegram.messenger.MessagesController",
@@ -36,10 +56,12 @@ APPLICATION_CLASSES = {"org.telegram.messenger.UserConfig", "org.telegram.tgnet.
                         "org.telegram.messenger.NotificationCenter$NotificationCenterDelegate",
                          "android.content.res.Resources", "android.content.res.Configuration",
                          "android.util.DisplayMetrics", "android.util.TypedValue",
-                        "java.lang.String", "org.telegram.ui.ActionBar.Theme",
-                        "org.telegram.ui.Components.BulletinFactory", "org.telegram.ui.Components.Bulletin",
-                        "org.telegram.ui.PhotoViewer", "android.widget.Toast",
-                        "org.telegram.messenger.ApplicationLoader", "org.telegram.messenger.AndroidUtilities"}
+                         "org.telegram.ui.ActionBar.Theme",
+                         "org.telegram.ui.Components.BulletinFactory", "org.telegram.ui.Components.Bulletin",
+                         "org.telegram.ui.PhotoViewer", "android.widget.Toast",
+                          "org.telegram.messenger.LocaleController", "org.telegram.messenger.LocaleController$LocaleInfo",
+                          "org.telegram.messenger.browser.Browser",
+                         "org.telegram.messenger.ApplicationLoader", "org.telegram.messenger.AndroidUtilities"}
 NATIVE_PREFIXES = ("android.", "androidx.", "java.", "javax.", "org.telegram.", "com.")
 HOOKS = {"hook_method", "hook_all_methods", "hook_all_constructors", "add_hook", "add_on_send_message_hook",
          "add_on_request_hook", "add_on_response_hook", "hook_request", "hook_response"}

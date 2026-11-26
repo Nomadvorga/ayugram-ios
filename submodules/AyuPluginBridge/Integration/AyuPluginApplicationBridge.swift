@@ -58,13 +58,25 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     private struct Reservation { let owner: String; let generation: UUID }
     private var reservations: [String: Reservation] = [:]
     private var clipboardReservations: [String: Reservation] = [:]
+    private struct URLReservation {
+        let owner: String
+        let generation: UUID
+        let account: AyuPluginAccountSnapshot
+        let screen: AyuPluginScreenSnapshot
+        let url: URL
+    }
+    private var urlReservations: [String: URLReservation] = [:]
     private let clipboardWriter: @MainActor @Sendable (String) -> Void
     // Descriptor ids are stable host-owned state; every show gets a fresh token.
     private var feedbackTokens: [String: String] = [:]
     private struct Observation { let event: Int64; let sink: AyuBridgeNativeCallback }
     private var observations: [String: [String: Observation]] = [:]
     @MainActor private var screenSource: (() -> AyuPluginScreenSnapshot?)?
+    @MainActor private var localeIdentifierSource: (() -> String)?
     @MainActor private var presenterSource: (() -> UIViewController?)?
+    @MainActor private var urlOpenerSource: ((AyuPluginScreenSnapshot, URL) -> Void)?
+    // Read by worker-side preparation; written by bindScreen under `lock`.
+    private var urlRouteBound = false
     @MainActor private var alertPresenter: ((UIAlertController) -> Void)?
     @MainActor private var dialogs: [String: UIViewController] = [:]
     @MainActor private var bulletins: [String: UIView] = [:]
@@ -98,15 +110,19 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     }
 
     /// Explicit app-owned root only. No key-window discovery or private APIs.
-    @MainActor public func bindScreen(screen: @escaping () -> AyuPluginScreenSnapshot?, presenter: @escaping () -> UIViewController?, presentAlert: ((UIAlertController) -> Void)? = nil) {
+    @MainActor public func bindScreen(screen: @escaping () -> AyuPluginScreenSnapshot?, presenter: @escaping () -> UIViewController?, presentAlert: ((UIAlertController) -> Void)? = nil,
+                                      openURL: ((AyuPluginScreenSnapshot, URL) -> Void)? = nil,
+                                      localeIdentifier: (() -> String)? = nil) {
         self.invalidatePresentations()
-        self.screenSource = screen; self.presenterSource = presenter; self.alertPresenter = presentAlert
+        self.screenSource = screen; self.presenterSource = presenter; self.alertPresenter = presentAlert; self.urlOpenerSource = openURL
+        self.localeIdentifierSource = localeIdentifier
+        self.lock.lock(); self.urlRouteBound = openURL != nil; self.lock.unlock()
     }
 
     /// Lock/background/account transitions remove only bridge-owned UI. No
     /// dismissal callbacks are fabricated for revoked presentations.
     @MainActor public func invalidatePresentations() {
-        self.lock.lock(); let tokens = Array(self.reservations.keys); self.reservations.removeAll(); self.feedbackTokens.removeAll(); self.clipboardReservations.removeAll(); self.lock.unlock()
+        self.lock.lock(); let tokens = Array(self.reservations.keys); self.reservations.removeAll(); self.feedbackTokens.removeAll(); self.clipboardReservations.removeAll(); self.urlReservations.removeAll(); self.lock.unlock()
         for token in tokens { self.removePresentation(token) }
     }
 
@@ -205,6 +221,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         self.lock.lock()
         self.ownerGenerations.removeValue(forKey: pluginID)
         self.clipboardReservations = self.clipboardReservations.filter { $0.value.owner != pluginID }
+        self.urlReservations = self.urlReservations.filter { $0.value.owner != pluginID }
         self.observations.removeValue(forKey: pluginID)
         let hookTokens = self.sendHooksByToken.filter { $0.value.owner == pluginID }.map(\.key)
         for token in hookTokens { self.sendHooksByToken.removeValue(forKey: token) }
@@ -248,6 +265,78 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                 self.showBulletin("Copied to clipboard")
             }
         })
+    }
+
+    private func prepareBrowserOpenURL(_ contextValue: AyuBridgeValue, urlValue: AyuBridgeValue, owner: String,
+                                       context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
+        let contextSnapshot = try context.snapshot(of: contextValue)
+        guard [Self.fragment, Self.context].contains(contextSnapshot.className) else { throw Self.invalid() }
+        guard self.isURLRouteBound() else { throw AyuBridgeFailure("screen_unavailable", "Telegram URL route is not bound") }
+        // Resolve the owned immutable handle on the worker. Visibility is checked
+        // by the queued effect so preparation never waits for the main thread.
+        guard let identityString = contextSnapshot.state["screenIdentity"]?.string,
+              let identity = UUID(uuidString: identityString),
+              let accountIndex = contextSnapshot.state["accountIndex"]?.integer else { throw Self.invalid() }
+        let screen = AyuPluginScreenSnapshot(identity: identity, accountIndex: accountIndex)
+        let account = try self.account(.integer(screen.accountIndex))
+        let url = try Self.browserURL(urlValue, context: context)
+        let token = UUID().uuidString
+        self.lock.lock()
+        let generation = self.ownerGenerations[owner] ?? UUID()
+        self.ownerGenerations[owner] = generation
+        guard self.urlReservations.count < 16,
+              self.urlReservations.values.filter({ $0.owner == owner }).count < 4 else {
+            self.lock.unlock(); throw AyuBridgeFailure("resource_limit", "Browser URL dispatch quota exceeded")
+        }
+        self.urlReservations[token] = URLReservation(owner: owner, generation: generation, account: account, screen: screen, url: url)
+        self.lock.unlock()
+        return AyuBridgeProviderResult(.value(.null), rollback: {
+            self.lock.lock(); self.urlReservations.removeValue(forKey: token); self.lock.unlock()
+        }, commit: { _ in
+            DispatchQueue.main.async {
+                self.lock.lock()
+                let reservation = self.urlReservations.removeValue(forKey: token)
+                let valid: Bool
+                if let reservation {
+                    valid = reservation.owner == owner && reservation.generation == generation
+                        && self.ownerGenerations[owner] == generation
+                        && self.accounts[reservation.account.index]?.identity == reservation.account.identity
+                } else {
+                    valid = false
+                }
+                self.lock.unlock()
+                guard valid, let reservation,
+                      let current = self.screenSource?(), current.identity == reservation.screen.identity,
+                      current.accountIndex == reservation.screen.accountIndex else { return }
+                self.urlOpenerSource?(reservation.screen, reservation.url)
+            }
+        })
+    }
+
+    private func isURLRouteBound() -> Bool {
+        self.lock.lock(); defer { self.lock.unlock() }
+        return self.urlRouteBound
+    }
+
+    private static func browserURL(_ value: AyuBridgeValue, context: AyuBridgeAdapterContext) throws -> URL {
+        let string: String
+        if let supplied = value.string {
+            string = supplied
+        } else {
+            guard value.object?["$handle"]?.string != nil else { throw Self.invalid() }
+            let uri = try context.snapshot(of: value)
+            guard uri.className == "android.net.Uri", let supplied = uri.state["value"]?.string else { throw Self.invalid() }
+            string = supplied
+        }
+        guard string.utf8.count <= 8_192,
+              string == string.trimmingCharacters(in: .whitespacesAndNewlines),
+              let components = URLComponents(string: string),
+              let scheme = components.scheme?.lowercased(), let host = components.host, !host.isEmpty,
+              components.user == nil, components.password == nil,
+              let url = components.url, url.baseURL == nil else { throw Self.invalid() }
+        guard scheme == "http" || scheme == "https" else { throw AyuBridgeFailure.unsupported("Browser.openUrl URL scheme") }
+        if let port = components.port, !(1...65_535).contains(port) { throw Self.invalid() }
+        return url
     }
 
     private func prepareSendHook(_ arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
@@ -340,6 +429,46 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     }
 
     public func classRegistry() throws -> AyuBridgeClassRegistry {
+        let localeControllerAdapter = AyuBridgeClassAdapter(name: Self.localeController,
+            staticMethods: ["getInstance": { args, _ in
+                guard args.isEmpty else { throw Self.invalid() }
+                return .instance(className: Self.localeController, state: self.localeControllerState())
+            }], methods: [
+                "isRTL": { state, args, _ in
+                    guard args.isEmpty else { throw Self.invalid() }
+                    try Self.validateLocaleControllerState(state)
+                    let language = state["language"]?.string ?? ""
+                    return .value(.bool(NSLocale.characterDirection(forLanguage: language) == .rightToLeft))
+                },
+                "getCurrentLocale": { state, args, _ in
+                    guard args.isEmpty else { throw Self.invalid() }
+                    try Self.validateLocaleControllerState(state)
+                    let identifier = state["identifier"]?.string ?? ""
+                    let locale = Locale(identifier: identifier) as NSLocale
+                    return .instance(className: "java.util.Locale", state: [
+                        "identifier": .string(identifier),
+                        "language": .string(locale.object(forKey: .languageCode) as? String ?? ""),
+                        "country": .string(locale.object(forKey: .countryCode) as? String ?? ""),
+                        "variant": .string(locale.object(forKey: .variantCode) as? String ?? ""),
+                    ])
+                },
+                "getCurrentLocaleInfo": { state, args, _ in
+                    guard args.isEmpty else { throw Self.invalid() }
+                    try Self.validateLocaleControllerState(state)
+                    return .instance(className: Self.localeInfo, state: [
+                        "pluralLangCode": .string(Self.pluralLanguageCode(forLanguage: state["language"]?.string ?? "")),
+                    ])
+                },
+            ], validateState: Self.validateLocaleControllerState)
+        let localeInfoAdapter = AyuBridgeClassAdapter(name: Self.localeInfo,
+            readableFields: ["pluralLangCode"], validateState: { state in
+                guard Set(state.keys) == ["pluralLangCode"],
+                      let code = state["pluralLangCode"]?.string,
+                      (1...32).contains(code.utf8.count),
+                      code.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) }) else {
+                    throw Self.invalid()
+                }
+            })
         let accountAdapter = AyuBridgeClassAdapter(name: Self.userConfig,
             staticMethods: ["getInstance": { args, _ in
                 guard args.count == 1 else { throw Self.invalid() }
@@ -457,14 +586,15 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                 return .value(.bool(try self.withPresentationTraits { $0.userInterfaceStyle == .dark }))
             }])
         let typedValueAdapter = AyuBridgeClassAdapter(name: Self.typedValue,
-            constants: ["COMPLEX_UNIT_DIP": .integer(1), "COMPLEX_UNIT_PX": .integer(0)],
+            constants: ["COMPLEX_UNIT_DIP": .integer(1), "COMPLEX_UNIT_PX": .integer(0), "COMPLEX_UNIT_SP": .integer(2)],
             staticMethods: ["applyDimension": { args, context in
-                guard args.count == 3, let unit = args[0].integer, unit == 0 || unit == 1,
+                guard args.count == 3, let unit = args[0].integer,
                       let value = args[1].number, value.isFinite, abs(value) <= 100_000 else { throw Self.invalid() }
+                guard (0...2).contains(unit) else { throw AyuBridgeFailure.unsupported("TypedValue.applyDimension unit") }
                 let metrics = try context.snapshot(of: args[2])
                 guard metrics.className == Self.displayMetrics, let density = metrics.state["density"]?.number else { throw Self.invalid() }
                 _ = try self.screen(state: ["accountIndex": metrics.state["accountIndex"] ?? .null, "screenIdentity": metrics.state["screenIdentity"] ?? .null])
-                return .value(.number(unit == 1 ? value * density : value))
+                return .value(.number(unit == 0 ? value : value * density))
             }])
         let stringAdapter = AyuBridgeClassAdapter(name: Self.javaString, methods: [
                 "toString": { state, args, _ in guard args.isEmpty, let value = state["value"]?.string else { throw Self.invalid() }; return .value(.string(value)) },
@@ -537,10 +667,22 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         let androidUtilitiesAdapter = AyuBridgeClassAdapter(name: Self.androidUtilities, staticMethods: [
             "dp": { args, _ in
                 guard args.count == 1, let value = args[0].number, value.isFinite, abs(value) <= 100_000 else { throw Self.invalid() }
-                return .value(.number(value * Self.screenScale(main: true)))
+                // Android dp(float) rounds density-scaled dimensions upward.
+                // Bridge layout uses UIKit points (density 1), so preserve point
+                // units and do not multiply by the physical screen pixel scale.
+                return .value(.integer(Int64(ceil(value))))
+            },
+            "dpf2": { args, _ in
+                guard args.count == 1, let value = args[0].number, value.isFinite, abs(value) <= 100_000 else { throw Self.invalid() }
+                // Fractional dp is already expressed in native UIKit points.
+                return .value(.number(value))
             },
             "dpRatio": { args, _ in guard args.isEmpty else { throw Self.invalid() }; return .value(.number(Self.screenScale(main: true))) },
             "getPx": { args, _ in throw AyuBridgeFailure.unsupported("AndroidUtilities.getPx") },
+            "addToClipboard": { args, context in
+                guard args.count == 1, let text = args[0].string, text.utf8.count <= 65_536 else { throw Self.invalid() }
+                return .prepared(try self.prepareClipboard(text, owner: context.pluginID))
+            },
             "runOnUIThread": { args, context in
                 guard args.count == 1 || args.count == 2 else { throw Self.invalid() }
                 let runnable = try context.snapshot(of: args[0])
@@ -569,6 +711,12 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                 _ = try self.account(.integer(screen.accountIndex))
                 return .instance(className: Self.context, state: screen.state)
             }])
+        let browserAdapter = AyuBridgeClassAdapter(name: Self.browser, staticMethods: [
+            "openUrl": { args, context in
+                guard args.count == 2 else { throw Self.invalid() }
+                return .prepared(try self.prepareBrowserOpenURL(args[0], urlValue: args[1], owner: context.pluginID, context: context))
+            }
+        ])
         let dialogAdapter = AyuBridgeClassAdapter(name: Self.dialog, methods: [
             "dismiss": { state, args, context in
                 guard args.isEmpty, let token = state["token"]?.string else { throw Self.invalid() }
@@ -602,7 +750,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
             ], validateState: { state in guard state == Self.notificationCenterState else { throw Self.invalid() } })
         let notificationDelegate = AyuBridgeClassAdapter(name: Self.notificationDelegate,
             validateState: { state in guard state.isEmpty else { throw Self.invalid() } })
-        return try .standard.adding([accountAdapter, accountInstanceAdapter, userAdapter, fragmentAdapter, contextAdapter, resourcesAdapter, configurationAdapter, displayMetricsAdapter, messagesControllerAdapter, chatAdapter, themeAdapter, typedValueAdapter, stringAdapter, bulletinFactoryAdapter, bulletinAdapter, photoViewerAdapter, toastAdapter, applicationLoaderAdapter, androidUtilitiesAdapter, dialogAdapter, notificationCenter, notificationDelegate])
+        return try .standard.adding([localeControllerAdapter, localeInfoAdapter, accountAdapter, accountInstanceAdapter, userAdapter, fragmentAdapter, contextAdapter, resourcesAdapter, configurationAdapter, displayMetricsAdapter, messagesControllerAdapter, chatAdapter, themeAdapter, typedValueAdapter, stringAdapter, bulletinFactoryAdapter, bulletinAdapter, photoViewerAdapter, toastAdapter, applicationLoaderAdapter, browserAdapter, androidUtilitiesAdapter, dialogAdapter, notificationCenter, notificationDelegate])
     }
 
     private static let notificationCenter = "org.telegram.messenger.NotificationCenter"
@@ -704,6 +852,9 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     private static let photoViewer = "org.telegram.ui.PhotoViewer"
     private static let toast = "android.widget.Toast"
     private static let applicationLoader = "org.telegram.messenger.ApplicationLoader"
+    private static let browser = "org.telegram.messenger.browser.Browser"
+    private static let localeController = "org.telegram.messenger.LocaleController"
+    private static let localeInfo = "org.telegram.messenger.LocaleController$LocaleInfo"
     private static let activeAccountChanged: Int64 = 1
     private static let notificationCenterState: [String: AyuBridgeValue] = ["token": .string("global")]
     private static func notificationObserver(state: [String: AyuBridgeValue], args: [AyuBridgeValue],
@@ -746,6 +897,40 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     private static let context = "android.content.Context"
     private static let dialog = "org.telegram.ui.ActionBar.AlertDialog"
     private static func invalid() -> AyuBridgeFailure { AyuBridgeFailure("invalid_arguments", "Unsupported application adapter arguments") }
+
+    private func localeControllerState() -> [String: AyuBridgeValue] {
+        let requestedIdentifier = DispatchQueue.main.sync { self.localeIdentifierSource?() }
+        let identifier = requestedIdentifier.flatMap { $0.utf8.count <= 128 ? $0 : nil } ?? Locale.current.identifier
+        let locale = Locale(identifier: identifier)
+        let nativeLocale = locale as NSLocale
+        return [
+            "identifier": .string(identifier),
+            "language": .string(nativeLocale.object(forKey: .languageCode) as? String ?? ""),
+        ]
+    }
+
+    private static func validateLocaleControllerState(_ state: [String: AyuBridgeValue]) throws {
+        guard Set(state.keys) == ["identifier", "language"],
+              let identifier = state["identifier"]?.string, identifier.utf8.count <= 128,
+              let language = state["language"]?.string, language.utf8.count <= 32 else { throw Self.invalid() }
+    }
+
+    private static func pluralLanguageCode(forLanguage language: String) -> String {
+        let language = language.lowercased()
+        guard !language.isEmpty, language.utf8.count <= 32,
+              language.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) }) else {
+            return "en"
+        }
+        // LocaleController's snapshot already extracts the language subtag from
+        // regional identifiers such as ru_RU, uk-UA and en_GB.
+        switch language {
+        case "ru": return "ru"
+        case "uk": return "uk"
+        case "be": return "be"
+        case "en": return "en"
+        default: return language
+        }
+    }
     private static func validateIdentityState(_ state: [String: AyuBridgeValue], identity: String) throws {
         guard Set(state.keys) == ["accountIndex", identity], let index = state["accountIndex"]?.integer, index >= 0,
               UUID(uuidString: state[identity]?.string ?? "") != nil else { throw Self.invalid() }

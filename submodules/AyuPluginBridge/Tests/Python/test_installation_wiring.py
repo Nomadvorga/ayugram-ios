@@ -61,12 +61,38 @@ class InstallationWiringTests(unittest.TestCase):
         self.contains(cleanup, "self.cancelSourceRequest?()")
         self.contains(cleanup, "removeItem(at: stagedURL.deletingLastPathComponent())")
 
-    def test_document_picker_only_opens_detail(self):
+    def test_document_picker_routes_single_preview_or_confirmed_multi_import(self):
         picker = section(self.manager, "public func documentPicker(", "private func openDetail(")
         self.contains(picker, "AyuPluginDetailViewController(sourceURL: url, service: self.service)")
-        self.contains(self.manager, "picker.allowsMultipleSelection = false")
+        self.contains(self.manager, "picker.allowsMultipleSelection = true")
+        self.contains(picker, "if urls.count == 1, let url = urls.first")
+        self.contains(picker, "self.confirmImportBatch(urls)")
+        self.contains(picker, "controller.dismiss(animated: true)")
         self.excludes(picker, "importPlugin(")
         self.excludes(picker, ".enable(")
+
+    def test_multi_document_import_is_explicit_sequential_and_never_auto_enables(self):
+        confirmation = section(self.manager, "private func confirmImportBatch(", "private func runImportBatch(")
+        self.contains(confirmation, "urls.count <= AyuPluginCapacity.maximumInstalledPlugins")
+        self.contains(confirmation, "UIAlertAction(title: \"Установить выключенными\"")
+        self.contains(confirmation, "self?.runImportBatch(urls)")
+        self.contains(confirmation, "Все они останутся выключенными")
+        self.contains(confirmation, "Повторные ID и существующие плагины будут пропущены без замены")
+        self.excludes(confirmation, ".enable(")
+
+        import_batch = section(self.manager, "private func runImportBatch(", "private func confirmBatch(")
+        self.contains(import_batch, "self.service.importBatch(from: urls")
+        self.contains(import_batch, "isCancelled:")
+        self.contains(import_batch, "progress:")
+        self.contains(import_batch, "Installed disabled:")
+        self.excludes(import_batch, ".enable(")
+
+        service_import_batch = section(self.service, "public func importBatch(", "nonisolated private static let maximumPendingImports")
+        self.contains(service_import_batch, "for (index, url) in urls.enumerated()")
+        self.contains(service_import_batch, "importPlugin(from:")
+        self.contains(service_import_batch, "expectedSHA256: preview.sourceSHA256")
+        self.excludes(service_import_batch, "self.enable(")
+        self.excludes(service_import_batch, "self.enableBatch(")
 
     def test_inspection_has_no_install_or_execution(self):
         loader = section(self.detail, "public func loadPlugin(", "public func sourceUnavailable()")

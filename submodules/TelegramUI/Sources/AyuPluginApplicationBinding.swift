@@ -19,6 +19,7 @@ import UIKit
     private var slots: [AccountRecordId: Int64] = [:]
     private var identities: [AccountRecordId: UUID] = [:]
     private var accountSnapshots: [AccountRecordId: AyuPluginAccountSnapshot] = [:]
+    private var accountContexts: [AccountRecordId: AccountContext] = [:]
     private var nextSlot: Int64 = 0
     private var primaryID: AccountRecordId?
     private var locked = true
@@ -33,6 +34,10 @@ import UIKit
         AyuTelegramPluginApplicationBinding.current = self
         bridge.bindScreen(screen: { [weak self] in self?.screen() }, presenter: { [weak self] in self?.visibleController()?.1 }, presentAlert: { [weak sharedContext] alert in
             sharedContext?.mainWindow?.presentNative(alert)
+        }, openURL: { [weak self] screen, url in
+            self?.openPluginURL(url, screen: screen)
+        }, localeIdentifier: { [weak sharedContext] in
+            sharedContext?.currentPresentationData.with { $0 }.strings.baseLanguageCode ?? Locale.current.identifier
         })
         AyuNativePluginRuntime.shared.presenter = { [weak self] in
             self?.visibleController()?.1
@@ -63,7 +68,9 @@ import UIKit
             let activeIDs = Set(accounts.map { $0.0 })
             self.identities = self.identities.filter { activeIDs.contains($0.key) }
             self.accountSnapshots = self.accountSnapshots.filter { activeIDs.contains($0.key) }
+            self.accountContexts = self.accountContexts.filter { activeIDs.contains($0.key) }
             for (id, context, _) in accounts {
+                self.accountContexts[id] = context
                 if self.slots[id] == nil { self.slots[id] = self.nextSlot; self.nextSlot += 1 }
                 if self.identities[id] == nil { self.identities[id] = UUID() }
                 let slot = self.slots[id]!
@@ -163,6 +170,21 @@ import UIKit
             self.screenIdentity = UUID(); self.lastController = controller; self.lastAccount = slot; self.lastDialog = dialogID
         }
         return AyuPluginScreenSnapshot(identity: self.screenIdentity, accountIndex: slot, dialogID: dialogID, isGroup: isGroup, isChannel: isChannel)
+    }
+
+    private func openPluginURL(_ url: URL, screen expected: AyuPluginScreenSnapshot) {
+        guard self.active, !self.locked,
+              let (accountID, rootController) = self.root(),
+              let current = self.screen(), current.identity == expected.identity,
+              current.accountIndex == expected.accountIndex,
+              accountID == self.primaryID,
+              self.slots[accountID] == expected.accountIndex, self.identities[accountID] != nil,
+              let sharedContext = self.sharedContext, let accountContext = self.accountContexts[accountID],
+              let navigationController = rootController as? NavigationController else { return }
+        let presentationData = sharedContext.currentPresentationData.with { $0 }
+        sharedContext.openExternalUrl(context: accountContext, urlContext: .generic, url: url.absoluteString,
+            forceExternal: false, presentationData: presentationData, navigationController: navigationController,
+            dismissInput: { [weak navigationController] in navigationController?.view.endEditing(true) })
     }
 }
 

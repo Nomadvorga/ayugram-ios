@@ -1,21 +1,656 @@
 import Foundation
 
 /// Java facade additions over the class-adapter registry: Intent, Bundle,
-/// View, MotionEvent, Paint/Canvas, Drawable, Handler/Runnable. Every
+/// View, ViewConfiguration, SystemClock, MotionEvent, bounded Paint values, Canvas/Drawable, Handler/Runnable. Every
 /// unsupported overload raises `unsupported_api` — no fake success. Registered
 /// by the integrator via `AyuBridgeClassRegistry.adding(AyuBridgeJavaRuntime.adapters)`.
 
 enum AyuBridgeJavaRuntime {
     /// Utility adapters that have an explicit native value/rendering path.
-    /// Canvas, Paint, ScrollView and widget adapter models remain excluded when
-    /// the native-host view registry owns those classes.
+    /// Canvas, ScrollView and widget adapter models remain excluded when the
+    /// native-host view registry owns those classes. Paint is a value-only model.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.view.MotionEvent", "android.os.Handler"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.os.SystemClock", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.Matrix", "android.graphics.Paint", "android.graphics.Paint$Cap", "android.graphics.Paint$Join", "android.graphics.Paint$Style", "android.graphics.Path", "android.graphics.Rect", "android.graphics.RectF", "android.graphics.Typeface", "android.text.TextUtils$TruncateAt", "android.widget.ImageView$ScaleType", "java.util.Locale", "java.nio.ByteBuffer", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.graphics.PorterDuff$Mode", "android.graphics.PorterDuffColorFilter", "android.view.MotionEvent", "android.view.View$MeasureSpec", "android.view.ViewConfiguration", "android.os.Handler", "android.view.animation.LinearInterpolator", "android.view.animation.DecelerateInterpolator", "android.view.animation.OvershootInterpolator", "android.animation.ValueAnimator"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
     static var adapters: [AyuBridgeClassAdapter] {
-        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, canvas, color, colorDrawable, gradientDrawable, runnable, handler, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast]
+        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, paintCap, paintJoin, paintStyle, path, matrix, canvas, color, rect, rectF, typeface, truncateAt, imageScaleType, locale, byteBuffer, colorDrawable, gradientDrawable, porterDuffMode, porterDuffColorFilter, runnable, handler, measureSpec, viewConfiguration, systemClock, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast, linearInterpolator, decelerateInterpolator, overshootInterpolator, valueAnimator]
+    }
+
+    private static let maximumByteBufferBytes = 4096
+    private static let rectangleFields = ["left", "top", "right", "bottom"]
+
+    private static func rectangleComponent(_ value: AyuBridgeValue, floating: Bool) throws -> AyuBridgeValue {
+        if floating {
+            let raw = value.number ?? value.integer.map(Double.init)
+            guard let raw, raw.isFinite, abs(raw) <= 10_000_000 else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle coordinate")
+            }
+            let number = Float(raw)
+            guard number.isFinite else { throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle coordinate") }
+            return .number(Double(number))
+        }
+        guard let integer = value.integer, (Int64(Int32.min)...Int64(Int32.max)).contains(integer) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle coordinate")
+        }
+        return .integer(integer)
+    }
+
+    private static func rectangleCoordinate(_ state: [String: AyuBridgeValue], _ field: String, floating: Bool) throws -> Double {
+        guard let value = state[field] else { throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle state") }
+        if floating {
+            guard let coordinate = value.number, coordinate.isFinite, abs(coordinate) <= 10_000_000 else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle state")
+            }
+            return Double(Float(coordinate))
+        }
+        guard let coordinate = value.integer, (Int64(Int32.min)...Int64(Int32.max)).contains(coordinate) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle state")
+        }
+        return Double(coordinate)
+    }
+
+    private static func rectangleArgument(_ value: AyuBridgeValue, className: String,
+                                          floating: Bool, context: AyuBridgeAdapterContext) throws -> [String: AyuBridgeValue] {
+        let snapshot = try context.snapshot(of: value)
+        guard snapshot.className == className else { throw AyuBridgeFailure.unsupported(className + " geometry overload") }
+        try Self.validateRectangle(snapshot.state, floating: floating)
+        return snapshot.state
+    }
+
+    private static func validateRectangle(_ state: [String: AyuBridgeValue], floating: Bool) throws {
+        guard Set(state.keys) == Set(Self.rectangleFields) else { throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle state") }
+        for field in Self.rectangleFields { _ = try Self.rectangleCoordinate(state, field, floating: floating) }
+    }
+
+    private static func rectangleSet(_ state: inout [String: AyuBridgeValue], values: [Double], floating: Bool) throws {
+        guard values.count == 4 else { throw AyuBridgeFailure("invalid_arguments", "Invalid rectangle coordinate count") }
+        for (field, value) in zip(Self.rectangleFields, values) {
+            state[field] = try Self.rectangleComponent(floating ? .number(value) : .integer(Int64(value)), floating: floating)
+        }
+    }
+
+    private static func rectangleValues(_ state: [String: AyuBridgeValue], floating: Bool) throws -> [Double] {
+        try Self.rectangleFields.map { try Self.rectangleCoordinate(state, $0, floating: floating) }
+    }
+
+    private static func rectangleArithmetic(_ value: Double, floating: Bool) -> Double {
+        floating ? Double(Float(value)) : Double(Int32(truncatingIfNeeded: Int64(value)))
+    }
+
+    private static func rectangleAdapter(_ name: String, floating: Bool) -> AyuBridgeClassAdapter {
+        let fields = Self.rectangleFields
+        let zero = floating ? AyuBridgeValue.number(0) : .integer(0)
+        let constructor: AyuBridgeClassAdapter.Constructor = { args, _ in
+            guard args.isEmpty || args.count == 4 else { throw AyuBridgeFailure.unsupported(name + " constructor overload") }
+            var state = Dictionary(uniqueKeysWithValues: fields.map { ($0, zero) })
+            if !args.isEmpty {
+                for (field, value) in zip(fields, args) { state[field] = try Self.rectangleComponent(value, floating: floating) }
+            }
+            return state
+        }
+        let setValues: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            if args.count == 1 {
+                let copied = try Self.rectangleArgument(args[0], className: name, floating: floating, context: context)
+                for field in fields { state[field] = copied[field] }
+            } else if args.count == 4 {
+                for (field, value) in zip(fields, args) { state[field] = try Self.rectangleComponent(value, floating: floating) }
+            } else {
+                throw AyuBridgeFailure.unsupported(name + ".set overload")
+            }
+            return .instance(className: name, state: state)
+        }
+        let setEmpty: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            for field in fields { state[field] = zero }
+            return .instance(className: name, state: state)
+        }
+        let width: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let left = try Self.rectangleCoordinate(state, "left", floating: floating)
+            let right = try Self.rectangleCoordinate(state, "right", floating: floating)
+            if floating { return .value(.number(Self.rectangleArithmetic(right - left, floating: true))) }
+            let result = Int32(right) &- Int32(left)
+            return .value(.integer(Int64(result)))
+        }
+        let height: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let top = try Self.rectangleCoordinate(state, "top", floating: floating)
+            let bottom = try Self.rectangleCoordinate(state, "bottom", floating: floating)
+            if floating { return .value(.number(Self.rectangleArithmetic(bottom - top, floating: true))) }
+            let result = Int32(bottom) &- Int32(top)
+            return .value(.integer(Int64(result)))
+        }
+        let centerX: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let left = try Self.rectangleCoordinate(state, "left", floating: floating)
+            let right = try Self.rectangleCoordinate(state, "right", floating: floating)
+            if floating { return .value(.number(Self.rectangleArithmetic((left + right) * 0.5, floating: true))) }
+            let sum = Int32(left) &+ Int32(right)
+            return .value(.integer(Int64(sum >> 1)))
+        }
+        let centerY: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let top = try Self.rectangleCoordinate(state, "top", floating: floating)
+            let bottom = try Self.rectangleCoordinate(state, "bottom", floating: floating)
+            if floating { return .value(.number(Self.rectangleArithmetic((top + bottom) * 0.5, floating: true))) }
+            let sum = Int32(top) &+ Int32(bottom)
+            return .value(.integer(Int64(sum >> 1)))
+        }
+        let exactCenterX: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let left = try Self.rectangleCoordinate(state, "left", floating: floating)
+            let right = try Self.rectangleCoordinate(state, "right", floating: floating)
+            return .value(.number(Double(Float((left + right) * 0.5))))
+        }
+        let exactCenterY: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let top = try Self.rectangleCoordinate(state, "top", floating: floating)
+            let bottom = try Self.rectangleCoordinate(state, "bottom", floating: floating)
+            return .value(.number(Double(Float((top + bottom) * 0.5))))
+        }
+        let isEmpty: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            let left = try Self.rectangleCoordinate(state, "left", floating: floating)
+            let top = try Self.rectangleCoordinate(state, "top", floating: floating)
+            let right = try Self.rectangleCoordinate(state, "right", floating: floating)
+            let bottom = try Self.rectangleCoordinate(state, "bottom", floating: floating)
+            return .value(.bool(left >= right || top >= bottom))
+        }
+        let offset: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            guard args.count == 2 else { throw AyuBridgeFailure.unsupported(name + ".offset overload") }
+            let dx = try Self.rectangleCoordinateValue(args[0], floating: floating)
+            let dy = try Self.rectangleCoordinateValue(args[1], floating: floating)
+            var values = try Self.rectangleValues(state, floating: floating)
+            values[0] = Self.rectangleArithmetic(values[0] + dx, floating: floating)
+            values[2] = Self.rectangleArithmetic(values[2] + dx, floating: floating)
+            values[1] = Self.rectangleArithmetic(values[1] + dy, floating: floating)
+            values[3] = Self.rectangleArithmetic(values[3] + dy, floating: floating)
+            try Self.rectangleSet(&state, values: values, floating: floating)
+            return .instance(className: name, state: state)
+        }
+        let offsetTo: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            guard args.count == 2 else { throw AyuBridgeFailure.unsupported(name + ".offsetTo overload") }
+            let left = try Self.rectangleCoordinateValue(args[0], floating: floating)
+            let top = try Self.rectangleCoordinateValue(args[1], floating: floating)
+            let current = try Self.rectangleValues(state, floating: floating)
+            let width = Self.rectangleArithmetic(current[2] - current[0], floating: floating)
+            let height = Self.rectangleArithmetic(current[3] - current[1], floating: floating)
+            try Self.rectangleSet(&state, values: [left, top, Self.rectangleArithmetic(left + width, floating: floating), Self.rectangleArithmetic(top + height, floating: floating)], floating: floating)
+            return .instance(className: name, state: state)
+        }
+        let inset: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            guard args.count == 2 else { throw AyuBridgeFailure.unsupported(name + ".inset overload") }
+            let dx = try Self.rectangleCoordinateValue(args[0], floating: floating)
+            let dy = try Self.rectangleCoordinateValue(args[1], floating: floating)
+            var values = try Self.rectangleValues(state, floating: floating)
+            values[0] = Self.rectangleArithmetic(values[0] + dx, floating: floating)
+            values[2] = Self.rectangleArithmetic(values[2] - dx, floating: floating)
+            values[1] = Self.rectangleArithmetic(values[1] + dy, floating: floating)
+            values[3] = Self.rectangleArithmetic(values[3] - dy, floating: floating)
+            try Self.rectangleSet(&state, values: values, floating: floating)
+            return .instance(className: name, state: state)
+        }
+        let contains: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            let bounds = try Self.rectangleValues(state, floating: floating)
+            if args.count == 1 {
+                let otherState = try Self.rectangleArgument(args[0], className: name, floating: floating, context: context)
+                let other = try Self.rectangleValues(otherState, floating: floating)
+                return .value(.bool(other[0] >= bounds[0] && other[1] >= bounds[1] && other[2] <= bounds[2] && other[3] <= bounds[3]
+                    && bounds[0] < bounds[2] && bounds[1] < bounds[3]))
+            }
+            if args.count == 2 {
+                let x = try Self.rectangleCoordinateValue(args[0], floating: floating)
+                let y = try Self.rectangleCoordinateValue(args[1], floating: floating)
+                return .value(.bool(bounds[0] <= x && x < bounds[2] && bounds[1] <= y && y < bounds[3]))
+            }
+            if args.count == 4 {
+                let other = try args.map { try Self.rectangleCoordinateValue($0, floating: floating) }
+                return .value(.bool(other[0] >= bounds[0] && other[1] >= bounds[1] && other[2] <= bounds[2] && other[3] <= bounds[3]
+                    && bounds[0] < bounds[2] && bounds[1] < bounds[3]))
+            }
+            throw AyuBridgeFailure.unsupported(name + ".contains overload")
+        }
+        let intersect: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            let other: [Double]
+            if args.count == 1 {
+                let otherState = try Self.rectangleArgument(args[0], className: name, floating: floating, context: context)
+                other = try Self.rectangleValues(otherState, floating: floating)
+            } else if args.count == 4 {
+                other = try args.map { try Self.rectangleCoordinateValue($0, floating: floating) }
+            } else {
+                throw AyuBridgeFailure.unsupported(name + ".intersect overload")
+            }
+            let current = try Self.rectangleValues(state, floating: floating)
+            let left = max(current[0], other[0]); let top = max(current[1], other[1])
+            let right = min(current[2], other[2]); let bottom = min(current[3], other[3])
+            guard left < right, top < bottom else { return .value(.bool(false)) }
+            try Self.rectangleSet(&state, values: [left, top, right, bottom], floating: floating)
+            return .value(.bool(true))
+        }
+        let union: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            let other: [Double]
+            if args.count == 1 {
+                let otherState = try Self.rectangleArgument(args[0], className: name, floating: floating, context: context)
+                other = try Self.rectangleValues(otherState, floating: floating)
+            } else if args.count == 2 {
+                let x = try Self.rectangleCoordinateValue(args[0], floating: floating)
+                let y = try Self.rectangleCoordinateValue(args[1], floating: floating)
+                let current = try Self.rectangleValues(state, floating: floating)
+                if current[0] < current[2] && current[1] < current[3] {
+                    try Self.rectangleSet(&state, values: [min(current[0], x), min(current[1], y), max(current[2], x), max(current[3], y)], floating: floating)
+                    return .instance(className: name, state: state)
+                }
+                try Self.rectangleSet(&state, values: [x, y, x, y], floating: floating)
+                return .instance(className: name, state: state)
+            } else if args.count == 4 {
+                other = try args.map { try Self.rectangleCoordinateValue($0, floating: floating) }
+            } else {
+                throw AyuBridgeFailure.unsupported(name + ".union overload")
+            }
+            let current = try Self.rectangleValues(state, floating: floating)
+            if other[0] >= other[2] || other[1] >= other[3] { return .instance(className: name, state: state) }
+            if current[0] >= current[2] || current[1] >= current[3] {
+                try Self.rectangleSet(&state, values: other, floating: floating)
+            } else {
+                try Self.rectangleSet(&state, values: [min(current[0], other[0]), min(current[1], other[1]), max(current[2], other[2]), max(current[3], other[3])], floating: floating)
+            }
+            return .instance(className: name, state: state)
+        }
+        let sort: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            var values = try Self.rectangleValues(state, floating: floating)
+            if values[0] > values[2] { values.swapAt(0, 2) }
+            if values[1] > values[3] { values.swapAt(1, 3) }
+            try Self.rectangleSet(&state, values: values, floating: floating)
+            return .instance(className: name, state: state)
+        }
+        let methods: [String: AyuBridgeClassAdapter.InstanceMethod] = [
+            "set": setValues, "setEmpty": setEmpty, "width": width, "height": height,
+            "centerX": centerX, "centerY": centerY, "exactCenterX": exactCenterX, "exactCenterY": exactCenterY,
+            "isEmpty": isEmpty, "offset": offset, "offsetTo": offsetTo, "inset": inset,
+            "contains": contains, "intersect": intersect, "union": union, "sort": sort,
+        ]
+        return AyuBridgeClassAdapter(name: name, constructor: constructor, methods: methods,
+            readableFields: Set(fields), writableFields: Set(fields),
+            receiverMethods: ["set", "setEmpty", "offset", "offsetTo", "inset", "intersect", "union", "sort"],
+            validateState: { state in try Self.validateRectangle(state, floating: floating) })
+    }
+
+    private static func rectangleCoordinateValue(_ value: AyuBridgeValue, floating: Bool) throws -> Double {
+        try Self.rectangleCoordinate(["value": try Self.rectangleComponent(value, floating: floating)], "value", floating: floating)
+    }
+
+    static var rect: AyuBridgeClassAdapter { Self.rectangleAdapter("android.graphics.Rect", floating: false) }
+    static var rectF: AyuBridgeClassAdapter { Self.rectangleAdapter("android.graphics.RectF", floating: true) }
+
+    private static func byteBufferParts(_ state: [String: AyuBridgeValue]) throws -> (bytes: [AyuBridgeValue], position: Int, limit: Int, mark: Int?) {
+        guard Set(state.keys) == ["bytes", "position", "limit", "mark"],
+              let bytes = state["bytes"]?.array, bytes.count <= Self.maximumByteBufferBytes,
+              let positionValue = state["position"]?.integer, let limitValue = state["limit"]?.integer,
+              positionValue >= 0, limitValue >= 0, limitValue <= Int64(bytes.count), positionValue <= limitValue,
+              bytes.allSatisfy({ value in value.integer.map { (-128...127).contains($0) } ?? false }) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid ByteBuffer state")
+        }
+        let markValue = state["mark"] ?? .null
+        let mark: Int?
+        if markValue == .null {
+            mark = nil
+        } else if let value = markValue.integer, value >= 0, value <= positionValue {
+            mark = Int(value)
+        } else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid ByteBuffer mark")
+        }
+        return (bytes, Int(positionValue), Int(limitValue), mark)
+    }
+
+    private static func byteBufferArgument(_ value: AyuBridgeValue) throws -> Int64 {
+        guard let byte = value.integer, (-128...127).contains(byte) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid signed byte")
+        }
+        return byte
+    }
+
+    private static func byteBufferReceiver(_ state: [String: AyuBridgeValue]) -> AyuBridgeAdapterResult {
+        .instance(className: "java.nio.ByteBuffer", state: state)
+    }
+
+    static var byteBuffer: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "java.nio.ByteBuffer", staticMethods: [
+            "wrap": { args, context in
+                guard args.count == 1, args[0].object?["$handle"]?.string != nil else {
+                    throw AyuBridgeFailure.unsupported("ByteBuffer.wrap overload")
+                }
+                let snapshot = try context.snapshot(of: args[0])
+                guard snapshot.className == "[B", snapshot.state["component"] == .string("byte"),
+                      let bytes = snapshot.state["values"]?.array, bytes.count <= Self.maximumByteBufferBytes,
+                      bytes.allSatisfy({ value in value.integer.map { (-128...127).contains($0) } ?? false }) else {
+                    throw AyuBridgeFailure("invalid_arguments", "ByteBuffer.wrap requires a bounded byte array")
+                }
+                return .instance(className: "java.nio.ByteBuffer", state: [
+                    "bytes": .array(bytes), "position": .integer(0),
+                    "limit": .integer(Int64(bytes.count)), "mark": .null,
+                ])
+            },
+        ], methods: [
+            "capacity": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                return .value(.integer(Int64(buffer.bytes.count)))
+            },
+            "position": { state, args, _ in
+                var buffer = try Self.byteBufferParts(state)
+                switch args.count {
+                case 0: return .value(.integer(Int64(buffer.position)))
+                case 1:
+                    guard let position = args[0].integer, position >= 0, position <= Int64(buffer.limit) else {
+                        throw AyuBridgeFailure("invalid_arguments", "ByteBuffer position is out of bounds")
+                    }
+                    state["position"] = .integer(position)
+                    if let mark = buffer.mark, mark > position { state["mark"] = .null }
+                    return Self.byteBufferReceiver(state)
+                default: throw AyuBridgeFailure.unsupported("ByteBuffer.position overload")
+                }
+            },
+            "limit": { state, args, _ in
+                let buffer = try Self.byteBufferParts(state)
+                switch args.count {
+                case 0: return .value(.integer(Int64(buffer.limit)))
+                case 1:
+                    guard let limit = args[0].integer, limit >= 0, limit <= Int64(buffer.bytes.count) else {
+                        throw AyuBridgeFailure("invalid_arguments", "ByteBuffer limit is out of bounds")
+                    }
+                    state["limit"] = .integer(limit)
+                    if Int64(buffer.position) > limit { state["position"] = .integer(limit) }
+                    if let mark = buffer.mark, mark > limit { state["mark"] = .null }
+                    return Self.byteBufferReceiver(state)
+                default: throw AyuBridgeFailure.unsupported("ByteBuffer.limit overload")
+                }
+            },
+            "remaining": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                return .value(.integer(Int64(buffer.limit - buffer.position)))
+            },
+            "hasRemaining": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                return .value(.bool(buffer.position < buffer.limit))
+            },
+            "get": { state, args, _ in
+                let buffer = try Self.byteBufferParts(state)
+                switch args.count {
+                case 0:
+                    guard buffer.position < buffer.limit else { throw AyuBridgeFailure("invalid_state", "ByteBuffer underflow") }
+                    state["position"] = .integer(Int64(buffer.position + 1))
+                    return .value(buffer.bytes[buffer.position])
+                case 1:
+                    guard let index = args[0].integer, index >= 0, index < Int64(buffer.limit) else {
+                        throw AyuBridgeFailure("invalid_arguments", "ByteBuffer index is out of bounds")
+                    }
+                    return .value(buffer.bytes[Int(index)])
+                default: throw AyuBridgeFailure.unsupported("ByteBuffer.get overload")
+                }
+            },
+            "put": { state, args, _ in
+                let buffer = try Self.byteBufferParts(state)
+                switch args.count {
+                case 1:
+                    guard buffer.position < buffer.limit else { throw AyuBridgeFailure("invalid_state", "ByteBuffer overflow") }
+                    let byte = try Self.byteBufferArgument(args[0])
+                    state["bytes"] = .array(buffer.bytes.enumerated().map { index, value in
+                        index == buffer.position ? .integer(byte) : value
+                    })
+                    state["position"] = .integer(Int64(buffer.position + 1))
+                case 2:
+                    guard let index = args[0].integer, index >= 0, index < Int64(buffer.limit) else {
+                        throw AyuBridgeFailure("invalid_arguments", "ByteBuffer index is out of bounds")
+                    }
+                    let byte = try Self.byteBufferArgument(args[1])
+                    state["bytes"] = .array(buffer.bytes.enumerated().map { $0.offset == Int(index) ? .integer(byte) : $0.element })
+                default: throw AyuBridgeFailure.unsupported("ByteBuffer.put overload")
+                }
+                return Self.byteBufferReceiver(state)
+            },
+            "flip": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                state["limit"] = .integer(Int64(buffer.position)); state["position"] = .integer(0); state["mark"] = .null
+                return Self.byteBufferReceiver(state)
+            },
+            "rewind": { state, args, _ in
+                try Self.arity(args, 0); _ = try Self.byteBufferParts(state)
+                state["position"] = .integer(0); state["mark"] = .null
+                return Self.byteBufferReceiver(state)
+            },
+            "clear": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                state["position"] = .integer(0); state["limit"] = .integer(Int64(buffer.bytes.count)); state["mark"] = .null
+                return Self.byteBufferReceiver(state)
+            },
+            "mark": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                state["mark"] = .integer(Int64(buffer.position)); return Self.byteBufferReceiver(state)
+            },
+            "reset": { state, args, _ in
+                try Self.arity(args, 0); let buffer = try Self.byteBufferParts(state)
+                guard let mark = buffer.mark else { throw AyuBridgeFailure("invalid_state", "ByteBuffer mark is unset") }
+                state["position"] = .integer(Int64(mark)); return Self.byteBufferReceiver(state)
+            },
+        ], receiverMethods: ["position", "limit", "put", "flip", "rewind", "clear", "mark", "reset"],
+           validateState: { state in _ = try Self.byteBufferParts(state) })
+    }
+
+    private static func typefacePreset(_ style: Int64) -> AyuBridgeClassAdapter.StaticField {
+        { _ in
+            .instance(className: "android.graphics.Typeface", state: ["style": .integer(style)])
+        }
+    }
+
+    static var typeface: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.graphics.Typeface",
+            constants: ["NORMAL": .integer(0), "BOLD": .integer(1), "ITALIC": .integer(2), "BOLD_ITALIC": .integer(3)],
+            staticFields: [
+                "DEFAULT": Self.typefacePreset(0),
+                "DEFAULT_BOLD": Self.typefacePreset(1),
+                "DEFAULT_ITALIC": Self.typefacePreset(2),
+                "DEFAULT_BOLD_ITALIC": Self.typefacePreset(3),
+            ],
+            validateState: { state in
+                guard state.count == 1, let style = state["style"]?.integer, (0...3).contains(style) else {
+                    throw Self.unsupported("Typeface preset")
+                }
+            })
+    }
+
+    static var truncateAt: AyuBridgeClassAdapter {
+        let modes = ["END", "START", "MIDDLE"]
+        return AyuBridgeClassAdapter(name: "android.text.TextUtils$TruncateAt",
+            staticFields: Dictionary(uniqueKeysWithValues: modes.map { mode in
+                (mode, { _ in AyuBridgeAdapterResult.instance(className: "android.text.TextUtils$TruncateAt", state: ["mode": .string(mode)]) } as AyuBridgeClassAdapter.StaticField)
+            }),
+            validateState: { state in
+                guard state.count == 1, let mode = state["mode"]?.string, modes.contains(mode) else {
+                    throw Self.unsupported("TextUtils.TruncateAt")
+                }
+            })
+    }
+
+    static var locale: AyuBridgeClassAdapter {
+        func snapshot(_ locale: Locale, identifier: String? = nil) -> [String: AyuBridgeValue] {
+            let nativeLocale = locale as NSLocale
+            return [
+                "identifier": .string(identifier ?? locale.identifier),
+                "language": .string(nativeLocale.object(forKey: .languageCode) as? String ?? ""),
+                "country": .string(nativeLocale.object(forKey: .countryCode) as? String ?? ""),
+                "variant": .string(nativeLocale.object(forKey: .variantCode) as? String ?? ""),
+            ]
+        }
+        let presets: [String: String] = [
+            "CANADA": "en_CA", "CANADA_FRENCH": "fr_CA", "CHINA": "zh_CN", "CHINESE": "zh",
+            "ENGLISH": "en", "FRANCE": "fr_FR", "FRENCH": "fr", "GERMANY": "de_DE", "GERMAN": "de",
+            "ITALY": "it_IT", "ITALIAN": "it", "JAPAN": "ja_JP", "JAPANESE": "ja",
+            "KOREA": "ko_KR", "KOREAN": "ko", "ROOT": "und", "SIMPLIFIED_CHINESE": "zh_CN",
+            "TAIWAN": "zh_TW", "TRADITIONAL_CHINESE": "zh_TW", "UK": "en_GB", "US": "en_US",
+        ]
+        let staticFields = Dictionary(uniqueKeysWithValues: presets.map { key, identifier in
+            (key, { _ in
+                .instance(className: "java.util.Locale", state: snapshot(Locale(identifier: identifier)))
+            } as AyuBridgeClassAdapter.StaticField)
+        })
+        return AyuBridgeClassAdapter(name: "java.util.Locale",
+            constructor: { args, _ in
+                let identifier: String
+                switch args.count {
+                case 0: return snapshot(Locale.current)
+                case 1:
+                    guard let value = args[0].string, value.utf8.count <= 128 else { throw AyuBridgeFailure("invalid_arguments", "Invalid Locale identifier") }
+                    identifier = value
+                case 2, 3:
+                    guard args.allSatisfy({ $0.string != nil }), args.allSatisfy({ ($0.string?.utf8.count ?? 129) <= 64 }) else {
+                        throw AyuBridgeFailure("invalid_arguments", "Invalid Locale component")
+                    }
+                    let language = args[0].string ?? ""
+                    let country = args[1].string ?? ""
+                    let variant = args.count == 3 ? (args[2].string ?? "") : ""
+                    if !variant.isEmpty {
+                        identifier = language + "_" + country + "_" + variant
+                    } else if !country.isEmpty {
+                        identifier = language + "_" + country
+                    } else {
+                        identifier = language
+                    }
+                default: throw AyuBridgeFailure.unsupported("Locale constructor overload")
+                }
+                return snapshot(Locale(identifier: identifier), identifier: identifier)
+            },
+            staticMethods: ["getDefault": { args, _ in
+                guard args.isEmpty else { throw AyuBridgeFailure("invalid_arguments", "Wrong Locale.getDefault arity") }
+                return .instance(className: "java.util.Locale", state: snapshot(Locale.current))
+            }],
+            staticFields: staticFields,
+            methods: [
+                "getLanguage": { state, args, _ in try Self.arity(args, 0); return .value(state["language"] ?? .string("")) },
+                "getCountry": { state, args, _ in try Self.arity(args, 0); return .value(state["country"] ?? .string("")) },
+                "getVariant": { state, args, _ in try Self.arity(args, 0); return .value(state["variant"] ?? .string("")) },
+                "getLanguageTag": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let identifier = state["identifier"]?.string ?? ""
+                    guard !identifier.isEmpty else { return .value(.string("und")) }
+                    let nativeLocale = Locale(identifier: identifier) as NSLocale
+                    let language = nativeLocale.object(forKey: .languageCode) as? String ?? "und"
+                    let script = nativeLocale.object(forKey: .scriptCode) as? String
+                    let region = nativeLocale.object(forKey: .countryCode) as? String
+                    let variant = nativeLocale.object(forKey: .variantCode) as? String
+                    return .value(.string(([language] + [script, region, variant].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: "-")))
+                },
+                "toString": { state, args, _ in try Self.arity(args, 0); return .value(state["identifier"] ?? .string("")) },
+            ],
+            validateState: { state in
+                let allowed: Set<String> = ["identifier", "language", "country", "variant"]
+                guard Set(state.keys) == allowed,
+                      state.values.allSatisfy({ $0.string.map { $0.utf8.count <= 128 } ?? false }) else {
+                    throw AyuBridgeFailure("invalid_arguments", "Invalid Locale state")
+                }
+            })
+    }
+
+    static var imageScaleType: AyuBridgeClassAdapter {
+        let modes = ["CENTER", "FIT_XY", "FIT_CENTER", "CENTER_INSIDE", "CENTER_CROP", "MATRIX"]
+        return AyuBridgeClassAdapter(name: "android.widget.ImageView$ScaleType",
+            staticFields: Dictionary(uniqueKeysWithValues: modes.map { mode in
+                (mode, { _ in
+                    .instance(className: "android.widget.ImageView$ScaleType", state: ["mode": .string(mode)])
+                } as AyuBridgeClassAdapter.StaticField)
+            }),
+            validateState: { state in
+                guard Set(state.keys) == ["mode"], let mode = state["mode"]?.string, modes.contains(mode) else {
+                    throw Self.unsupported("ImageView.ScaleType")
+                }
+            })
+    }
+
+    // MARK: Bounded animation values
+
+    /// These adapters are value-only. They never create a display link or call
+    /// Python for each frame; ViewPropertyAnimator consumes the descriptor and
+    /// UIKit performs the actual animation on the main thread.
+    private static func interpolationInput(_ value: AyuBridgeValue) throws -> Double {
+        guard let input = value.number, input.isFinite, (0...1).contains(input) else {
+            throw AyuBridgeFailure("invalid_arguments", "Interpolator input must be finite and within 0...1")
+        }
+        return input
+    }
+
+    private static func validateInterpolatorState(_ state: [String: AyuBridgeValue], name: String) throws -> Double {
+        guard Set(state.keys) == ["parameter"], let parameter = state["parameter"]?.number,
+              parameter.isFinite, (0...10).contains(parameter) else {
+            throw AyuBridgeFailure("invalid_state", "Invalid " + name + " state")
+        }
+        return parameter
+    }
+
+    private static func interpolatorAdapter(_ name: String, defaultParameter: Double?, formula: @escaping @Sendable (Double, Double) -> Double) -> AyuBridgeClassAdapter {
+        let constructor: AyuBridgeClassAdapter.Constructor = { args, _ in
+            guard args.count <= 1 else { throw Self.unsupported(name + " constructor overload") }
+            let parameter: Double
+            if let defaultParameter {
+                if let supplied = args.first?.number {
+                    guard supplied.isFinite, (0...10).contains(supplied) else {
+                        throw AyuBridgeFailure("invalid_arguments", "Interpolator parameter is out of range")
+                    }
+                    parameter = supplied
+                } else if args.isEmpty {
+                    parameter = defaultParameter
+                } else {
+                    throw AyuBridgeFailure("invalid_arguments", "Interpolator parameter must be numeric")
+                }
+            } else {
+                guard args.isEmpty else { throw Self.unsupported(name + " constructor overload") }
+                parameter = 0
+            }
+            return ["parameter": .number(parameter)]
+        }
+        return AyuBridgeClassAdapter(name: name, constructor: constructor,
+            methods: [
+                "getInterpolation": { state, args, _ in
+                    try Self.arity(args, 1)
+                    let input = try Self.interpolationInput(args[0])
+                    let parameter = try Self.validateInterpolatorState(state, name: name)
+                    let output = formula(input, parameter)
+                    guard output.isFinite else { throw AyuBridgeFailure("invalid_state", "Interpolator result is not finite") }
+                    return .value(.number(output))
+                },
+            ],
+            validateState: { state in _ = try Self.validateInterpolatorState(state, name: name) })
+    }
+
+    static var linearInterpolator: AyuBridgeClassAdapter {
+        self.interpolatorAdapter("android.view.animation.LinearInterpolator", defaultParameter: nil) { input, _ in input }
+    }
+
+    static var decelerateInterpolator: AyuBridgeClassAdapter {
+        // Android's default constructor uses factor 1.0.
+        self.interpolatorAdapter("android.view.animation.DecelerateInterpolator", defaultParameter: 1) { input, factor in
+            1 - pow(1 - input, 2 * factor)
+        }
+    }
+
+    static var overshootInterpolator: AyuBridgeClassAdapter {
+        // Android's default constructor uses tension 2.0.
+        self.interpolatorAdapter("android.view.animation.OvershootInterpolator", defaultParameter: 2) { input, tension in
+            let shifted = input - 1
+            return shifted * shifted * ((tension + 1) * shifted + tension) + 1
+        }
+    }
+
+    /// The static capability is useful for plugins that only gate native
+    /// ChangeBounds/UIKit animations on Android's global animator setting.
+    /// Per-frame ValueAnimator listeners remain intentionally unsupported.
+    static var valueAnimator: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.animation.ValueAnimator", staticMethods: [
+            "areAnimatorsEnabled": { args, context in
+                try Self.arity(args, 0)
+                return .value(.bool(context.animationsEnabled()))
+            },
+        ])
     }
 
     // MARK: android.widget (text/layout surface used by the corpus)
@@ -427,14 +1062,16 @@ enum AyuBridgeJavaRuntime {
                     return .value(fragment.map { .string($0) } ?? .null)
                 },
             ], validateState: { state in
-                guard Set(state.keys) == ["value"] else { throw Self.invalid() }
+                guard Set(state.keys) == ["value"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid URI state") }
                 _ = try Self.uriString(state)
                 _ = try Self.uriComponents(state)
             })
     }
 
     private static func uriString(_ state: [String: AyuBridgeValue]) throws -> String {
-        guard let value = state["value"]?.string, value.utf8.count <= 8_192 else { throw Self.invalid() }
+        guard let value = state["value"]?.string, value.utf8.count <= 8_192 else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid URI value")
+        }
         return value
     }
 
@@ -586,66 +1223,475 @@ enum AyuBridgeJavaRuntime {
             })
     }
 
-    // MARK: Paint / Canvas (path-model drawing for snow/ball style plugins)
+    // MARK: Paint value model (rendering is deliberately not implied)
+
+    private static let paintName = "android.graphics.Paint"
+    private static let paintStyleName = "android.graphics.Paint$Style"
+    private static let paintCapName = "android.graphics.Paint$Cap"
+    private static let paintJoinName = "android.graphics.Paint$Join"
+    private static let paintFlags: Int64 = 0x07
+    private static let paintStyles = ["FILL", "STROKE", "FILL_AND_STROKE"]
+    private static let paintCaps = ["BUTT", "ROUND", "SQUARE"]
+    private static let paintJoins = ["MITER", "ROUND", "BEVEL"]
+
+    private static func paintDefaultState(flags: Int64 = 0) -> [String: AyuBridgeValue] {
+        ["flags": .integer(flags),
+         "color": .integer(Int64(Int32(bitPattern: 0xFF00_0000))),
+         "stroke_width": .number(0), "text_size": .number(12),
+         "style": .string("FILL"), "cap": .string("BUTT"), "join": .string("MITER"),
+         "anti_alias": .bool(flags & 1 != 0), "filter_bitmap": .bool(flags & 2 != 0),
+         "dither": .bool(flags & 4 != 0)]
+    }
+
+    private static func paintEnum(_ name: String, values: [String]) -> AyuBridgeClassAdapter {
+        let fields = Dictionary(uniqueKeysWithValues: values.map { value in
+            (value, { _ in AyuBridgeAdapterResult.instance(className: name, state: ["value": .string(value)]) } as AyuBridgeClassAdapter.StaticField)
+        })
+        return AyuBridgeClassAdapter(name: name, staticFields: fields, validateState: { state in
+            guard Set(state.keys) == ["value"], let value = state["value"]?.string, values.contains(value) else {
+                throw Self.unsupported(name)
+            }
+        })
+    }
+
+    private static func paintEnumValue(_ reference: AyuBridgeValue, name: String, allowed: [String], context: AyuBridgeAdapterContext) throws -> String {
+        let snapshot = try context.snapshot(of: reference)
+        guard snapshot.className == name, Set(snapshot.state.keys) == ["value"],
+              let value = snapshot.state["value"]?.string, allowed.contains(value) else {
+            throw AyuBridgeFailure.unsupported(name + " value")
+        }
+        return value
+    }
+
+    private static func paintState(_ state: [String: AyuBridgeValue]) throws -> [String: AyuBridgeValue] {
+        guard Set(state.keys) == ["flags", "color", "stroke_width", "text_size", "style", "cap", "join", "anti_alias", "filter_bitmap", "dither"],
+              let flags = state["flags"]?.integer, flags >= 0, flags & ~Self.paintFlags == 0,
+              let color = state["color"]?.integer, (Int64(Int32.min)...Int64(Int32.max)).contains(color),
+              let strokeWidth = state["stroke_width"]?.number, strokeWidth.isFinite, (0...10_000).contains(strokeWidth),
+              let textSize = state["text_size"]?.number, textSize.isFinite, (0...10_000).contains(textSize),
+              let style = state["style"]?.string, Self.paintStyles.contains(style),
+              let cap = state["cap"]?.string, Self.paintCaps.contains(cap),
+              let join = state["join"]?.string, Self.paintJoins.contains(join),
+              let antiAlias = state["anti_alias"]?.bool, let filterBitmap = state["filter_bitmap"]?.bool,
+              let dither = state["dither"]?.bool,
+              antiAlias == (flags & 1 != 0), filterBitmap == (flags & 2 != 0), dither == (flags & 4 != 0) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid Paint value state")
+        }
+        return state
+    }
+
+    private static func paintToggle(_ flag: Int64, field: String) -> AyuBridgeClassAdapter.InstanceMethod {
+        { state, args, _ in
+            try Self.arity(args, 1)
+            let enabled = try Self.bool(args[0], field)
+            var flags = state["flags"]?.integer ?? 1
+            flags = enabled ? flags | flag : flags & ~flag
+            state["flags"] = .integer(flags)
+            state[field] = .bool(enabled)
+            return .value(.null)
+        }
+    }
 
     static var paint: AyuBridgeClassAdapter {
-        let caps: [String: AyuBridgeValue] = ["BUTT": .integer(0), "ROUND": .integer(1), "SQUARE": .integer(2)]
-        let styles: [String: AyuBridgeValue] = ["FILL": .integer(0), "STROKE": .integer(1), "FILL_AND_STROKE": .integer(2)]
-        return AyuBridgeClassAdapter(name: "android.graphics.Paint", constants: caps.merging(styles) { a, _ in a },
-            constructor: { args, _ in try Self.arity(args, 0); return ["color": .integer(0xFF00_0000), "stroke_width": .number(0), "style": .integer(0), "cap": .integer(0), "anti_alias": .bool(true)] },
-            methods: [
+        let defaults = Self.paintDefaultState()
+        let copy: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            try Self.arity(args, 1)
+            let snapshot = try context.snapshot(of: args[0])
+            guard snapshot.className == Self.paintName else { throw AyuBridgeFailure.unsupported("Paint.set overload") }
+            state = try Self.paintState(snapshot.state)
+            return .value(.null)
+        }
+        let styleGet: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            return .instance(className: Self.paintStyleName, state: ["value": state["style"] ?? .string("FILL")])
+        }
+        let capGet: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            return .instance(className: Self.paintCapName, state: ["value": state["cap"] ?? .string("BUTT")])
+        }
+        let joinGet: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            return .instance(className: Self.paintJoinName, state: ["value": state["join"] ?? .string("MITER")])
+        }
+        return AyuBridgeClassAdapter(name: Self.paintName,
+            constants: ["ANTI_ALIAS_FLAG": .integer(1), "FILTER_BITMAP_FLAG": .integer(2), "DITHER_FLAG": .integer(4)],
+            constructor: { args, context in
+                if args.isEmpty { return defaults }
+                guard args.count == 1 else { throw AyuBridgeFailure.unsupported("Paint constructor overload") }
+                if let flags = args[0].integer {
+                    guard flags >= 0, flags & ~Self.paintFlags == 0 else { throw AyuBridgeFailure.unsupported("Paint flags") }
+                    return Self.paintDefaultState(flags: flags)
+                }
+                let snapshot = try context.snapshot(of: args[0])
+                guard snapshot.className == Self.paintName else { throw AyuBridgeFailure.unsupported("Paint constructor overload") }
+                return try Self.paintState(snapshot.state)
+            }, methods: [
+                "set": copy,
+            "reset": { state, args, _ in try Self.arity(args, 0); state = Self.paintDefaultState(); return .value(.null) },
                 "setColor": { state, args, _ in
                     try Self.arity(args, 1)
-                    guard let color = args[0].integer, color >= 0, color <= 0xFFFF_FFFF else { throw Self.unsupported("Paint.setColor") }
-                    var updated = state
-                    updated["color"] = .integer(color)
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
+                    guard let color = args[0].integer, (Int64(Int32.min)...Int64(Int32.max)).contains(color) else { throw Self.unsupported("Paint.setColor") }
+                    state["color"] = .integer(color); return .value(.null)
                 },
-                "setStrokeWidth": { state, args, _ in
-                    try Self.arity(args, 1)
-                    guard let width = args[0].double, width >= 0 else { throw Self.unsupported("Paint.setStrokeWidth") }
-                    var updated = state
-                    updated["stroke_width"] = .number(width)
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
+                "setARGB": { state, args, _ in
+                    try Self.arity(args, 4)
+                    let components = try args.map { value -> UInt32 in
+                        guard let component = value.integer, (0...255).contains(component) else {
+                            throw AyuBridgeFailure("invalid_arguments", "Paint.setARGB components must be in 0...255")
+                        }
+                        return UInt32(component)
+                    }
+                    let bits = (components[0] << 24) | (components[1] << 16) | (components[2] << 8) | components[3]
+                    state["color"] = .integer(Int64(Int32(bitPattern: bits)))
+                    return .value(.null)
                 },
-                "setStyle": { state, args, _ in
-                    try Self.arity(args, 1)
-                    guard let style = args[0].integer, [0, 1, 2].contains(style) else { throw Self.unsupported("Paint.setStyle") }
-                    var updated = state
-                    updated["style"] = .integer(style)
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
-                },
-                "setStrokeCap": { state, args, _ in
-                    try Self.arity(args, 1)
-                    guard let cap = args[0].integer, [0, 1, 2].contains(cap) else { throw Self.unsupported("Paint.setStrokeCap") }
-                    var updated = state
-                    updated["cap"] = .integer(cap)
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
-                },
-                "setAntiAlias": { state, args, _ in
-                    try Self.arity(args, 1)
-                    var updated = state
-                    updated["anti_alias"] = .bool(try Self.bool(args[0], "anti-alias flag"))
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
-                },
+                "getColor": { state, args, _ in try Self.arity(args, 0); return .value(state["color"] ?? defaults["color"]!) },
                 "setAlpha": { state, args, _ in
                     try Self.arity(args, 1)
                     guard let alpha = args[0].integer, (0...255).contains(alpha) else { throw Self.unsupported("Paint.setAlpha") }
-                    var updated = state
-                    var color = updated["color"]?.integer ?? 0xFF00_0000
-                    color = (color & 0x00FF_FFFF) | (alpha << 24)
-                    updated["color"] = .integer(color)
-                    state = updated
-                    return Self.instance("android.graphics.Paint", updated)
+                    let color = Int32(truncatingIfNeeded: state["color"]?.integer ?? defaults["color"]!.integer!)
+                    let bits = (UInt32(bitPattern: color) & 0x00FF_FFFF) | (UInt32(alpha) << 24)
+                    state["color"] = .integer(Int64(Int32(bitPattern: bits))); return .value(.null)
                 },
-            ], receiverMethods: ["setColor", "setStrokeWidth", "setStyle", "setStrokeCap", "setAntiAlias", "setAlpha"], validateState: { state in
-                try Self.rejectState(["color", "stroke_width", "style", "cap", "anti_alias"], state: state, className: "android.graphics.Paint")
+                "getAlpha": { state, args, _ in
+                    try Self.arity(args, 0)
+                    let color = UInt32(bitPattern: Int32(truncatingIfNeeded: state["color"]?.integer ?? 0))
+                    return .value(.integer(Int64((color >> 24) & 0xFF)))
+                },
+                "setStrokeWidth": { state, args, _ in
+                    try Self.arity(args, 1)
+                    let width = args[0].number ?? args[0].integer.map(Double.init)
+                    guard let width, width.isFinite, (0...10_000).contains(width) else { throw Self.unsupported("Paint.setStrokeWidth") }
+                    state["stroke_width"] = .number(Double(Float(width))); return .value(.null)
+                },
+                "getStrokeWidth": { state, args, _ in try Self.arity(args, 0); return .value(state["stroke_width"] ?? .number(0)) },
+                "setTextSize": { state, args, _ in
+                    try Self.arity(args, 1)
+                    let size = args[0].number ?? args[0].integer.map(Double.init)
+                    guard let size, size.isFinite, (0...10_000).contains(size) else { throw Self.unsupported("Paint.setTextSize") }
+                    state["text_size"] = .number(Double(Float(size))); return .value(.null)
+                },
+                "getTextSize": { state, args, _ in try Self.arity(args, 0); return .value(state["text_size"] ?? .number(12)) },
+                "setStyle": { state, args, context in
+                    try Self.arity(args, 1); state["style"] = .string(try Self.paintEnumValue(args[0], name: Self.paintStyleName, allowed: Self.paintStyles, context: context)); return .value(.null)
+                },
+                "getStyle": styleGet,
+                "setStrokeCap": { state, args, context in
+                    try Self.arity(args, 1); state["cap"] = .string(try Self.paintEnumValue(args[0], name: Self.paintCapName, allowed: Self.paintCaps, context: context)); return .value(.null)
+                },
+                "getStrokeCap": capGet,
+                "setStrokeJoin": { state, args, context in
+                    try Self.arity(args, 1); state["join"] = .string(try Self.paintEnumValue(args[0], name: Self.paintJoinName, allowed: Self.paintJoins, context: context)); return .value(.null)
+                },
+                "getStrokeJoin": joinGet,
+                "setAntiAlias": Self.paintToggle(1, field: "anti_alias"),
+                "isAntiAlias": { state, args, _ in try Self.arity(args, 0); return .value(state["anti_alias"] ?? .bool(false)) },
+                "setFilterBitmap": Self.paintToggle(2, field: "filter_bitmap"),
+                "isFilterBitmap": { state, args, _ in try Self.arity(args, 0); return .value(state["filter_bitmap"] ?? .bool(false)) },
+                "setDither": Self.paintToggle(4, field: "dither"),
+                "isDither": { state, args, _ in try Self.arity(args, 0); return .value(state["dither"] ?? .bool(false)) },
+                "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(1)) },
+            ], validateState: { _ = try Self.paintState($0) })
+    }
+
+    static var paintStyle: AyuBridgeClassAdapter { Self.paintEnum(Self.paintStyleName, values: Self.paintStyles) }
+    static var paintCap: AyuBridgeClassAdapter { Self.paintEnum(Self.paintCapName, values: Self.paintCaps) }
+    static var paintJoin: AyuBridgeClassAdapter { Self.paintEnum(Self.paintJoinName, values: Self.paintJoins) }
+
+    // MARK: Porter-Duff SRC_IN tint value subset
+
+    private static let porterDuffModeName = "android.graphics.PorterDuff$Mode"
+    private static let porterDuffModeValues = ["SRC_IN"]
+    private static let porterDuffColorFilterName = "android.graphics.PorterDuffColorFilter"
+
+    static var porterDuffMode: AyuBridgeClassAdapter {
+        Self.paintEnum(Self.porterDuffModeName, values: Self.porterDuffModeValues)
+    }
+
+    static var porterDuffColorFilter: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: Self.porterDuffColorFilterName,
+            constructor: { args, context in
+                try Self.arity(args, 2)
+                let color = try Self.colorInteger(args[0], "ARGB color")
+                let mode = try context.snapshot(of: args[1])
+                guard mode.className == Self.porterDuffModeName,
+                      Set(mode.state.keys) == ["value"],
+                      mode.state["value"]?.string == "SRC_IN" else {
+                    throw AyuBridgeFailure.unsupported("PorterDuffColorFilter mode")
+                }
+                return ["color": .integer(color), "mode": .string("SRC_IN")]
+            }, methods: [
+                "getColor": { state, args, _ in
+                    try Self.arity(args, 0)
+                    return .value(state["color"] ?? .null)
+                },
+                "getMode": { state, args, _ in
+                    try Self.arity(args, 0)
+                    guard state["mode"]?.string == "SRC_IN" else {
+                        throw AyuBridgeFailure("invalid_state", "Invalid PorterDuffColorFilter mode")
+                    }
+                    return .instance(className: Self.porterDuffModeName, state: ["value": .string("SRC_IN")])
+                },
+            ], validateState: { state in
+                try Self.rejectState(["color", "mode"], state: state, className: Self.porterDuffColorFilterName)
+                _ = try Self.colorInteger(state["color"] ?? .null, "ARGB color")
+                guard state["mode"]?.string == "SRC_IN" else {
+                    throw AyuBridgeFailure("invalid_arguments", "Unsupported PorterDuffColorFilter mode")
+                }
             })
+    }
+
+    // MARK: Bounded Path command values (no Canvas renderer)
+
+    private static let pathName = "android.graphics.Path"
+    private static let maximumPathCommands = 1_024
+
+    private static func pathDefaultState() -> [String: AyuBridgeValue] {
+        ["commands": .array([]), "current": .array([.number(0), .number(0)]),
+         "start": .array([.number(0), .number(0)]), "has_current": .bool(false)]
+    }
+
+    private static func pathCoordinate(_ value: AyuBridgeValue) throws -> Double {
+        let raw = value.number ?? value.integer.map(Double.init)
+        guard let raw, raw.isFinite, abs(raw) <= 10_000_000 else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid Path coordinate")
+        }
+        let coordinate = Float(raw)
+        guard coordinate.isFinite else { throw AyuBridgeFailure("invalid_arguments", "Invalid Path coordinate") }
+        return Double(coordinate)
+    }
+
+    private static func pathPair(_ values: [AyuBridgeValue]?) throws -> (Double, Double) {
+        guard let values, values.count == 2 else { throw AyuBridgeFailure("invalid_arguments", "Invalid Path point") }
+        return (try Self.pathCoordinate(values[0]), try Self.pathCoordinate(values[1]))
+    }
+
+    private static func validatePath(_ state: [String: AyuBridgeValue]) throws {
+        guard Set(state.keys) == ["commands", "current", "start", "has_current"],
+              let commands = state["commands"]?.array, commands.count <= Self.maximumPathCommands,
+              let hasCurrent = state["has_current"]?.bool else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid Path state")
+        }
+        _ = try Self.pathPair(state["current"]?.array)
+        _ = try Self.pathPair(state["start"]?.array)
+        for command in commands {
+            guard let object = command.object, let operation = object["op"]?.string else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid Path command")
+            }
+            switch operation {
+            case "move", "line":
+                guard Set(object.keys) == ["op", "x", "y"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid Path command") }
+                _ = try Self.pathCoordinate(object["x"] ?? .null)
+                _ = try Self.pathCoordinate(object["y"] ?? .null)
+            case "close":
+                guard Set(object.keys) == ["op"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid Path command") }
+            default: throw AyuBridgeFailure("invalid_arguments", "Invalid Path command")
+            }
+        }
+        if !hasCurrent && !commands.isEmpty {
+            throw AyuBridgeFailure("invalid_arguments", "Inconsistent Path state")
+        }
+    }
+
+    private static func appendPathCommand(_ state: inout [String: AyuBridgeValue], _ command: [String: AyuBridgeValue]) throws {
+        var commands = state["commands"]?.array ?? []
+        guard commands.count < Self.maximumPathCommands else { throw AyuBridgeFailure("resource_limit", "Path command limit exceeded") }
+        commands.append(.object(command))
+        state["commands"] = .array(commands)
+    }
+
+    static var path: AyuBridgeClassAdapter {
+        let constructor: AyuBridgeClassAdapter.Constructor = { args, context in
+            if args.isEmpty { return Self.pathDefaultState() }
+            try Self.arity(args, 1)
+            let snapshot = try context.snapshot(of: args[0])
+            guard snapshot.className == Self.pathName else { throw AyuBridgeFailure.unsupported("Path constructor overload") }
+            try Self.validatePath(snapshot.state)
+            return snapshot.state
+        }
+        let set: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            try Self.arity(args, 1)
+            let snapshot = try context.snapshot(of: args[0])
+            guard snapshot.className == Self.pathName else { throw AyuBridgeFailure.unsupported("Path.set overload") }
+            try Self.validatePath(snapshot.state)
+            state = snapshot.state
+            return .instance(className: Self.pathName, state: state)
+        }
+        let moveTo: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            guard args.count == 2 else { throw AyuBridgeFailure.unsupported("Path.moveTo overload") }
+            let x = try Self.pathCoordinate(args[0]); let y = try Self.pathCoordinate(args[1])
+            try Self.appendPathCommand(&state, ["op": .string("move"), "x": .number(x), "y": .number(y)])
+            state["current"] = .array([.number(x), .number(y)])
+            state["start"] = .array([.number(x), .number(y)])
+            state["has_current"] = .bool(true)
+            return .instance(className: Self.pathName, state: state)
+        }
+        let lineTo: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            guard args.count == 2 else { throw AyuBridgeFailure.unsupported("Path.lineTo overload") }
+            let x = try Self.pathCoordinate(args[0]); let y = try Self.pathCoordinate(args[1])
+            if state["has_current"]?.bool != true {
+                guard (state["commands"]?.array?.count ?? 0) <= Self.maximumPathCommands - 2 else {
+                    throw AyuBridgeFailure("resource_limit", "Path command limit exceeded")
+                }
+                try Self.appendPathCommand(&state, ["op": .string("move"), "x": .number(0), "y": .number(0)])
+                state["current"] = .array([.number(0), .number(0)])
+                state["start"] = .array([.number(0), .number(0)])
+                state["has_current"] = .bool(true)
+            } else if state["commands"]?.array?.last?.object?["op"]?.string == "close" {
+                // Skia begins a new contour from the previous contour's start
+                // when a segment follows close().
+                guard (state["commands"]?.array?.count ?? 0) <= Self.maximumPathCommands - 2 else {
+                    throw AyuBridgeFailure("resource_limit", "Path command limit exceeded")
+                }
+                try Self.appendPathCommand(&state, ["op": .string("move"), "x": state["start"]?.array?[0] ?? .number(0), "y": state["start"]?.array?[1] ?? .number(0)])
+            }
+            try Self.appendPathCommand(&state, ["op": .string("line"), "x": .number(x), "y": .number(y)])
+            state["current"] = .array([.number(x), .number(y)])
+            return .instance(className: Self.pathName, state: state)
+        }
+        let close: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            guard state["has_current"]?.bool == true else { return .instance(className: Self.pathName, state: state) }
+            let start = try Self.pathPair(state["start"]?.array)
+            if state["commands"]?.array?.last?.object?["op"]?.string != "close" {
+                try Self.appendPathCommand(&state, ["op": .string("close")])
+            }
+            state["current"] = .array([.number(start.0), .number(start.1)])
+            return .instance(className: Self.pathName, state: state)
+        }
+        let clear: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            state = Self.pathDefaultState()
+            return .instance(className: Self.pathName, state: state)
+        }
+        return AyuBridgeClassAdapter(name: Self.pathName, constructor: constructor, methods: [
+            "set": set, "moveTo": moveTo, "lineTo": lineTo, "close": close,
+            "reset": clear, "rewind": clear,
+            "isEmpty": { state, args, _ in
+                try Self.arity(args, 0)
+                let commands = state["commands"]?.array ?? []
+                return .value(.bool(commands.isEmpty))
+            },
+        ], receiverMethods: ["set", "moveTo", "lineTo", "close", "reset", "rewind"],
+           validateState: { try Self.validatePath($0) })
+    }
+
+    // MARK: Bounded affine Matrix subset
+
+    private static let matrixName = "android.graphics.Matrix"
+    private static let matrixIdentity = [1.0, 0, 0, 0, 1, 0, 0, 0, 1]
+
+    private static func matrixValues(_ state: [String: AyuBridgeValue]) throws -> [Double] {
+        guard Set(state.keys) == ["values"], let values = state["values"]?.array, values.count == 9 else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid Matrix state")
+        }
+        return try values.map { value in
+            let raw = value.number ?? value.integer.map(Double.init)
+            guard let raw, raw.isFinite, abs(raw) <= 10_000_000, Float(raw).isFinite else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid Matrix state")
+            }
+            return Double(Float(raw))
+        }
+    }
+
+    private static func matrixCoordinates(_ args: [AyuBridgeValue], method: String) throws -> (Double, Double) {
+        guard args.count == 2 else { throw AyuBridgeFailure.unsupported("Matrix." + method + " overload") }
+        func coordinate(_ value: AyuBridgeValue) throws -> Double {
+            let raw = value.number ?? value.integer.map(Double.init)
+            guard let raw, raw.isFinite, abs(raw) <= 10_000 else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid Matrix coordinate")
+            }
+            let result = Float(raw)
+            guard result.isFinite else { throw AyuBridgeFailure("invalid_arguments", "Invalid Matrix coordinate") }
+            return Double(result)
+        }
+        return (try coordinate(args[0]), try coordinate(args[1]))
+    }
+
+    private static func matrixState(_ values: [Double]) throws -> [String: AyuBridgeValue] {
+        guard values.count == 9 else { throw AyuBridgeFailure("invalid_arguments", "Invalid Matrix value count") }
+        let converted = try values.map { value -> AyuBridgeValue in
+            guard value.isFinite, abs(value) <= 10_000_000, Float(value).isFinite else {
+                throw AyuBridgeFailure("resource_limit", "Matrix values exceed bounds")
+            }
+            return .number(Double(Float(value)))
+        }
+        return ["values": .array(converted)]
+    }
+
+    static var matrix: AyuBridgeClassAdapter {
+        let constructor: AyuBridgeClassAdapter.Constructor = { args, context in
+            if args.isEmpty { return try Self.matrixState(Self.matrixIdentity) }
+            try Self.arity(args, 1)
+            let snapshot = try context.snapshot(of: args[0])
+            guard snapshot.className == Self.matrixName else { throw AyuBridgeFailure.unsupported("Matrix constructor overload") }
+            _ = try Self.matrixValues(snapshot.state)
+            return snapshot.state
+        }
+        let set: AyuBridgeClassAdapter.InstanceMethod = { state, args, context in
+            try Self.arity(args, 1)
+            let snapshot = try context.snapshot(of: args[0])
+            guard snapshot.className == Self.matrixName else { throw AyuBridgeFailure.unsupported("Matrix.set overload") }
+            _ = try Self.matrixValues(snapshot.state)
+            state = snapshot.state
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let reset: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            state = try Self.matrixState(Self.matrixIdentity)
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let setTranslate: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (dx, dy) = try Self.matrixCoordinates(args, method: "setTranslate")
+            state = try Self.matrixState([1, 0, dx, 0, 1, dy, 0, 0, 1])
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let setScale: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (sx, sy) = try Self.matrixCoordinates(args, method: "setScale")
+            state = try Self.matrixState([sx, 0, 0, 0, sy, 0, 0, 0, 1])
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let postTranslate: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (dx, dy) = try Self.matrixCoordinates(args, method: "postTranslate")
+            var m = try Self.matrixValues(state)
+            m[2] = Double(Float(m[2] + dx * m[8])); m[5] = Double(Float(m[5] + dy * m[8]))
+            state = try Self.matrixState(m)
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let postScale: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (sx, sy) = try Self.matrixCoordinates(args, method: "postScale")
+            var m = try Self.matrixValues(state)
+            for index in 0...2 { m[index] = Double(Float(m[index] * sx)) }
+            for index in 3...5 { m[index] = Double(Float(m[index] * sy)) }
+            state = try Self.matrixState(m)
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let preTranslate: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (dx, dy) = try Self.matrixCoordinates(args, method: "preTranslate")
+            var m = try Self.matrixValues(state)
+            m[2] = Double(Float(m[2] + m[0] * dx + m[1] * dy))
+            m[5] = Double(Float(m[5] + m[3] * dx + m[4] * dy))
+            state = try Self.matrixState(m)
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let preScale: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            let (sx, sy) = try Self.matrixCoordinates(args, method: "preScale")
+            var m = try Self.matrixValues(state)
+            for index in [0, 3, 6] { m[index] = Double(Float(m[index] * sx)) }
+            for index in [1, 4, 7] { m[index] = Double(Float(m[index] * sy)) }
+            state = try Self.matrixState(m)
+            return .instance(className: Self.matrixName, state: state)
+        }
+        let isIdentity: AyuBridgeClassAdapter.InstanceMethod = { state, args, _ in
+            try Self.arity(args, 0)
+            return .value(.bool(try Self.matrixValues(state) == Self.matrixIdentity))
+        }
+        return AyuBridgeClassAdapter(name: Self.matrixName, constructor: constructor, methods: [
+            "set": set, "reset": reset, "setTranslate": setTranslate, "setScale": setScale,
+            "postTranslate": postTranslate, "postScale": postScale, "preTranslate": preTranslate,
+            "preScale": preScale, "isIdentity": isIdentity,
+        ], receiverMethods: ["set", "reset", "setTranslate", "setScale", "postTranslate", "postScale", "preTranslate", "preScale"],
+           validateState: { _ = try Self.matrixValues($0) })
     }
 
     static var canvas: AyuBridgeClassAdapter {
@@ -716,10 +1762,18 @@ enum AyuBridgeJavaRuntime {
             "lightgray": 0xFFCC_CCCC, "white": 0xFFFF_FFFF, "red": 0xFFFF_0000,
             "green": 0xFF00_FF00, "blue": 0xFF00_00FF, "yellow": 0xFFFFFF00,
             "cyan": 0xFF00_FFFF, "aqua": 0xFF00_FFFF, "magenta": 0xFFFF_00FF,
-            "fuchsia": 0xFFFF_00FF, "transparent": 0x0000_0000,
+            "fuchsia": 0xFFFF_00FF, "darkgrey": 0xFF44_4444, "grey": 0xFF88_8888,
+            "lightgrey": 0xFFCC_CCCC, "lime": 0xFF00_FF00, "maroon": 0xFF80_0000,
+            "navy": 0xFF00_0080, "olive": 0xFF80_8000, "purple": 0xFF80_0080,
+            "silver": 0xFFC0_C0C0, "teal": 0xFF00_8080,
+            "transparent": 0x0000_0000,
         ]
         guard let value = names[text.lowercased()] else { throw AyuBridgeFailure("invalid_arguments", "Invalid color string") }
         return .integer(Int64(Int32(bitPattern: value)))
+    }
+    private static func colorByte(_ value: AyuBridgeValue, shift: UInt32) throws -> AyuBridgeValue {
+        let color = UInt32(truncatingIfNeeded: try Self.colorInteger(value, "ARGB color"))
+        return .integer(Int64((color >> shift) & 255))
     }
     private static func hsvColor(_ args: [AyuBridgeValue]) throws -> AyuBridgeValue {
         let alpha: UInt32
@@ -777,6 +1831,10 @@ enum AyuBridgeJavaRuntime {
                 },
                 "parseColor": { args, _ in try Self.arity(args, 1); return .value(try Self.parsedColor(try Self.string(args[0], "color string"))) },
                 "HSVToColor": { args, _ in .value(try Self.hsvColor(args)) },
+                "alpha": { args, _ in try Self.arity(args, 1); return .value(try Self.colorByte(args[0], shift: 24)) },
+                "red": { args, _ in try Self.arity(args, 1); return .value(try Self.colorByte(args[0], shift: 16)) },
+                "green": { args, _ in try Self.arity(args, 1); return .value(try Self.colorByte(args[0], shift: 8)) },
+                "blue": { args, _ in try Self.arity(args, 1); return .value(try Self.colorByte(args[0], shift: 0)) },
             ])
     }
 
@@ -802,11 +1860,11 @@ enum AyuBridgeJavaRuntime {
 
     static var gradientDrawable: AyuBridgeClassAdapter {
         AyuBridgeClassAdapter(name: "android.graphics.drawable.GradientDrawable",
+            constants: ["RECTANGLE": .integer(0), "OVAL": .integer(1)],
             constructor: { args, _ in
                 try Self.arity(args, 0)
                 return ["color": .integer(0), "shape": .integer(0), "corner_radius": .number(0), "stroke_width": .number(0), "stroke_color": .integer(0)]
             },
-            constants: ["RECTANGLE": .integer(0), "OVAL": .integer(1)],
             methods: [
                 "setColor": { state, args, _ in
                     try Self.arity(args, 1)
@@ -895,6 +1953,101 @@ enum AyuBridgeJavaRuntime {
                     throw Self.unsupported("Handler.removeCallbacks")
                 },
             ], validateState: { state in try Self.rejectState(["pending"], state: state, className: "android.os.Handler") })
+    }
+
+    static var viewConfiguration: AyuBridgeClassAdapter {
+        let state = ["scaled_touch_slop": AyuBridgeValue.integer(8)]
+        return AyuBridgeClassAdapter(name: "android.view.ViewConfiguration",
+            staticMethods: [
+                "get": { args, context in
+                    try Self.arity(args, 1)
+                    let snapshot = try context.snapshot(of: args[0])
+                    guard snapshot.className == "android.content.Context" else {
+                        throw Self.unsupported("ViewConfiguration.get Context")
+                    }
+                    return .instance(className: "android.view.ViewConfiguration", state: state)
+                },
+                "getLongPressTimeout": { args, _ in
+                    try Self.arity(args, 0)
+                    return .value(.integer(500))
+                },
+            ],
+            methods: [
+                "getScaledTouchSlop": { current, args, _ in
+                    try Self.arity(args, 0)
+                    guard current == state else { throw AyuBridgeFailure("invalid_state", "Invalid ViewConfiguration state") }
+                    return .value(.integer(8))
+                },
+            ],
+            validateState: { current in
+                guard current == state else { throw AyuBridgeFailure("invalid_state", "Invalid ViewConfiguration state") }
+            })
+    }
+
+    static var systemClock: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.os.SystemClock", staticMethods: [
+            "uptimeMillis": { args, _ in
+                try Self.arity(args, 0)
+                let uptimeMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+                guard uptimeMilliseconds.isFinite, uptimeMilliseconds >= 0,
+                      uptimeMilliseconds < Double(Int64.max) else {
+                    throw AyuBridgeFailure("invalid_state", "Monotonic clock value is out of range")
+                }
+                return .value(.integer(Int64(uptimeMilliseconds)))
+            },
+        ])
+    }
+
+    private static let measureSpecModeMask: UInt32 = 0xC000_0000
+    private static let measureSpecSizeMask: UInt32 = 0x3FFF_FFFF
+    private static let measureSpecExactly = Int32(1 << 30)
+    private static let measureSpecAtMost = Int32(bitPattern: 0x8000_0000)
+    private static let measureSpecMask = Int32(bitPattern: 0xC000_0000)
+
+    private static func measureSpecInt(_ value: AyuBridgeValue) throws -> Int32 {
+        guard let raw = value.integer, let converted = Int32(exactly: raw) else {
+            throw AyuBridgeFailure("invalid_arguments", "MeasureSpec requires a signed 32-bit integer")
+        }
+        return converted
+    }
+
+    static var measureSpec: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.view.View$MeasureSpec",
+            constants: [
+                "MODE_SHIFT": .integer(30),
+                "MODE_MASK": .integer(Int64(Self.measureSpecMask)),
+                "UNSPECIFIED": .integer(0),
+                "EXACTLY": .integer(Int64(Self.measureSpecExactly)),
+                "AT_MOST": .integer(Int64(Self.measureSpecAtMost)),
+            ],
+            staticMethods: [
+                "makeMeasureSpec": { args, _ in
+                    try Self.arity(args, 2)
+                    guard let size = args[0].integer,
+                          (0...Int64(Self.measureSpecSizeMask)).contains(size) else {
+                        throw AyuBridgeFailure("invalid_arguments", "MeasureSpec size is out of range")
+                    }
+                    let mode = try Self.measureSpecInt(args[1])
+                    guard [Int32(0), Self.measureSpecExactly, Self.measureSpecAtMost].contains(mode) else {
+                        throw AyuBridgeFailure("invalid_arguments", "Unsupported MeasureSpec mode")
+                    }
+                    let raw = (UInt32(size) & Self.measureSpecSizeMask) |
+                        (UInt32(bitPattern: mode) & Self.measureSpecModeMask)
+                    return .value(.integer(Int64(Int32(bitPattern: raw))))
+                },
+                "getMode": { args, _ in
+                    try Self.arity(args, 1)
+                    let raw = try Self.measureSpecInt(args[0])
+                    let mode = UInt32(bitPattern: raw) & Self.measureSpecModeMask
+                    return .value(.integer(Int64(Int32(bitPattern: mode))))
+                },
+                "getSize": { args, _ in
+                    try Self.arity(args, 1)
+                    let raw = try Self.measureSpecInt(args[0])
+                    let size = UInt32(bitPattern: raw) & Self.measureSpecSizeMask
+                    return .value(.integer(Int64(size)))
+                },
+            ])
     }
 
     private static func arity(_ arguments: [AyuBridgeValue], _ count: Int) throws {

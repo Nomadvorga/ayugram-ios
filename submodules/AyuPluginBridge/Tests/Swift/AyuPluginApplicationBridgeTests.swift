@@ -12,6 +12,32 @@ import UIKit
         func append(_ value: String) { self.lock.lock(); self.storage.append(value); self.lock.unlock() }
         func values() -> [String] { self.lock.lock(); defer { self.lock.unlock() }; return self.storage }
     }
+    private final class URLBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [String] = []
+        func append(_ value: URL) { self.lock.lock(); self.storage.append(value.absoluteString); self.lock.unlock() }
+        func values() -> [String] { self.lock.lock(); defer { self.lock.unlock() }; return self.storage }
+    }
+    private final class ScreenBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: AyuPluginScreenSnapshot
+        init(_ screen: AyuPluginScreenSnapshot) { self.storage = screen }
+        func set(_ screen: AyuPluginScreenSnapshot) { self.lock.lock(); self.storage = screen; self.lock.unlock() }
+        func get() -> AyuPluginScreenSnapshot { self.lock.lock(); defer { self.lock.unlock() }; return self.storage }
+    }
+    private final class ScreenProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reads = 0
+        func read() -> Int { self.lock.lock(); defer { self.lock.unlock() }; self.reads += 1; return self.reads }
+        var count: Int { self.lock.lock(); defer { self.lock.unlock() }; return self.reads }
+    }
+    private final class LocaleBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: String
+        init(_ value: String) { self.value = value }
+        func set(_ value: String) { self.lock.lock(); self.value = value; self.lock.unlock() }
+        func get() -> String { self.lock.lock(); defer { self.lock.unlock() }; return self.value }
+    }
 
     private func host(_ provider: AyuPluginHostProvider, registry: AyuBridgeClassRegistry = .standard, limits: AyuPluginBridgeLimits = AyuPluginBridgeLimits(), callback: @escaping AyuPluginNativeHost.CallbackSink = { _, _, _ in }) -> AyuPluginNativeHost {
         AyuPluginNativeHost(defaults: UserDefaults(suiteName: "AyuApplicationBridgeTests." + UUID().uuidString)!, provider: provider, classRegistry: registry, limits: limits, trustedOwner: { "alpha" }, callback: callback)
@@ -50,6 +76,217 @@ import UIKit
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async { continuation.resume() }
         }
+    }
+
+    private func preparedBrowserURL(_ provider: AyuPluginApplicationBridge, url: String,
+                                   screen: AyuPluginScreenSnapshot, owner: String = "alpha") async throws -> AyuBridgeProviderResult {
+        let registry = try provider.classRegistry()
+        let openURL = try XCTUnwrap(registry.adapters["org.telegram.messenger.browser.Browser"]?.staticMethods["openUrl"])
+        let context = AyuBridgeAdapterContext(pluginID: owner, resolveCallback: { _ in
+            throw AyuBridgeFailure.unsupported("Synthetic Browser callback")
+        }, resolve: { reference in
+            guard reference == .string("context") else { throw AyuBridgeFailure("invalid_handle", "Unknown synthetic context") }
+            return AyuBridgeAdapterSnapshot(className: "android.content.Context", state: screen.state)
+        })
+        return try await Task.detached {
+            guard case let .prepared(result) = try openURL([.string("context"), .string(url)], context) else {
+                throw AyuBridgeFailure("test_failure", "Browser.openUrl did not prepare its native effect")
+            }
+            return result
+        }.value
+    }
+
+    func testBrowserOpenURLStringAndUriOverloadsUseQueuedAppRoute() async throws {
+        let provider = AyuPluginApplicationBridge()
+        provider.updateAccounts([AyuPluginAccountSnapshot(index: 0, identity: UUID(), userID: 12)], selected: 0)
+        let screen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0)
+        let opened = URLBox()
+        provider.bindScreen(screen: { screen }, presenter: { nil }, openURL: { _, url in opened.append(url) })
+        let host = self.host(provider, registry: try provider.classRegistry())
+        try await self.authorize(host)
+
+        let fragment = try await self.client(host, "get_last_fragment")
+        let context = try await self.invoke(host, fragment["result"], "getContext")
+        let browser: AyuBridgeValue = .object(["class_name": .string("org.telegram.messenger.browser.Browser")])
+        let stringURL = "https://example.org/path?q=bridge"
+        let stringResult = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string(stringURL)])
+        XCTAssertEqual(stringResult["result"], .null)
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), [stringURL])
+
+        let uriClass: AyuBridgeValue = .object(["class_name": .string("android.net.Uri")])
+        let uri = try await self.invoke(host, uriClass, "parse", args: [.string("https://example.net/uri")])
+        let uriResult = try await self.invoke(host, browser, "openUrl", args: [context["result"], uri["result"]])
+        XCTAssertEqual(uriResult["result"], .null)
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), [stringURL, "https://example.net/uri"])
+
+        let wrongTarget = try await self.invoke(host, browser, "openUrl", args: [uri["result"], .string(stringURL)])
+        XCTAssertEqual(wrongTarget["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let extraOptions = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string(stringURL), .bool(true)])
+        XCTAssertEqual(extraOptions["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let relative = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string("/relative/path")])
+        XCTAssertEqual(relative["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let unsupportedScheme = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string("tg://resolve?domain=example")])
+        XCTAssertEqual(unsupportedScheme["error"]["code"], .string("UNSUPPORTED_API"))
+        let userInfo = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string("https://user:secret@example.org")])
+        XCTAssertEqual(userInfo["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let oversized = try await self.invoke(host, browser, "openUrl", args: [context["result"], .string("https://example.org/" + String(repeating: "x", count: 8_200))])
+        XCTAssertEqual(oversized["error"]["code"], .string("INVALID_ARGUMENTS"))
+        XCTAssertEqual(opened.values(), [stringURL, "https://example.net/uri"])
+    }
+
+    func testLocaleControllerUsesBoundedTelegramPresentationLocaleSnapshot() async throws {
+        let provider = AyuPluginApplicationBridge()
+        provider.bindScreen(screen: { nil }, presenter: { nil }, localeIdentifier: { "ar" })
+        let host = self.host(provider, registry: try provider.classRegistry())
+        try await self.authorize(host)
+
+        let localeController: AyuBridgeValue = .object(["class_name": .string("org.telegram.messenger.LocaleController")])
+        let localeResult = try await self.invoke(host, localeController, "getInstance")
+        XCTAssertEqual(localeResult["error"], .null)
+        let currentLocale = try await self.invoke(host, localeResult["result"], "getCurrentLocale")
+        XCTAssertEqual(currentLocale["error"], .null)
+        let language = try await self.invoke(host, currentLocale["result"], "getLanguage")
+        XCTAssertEqual(language["error"], .null)
+        XCTAssertEqual(language["result"], .string("ar"))
+        let isRTL = try await self.invoke(host, localeResult["result"], "isRTL")
+        XCTAssertEqual(isRTL["error"], .null)
+        XCTAssertEqual(isRTL["result"], .bool(true))
+
+        let wrongArity = try await self.invoke(host, localeController, "getInstance", args: [.integer(0)])
+        XCTAssertEqual(wrongArity["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let unsupportedStringLookup = try await self.invoke(host, localeResult["result"], "getString", args: [.string("hello")])
+        XCTAssertEqual(unsupportedStringLookup["error"]["code"], .string("UNSUPPORTED_API"))
+    }
+
+    func testLocaleControllerCurrentLocaleInfoMapsRegionalIdentifiersAndExpires() async throws {
+        let provider = AyuPluginApplicationBridge()
+        let locale = LocaleBox("ru_RU")
+        provider.bindScreen(screen: { nil }, presenter: { nil }, localeIdentifier: { locale.get() })
+        let host = self.host(provider, registry: try provider.classRegistry())
+        try await self.authorize(host)
+        let controller: AyuBridgeValue = .object(["class_name": .string("org.telegram.messenger.LocaleController")])
+
+        let expected: [(String, String)] = [("ru_RU", "ru"), ("uk-UA", "uk"), ("be_BY", "be"), ("en_GB", "en")]
+        for (identifier, code) in expected {
+            locale.set(identifier)
+            let instance = try await self.invoke(host, controller, "getInstance")
+            let info = try await self.invoke(host, instance["result"], "getCurrentLocaleInfo")
+            XCTAssertEqual(info["error"], .null)
+            let plural = try await self.call(host, "java.get_field", ["target": info["result"], "name": .string("pluralLangCode")])
+            XCTAssertEqual(plural["result"], .string(code))
+            let wrongArity = try await self.invoke(host, instance["result"], "getCurrentLocaleInfo", args: [.integer(0)])
+            XCTAssertEqual(wrongArity["error"]["code"], .string("INVALID_ARGUMENTS"))
+            let write = try await self.call(host, "java.set_field", ["target": info["result"], "name": .string("pluralLangCode"), "value": .string("en")])
+            XCTAssertEqual(write["error"]["code"], .string("UNSUPPORTED_API"))
+        }
+
+        let instance = try await self.invoke(host, controller, "getInstance")
+        let info = try await self.invoke(host, instance["result"], "getCurrentLocaleInfo")
+        _ = try await self.call(host, "plugin.deactivate")
+        let expired = try await self.call(host, "java.get_field", ["target": info["result"], "name": .string("pluralLangCode")])
+        XCTAssertEqual(expired["error"]["code"], .string("UNAUTHORIZED"))
+    }
+
+    func testBrowserOpenURLRequiresBoundApplicationRoute() async throws {
+        let provider = AyuPluginApplicationBridge()
+        let screen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0)
+        let probe = ScreenProbe()
+        provider.bindScreen(screen: { _ = probe.read(); return screen }, presenter: { nil })
+        let registry = try provider.classRegistry()
+        let openURL = try XCTUnwrap(registry.adapters["org.telegram.messenger.browser.Browser"]?.staticMethods["openUrl"])
+        let context = AyuBridgeAdapterContext(pluginID: "alpha", resolveCallback: { _ in
+            throw AyuBridgeFailure.unsupported("Synthetic Browser callback")
+        }, resolve: { reference in
+            guard reference == .string("context") else { throw AyuBridgeFailure("invalid_handle", "Unknown synthetic context") }
+            return AyuBridgeAdapterSnapshot(className: "android.content.Context", state: screen.state)
+        })
+        let error = await Task.detached { () -> AyuBridgeFailure? in
+            do {
+                _ = try openURL([.string("context"), .string("https://example.org")], context)
+                return nil
+            } catch let caught { return caught as? AyuBridgeFailure }
+        }.value
+        XCTAssertEqual(error?.code, "screen_unavailable")
+        XCTAssertEqual(error?.message, "Telegram URL route is not bound")
+        XCTAssertEqual(probe.count, 0, "Missing-route detection must not synchronously query the main-thread screen source")
+    }
+
+    func testBrowserOpenURLPreparationDoesNotReadMainAndCommitQueuesEffect() async throws {
+        let provider = AyuPluginApplicationBridge()
+        provider.updateAccounts([AyuPluginAccountSnapshot(index: 0, identity: UUID(), userID: 12)], selected: 0)
+        let screen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0)
+        let probe = ScreenProbe()
+        let opened = URLBox()
+        provider.bindScreen(screen: { _ = probe.read(); return screen }, presenter: { nil }, openURL: { _, url in opened.append(url) })
+        let prepared = try await self.preparedBrowserURL(provider, url: "https://example.org/queued", screen: screen)
+        XCTAssertEqual(probe.count, 0, "Preparation must not synchronously query the main-thread screen source")
+        XCTAssertTrue(opened.values().isEmpty)
+        prepared.commit(.null)
+        XCTAssertEqual(probe.count, 0)
+        XCTAssertTrue(opened.values().isEmpty, "Commit must enqueue the route even when called on main")
+        await self.flushMain()
+        XCTAssertEqual(probe.count, 1)
+        XCTAssertEqual(opened.values(), ["https://example.org/queued"])
+
+        let invalidated = try await self.preparedBrowserURL(provider, url: "https://example.org/invalidated", screen: screen)
+        invalidated.commit(.null)
+        provider.invalidatePresentations()
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), ["https://example.org/queued"])
+
+        provider.bindScreen(screen: { screen }, presenter: { nil })
+        do {
+            _ = try await self.preparedBrowserURL(provider, url: "https://example.org/unbound", screen: screen)
+            XCTFail("Rebinding without a route must revoke route availability")
+        } catch let failure as AyuBridgeFailure {
+            XCTAssertEqual(failure.code, "screen_unavailable")
+        }
+    }
+
+    func testPreparedBrowserOpenURLRollsBackAndRevokesOnOwnerScreenAndAccountChanges() async throws {
+        let provider = AyuPluginApplicationBridge()
+        let originalAccount = AyuPluginAccountSnapshot(index: 3, identity: UUID(), userID: 42)
+        provider.updateAccounts([originalAccount], selected: 3)
+        let originalScreen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 3)
+        let opened = URLBox()
+        let currentScreen = ScreenBox(originalScreen)
+        provider.bindScreen(screen: { currentScreen.get() }, presenter: { nil }, openURL: { _, url in opened.append(url) })
+
+        let rolledBack = try await self.preparedBrowserURL(provider, url: "https://example.org/rollback", screen: originalScreen)
+        rolledBack.rollback()
+        rolledBack.commit(.null)
+        await self.flushMain()
+        XCTAssertTrue(opened.values().isEmpty)
+
+        let detached = try await self.preparedBrowserURL(provider, url: "https://example.org/detached", screen: originalScreen)
+        provider.detach(pluginID: "alpha")
+        detached.commit(.null)
+        await self.flushMain()
+        XCTAssertTrue(opened.values().isEmpty)
+
+        let oldGeneration = try await self.preparedBrowserURL(provider, url: "https://example.org/old-generation", screen: originalScreen)
+        provider.detach(pluginID: "alpha")
+        let newGeneration = try await self.preparedBrowserURL(provider, url: "https://example.org/new-generation", screen: originalScreen)
+        oldGeneration.commit(.null)
+        newGeneration.commit(.null)
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), ["https://example.org/new-generation"])
+
+        let staleScreen = try await self.preparedBrowserURL(provider, url: "https://example.org/stale-screen", screen: originalScreen)
+        let nextScreen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 3)
+        staleScreen.commit(.null)
+        currentScreen.set(nextScreen)
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), ["https://example.org/new-generation"])
+
+        let staleAccount = try await self.preparedBrowserURL(provider, url: "https://example.org/stale-account", screen: nextScreen)
+        let replacement = AyuPluginAccountSnapshot(index: 3, identity: UUID(), userID: 42)
+        provider.updateAccounts([replacement], selected: 3)
+        staleAccount.commit(.null)
+        await self.flushMain()
+        XCTAssertEqual(opened.values(), ["https://example.org/new-generation"])
     }
 
     func testAndroidUtilitiesRunOnUIThreadSchedulesOwnedRunnable() async throws {
@@ -408,6 +645,67 @@ import UIKit
         XCTAssertEqual(captured.values(), ["safe text"], "Removed accounts must invalidate captured actions")
     }
 
+    func testAndroidUtilitiesAddToClipboardAliasUsesBoundedDeferredClipboard() async throws {
+        let captured = ClipboardBox()
+        let provider = AyuPluginApplicationBridge(clipboardWriter: { captured.append($0) })
+        let account = AyuPluginAccountSnapshot(index: 1, identity: UUID(), userID: 42)
+        provider.updateAccounts([account], selected: 1)
+        let screen = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 1)
+        provider.bindScreen(screen: { screen }, presenter: { nil })
+        let host = self.host(provider, registry: try provider.classRegistry())
+        try await self.authorize(host)
+        let utilities: AyuBridgeValue = .object(["class_name": .string("org.telegram.messenger.AndroidUtilities")])
+
+        let copied = try await self.invoke(host, utilities, "addToClipboard", args: [.string("exact alias text")])
+        XCTAssertEqual(copied["result"], .null)
+        await self.flushMain()
+        XCTAssertEqual(captured.values(), ["exact alias text"])
+
+        let wrongArity = try await self.invoke(host, utilities, "addToClipboard")
+        XCTAssertEqual(wrongArity["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let wrongType = try await self.invoke(host, utilities, "addToClipboard", args: [.integer(1)])
+        XCTAssertEqual(wrongType["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let oversized = try await self.invoke(host, utilities, "addToClipboard", args: [.string(String(repeating: "x", count: 65_537))])
+        XCTAssertEqual(oversized["error"]["code"], .string("INVALID_ARGUMENTS"))
+        XCTAssertEqual(captured.values(), ["exact alias text"])
+
+        let registry = try provider.classRegistry()
+        let addToClipboard = try XCTUnwrap(registry.adapters["org.telegram.messenger.AndroidUtilities"]?.staticMethods["addToClipboard"])
+        let context = AyuBridgeAdapterContext(pluginID: "alpha", resolveCallback: { _ in
+            throw AyuBridgeFailure.unsupported("synthetic clipboard callback")
+        }, resolve: { _ in
+            throw AyuBridgeFailure.unsupported("synthetic clipboard reference")
+        })
+        let rolledBack = try await Task.detached {
+            guard case let .prepared(result) = try addToClipboard([.string("rolled back")], context) else {
+                throw AyuBridgeFailure("test_failure", "Expected prepared clipboard result")
+            }
+            return result
+        }.value
+        rolledBack.rollback()
+        rolledBack.commit(.null)
+        await self.flushMain()
+        XCTAssertEqual(captured.values(), ["exact alias text"])
+
+        let stale = try await Task.detached {
+            guard case let .prepared(result) = try addToClipboard([.string("stale generation")], context) else {
+                throw AyuBridgeFailure("test_failure", "Expected prepared clipboard result")
+            }
+            return result
+        }.value
+        provider.detach(pluginID: "alpha")
+        let current = try await Task.detached {
+            guard case let .prepared(result) = try addToClipboard([.string("current generation")], context) else {
+                throw AyuBridgeFailure("test_failure", "Expected prepared clipboard result")
+            }
+            return result
+        }.value
+        stale.commit(.null)
+        current.commit(.null)
+        await self.flushMain()
+        XCTAssertEqual(captured.values(), ["exact alias text", "current generation"])
+    }
+
     func testSelectedAccountStaticFieldIsLiveAndOwnedConfigHasExactInt64UserID() async throws {
         let provider = AyuPluginApplicationBridge()
         let first = AyuPluginAccountSnapshot(index: 7, identity: UUID(), userID: Int64.max - 7, firstName: "Synthetic")
@@ -615,6 +913,12 @@ import UIKit
         let typedValue: AyuBridgeValue = .object(["class_name": .string("android.util.TypedValue")])
         let pixels = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(1), .number(12), metrics["result"]])
         XCTAssertEqual(pixels["result"].number, 12 * Double(window.screen.scale))
+        let densityIndependentPixels = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(0), .number(12), metrics["result"]])
+        XCTAssertEqual(densityIndependentPixels["result"].number, 12)
+        let scaledPixels = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(2), .number(12), metrics["result"]])
+        XCTAssertEqual(scaledPixels["result"].number, 12 * Double(window.screen.scale))
+        let unsupportedUnit = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(3), .number(12), metrics["result"]])
+        XCTAssertEqual(unsupportedUnit["error"]["code"], .string("UNSUPPORTED_API"))
         let invalidMetrics = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(1), .number(12), .null])
         XCTAssertNotNil(invalidMetrics["error"]["code"].string)
         let theme: AyuBridgeValue = .object(["class_name": .string("org.telegram.ui.ActionBar.Theme")])

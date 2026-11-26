@@ -48,10 +48,13 @@ public struct AyuBridgeAdapterContext: Sendable {
     private let resolve: @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot
     private let resolveCallback: @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback
     private let schedule: (@Sendable (AyuBridgeNativeCallback, Int64) throws -> AyuBridgeProviderResult)?
+    private let readAnimationPreference: @Sendable () -> Bool
     init(pluginID: String, resolveCallback: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeNativeCallback,
          resolve: @escaping @Sendable (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot,
-         schedule: (@Sendable (AyuBridgeNativeCallback, Int64) throws -> AyuBridgeProviderResult)? = nil) {
-        self.pluginID = pluginID; self.resolve = resolve; self.resolveCallback = resolveCallback; self.schedule = schedule
+         schedule: (@Sendable (AyuBridgeNativeCallback, Int64) throws -> AyuBridgeProviderResult)? = nil,
+         readAnimationPreference: @escaping @Sendable () -> Bool = { true }) {
+        self.pluginID = pluginID; self.resolve = resolve; self.resolveCallback = resolveCallback
+        self.schedule = schedule; self.readAnimationPreference = readAnimationPreference
     }
     public func snapshot(of reference: AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot { try self.resolve(reference) }
     public func state(of reference: AyuBridgeValue) throws -> [String: AyuBridgeValue] { try self.resolve(reference).state }
@@ -64,6 +67,9 @@ public struct AyuBridgeAdapterContext: Sendable {
         guard let schedule = self.schedule else { throw AyuBridgeFailure.unsupported("adapter scheduling") }
         return try schedule(callback, delayMilliseconds)
     }
+    /// The current native host's user animation preference. It is an iOS-side
+    /// Reduce Motion signal, not an emulation of Android's animator scale.
+    public func animationsEnabled() -> Bool { self.readAnimationPreference() }
 }
 
 public struct AyuBridgeNativeCallback: Sendable {

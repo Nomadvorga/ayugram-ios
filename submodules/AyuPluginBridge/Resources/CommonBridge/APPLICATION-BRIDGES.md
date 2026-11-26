@@ -40,27 +40,196 @@ Neither successful imports nor an IPA build establish functional compatibility.
 - The virtual view tree supports a bounded `android.view.Gravity` subset for
   `TextView.setGravity` and `LinearLayout.setGravity`: horizontal left/right,
   start/end, center, and vertical top/center/bottom. `LinearLayout` aligns the
-  child group on its main axis and children on the cross axis. Fill/clip flags,
+  child group on its main axis and children on the cross axis. Fill flags,
   per-child gravity and scrollable backing remain unsupported. Relative start/end
   follow the native view's layout direction. `EditText` supports horizontal
   gravity and center/unspecified vertical gravity.
-- `View.setBackground` accepts an owned `ColorDrawable`, a solid rectangle/oval
+ - `TextView.setTextSize(size)` and `setTextSize(PX|DIP|SP, size)` accept finite
+  sizes from 1–256. PX converts using the visible screen scale; DIP and SP map
+  to iOS points, without Android font-scale emulation. `ViewGroup.addView` accepts
+  `(child)`, `(child, index)`, `(child, LayoutParams)` and
+  `(child, index, LayoutParams)` for the supported Frame/Linear/Scroll groups;
+   indices are bounded against current children and `-1` appends. Other overloads
+   and unsupported LayoutParams types reject explicitly.
+ - `EditText.setTypeface` uses the bounded `TextView` presets. `setInputType` maps
+   only plain text, password and no-suggestions combinations to a single-line
+   native text field; multiline and unknown flag combinations reject. The common
+   `TextUtils.isEmpty` handles `null`, bounded strings and owned Java `String`/
+   Spannable adapters. `TextView.setText` and `setHint` flatten those owned values
+   to bounded plain text; spans are not rendered. Both text classes support at
+   most eight owned `TextWatcher` registrations, including add/remove and the
+   three UTF-16-indexed callbacks. Programmatic text changes and user edits report
+   bounded plain-text snapshots asynchronously; callback delivery is subject to
+   the host's pending-callback bound. For multiple listeners, each callback phase
+   runs for all listeners in registration order before the next phase. `View`
+   content-description accessors map at most 65,536 UTF-8 bytes to native
+   accessibility labels; null clears them. `EditText.requestFocus()` succeeds
+   only for an attached, enabled field, while `hasFocus()` and `clearFocus()` map
+   to native first-responder state. `EditText.setSelection(int)` uses a bounded
+   UTF-16 cursor offset; selection getters return native offsets or `-1` when
+   unavailable. View padding and attachment getters read a
+   main-thread snapshot; owned child-order and parent queries expose only the
+   supported Frame/Linear/Scroll containers. A host-mounted root has no modeled
+   Android parent. `findViewById(int)` searches the bounded modeled subtree in
+   depth-first child order; `getRootView()` returns the top modeled view.
+   `getTag()` and
+   `setTag(Object)` preserve one bounded default tag (scalar or owned handle);
+   keyed tags, containers and callback tokens reject. `getLayoutParams()` returns
+   the owned assigned object when still live, otherwise a new owned value snapshot
+   of the last known params; absent params return null. `isShown()` follows native
+   ancestor visibility. `setId`/`getId` expose signed 32-bit IDs. Minimum
+   width/height setters and getters use a 0-100,000 native-point intrinsic-size
+    floor, not Android density conversion. Rotation Z/X/Y, scale, translation,
+    optional local pivots and positive camera distance map to a bounded UIKit
+    3D-layer transform. Getters read bridge state; pivots do not alter
+    parent-owned frames or anchors. This is not Android pixel or perspective
+    rendering parity.
+    `invalidate()` requests native redraw only (no Canvas), while `requestLayout`
+    queues host layout invalidation. `setClickable`/`isClickable` gate/read the
+    declared click callback state; Android event dispatch is not reproduced. `post` and
+   `postDelayed` accept an owned Runnable, return true when queued, and deliver
+   asynchronously through the bounded generation-revocable callback queue; they
+    do not implement Android Loopers, cancellation or frame timing. Other
+    `CharSequence` values reject.
+    `setElevation`/`getElevation` map a bounded native-point value to UIKit layer
+    z-order only; Android elevation shadows and density conversion are not
+    emulated. `FrameLayout`/`LinearLayout` clip-children accessors control the
+    native child container; ScrollView viewport clipping remains fixed.
+     Only `ViewOutlineProvider.BACKGROUND` and `null` are accepted; the getter
+     returns that bounded marker. `setClipToOutline`/`getClipToOutline` use the supported rectangular,
+    rounded-rectangle or oval drawable outline when one is present; arbitrary
+    Drawable outlines remain unsupported.
+  - `ImageButton` uses the bounded ImageView content surface and base View click
+    behavior; Android button chrome is not reproduced. `ImageView.ScaleType` maps `CENTER`, `FIT_XY`, `FIT_CENTER`,
+    `CENTER_INSIDE`, `CENTER_CROP` and identity-only `MATRIX` to UIKit content modes;
+    arbitrary image matrices remain unsupported. Image loading and
+   drawable semantics are not implied by this enum mapping.
+    Image tint supports only bounded ARGB with `SRC_IN` (one- and two-argument
+    overloads) or an owned `PorterDuffColorFilter`; other blend modes reject.
+    `setImageDrawable(null)` and `setImageResource(0)` clear the image; non-null
+    drawables, nonzero resource IDs and Android bitmap semantics remain unsupported.
+- `Rect` and `RectF` expose bounded mutable coordinate values, same-class copy
+  and coordinate setters, translation/inset, containment, intersection/union,
+  sorting, dimensions, integer/float centers and emptiness. `Rect` uses signed
+  32-bit arithmetic; `RectF` stores finite bounded single-precision values.
+  Cross-class conversion, drawing and other graphics APIs remain unsupported.
+ - `Paint` is a bounded value model for color/alpha (including four-channel
+   `setARGB`), stroke width/style/cap/join,
+  text size, the three declared boolean flags, reset and copy. The `Style`, `Cap`
+  and `Join` enum-like values are explicit. This does not provide Canvas drawing,
+  shaders, font metrics or Android graphics rendering.
+- `Path` stores at most 1,024 bounded `moveTo`/`lineTo`/`close` commands and
+  supports clear, emptiness and same-class copy. Curves, transforms, fill rules,
+  Canvas rendering and Android Drawable hooks remain unsupported.
+- `Matrix` exposes a bounded affine 3×3 float value model for identity/copy,
+  translate/scale pre/post operations without pivots, reset and identity checks.
+  Perspective, array mutation and Canvas/Bitmap integration remain unsupported.
+  - `View.setBackground`/`setBackgroundDrawable` accept an owned `ColorDrawable`, a solid rectangle/oval
   `GradientDrawable` with one corner radius and optional uniform stroke, or
-  `null`, mapped to UIKit background/layer styling. Gradients, per-corner
+  `null`, mapped to UIKit background/layer styling. `getBackground` returns a
+  live supported owned drawable, a validated drawable snapshot or null. A live
+  background retains its drawable handle until the background is cleared or the
+  view is released; drawable mutations refresh all current views and snapshots
+  within the same owner/generation. Gradients, per-corner
   radii, ripple/layer/resource/image drawables and Android Canvas rendering
   remain unsupported.
-- `LinearLayout.LayoutParams` accepts bounded width/height and an optional
-  nonnegative weight. Positive weights divide only the remaining main-axis space
-  after base child sizes and margins; this is not full Android measurement parity.
-- `ScrollView` accepts one direct child and uses a native vertical `UIScrollView`
-  with bounded content-size calculation. Horizontal scrolling, nested scrolling,
-  fling physics and Android scroll callbacks are unsupported.
+ - View constructors accept no context, null, or an owned `android.content.Context`
+   adapter. `getContext()` returns that retained value, and `getResources()` forwards
+   only the registered adapter's read-only resources result. Context handles remain
+   live while any view retains them; other Android Context APIs remain unsupported.
+ - `LinearLayout.LayoutParams` accepts bounded width/height and an optional
+   nonnegative weight. Positive weights divide only the remaining main-axis space
+   after base child sizes and margins; this is not full Android measurement parity.
+   `LinearLayout.getOrientation()` and the supported TextView/LinearLayout
+   `getGravity()` return their bounded bridge state; other view classes reject
+   these reads.
+  - `ScrollView` and `HorizontalScrollView` each accept one direct child and use
+    a bounded single-axis native `UIScrollView`. Their scroll coordinates are
+    signed 32-bit native points, clamp to content bounds and reject movement on
+    the cross axis. `smoothScrollTo` delegates to UIKit without Android timing or
+    physics parity. Fill-viewport sizes the child to at least the available
+    viewport extent on its scrolling axis, including padding and margins.
+    Scrollbar visibility maps only on the matching axis; `setClipToPadding(true)`
+    clips to the viewport, and only `OVER_SCROLL_NEVER` is accepted. False
+    clip-to-padding, two-axis/nested scrolling, smooth-scroll-by, flings and
+    Android scroll callbacks are unsupported.
+   - `View.setFocusable`/`isFocusable` and `setSelected`/`isSelected` preserve
+     bounded boolean state; they do not implement UIKit focus or Android
+     state-list drawable rendering.
+   - `ProgressBar(Context)` supports only the audited indeterminate constructor
+     and visibility; `ProgressBar(Context, null, 0x01010078)` supports a bounded
+     horizontal `UIProgressView` with `setMax`/`getMax`, `setProgress`/
+     `getProgress` and a single-color `ColorStateList.valueOf(int)` tint. Other
+     constructors, styles and tint forms reject. This does not claim Android
+     drawable or animation parity.
+   - `CheckBox(Context)` supports plain text, bounded text size/color and padding,
+     checked state, a single-color `ColorStateList.valueOf(int)` button tint and
+     the declared `CompoundButton.OnCheckedChangeListener` proxy. State-change
+     callbacks are asynchronous and generation-bound. This is a UIKit control,
+     not Android button styling or drawable-state parity; other CompoundButton
+     APIs and overloads reject.
+    - `ViewConfiguration` exposes a fixed 8-native-point touch slop and 500 ms
+      long-press timeout. `View.performHapticFeedback` accepts only the audited
+      long-press and clock-tick constants and queues UIKit impact/selection
+      feedback; a successful return confirms enqueueing only, not physical output.
+      Android density/settings behavior, other constants and flags are unsupported.
+    - `View.MeasureSpec` supports standard constants and bounded signed-32-bit
+      `makeMeasureSpec`/`getMode`/`getSize` integer operations only. It does not
+      implement `View.measure` or Android layout traversal.
 - `Bundle` and `Intent` provide bounded owner-scoped Java value objects only;
   no Android activity launch or system intent interception is performed.
   `MotionEvent` constructors provide bounded synthetic snapshots, not live UIKit
   touch objects. `Handler.post`/`postDelayed` dispatch declared callbacks through
   the generation-revocable host callback path; Android Loopers, queue selection
   and callback cancellation are not implemented.
+- `java.lang.Class.forName` resolves only exact names already present in the
+  registry. Class metadata exposes name/simple name/package, primitive/array/
+  interface/enum flags and registered array component types. Declared-method
+  lookup is name-only metadata for registered members; it does not expose
+  signatures, method invocation, arbitrary reflection or Java inheritance.
+- `java.lang.String` is a bounded value adapter for text/owned BMP `char[]`
+  construction, UTF-16 length, emptiness, exact UTF-16 equality/comparison/search/
+  prefix/suffix, Java `hashCode`, ASCII `trim`, concatenation, `toString` and bounded substring. Substrings cannot split
+  surrogate pairs; `valueOf` accepts strings, signed integers, booleans and null,
+  not floating-point/object conversion. Other constructors and methods reject.
+- `java.lang.Float` supports only finite, bounded numeric conversion, `floatValue`
+  and finite constants. NaN/infinity, hexadecimal parsing and Java-specific string
+  formatting are not implemented.
+- `java.lang.Object` supports creating an opaque empty value and the host-wide
+  `getClass` metadata path; Java identity, hash and string methods are not emulated. `WeakReference` stores a non-owning
+  opaque host handle and supports `get`, `clear`, and always-false `isEnqueued`.
+  A handle becomes unavailable only after explicit release or generation cleanup;
+  Java GC and `ReferenceQueue` semantics are not implemented.
+- `ColorStateList.valueOf(int)` exposes an immutable single-color ARGB value with
+  `getDefaultColor`, `getColorForState(int[], int)` and `isStateful == false`.
+  State-array constructors, stateful lists and resource/theme lookup reject.
+- `java.lang.CharSequence` and `android.text.Spanned` are bounded marker/interface
+  types. `SpannableString` and
+  `SpannableStringBuilder` store bounded UTF-16 text plus owner-checked ranges;
+  the builder's supported append/replace/delete subset updates or drops affected
+  span records deterministically. Value-only style spans are limited to
+  `StyleSpan`, `UnderlineSpan`, `StrikethroughSpan`, `TypefaceSpan` and
+  `ForegroundColorSpan`, with only their explicitly modeled span-base checks.
+  `TextView.setText`/`setHint` flatten owned Java String/Spannable values to plain
+  text; span metadata is not rendered. Telegram-specific spans, Android
+  layout/measurement and graphics are unsupported. Typed object arrays and casts
+  check exact ownership and the bounded `View`/`ViewGroup`, `CharSequence`/`Spanned`
+  and style-span relationships; arbitrary object arrays and Java covariance remain
+  unsupported.
+- `java.io.ByteArrayOutputStream` is a bounded in-memory byte buffer only; its
+  `write`/`writeBytes`, `size`, `toByteArray`, `reset` and no-op `flush`/`close`
+  subset never opens or writes a resource. `toByteArray` yields a Python list of
+  signed byte values, not a Java array handle. `java.util.Collections.singletonList`
+  exposes a read-only one-element value snapshot; other collection factories and
+  stream operations reject.
+- `java.net.URL` parses bounded absolute HTTP(S) values and exposes selected
+  components only; parsing never opens a connection. User-info, other schemes and
+  network methods reject. `java.net.URLEncoder.encode` implements bounded
+  UTF-8 form encoding only.
+- `java.util.Scanner` reads bounded in-memory text only, with ASCII-whitespace
+  tokenization, line reads and boolean/signed-integer token methods. File/stream/
+  URL constructors, custom delimiters/locales/radices, floating-point parsing and
+  resource APIs are not implemented.
 - `Context.getResources().getDisplayMetrics()` snapshots the explicit presentation
   window's display scale and dimensions as read-only `density`, `densityDpi`,
   `widthPixels`, `heightPixels`. Density uses 160 Android dpi per iOS display scale;
@@ -72,6 +241,25 @@ Neither successful imports nor an IPA build establish functional compatibility.
   one-shot, generation-revocable callback onto the serial Python queue; it does
   not execute plugin Python on UIKit's main thread. `cancelRunOnUIThread` and
   arbitrary Android queue/Looper semantics remain unsupported.
+- `View.animate()` returns an owned `ViewPropertyAnimator` supporting bounded
+  alpha, translation X/Y, scale X/Y and rotation Z/X/Y targets; duration,
+  start-delay, the three listed interpolators, one owned `withEndAction` Runnable,
+  `start` and `cancel` are supported. UIKit/Core Animation runs it natively;
+  Python is never called per frame. Interpolator adapters also expose bounded
+  pure `getInterpolation(float)` queries. Custom `TimeInterpolator` proxies,
+  `ValueAnimator` update listeners, display-link callbacks and Android timing or
+  rendering parity remain unsupported. `ValueAnimator.areAnimatorsEnabled()` is
+  a read-only host animation-setting snapshot.
+- `LocaleController.getInstance()` exposes `isRTL()`, `getCurrentLocale()` and
+  `getCurrentLocaleInfo().pluralLangCode`. These are read-only snapshots of the
+  app's presentation-language identifier with system-locale fallback; the
+  immutable LocaleInfo adapter exposes only `pluralLangCode`. Android locale
+  selection, per-account overrides and localized-resource lookup remain
+  unsupported.
+- `Browser.openUrl(context, url)` accepts a visible owned screen context and an
+  absolute HTTP(S) URL or owned `android.net.Uri`. It routes through Telegram's
+  current screen navigation handler after revalidating account, screen and plugin
+  generation. Other schemes, overloads and external URL-launch behavior reject.
 - `Resources.getConfiguration()` returns an owner-held, read-only
   `Configuration.orientation` snapshot derived from the bound scene's interface
   orientation. Only `ORIENTATION_UNDEFINED`, `ORIENTATION_PORTRAIT`, and
@@ -99,6 +287,9 @@ Neither successful imports nor an IPA build establish functional compatibility.
   presents native copied-to-clipboard feedback. Values over 65,536 bytes and
   calls without a visible screen reject. This is a clipboard write, not an
   Android clipboard-manager or clipboard-read API.
+- `AndroidUtilities.addToClipboard(text)` shares the same bounded clipboard-write
+  route, visible-screen/account checks and native feedback; it does not add
+  clipboard-read or background access.
 - `BasePlugin.add_menu_item` for `MESSAGE_CONTEXT_MENU`: bounded native rows
   appear in the chat message context menu. Existing Telegram rows are published
   immediately; plugin rows are appended after asynchronous Python conditions
