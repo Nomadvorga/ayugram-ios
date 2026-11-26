@@ -1,6 +1,6 @@
 # Vosk implementation and root integration
 
-Checkpoint: 2026-11-26. Independent Vosk implementation and the authorized targeted root integration are present as uncommitted changes. The five shared files contain only the Vosk hunks/appends made for this handoff, alongside pre-existing root changes; root can now resume those files. Existing Apple speech/camera source remains unchanged. No commit or push was made.
+Checkpoint: 2026-11-26. Independent Vosk implementation and the authorized targeted root integration are present in the workspace. The five shared files contain only the Vosk hunks/appends made for this handoff, alongside pre-existing root changes; root can now resume those files. Existing Apple speech/camera source remains unchanged. The integrated tree is now at `c56af00f`; device and simulator debug compile/link succeeded, while native recognition and release qualification remain open.
 
 ## Implementation
 
@@ -67,16 +67,16 @@ Review release framework export lists under `Telegram/CLAUDE.md` during the full
 | C smoke/stub declarations | Strict C syntax check passed; this does not run the iOS SDK. |
 | Shared integration | Applied as targeted Vosk-only hunks after reviewing current dirty content; root patch remains unapplied as a whole. `git diff --check` and the catalogue/localization verifier passed. |
 | Source syntax/localization consistency | The touched Swift sources and decoder test parse with tree-sitter; the 21 EN/RU keys match the screen and root patch. Syntax parsing does not typecheck Swift. |
-| Exact-source Swift host test package | Emitted under Temp for Mac execution. Not compiled/run here. |
+| Swift host package | The local WSL projection compiled and linked, then timed out at 180 seconds after use/delete before the remaining cleanup checks finished; it is not a passing full suite. The exact Mac host suite is included in [host workflow 45752660441](https://github.com/Nomadvorga/ayugram-ios/actions/runs/45752660441) and its Vosk catalogue/archive/model-lifecycle step passed. |
 | Decoder fixture regression | Added `submodules/MediaPlayer/Tests/SoftwareAudioTranscriptionDrainTests.swift`; independent FFmpeg reference outputs for both fixtures measured at 145,408 and 49,152 samples. The production test has not run. |
-| iOS full app/typecheck/link/native recognition/performance | Blocked: this Windows host has no Swift, Xcode, xcrun or Bazel executable/toolchain. No successful debug build is claimed. |
-| Visual UI | Not recorded or accepted: no simulator/Mac available. |
+| iOS full app/typecheck/link/native recognition/performance | Device and simulator debug compile/link succeeded on `c56af00f` ([device run 45751399386](https://github.com/Nomadvorga/ayugram-ios/actions/runs/45751399386), [simulator run 45751420234](https://github.com/Nomadvorga/ayugram-ios/actions/runs/45751420234)); the simulator onboarding smoke also passed on attempt 2. Native SDK recognition, release link/export, model accuracy and device performance remain unverified. |
+| Visual UI | No Vosk settings/model-management state is recorded or accepted. The CI simulator recording covers only onboarding and does not verify this UI. |
 
 Local C verification used WSL Ubuntu with GCC/zlib development packages. Apt verified repository metadata and package checksums; its dependencies also updated Ubuntu libc/zlib packages. Nothing from that toolchain is an app dependency.
 
 ## Repeatable checks
 
-No downloads occur in these test commands:
+The catalogue/native commands use local fixtures and optional cached models. On macOS the host harness uses CryptoKit; its Linux projection uses Swift Crypto (a local checkout via `SWIFT_CRYPTO_PATH`, otherwise SwiftPM resolves the pinned package).
 
 ```sh
 python3 Tests/ExteraVosk/verify_catalogue.py
@@ -87,11 +87,11 @@ python3 Tests/ExteraVosk/verify_catalogue.py --model-cache /path/to/extera-vosk-
 python3 Tests/ExteraVosk/run_native_tests.py --model-cache /path/to/extera-vosk-artifacts
 ```
 
-The Mac host harness copies exact production Foundation/settings/store/ZIP/native-wrapper sources into a temporary Swift package. Only the native library implementation is replaced by `NativeHostStub.c`, so the host can test install/corruption/cancel cleanup, stale Use, lease/delete, settings/aliases, safe ZIP rejection and native wrapper ownership without trying to load an iOS archive into macOS. It does **not** test AVAudioConverter, UIKit, the native iOS SDK or the SwiftSignalKit delivery layer. Run it before treating these Swift tests as passing.
+The Mac host harness copies exact production Foundation/settings/store/ZIP/native-wrapper sources into a temporary Swift package. Only the native library implementation is replaced by `NativeHostStub.c`, so the host can test install/corruption/cancel cleanup, stale Use, lease/delete, settings/aliases, safe ZIP rejection and native wrapper ownership without trying to load an iOS archive into macOS. Linux additionally projects Darwin to Glibc, imports FoundationNetworking, and substitutes the available volume-capacity key and Crypto module. It does **not** test AVAudioConverter, UIKit, native recognition or the SwiftSignalKit delivery layer. The WSL projection compiled/linked but timed out during runtime checks; the Mac CI host suite passed, so that timeout is not treated as a product-test failure.
 
 ## Mac/device acceptance still required
 
-1. Run the workflow's Vosk host step on Mac, then build the integrated app using `CLAUDE.md` for arm64 simulator and device; validate a release link and exports. Load all 24 native models; run representative checksum-pinned language fixtures, including Portuguese/Turkish legacy layout.
+1. The Vosk host workflow and integrated app debug compile/link have passed on Mac CI for arm64 simulator and device (`c56af00f`). Still validate a release link and exports. Load all 24 native models; run representative checksum-pinned language fixtures, including Portuguese/Turkish legacy layout.
 2. Run the new MediaPlayer drain regression tests and test original Opus voice files, mono/stereo input, conversion sample counts, EOF tail, delayed/multiple decoder output, malformed/read errors, empty/silent files and utterance accumulation. `Tests/ExteraVosk/NativeSmoke.c` supplies a minimal actual-SDK C runner for a pinned mono S16/16 kHz fixture; it is not a performed test.
 3. Install/cancel/retry/relaunch, low disk, model corruption, delete during active recognition, rapid Use/backend/None changes, timeout after partial output, node reuse and backup restore without installed files. Verify no implicit network, Apple permission or server fallback; recognize in airplane mode after explicit installation.
 4. Measure peak model memory, teardown, IPA delta and cold/warm latency on supported devices, especially Ukrainian/Gujarati. No measured recognition accuracy or memory bound is claimed from an archive-size check.

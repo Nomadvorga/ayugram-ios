@@ -175,10 +175,10 @@ with and without system Reduce Motion/Reduce Transparency. Expectations:
 ## Validation status
 
 Eleven production-model XCTest cases are in `Tests/ExteraEnergy`; their README gives
-the host command. The command was attempted with Python 3.14 and stopped with
-`swift is unavailable; XCTest requires a Swift host toolchain`. There is no Swift/Xcode,
-iOS SDK or simulator on this Windows host. Native typecheck, XCTest execution and
-recorded-frame/device acceptance remain unverified; no animation frame claim is made.
+the host command. The exact command passed in the Mac host workflow at `c56af00f`
+(`45752660441`). There is no Swift/Xcode, iOS SDK or simulator on this Windows host.
+Native UIKit runtime and recorded-frame/device acceptance remain unverified; no
+animation frame claim is made.
 All 43 owned Swift files passed tree-sitter parsing with zero ERROR/missing nodes and
 an explicit import-presence check for the added EnergyUsageSettings extension calls.
 Scoped `git diff --check` passed. These checks do not substitute for the full build.

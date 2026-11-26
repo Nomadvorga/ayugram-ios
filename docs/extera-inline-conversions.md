@@ -133,11 +133,12 @@ accepts at most 20 words and three-word zone names. It uses Foundation IANA/DST
 rules with forward gap resolution and the earlier overlap occurrence.
 
 XCTest cases compile the exact production engine, units, rates and time-zone
-sources. See `Tests/ExteraMath/README.md`. No Swift compiler or iOS simulator is
-available on this Windows host. Tree-sitter syntax checks do not substitute for
-compilation, XCTest execution, a full app build, or recorded-frame UI verification.
-The Windows reference-data check passed for 39 units and all 251 built-in zone
-aliases; 11 numerical regressions passed using the production unit scales/offsets.
+sources. See `Tests/ExteraMath/README.md`. The calculator/conversions host group
+passed on Mac CI at `c56af00f` (`45752660441`). No Swift compiler or iOS simulator is
+available on this Windows host. Host execution does not substitute for a full app
+UI/runtime build or recorded-frame verification. The Windows reference-data check
+passed for 39 units and all 251 built-in zone aliases; 11 numerical regressions
+passed using the production unit scales/offsets.
 Tree-sitter passed for all math production sources, settings and the XCTest source.
 
 Known remaining Android parity gaps: account-specific Telegram Stars pricing
