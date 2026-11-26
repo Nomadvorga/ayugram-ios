@@ -264,6 +264,48 @@ let outer = try JSONSerialization.data(withJSONObject: [
 ])
 let currentBundle = try ExteraSettingsBackup.validateBundle(data: outer)
 require(currentBundle.iconPackBackupData == iconPayload, "outer icon payload did not round-trip")
+let largeIconPayload = try JSONSerialization.data(withJSONObject: ["archiveFixture": String(repeating: "x", count: 300 * 1024)])
+require(largeIconPayload.count > ExteraSettingsBackup.maximumFileSize, "large icon fixture did not exceed settings limit")
+let sharedFixture = ExteraSettingsBackup.SharedPreferences(showContactsTab: false, showCallsTab: true, foldersAtBottom: true)
+let exportedBundle = try ExteraSettingsBackup.exportBundle(sharedPreferences: sharedFixture, iconPackBackup: largeIconPayload)
+let restoredBundle = try ExteraSettingsBackup.validateBundle(data: exportedBundle)
+require(restoredBundle.iconPackBackupData == largeIconPayload, "large icon payload did not survive production export/import")
+require(restoredBundle.settings.settingCount == exportedSettings.count + 3, "bundle lost settings or shared preferences")
+require(restoredBundle.settings.sharedPreferences?.showContactsTab == false && restoredBundle.settings.sharedPreferences?.showCallsTab == true && restoredBundle.settings.sharedPreferences?.foldersAtBottom == true, "bundle changed shared preferences")
+let settingsOnlyBundle = try ExteraSettingsBackup.validateBundle(data: ExteraSettingsBackup.exportBundle())
+require(settingsOnlyBundle.iconPackBackupData == nil && settingsOnlyBundle.settings.iconPackBackupData == nil, "settings-only export invented an icon catalog")
+let legacySettingsOnly = try ExteraSettingsBackup.validateBundle(data: innerSettings)
+require(legacySettingsOnly.settings.settingCount == exportedSettings.count && legacySettingsOnly.iconPackBackupData == nil, "legacy settings-only import changed scope")
+
+func bundleDocument(_ replacements: [String: Any]) throws -> Data {
+    var object: [String: Any] = ["format": ExteraSettingsBackup.bundleFormat, "version": ExteraSettingsBackup.version, "settings": innerSettings.base64EncodedString()]
+    for (key, value) in replacements { object[key] = value }
+    return try JSONSerialization.data(withJSONObject: object)
+}
+let bundleValidationState = store.strings
+let bundleValidationWrites = store.writes
+for invalid in ["!", "e30", "", true, 1, NSNull()] as [Any] {
+    mustThrow("invalid encoded settings accepted") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["settings": invalid])) }
+    mustThrow("invalid encoded icon envelope accepted") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["uiIconPacks": invalid])) }
+}
+for invalid in [true, 0, 2, "1", NSNull()] as [Any] {
+    mustThrow("invalid bundle version accepted") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["version": invalid])) }
+}
+mustThrow("unknown bundle key accepted") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["plugins": [:]])) }
+let duplicateIconPayload = Data(#"{"schemaVersion":1,"schemaVersion":1}"#.utf8)
+mustThrow("duplicate icon keys accepted by export") { _ = try ExteraSettingsBackup.exportBundle(iconPackBackup: duplicateIconPayload) }
+mustThrow("duplicate icon keys accepted by import") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["uiIconPacks": duplicateIconPayload.base64EncodedString()])) }
+for invalid in [Data("[]".utf8), Data("null".utf8), Data("{".utf8)] {
+    mustThrow("non-object icon payload accepted by export") { _ = try ExteraSettingsBackup.exportBundle(iconPackBackup: invalid) }
+    mustThrow("non-object icon payload accepted by import") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["uiIconPacks": invalid.base64EncodedString()])) }
+}
+let oversizedSettings = Data(repeating: 32, count: ExteraSettingsBackup.maximumFileSize + 1)
+mustThrow("outer bundle bypassed inner settings limit") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["settings": oversizedSettings.base64EncodedString()])) }
+let oversizedIcons = Data(repeating: 32, count: ExteraUIIconPackStore.maxBackupBytes + 1)
+mustThrow("oversized icon export accepted") { _ = try ExteraSettingsBackup.exportBundle(iconPackBackup: oversizedIcons) }
+mustThrow("oversized icon import accepted") { _ = try ExteraSettingsBackup.validateBundle(data: bundleDocument(["uiIconPacks": oversizedIcons.base64EncodedString()])) }
+mustThrow("oversized outer bundle accepted") { _ = try ExteraSettingsBackup.validateBundle(data: Data(count: ExteraSettingsBackup.maximumBundleFileSize + 1)) }
+require(store.strings == bundleValidationState && store.writes == bundleValidationWrites, "bundle validation mutated preferences")
 var duplicateIconDocument = legacyObject
 duplicateIconDocument["uiIconPacks"] = iconObject
 let duplicateIconOuter = try JSONSerialization.data(withJSONObject: [
@@ -289,6 +331,26 @@ require(!simple.fixture, "external commit failure left the ordinary setting chan
 require(ExteraAISettings.shared.configuration == commitInitial, "external commit failure left the AI setting changed")
 require(simple.synchronizations == commitSyncs, "failed commit synchronized partial settings")
 require(aiNotifications == commitNotifications + 2, "failed commit did not publish apply and rollback cache changes")
+var secondaryCommitCount = 0
+try ExteraSettingsBackup.apply(document(["extera.fixture": true]), commit: {
+    require(store.depth == 1 && simple.fixture, "secondary commit ran outside the settings batch or before settings")
+    secondaryCommitCount += 1
+})
+require(secondaryCommitCount == 1 && simple.synchronizations == commitSyncs + 1, "successful secondary commit did not synchronize once")
+
+// Surface both errors if external code makes compensation itself impossible.
+let rollbackSyncs = simple.synchronizations
+do {
+    try ExteraSettingsBackup.apply(document(["extera.fixture": false, "extera.ai.showEditor": false]), commit: {
+        store.strings[key] = "{\"roles\":[{\"id\":\"duplicate\",\"name\":\"A\",\"prompt\":\"A\"},{\"id\":\"duplicate\",\"name\":\"B\",\"prompt\":\"B\"}]}"
+        ExteraAISettings.shared = ExteraAISettings()
+        throw FixtureCommitError.expected
+    })
+    fatalError("rollback failure was swallowed")
+} catch ExteraSettingsBackup.BackupError.rollbackFailed(let original, _) {
+    require(original is FixtureCommitError, "rollback failure lost the original error")
+} catch { fatalError("rollback failure was not distinguished from the original failure") }
+require(simple.synchronizations == rollbackSyncs, "failed compensation emitted successful synchronization")
 
 // A valid backup can fail to persist against an out-of-limits legacy configuration.
 // Both import and reset must fail before ordinary settings or shared synchronization change.
@@ -305,7 +367,7 @@ require(simple.fixture && simple.synchronizations == synchronizations && store.w
 require(ExteraAISettings.shared.configuration == invalidConfiguration && aiNotifications == beforeNotifications, "failed backup changed AI cache or notified success")
 try ExteraSettingsBackup.apply(document(["extera.fixture": false]))
 require(!simple.fixture && store.writes == 0, "AI-free import should not validate/rewrite legacy AI configuration")
-print("Passed production AI cache, failure isolation, strict bool allowlist, partial import, grouped writes, private-state preservation, reset and notification-lock checks")
+print("Passed production AI cache, failure isolation, strict bool allowlist, partial import, grouped writes, private-state preservation, reset, notification locks, bundle export/import and failed-commit compensation checks")
 '''
     navigation = (sources / "ExteraNavigationSettings.swift").read_text(encoding="utf-8")
     return stubs + pill_sources + navigation + ai + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n" + backup + tests
