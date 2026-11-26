@@ -1936,10 +1936,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         var allowFullWidth = false
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
-        var supportsNativeSenderProfiles = true
-        if let channel = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case let .broadcast(info) = channel.info {
-            supportsNativeSenderProfiles = info.flags.contains(.messagesShouldHaveProfiles)
-        }
         
         /*let isInlinePage = false
         for attribute in item.message.attributes {
