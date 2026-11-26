@@ -1,5 +1,6 @@
 import AccountContext
 import Foundation
+import SGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
 

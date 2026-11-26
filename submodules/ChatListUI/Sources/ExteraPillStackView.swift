@@ -72,7 +72,7 @@ final class ExteraPillStackView: UIView, UIGestureRecognizerDelegate {
     private var selected: String?
     private var runningSignature: String?
     private var lease: UUID?
-    private var refreshTimer: Timer?
+    private var refreshTimer: Foundation.Timer?
     private var language = "en"
     var hostVisible = false { didSet {
         if self.hostVisible && !oldValue { exteraEntryStatusDialogsAppeared(account: self.context.account) }
@@ -192,7 +192,7 @@ final class ExteraPillStackView: UIView, UIGestureRecognizerDelegate {
         if let kind = ExteraBuiltinPill.from(id: selected) {
             self.provider.start(kind, force: force)
             if kind != .proxy && (kind != .entryTime || store.entryTimeAutoRefresh(account: account)) {
-                self.refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+                self.refreshTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
                     guard let self, self.hostVisible, UIApplication.shared.applicationState == .active else { return }
                     self.provider.start(kind)
                 }
@@ -325,7 +325,7 @@ final class ExteraPillStackView: UIView, UIGestureRecognizerDelegate {
     }
     override func accessibilityIncrement() { self.step(1) }
     override func accessibilityDecrement() { self.step(-1) }
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
         let velocity = pan.velocity(in: self)
         return self.ids.count > 1 && abs(velocity.y) > abs(velocity.x)

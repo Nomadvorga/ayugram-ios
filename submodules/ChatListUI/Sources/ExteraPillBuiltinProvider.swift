@@ -20,7 +20,7 @@ final class ExteraPillBuiltinProvider: NSObject, CLLocationManagerDelegate {
     private lazy var authorizationManager = CLLocationManager()
     private var cache: [ExteraBuiltinPill: (String, Date, String)] = [:]
     private var authorizationAction: (() -> Void)?
-    private var entryTimeHideTimer: Timer?
+    private var entryTimeHideTimer: Foundation.Timer?
     private var entryTimeStatus: ExteraPillEntryStatus?
     private var entryTimeExpanded = false
     private var entryTimeRequestInFlight = false
@@ -173,7 +173,7 @@ final class ExteraPillBuiltinProvider: NSObject, CLLocationManagerDelegate {
                 publish(self.entryTimeStatus.map { self.entryTimeText($0) } ?? self.text("Status unavailable", "Статус недоступен"))
                 self.entryTimeExpanded = true
                 if !ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) {
-                    self.entryTimeHideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                    self.entryTimeHideTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
                         guard let self, self.generation.accepts(ticket) else { return }
                         self.entryTimeExpanded = false; self.entryTimeHideTimer = nil; publish("")
                     }
