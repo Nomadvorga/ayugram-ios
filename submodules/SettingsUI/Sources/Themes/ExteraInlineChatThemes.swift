@@ -14,7 +14,7 @@ public struct ExteraInlineChatThemes: Equatable {
     private let themes: [PresentationThemeReference]
     private let animatedEmojiStickers: [String: [StickerPackItem]]
 
-    private init(themes: [PresentationThemeReference], animatedEmojiStickers: [String: [StickerPackItem]]) {
+    fileprivate init(themes: [PresentationThemeReference], animatedEmojiStickers: [String: [StickerPackItem]]) {
         self.themes = themes
         self.animatedEmojiStickers = animatedEmojiStickers
     }
