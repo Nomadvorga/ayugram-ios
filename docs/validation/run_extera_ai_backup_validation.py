@@ -27,6 +27,10 @@ def make_harness(repo):
     ai = ai.replace("public static let shared = ExteraAISettings()", "public static var shared = ExteraAISettings()")
     ai = ai.replace("private init() {}", "fileprivate init() {}")
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
+    pill_sources = "\n".join((sources / name).read_text(encoding="utf-8") for name in [
+        "ExteraPillSettings.swift", "ExteraPillStrings.swift", "ExteraPillStackSettings.swift",
+        "ExteraPillParity.swift", "ExteraPillPortableSettings.swift",
+    ])
     start = backup.index("    private static let settings: [Setting] = [")
     end = backup.index("\n    private static let settingsByName:", start)
     flags = "\n".join(line for line in backup[start:end].splitlines() if any(helper in line for helper in ["aiBoolean(", "aiTemperature(", "aiSummaryPolicy(", "aiEditorPolicy("]))
@@ -48,6 +52,7 @@ let ayuSettingsDidChangeNotification = Notification.Name("ExteraAIValidationChan
 final class AyuSettingsStore {
     static let shared = AyuSettingsStore()
     static let didChangeNotification = Notification.Name("FixtureStoreDidChange")
+    let userDefaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER)!
     var strings: [String: String] = [:]
     var reads = 0
     var writes = 0
@@ -255,7 +260,7 @@ require(!simple.fixture && store.writes == 0, "AI-free import should not validat
 print("Passed production AI cache, failure isolation, strict bool allowlist, partial import, grouped writes, private-state preservation, reset and notification-lock checks")
 '''
     navigation = (sources / "ExteraNavigationSettings.swift").read_text(encoding="utf-8")
-    return stubs + navigation + ai + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n" + backup + tests
+    return stubs + pill_sources + navigation + ai + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n" + backup + tests
 
 
 def main():

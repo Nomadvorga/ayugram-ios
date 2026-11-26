@@ -34,6 +34,10 @@ public enum ExteraSettingsBackup {
     public struct ValidatedBackup {
         fileprivate let values: [String: Value]
         public let sharedPreferences: SharedPreferences?
+        /// The icon-pack envelope is kept as canonical JSON data. The settings
+        /// module validates its JSON shape here; the UI layer performs the
+        /// platform image validation before committing it to the icon store.
+        public let iconPackBackupData: Data?
 
         public var settingCount: Int {
             return self.values.count + (self.sharedPreferences == nil ? 0 : 3)
@@ -168,9 +172,14 @@ public enum ExteraSettingsBackup {
             }, write: {
                 // ValidatedBackup and the encoded default are the only sources. Decode before
                 // entering the setter; no malformed document can cause a partial layout write.
-                guard case let .string(value) = $0,
-                      let layout = try? ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys) else {
+                guard case let .string(value) = $0 else {
                     preconditionFailure("Pill backup value must have passed complete validation")
+                }
+                let layout: ExteraPillStackLayout
+                do {
+                    layout = try ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys)
+                } catch {
+                    preconditionFailure("Pill backup value must have passed complete validation: \(error)")
                 }
                 ExteraPillPortableSettings.applyValidated(layout, settings: ExteraPillStackSettings.shared, custom: ExteraPillSettings.shared.pills)
             })
@@ -513,7 +522,7 @@ public enum ExteraSettingsBackup {
     private static let settingsByName: [String: Setting] = Dictionary(uniqueKeysWithValues: ExteraSettingsBackup.settings.map { ($0.name, $0) })
 
     /// Call on the main queue, as with the settings screen's property-wrapper setters.
-    public static func exportData(sharedPreferences: SharedPreferences? = nil) throws -> Data {
+    public static func exportData(sharedPreferences: SharedPreferences? = nil, iconPackBackup: Data? = nil) throws -> Data {
         precondition(Thread.isMainThread)
         var values: [String: Any] = [:]
         for setting in self.settings {
@@ -528,6 +537,12 @@ public enum ExteraSettingsBackup {
                 "showCallsTab": sharedPreferences.showCallsTab,
                 "foldersAtBottom": sharedPreferences.foldersAtBottom,
             ]
+        }
+        if let iconPackBackup {
+            guard let iconObject = try JSONSerialization.jsonObject(with: iconPackBackup) as? [String: Any] else {
+                throw BackupError.invalidValue
+            }
+            document["uiIconPacks"] = iconObject
         }
         let data = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
         guard data.count <= self.maximumFileSize else { throw BackupError.fileTooLarge }
@@ -546,7 +561,7 @@ public enum ExteraSettingsBackup {
             throw BackupError.malformed
         }
         guard let document = object as? [String: Any],
-            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared"]),
+            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared", "uiIconPacks"]),
             document["format"] as? String == self.format,
             let rawVersion = document["version"],
             let values = document["settings"] as? [String: Any], !values.isEmpty else {
@@ -573,7 +588,14 @@ public enum ExteraSettingsBackup {
         } else {
             sharedPreferences = nil
         }
-        return ValidatedBackup(values: validated, sharedPreferences: sharedPreferences)
+        let iconPackBackupData: Data?
+        if let rawIconBackup = document["uiIconPacks"] {
+            guard let iconObject = rawIconBackup as? [String: Any] else { throw BackupError.invalidValue }
+            iconPackBackupData = try JSONSerialization.data(withJSONObject: iconObject, options: [.sortedKeys])
+        } else {
+            iconPackBackupData = nil
+        }
+        return ValidatedBackup(values: validated, sharedPreferences: sharedPreferences, iconPackBackupData: iconPackBackupData)
     }
 
     /// Apply only a previously validated document. Missing allowlisted settings retain their current values.

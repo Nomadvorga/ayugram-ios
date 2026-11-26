@@ -55,6 +55,12 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertIn("if updateDownloadSpeedBoost {", UI)
         self.assertIn("if updates.isEmpty {", UI)
 
+    def test_icon_pack_envelope_is_root_owned_and_atomic(self):
+        self.assertIn('"uiIconPacks"', BACKUP)
+        self.assertIn("iconPackBackupData", BACKUP)
+        for expected in ["exportBackup()", "prepareBackupRestore", "restoreBackup", "ExteraUIIconRendering.validate"]:
+            self.assertIn(expected, UI)
+
     def test_confirmed_transactions_outlive_controller(self):
         update = UI.split("private func applyShared", 1)[1].split("private func confirm(", 1)[0]
         self.assertIn("let completion = { [self] in", update)
@@ -101,7 +107,7 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertLess(update.index("self.cachedConfiguration = value"), update.index("self.store.setString"))
 
     def test_native_file_flow_and_confirmation(self):
-        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumFileSize + 1", "confirmReset()", "confirmImport(backup)", "ExteraSettingsBackup.apply(backup)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
+        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumFileSize + 1", "confirmReset()", "confirmImport(backup, iconPlan:", "ExteraSettingsBackup.apply(backup)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
             self.assertIn(expected, UI)
         reset = UI.split("private func confirmReset()", 1)[1].split("private func applyShared", 1)[0]
         self.assertLess(reset.index("self.confirm("), reset.index("ExteraSettingsBackup.reset()"))

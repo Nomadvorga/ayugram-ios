@@ -301,6 +301,8 @@ public enum ExteraPillExchangeRate {
         guard price.isFinite, price > 0 else { throw ExteraPillError.invalidNumber }
         let formatter = NumberFormatter()
         formatter.locale = locale; formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = price < 1 ? 6 : 2
         guard let text = formatter.string(from: NSNumber(value: price)) else { throw ExteraPillError.invalidNumber }
         return text + " " + target

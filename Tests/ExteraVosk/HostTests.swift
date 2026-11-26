@@ -133,31 +133,37 @@ private enum HostTests {
             bytes[0] ^= 1
             try bytes.write(to: destination)
         })
+        logStage("corruption check started")
         do { try await corrupt.install(language: "en", progress: { _ in }); preconditionFailure("Installed corruption") }
         catch { precondition(error as? VoskSpeechError == .integrityFailed) }
+        logStage("corruption check returned")
         precondition(!corrupt.catalogue()[0].isInstalled)
         let leftovers = try fm.contentsOfDirectory(atPath: temporary.appendingPathComponent("corrupt").path)
         precondition(leftovers.isEmpty)
         let cancelRoot = temporary.appendingPathComponent("cancel")
         let started = DispatchSemaphore(value: 0)
-        let resume = DispatchSemaphore(value: 0)
         let cancelStore = VoskModelStore(root: cancelRoot, models: [valid.model], validate: { _ in
             preconditionFailure("Loaded cancelled installation")
         }, download: { _, destination, _, _ in
-            // Deliberately emulate a transport completing after cancellation.
+            // Deliberately emulate a transport completing before cancellation is
+            // observed by the store. Keep the host projection cooperative: a
+            // blocking semaphore here can starve Swift's Linux task executor.
+            logStage("cancellation downloader entered")
             try fm.copyItem(at: URL(fileURLWithPath: valid.path), to: destination)
+            logStage("cancellation downloader copied")
             started.signal()
-            resume.wait()
+            try? await Task.sleep(nanoseconds: 50_000_000)
         })
+        logStage("cancellation check started")
         let operation = Task { try await cancelStore.install(language: "en", progress: { _ in }) }
-        await Task.detached { started.wait() }.value
+        while started.wait(timeout: .now()) == .timedOut { await Task.yield() }
         operation.cancel()
-        resume.signal()
         do { try await operation.value; preconditionFailure("Cancelled install succeeded") }
         catch {}
         precondition(!cancelStore.catalogue()[0].isInstalled)
         let cancelledLeftovers = try fm.contentsOfDirectory(atPath: cancelRoot.path)
         precondition(cancelledLeftovers.isEmpty)
+        logStage("cancellation check returned")
         logStage("cancellation rollback passed")
         let orphan = cancelRoot.appendingPathComponent("staging-" + UUID().uuidString)
         try fm.createDirectory(at: orphan, withIntermediateDirectories: false)

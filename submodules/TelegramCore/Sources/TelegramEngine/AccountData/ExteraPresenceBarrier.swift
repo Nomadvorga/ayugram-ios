@@ -62,7 +62,10 @@ func ayuTrackedPresence(network: Network, operation: Signal<Api.Bool, MTRpcError
         let barrier = presenceBarrier(network)
         barrier.begin()
         let once = Atomic<Bool>(value: false)
-        let finish: (Bool) -> Void = { notify in
+        // This closure is retained only for the lifetime of the in-flight signal. A
+        // strong capture avoids the Swift 6.4 weak-capture box bug for local
+        // closures that also capture the mutable `once` value.
+        let finish: (Bool) -> Void = { [network] notify in
             guard !once.swap(true) else { return }
             barrier.end()
             if notify {

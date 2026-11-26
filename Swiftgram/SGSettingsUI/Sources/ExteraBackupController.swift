@@ -119,7 +119,13 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
             let experimental = data.entries[ApplicationSpecificSharedDataKeys.experimentalUISettings]?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
             let temporaryFile = ExteraBackupTemporaryFile()
             do {
-                let data = try ExteraSettingsBackup.exportData(sharedPreferences: .init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: experimental.foldersTabAtBottom))
+                let iconBackup: Data?
+                if ExteraUIIconPackStore.shared.snapshot.all.isEmpty {
+                    iconBackup = nil
+                } else {
+                    iconBackup = try ExteraUIIconPackStore.shared.exportBackup()
+                }
+                let data = try ExteraSettingsBackup.exportData(sharedPreferences: .init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: experimental.foldersTabAtBottom), iconPackBackup: iconBackup)
                 try FileManager.default.createDirectory(at: temporaryFile.directory, withIntermediateDirectories: true)
                 let url = temporaryFile.directory.appendingPathComponent("exteragram-settings.json")
                 try data.write(to: url, options: [.atomic, .completeFileProtection])
@@ -175,7 +181,13 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
                     guard let self else { return }
                     self.busy = false
                     switch result {
-                    case let .success(backup): self.confirmImport(backup)
+                    case let .success(backup):
+                        do {
+                            let iconPlan = try self.iconPlan(backup)
+                            self.confirmImport(backup, iconPlan: iconPlan)
+                        } catch {
+                            self.showError(importing: true)
+                        }
                     case .failure: self.showError(importing: true)
                     }
                 }
@@ -217,11 +229,23 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
         return try result.get()
     }
 
-    private func confirmImport(_ backup: ExteraSettingsBackup.ValidatedBackup) {
+    private func iconPlan(_ backup: ExteraSettingsBackup.ValidatedBackup) throws -> ExteraUIIconPackBackupPlan? {
+        guard let data = backup.iconPackBackupData else { return nil }
+        let plan = try ExteraUIIconPackStore.prepareBackupRestore(data)
+        for preview in plan.packs {
+            try ExteraUIIconRendering.validate(preview)
+        }
+        return plan
+    }
+
+    private func confirmImport(_ backup: ExteraSettingsBackup.ValidatedBackup, iconPlan: ExteraUIIconPackBackupPlan?) {
         self.confirm(title: self.text("Extera.ImportSettings", "Import Settings"), message: self.text("Extera.ImportSettingsConfirm", "Replace the preferences included in this backup? Accounts, messages, and plugin preferences are kept."), destructive: false, actionTitle: self.text("Extera.ImportSettings", "Import Settings"), action: { [weak self] in
             guard let self else { return }
             do {
                 try ExteraSettingsBackup.apply(backup)
+                if let iconPlan {
+                    try ExteraUIIconPackStore.shared.restoreBackup(iconPlan, validate: ExteraUIIconRendering.validate)
+                }
                 self.applyShared(backup.sharedPreferences, reset: false, updateDownloadSpeedBoost: backup.includesDownloadSpeedBoost)
             } catch {
                 self.showError(importing: true)

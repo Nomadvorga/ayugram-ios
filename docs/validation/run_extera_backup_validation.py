@@ -34,6 +34,13 @@ def main():
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
     browser = (sources / "ExteraBrowserSettings.swift").read_text(encoding="utf-8")
     navigation = (sources / "ExteraNavigationSettings.swift").read_text(encoding="utf-8")
+    # Rule.pillConfiguration is part of the production validator. Compile the
+    # bounded portable Pill implementation itself instead of replacing it with
+    # a host-only model.
+    pill_sources = "\n".join((sources / name).read_text(encoding="utf-8") for name in [
+        "ExteraPillSettings.swift", "ExteraPillStrings.swift", "ExteraPillStackSettings.swift",
+        "ExteraPillParity.swift", "ExteraPillPortableSettings.swift",
+    ])
     declarations = [declaration(backup, marker) for marker in ["public enum BackupError", "fileprivate enum Value", "private enum Rule", "private static func rejectDuplicateKeys", "private struct JSONStructureValidator"]]
     cases = []
 
@@ -87,8 +94,16 @@ def main():
     rows = []
     for name, raw, accepted in cases:
         rows.append(f'            ({json.dumps(name)}, Data(base64Encoded: "{base64.b64encode(raw).decode()}")!, {str(accepted).lower()}),')
-    bindings = '\nlet APP_GROUP_IDENTIFIER = "extera-validator-" + UUID().uuidString\nlet ayuSettingsDidChangeNotification = Notification.Name("ExteraValidationChanged")\nenum SGSimpleSettings { static let shared = 0 }\n'
-    harness = "import CoreFoundation\nimport Foundation\n" + bindings + navigation + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n\nenum ExteraSettingsBackup {\n" + "\n\n".join(declarations)
+    bindings = '''
+let APP_GROUP_IDENTIFIER = "extera-validator-" + UUID().uuidString
+let ayuSettingsDidChangeNotification = Notification.Name("ExteraValidationChanged")
+final class AyuSettingsStore {
+    static let shared = AyuSettingsStore()
+    let userDefaults = UserDefaults(suiteName: APP_GROUP_IDENTIFIER)!
+}
+enum SGSimpleSettings { static let shared = 0 }
+'''
+    harness = "import CoreFoundation\nimport Foundation\n" + bindings + pill_sources + navigation + "\nenum ExteraBrowserSettings {\n" + declaration(browser, "public static func normalizedHost") + "\n}\n\nenum ExteraSettingsBackup {\n" + "\n\n".join(declarations)
     harness += """
 
     static func runTests() throws {

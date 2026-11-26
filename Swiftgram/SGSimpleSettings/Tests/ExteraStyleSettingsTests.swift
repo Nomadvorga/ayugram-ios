@@ -1,5 +1,10 @@
 import XCTest
+
+#if canImport(SGSimpleSettings)
 @testable import SGSimpleSettings
+#else
+let APP_GROUP_IDENTIFIER = "ExteraStyleSettingsTests." + UUID().uuidString
+#endif
 
 final class ExteraStyleSettingsTests: XCTestCase {
     func testSectionRadiusClampsWithoutOverflow() {
