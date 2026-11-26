@@ -4,6 +4,7 @@ import ContextUI
 import Display
 import Foundation
 import PeerInfoUI
+import PresentationDataUtils
 import SGSimpleSettings
 import SGStrings
 import SwiftSignalKit

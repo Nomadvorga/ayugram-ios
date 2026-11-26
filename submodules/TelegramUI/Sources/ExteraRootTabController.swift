@@ -170,16 +170,30 @@ final class ExteraRootTabController: TabBarControllerImpl {
                 stack.addArrangedSubview(divider)
             } else {
                 let button = ExteraMenuButton(frame: .zero)
-                button.setTitle("  " + item.title, for: .normal)
-                button.setTitleColor(self.menuTheme.list.itemPrimaryTextColor, for: .normal)
-                button.setTitleColor(self.menuTheme.list.itemSecondaryTextColor, for: .disabled)
-                button.setImage(ExteraUIIconProvider.current.navigationImage(id: item.id, fallback: UIImage(systemName: item.symbol)), for: .normal)
-                button.tintColor = self.menuTheme.list.itemAccentColor
-                button.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                button.titleLabel?.adjustsFontForContentSizeCategory = true
+                let primaryTextColor = self.menuTheme.list.itemPrimaryTextColor
+                let secondaryTextColor = self.menuTheme.list.itemSecondaryTextColor
+                let iconTintColor = self.menuTheme.list.itemAccentColor
+                var buttonConfiguration = UIButton.Configuration.plain()
+                buttonConfiguration.title = item.title
+                buttonConfiguration.image = ExteraUIIconProvider.current.navigationImage(id: item.id, fallback: UIImage(systemName: item.symbol))
+                buttonConfiguration.imagePlacement = .leading
+                buttonConfiguration.imagePadding = 8
+                buttonConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 10, bottom: 14, trailing: 10)
+                buttonConfiguration.baseForegroundColor = item.enabled ? primaryTextColor : secondaryTextColor
+                buttonConfiguration.imageColorTransformer = UIConfigurationColorTransformer { _ in iconTintColor }
+                buttonConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+                    var outgoing = incoming
+                    outgoing.font = UIFont.preferredFont(forTextStyle: .body)
+                    return outgoing
+                }
+                button.configuration = buttonConfiguration
+                button.configurationUpdateHandler = { button in
+                    guard var updatedConfiguration = button.configuration else { return }
+                    updatedConfiguration.baseForegroundColor = button.isEnabled ? primaryTextColor : secondaryTextColor
+                    button.configuration = updatedConfiguration
+                }
                 button.titleLabel?.numberOfLines = 0
                 button.contentHorizontalAlignment = .left
-                button.contentEdgeInsets = UIEdgeInsets(top: 14, left: 10, bottom: 14, right: 10)
                 button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
                 button.isEnabled = item.enabled
                 button.action = { [weak self] in

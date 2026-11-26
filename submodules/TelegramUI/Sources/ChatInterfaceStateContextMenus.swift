@@ -69,7 +69,8 @@ private func exteraAIInstantViewSummaryText(message: EngineRawMessage, isCopyPro
         if let webpage = media as? TelegramMediaWebpage,
            case let .Loaded(content) = webpage.content,
            let page = content.instantPage, page.isComplete {
-            let text = markdownStringFromInstantPage(page).trimmingCharacters(in: .whitespacesAndNewlines)
+            let parsedPage = page._parse()
+            let text = markdownStringFromInstantPage(parsedPage).trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty { return text }
         }
     }
