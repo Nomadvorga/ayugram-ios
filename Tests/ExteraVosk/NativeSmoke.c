@@ -33,6 +33,10 @@ int extera_vosk_native_smoke(const char *model_path, const char *pcm_path, const
     if (!report) {
         return 65;
     }
+    if (!write_event(report, "model_load_started")) {
+        fclose(report);
+        return 9;
+    }
 
     vosk_set_log_level(-1);
     VoskModel *model = vosk_model_new(model_path);

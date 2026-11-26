@@ -29,8 +29,10 @@
     NSURL *statusURL = [cacheURL URLByAppendingPathComponent:@"vosk-native-status.json"];
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSLog(@"Vosk native smoke started; model=%@ fixture=%@", modelURL.path, pcmURL.path);
         int result = extera_vosk_native_smoke(modelURL.fileSystemRepresentation, pcmURL.fileSystemRepresentation,
                                              nativeResultsURL.fileSystemRepresentation);
+        NSLog(@"Vosk native smoke returned with status %d", result);
         NSDictionary *status = @{
             @"exit_code": @(result),
             @"status": result == 0 ? @"passed" : @"failed",
@@ -43,6 +45,8 @@
         }
         if (error) {
             NSLog(@"Vosk smoke status write failed: %@", error);
+        } else {
+            NSLog(@"Vosk smoke status saved: %@", statusURL.path);
         }
     });
 

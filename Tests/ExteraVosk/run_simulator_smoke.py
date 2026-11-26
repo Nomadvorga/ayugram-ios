@@ -160,6 +160,30 @@ def launch_until_status(command, status_path, *, timeout):
         raise
 
 
+def collect_simulator_diagnostics(udid, output_dir, status_path=None, native_path=None):
+    for source, name in ((status_path, "native-status.partial.json"),
+                         (native_path, "native-results.partial.jsonl")):
+        if source is not None and source.is_file():
+            shutil.copyfile(source, output_dir / name)
+            print(f"Saved partial simulator evidence: {name}", flush=True)
+
+    command = [
+        "xcrun", "simctl", "spawn", udid, "log", "show", "--last", "5m", "--style", "compact",
+        "--predicate",
+        'process == "VoskNativeSmoke" OR process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash"',
+    ]
+    log_path = output_dir / "simulator-system.log"
+    print("$ " + " ".join(command), flush=True)
+    try:
+        with log_path.open("w", encoding="utf-8") as log:
+            result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, text=True,
+                                    check=False, timeout=90)
+        print(f"Saved simulator system log ({result.returncode}): {log_path}", flush=True)
+    except Exception as error:
+        log_path.write_text(f"Could not collect simulator system log: {error}\n", encoding="utf-8")
+        print(f"WARNING: could not collect simulator system log: {error}", flush=True)
+
+
 def download_verified(url, path, byte_count, expected_sha256):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file() and path.stat().st_size == byte_count and sha256_file(path) == expected_sha256:
@@ -414,6 +438,8 @@ def main():
     receipt_path = output_dir / "report.json"
     write_json(receipt_path, receipt)
     simulator_udid = None
+    status_path = None
+    native_path = None
     try:
         architecture = platform.machine()
         receipt["phase"] = "verified_inputs"
@@ -510,6 +536,10 @@ def main():
         raise
     finally:
         if simulator_udid:
+            try:
+                collect_simulator_diagnostics(simulator_udid, output_dir, status_path, native_path)
+            except Exception as error:
+                print(f"WARNING: simulator diagnostic collection failed: {error}", flush=True)
             for command in (["shutdown", simulator_udid], ["delete", simulator_udid]):
                 try:
                     run(["xcrun", "simctl", *command], timeout=90)
