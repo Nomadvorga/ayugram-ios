@@ -242,22 +242,11 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
         self.confirm(title: self.text("Extera.ImportSettings", "Import Settings"), message: self.text("Extera.ImportSettingsConfirm", "Replace the preferences included in this backup? Accounts, messages, and plugin preferences are kept."), destructive: false, actionTitle: self.text("Extera.ImportSettings", "Import Settings"), action: { [weak self] in
             guard let self else { return }
             do {
-                let previousSettings = try ExteraSettingsBackup.exportData()
-                try ExteraSettingsBackup.apply(bundle.settings)
-                do {
+                try ExteraSettingsBackup.apply(bundle.settings, commit: {
                     if let iconPlan {
                         try ExteraUIIconPackStore.shared.restoreBackup(iconPlan, validate: ExteraUIIconRendering.validate)
                     }
-                } catch {
-                    // Settings and the icon catalog are separate stores. If the
-                    // icon commit fails, compensate the settings write before
-                    // surfacing the import error; no fallible work follows a
-                    // successful icon publication.
-                    if let rollback = try? ExteraSettingsBackup.validate(data: previousSettings) {
-                        try? ExteraSettingsBackup.apply(rollback)
-                    }
-                    throw error
-                }
+                })
                 self.applyShared(bundle.settings.sharedPreferences, reset: false, updateDownloadSpeedBoost: bundle.settings.includesDownloadSpeedBoost)
             } catch {
                 self.showError(importing: true)

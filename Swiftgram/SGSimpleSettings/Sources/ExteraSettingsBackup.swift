@@ -16,6 +16,7 @@ public enum ExteraSettingsBackup {
         case unsupportedVersion
         case unknownSetting
         case invalidValue
+        case rollbackFailed(original: Error, rollback: Error)
     }
 
     /// Only the three shared Telegram preferences exposed by the exteraGram screen.
@@ -563,10 +564,9 @@ public enum ExteraSettingsBackup {
             "settings": settings.base64EncodedString(),
         ]
         if let iconPackBackup {
-            guard iconPackBackup.count <= self.maximumBundleFileSize,
-                  (try JSONSerialization.jsonObject(with: iconPackBackup) as? [String: Any]) != nil else {
-                throw BackupError.invalidValue
-            }
+            guard iconPackBackup.count <= ExteraUIIconPackStore.maxBackupBytes else { throw BackupError.invalidValue }
+            try self.rejectDuplicateKeys(iconPackBackup)
+            guard (try JSONSerialization.jsonObject(with: iconPackBackup) as? [String: Any]) != nil else { throw BackupError.invalidValue }
             document["uiIconPacks"] = iconPackBackup.base64EncodedString()
         }
         let data = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
@@ -586,7 +586,7 @@ public enum ExteraSettingsBackup {
             throw BackupError.malformed
         }
         guard let document = object as? [String: Any],
-            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared"]),
+            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared", "uiIconPacks"]),
             document["format"] as? String == self.format,
             let rawVersion = document["version"],
             let values = document["settings"] as? [String: Any], !values.isEmpty else {
@@ -649,34 +649,56 @@ public enum ExteraSettingsBackup {
               case let .integer(version) = try Rule.integer(1 ... Int(Int32.max)).validate(rawVersion),
               version == self.version,
               let encodedSettings = document["settings"] as? String,
+              encodedSettings.utf8.count <= ((self.maximumFileSize + 2) / 3) * 4,
               let settingsData = Data(base64Encoded: encodedSettings) else {
             throw BackupError.malformed
         }
         let iconPackBackupData: Data?
         if let rawIconBackup = document["uiIconPacks"] {
             guard let encodedIconBackup = rawIconBackup as? String,
+                  encodedIconBackup.utf8.count <= ((ExteraUIIconPackStore.maxBackupBytes + 2) / 3) * 4,
                   let iconData = Data(base64Encoded: encodedIconBackup),
-                  (try JSONSerialization.jsonObject(with: iconData) as? [String: Any]) != nil else {
-                throw BackupError.invalidValue
-            }
+                  iconData.count <= ExteraUIIconPackStore.maxBackupBytes else { throw BackupError.invalidValue }
+            try self.rejectDuplicateKeys(iconData)
+            guard (try JSONSerialization.jsonObject(with: iconData) as? [String: Any]) != nil else { throw BackupError.invalidValue }
             iconPackBackupData = iconData
         } else {
             iconPackBackupData = nil
         }
-        return ValidatedBundle(settings: try self.validate(data: settingsData), iconPackBackupData: iconPackBackupData)
+        let settings = try self.validate(data: settingsData)
+        guard settings.iconPackBackupData == nil else { throw BackupError.invalidValue }
+        return ValidatedBundle(settings: settings, iconPackBackupData: iconPackBackupData)
     }
 
     /// Apply only a previously validated document. Missing allowlisted settings retain their current values.
     /// All writes go through the original setters so cached values and extension mirrors stay coherent.
     /// AI flags are encoded together before any other write, so a persistence error leaves the import unapplied.
-    public static func apply(_ backup: ValidatedBackup) throws {
+    /// A failing external commit must leave its own store unchanged. Restore only
+    /// the affected settings if it fails, within the same settings notification batch.
+    public static func apply(_ backup: ValidatedBackup, commit: (() throws -> Void)? = nil) throws {
         precondition(Thread.isMainThread)
+        var previous: [String: Value] = [:]
+        if commit != nil {
+            for setting in self.settings where backup.values[setting.name] != nil {
+                previous[setting.name] = setting.read()
+            }
+        }
         var failure: Error?
         AyuSettingsStore.shared.performBatchUpdates {
+            var succeeded = false
             do {
                 try self.write(backup.values)
-                SGSimpleSettings.shared.synchronizeShared()
+                do {
+                    try commit?()
+                } catch {
+                    let original = error
+                    do { try self.write(previous) }
+                    catch { throw BackupError.rollbackFailed(original: original, rollback: error) }
+                    throw original
+                }
+                succeeded = true
             } catch { failure = error }
+            if succeeded { SGSimpleSettings.shared.synchronizeShared() }
         }
         if let failure { throw failure }
     }

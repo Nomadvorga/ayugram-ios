@@ -79,6 +79,8 @@ final class SGSimpleSettings {
     func synchronizeShared() { synchronizations += 1 }
 }
 
+enum ExteraUIIconPackStore { static let maxBackupBytes = 1024 * 1024 }
+
 func require(_ value: @autoclosure () -> Bool, _ message: String) {
     if !value() { fatalError(message) }
 }
@@ -87,6 +89,8 @@ func mustThrow(_ message: String, _ body: () throws -> Void) {
     do { try body() } catch { return }
     fatalError(message)
 }
+
+enum FixtureCommitError: Error { case expected }
 '''
     tests = r'''
 let store = AyuSettingsStore.shared
@@ -241,6 +245,50 @@ for (policy, value) in [("automatic", nil), ("enabled", true), ("disabled", fals
     let settings = exportedPolicy["settings"] as! [String: Any]
     require(settings["extera.ai.replaceTelegramSummaries"] as? String == policy, "summary automatic state lost in export")
 }
+
+// The outer bundle keeps large icon archives independent from the strict settings JSON limit,
+// while old version-1 settings files with an embedded icon envelope remain importable.
+let innerSettings = try ExteraSettingsBackup.exportData()
+let legacyObject = try JSONSerialization.jsonObject(with: innerSettings) as! [String: Any]
+var legacyWithIcons = legacyObject
+let iconObject: [String: Any] = ["schemaVersion": 1, "archives": [String: String](), "sha256": [String: String](), "enabled": [String](), "hidden": [String]()]
+legacyWithIcons["uiIconPacks"] = iconObject
+let legacyBundle = try ExteraSettingsBackup.validateBundle(data: JSONSerialization.data(withJSONObject: legacyWithIcons))
+require(legacyBundle.settings.iconPackBackupData != nil, "legacy icon envelope was not preserved")
+let iconPayload = try JSONSerialization.data(withJSONObject: iconObject)
+let outer = try JSONSerialization.data(withJSONObject: [
+    "format": ExteraSettingsBackup.bundleFormat,
+    "version": ExteraSettingsBackup.version,
+    "settings": innerSettings.base64EncodedString(),
+    "uiIconPacks": iconPayload.base64EncodedString()
+])
+let currentBundle = try ExteraSettingsBackup.validateBundle(data: outer)
+require(currentBundle.iconPackBackupData == iconPayload, "outer icon payload did not round-trip")
+var duplicateIconDocument = legacyObject
+duplicateIconDocument["uiIconPacks"] = iconObject
+let duplicateIconOuter = try JSONSerialization.data(withJSONObject: [
+    "format": ExteraSettingsBackup.bundleFormat,
+    "version": ExteraSettingsBackup.version,
+    "settings": try JSONSerialization.data(withJSONObject: duplicateIconDocument).base64EncodedString(),
+    "uiIconPacks": iconPayload.base64EncodedString()
+])
+mustThrow("bundle accepted two competing icon catalogs") { _ = try ExteraSettingsBackup.validateBundle(data: duplicateIconOuter) }
+
+// A secondary-store failure restores all affected allowlisted preferences before the batch exits.
+seed("{}")
+simple.fixture = false
+let commitInitial = ExteraAISettings.shared.configuration
+let commitSyncs = simple.synchronizations
+let commitNotifications = aiNotifications
+mustThrow("external commit failure was swallowed") {
+    try ExteraSettingsBackup.apply(document(["extera.fixture": true, "extera.ai.showEditor": false]), commit: {
+        throw FixtureCommitError.expected
+    })
+}
+require(!simple.fixture, "external commit failure left the ordinary setting changed")
+require(ExteraAISettings.shared.configuration == commitInitial, "external commit failure left the AI setting changed")
+require(simple.synchronizations == commitSyncs, "failed commit synchronized partial settings")
+require(aiNotifications == commitNotifications + 2, "failed commit did not publish apply and rollback cache changes")
 
 // A valid backup can fail to persist against an out-of-limits legacy configuration.
 // Both import and reset must fail before ordinary settings or shared synchronization change.

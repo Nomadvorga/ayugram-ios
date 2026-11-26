@@ -60,7 +60,7 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertIn('public static func exportBundle', BACKUP)
         self.assertIn('public static func validateBundle', BACKUP)
         self.assertIn("iconPackBackupData", BACKUP)
-        for expected in ["exportBackup()", "prepareBackupRestore", "restoreBackup", "ExteraUIIconRendering.validate", "previousSettings"]:
+        for expected in ["exportBackup()", "prepareBackupRestore", "restoreBackup", "ExteraUIIconRendering.validate", "commit:"]:
             self.assertIn(expected, UI)
 
     def test_confirmed_transactions_outlive_controller(self):
@@ -94,9 +94,9 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertNotIn("try?", BACKUP)
         write = BACKUP.split("private static func write(", 1)[1].split("private static func rejectDuplicateKeys", 1)[0]
         self.assertLess(write.index("try ExteraAISettings.shared.update"), write.index("setting.write?(value)"))
-        self.assertIn("public static func apply(_ backup: ValidatedBackup) throws", BACKUP)
+        self.assertIn("public static func apply(_ backup: ValidatedBackup, commit:", BACKUP)
         self.assertIn("public static func reset() throws", BACKUP)
-        self.assertIn("try ExteraSettingsBackup.apply(bundle.settings)", UI)
+        self.assertIn("try ExteraSettingsBackup.apply(bundle.settings, commit:", UI)
         self.assertIn("try ExteraSettingsBackup.reset()", UI)
 
     def test_ai_cache_publishes_only_valid_configuration(self):
@@ -109,7 +109,7 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertLess(update.index("self.cachedConfiguration = value"), update.index("self.store.setString"))
 
     def test_native_file_flow_and_confirmation(self):
-        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumBundleFileSize + 1", "confirmReset()", "confirmImport(bundle, iconPlan:", "ExteraSettingsBackup.apply(bundle.settings)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
+        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumBundleFileSize + 1", "confirmReset()", "confirmImport(bundle, iconPlan:", "ExteraSettingsBackup.apply(bundle.settings, commit:", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
             self.assertIn(expected, UI)
         reset = UI.split("private func confirmReset()", 1)[1].split("private func applyShared", 1)[0]
         self.assertLess(reset.index("self.confirm("), reset.index("ExteraSettingsBackup.reset()"))

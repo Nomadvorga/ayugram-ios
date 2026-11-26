@@ -913,6 +913,7 @@ public final class ContextControllerPreviewReaction {
 
 public protocol ContextControllerActionsStackNode: ASDisplayNode {
     typealias Presentation = ContextControllerActionsStackNodePresentation
+    var exteraStyleIsMessageMenu: Bool { get set }
     
     var topReactionItems: ContextControllerReactionItems? { get }
     var topPreviewReaction: ContextControllerPreviewReaction? { get }

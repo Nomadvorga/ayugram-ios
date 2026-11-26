@@ -1473,7 +1473,7 @@ private final class ItemSelectionRecognizer: UIGestureRecognizer {
 }
 
 public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, ContextControllerActionsStackNode {
-    var exteraStyleIsMessageMenu = false {
+    public var exteraStyleIsMessageMenu = false {
         didSet { self.navigationContainer.contentContainer.exteraStyleIsMessageMenu = self.exteraStyleIsMessageMenu }
     }
     public var usesClearGlass: Bool = false
