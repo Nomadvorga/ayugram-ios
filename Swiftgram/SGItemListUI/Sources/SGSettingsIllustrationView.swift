@@ -286,7 +286,7 @@ final class SGSettingsIllustrationView: UIView {
                 place(self.forwardCount, desiredWidth: ceil(self.forwardCount.intrinsicContentSize.width))
                 place(self.forwardIcon, desiredWidth: 12.0)
             }
-        case .stickerShapes: break
+        case .stickerShapes, .folderTabs: break
         }
         CATransaction.commit()
     }

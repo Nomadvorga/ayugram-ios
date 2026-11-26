@@ -45,7 +45,7 @@ private final class SGFolderTabsPreviewView: UIView {
             label.accessibilityLabel = tab.title
         }
         self.scrollView.accessibilityLabel = configuration.tabs.map(\.title).joined(separator: ", ")
-        self.separator.backgroundColor = theme.list.itemSeparatorColor
+        self.separator.backgroundColor = theme.list.itemBlocksSeparatorColor
         self.setNeedsLayout()
     }
 
