@@ -110,6 +110,56 @@ def stream_command(command, log_path, *, timeout):
         raise SmokeFailure(f"Xcode build exited {return_code}; last output:\n{tail}")
 
 
+def launch_until_status(command, status_path, *, timeout):
+    """Launch without letting a slow CoreSimulator launch service hide app progress.
+
+    On a fresh iOS 27 simulator, ``simctl launch`` can remain blocked while the
+    app is already running (the same service is also slow during install and
+    container lookup).  The smoke's durable status file is a better completion
+    signal than the launch client's return.  Stop only the client after the
+    app has reported, never the application itself.
+    """
+    command = [str(part) for part in command]
+    print("$ " + " ".join(command), flush=True)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    deadline = time.monotonic() + timeout
+    status_seen = False
+    try:
+        while True:
+            if status_path.is_file():
+                status_seen = True
+                if process.poll() is None:
+                    process.terminate()
+                break
+            return_code = process.poll()
+            if return_code is not None:
+                break
+            if time.monotonic() >= deadline:
+                process.kill()
+                process.wait()
+                raise SmokeFailure(
+                    f"simctl launch did not return and the app produced no status within {timeout} seconds"
+                )
+            time.sleep(0.5)
+        try:
+            output, _ = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            output, _ = process.communicate()
+        if output:
+            print(output, end="" if output.endswith("\n") else "\n", flush=True)
+        if process.returncode and not status_seen:
+            raise SmokeFailure(
+                f"Command exited {process.returncode}: {' '.join(command)}\n{output[-12000:]}"
+            )
+        return output
+    except BaseException:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        raise
+
+
 def download_verified(url, path, byte_count, expected_sha256):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file() and path.stat().st_size == byte_count and sha256_file(path) == expected_sha256:
@@ -409,6 +459,7 @@ def main():
             "runtime_version": ".".join(map(str, version)),
             "udid": simulator_udid,
         }
+        write_json(receipt_path, receipt)
 
         receipt["phase"] = "simulator_boot"
         run(["xcrun", "simctl", "boot", simulator_udid])
@@ -420,7 +471,12 @@ def main():
         native_path = cache_container / "vosk-native-results.jsonl"
 
         receipt["phase"] = "native_recognition"
-        launch_output = run(["xcrun", "simctl", "launch", simulator_udid, BUNDLE_ID], timeout=60)
+        write_json(receipt_path, receipt)
+        launch_output = launch_until_status(
+            ["xcrun", "simctl", "launch", simulator_udid, BUNDLE_ID],
+            status_path,
+            timeout=300,
+        )
         receipt["simulator"]["launch_output"] = launch_output.strip()
         write_json(receipt_path, receipt)
         deadline = time.monotonic() + 240
