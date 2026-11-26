@@ -53,7 +53,9 @@ def select_device(runtimes, devices, minimum):
                 if match:
                     generation = int(match.group(1))
                     suffix = name[match.end():].strip()
-                    model_rank = 2 if not suffix else 1 if suffix.startswith("Pro") else 0
+                    # When the base model is unavailable, prefer the smaller Pro model
+                    # over Pro Max. The latter can be much slower to boot in hosted CI.
+                    model_rank = {"": 4, "Pro": 3, "Pro Max": 2, "Plus": 1, "Air": 0}.get(suffix, 0)
                     return generation, model_rank, name
                 return 0, 0, name
 

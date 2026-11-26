@@ -120,6 +120,7 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
       - name: Build
+        id: build
         timeout-minutes: 320
         run: |
           set -euo pipefail
@@ -175,11 +176,11 @@ jobs:
           retention-days: 14
 
       - name: Upload IPA
-        if: success() || (failure() && contains(env.CONFIGURATION, '_sim_arm64') && hashFiles('build/artifacts/*.ipa') != '')
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: AyuGram-iOS-${{ env.CONFIGURATION }}-${{ github.run_number }}
-          path: build/artifacts/*.ipa
+          path: build/artifacts/AyuGram.ipa
           compression-level: 0
           retention-days: 14
 

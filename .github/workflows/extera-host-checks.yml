@@ -16,6 +16,8 @@ on:
       - 'Swiftgram/SGSettingsUI/Sources/Extera*.swift'
       - 'tools/check_extera_localizations.py'
       - 'tools/run_extera_xctests.py'
+      - 'tools/extera_simulator_smoke.py'
+      - 'tools/test_extera_simulator_smoke.py'
       - 'submodules/TelegramUI/Sources/ExteraMath*.swift'
       - 'submodules/TelegramUI/Sources/ExteraLyrics*Parser.swift'
       - 'submodules/GalleryUI/Sources/ExteraImageSearch*.swift'
@@ -54,6 +56,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: false
+      - name: Simulator smoke device selection
+        run: python3 -m unittest discover -s tools -p 'test_extera_simulator_smoke.py' -v
       - name: Calculator and conversions
         run: |
           set -euo pipefail
