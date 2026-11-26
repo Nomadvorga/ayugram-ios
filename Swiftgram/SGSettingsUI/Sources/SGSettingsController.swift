@@ -424,8 +424,48 @@ private func appendSettingsGroup(_ entries: inout [SGControllerEntry], id: SGIte
     }
 }
 
-private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, translationSettings: TranslationSettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String, category: SGSettingsCategory?) -> [SGControllerEntry] {
-    let allEntries = SGControllerAllEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle)
+private func folderTabsPreviewConfiguration(filters: [ChatListFilter], strings: PresentationStrings) -> SGFolderTabsPreviewConfiguration {
+    let settings = SGSimpleSettings.shared
+    let tabs = filters.map { filter -> SGFolderTabPreviewItem in
+        switch filter {
+        case .allChats:
+            let title: String
+            switch settings.allChatsTitleLengthOverride {
+            case SGSimpleSettings.AllChatsTitleLengthOverride.short.rawValue:
+                title = strings.ChatList_Tabs_All
+            case SGSimpleSettings.AllChatsTitleLengthOverride.long.rawValue:
+                title = strings.ChatList_Tabs_AllChats
+            default:
+                title = sgUseShortAllChatsTitle(false) ? strings.ChatList_Tabs_All : strings.ChatList_Tabs_AllChats
+            }
+            return SGFolderTabPreviewItem(title: title)
+        case let .filter(_, title, _, _):
+            let iconRanges = title.entities.compactMap { entity -> Range<Int>? in
+                if case .CustomEmoji = entity.type,
+                   entity.range.lowerBound >= 0,
+                   entity.range.upperBound <= (title.text as NSString).length,
+                   !entity.range.isEmpty {
+                    return entity.range
+                }
+                return nil
+            }
+            return SGFolderTabPreviewItem(title: title.text, iconRanges: iconRanges)
+        }
+    }
+    let titleStyle: SGFolderTabsPreviewConfiguration.TitleStyle
+    switch ExteraSettings.shared.tabTitleStyle {
+    case .textOnly:
+        titleStyle = .textOnly
+    case .iconsOnly:
+        titleStyle = .iconsOnly
+    case .textWithIcons:
+        titleStyle = .textWithIcons
+    }
+    return SGFolderTabsPreviewConfiguration(tabs: tabs, titleStyle: titleStyle, compact: settings.compactFolderNames)
+}
+
+private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, translationSettings: TranslationSettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String, chatListFilters: [ChatListFilter], category: SGSettingsCategory?) -> [SGControllerEntry] {
+    let allEntries = SGControllerAllEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, chatListFilters: chatListFilters)
     if let category {
         return allEntries.filter { entry in
             return category.sections.contains(where: { $0.rawValue == entry.section })
@@ -450,7 +490,7 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     return entries
 }
 
-private func SGControllerAllEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, translationSettings: TranslationSettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String) -> [SGControllerEntry] {
+private func SGControllerAllEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, translationSettings: TranslationSettings, nameColors: PeerNameColors, state: SGSettingsControllerState, previewTitle: String, chatListFilters: [ChatListFilter]) -> [SGControllerEntry] {
     let lang = presentationData.strings.baseLanguageCode
     let strings = presentationData.strings
     let settings = SGSimpleSettings.shared
@@ -537,6 +577,8 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.notice(id: id.count, section: .tabs, text: i18n("Settings.Tabs.WideTabBar.Notice", lang)))
 
     entries.append(.header(id: id.count, section: .folders, text: strings.Settings_ChatFolders, badge: nil))
+    entries.append(.settingsPreview(id: id.count, section: .folders, kind: .folderTabs(folderTabsPreviewConfiguration(filters: chatListFilters, strings: strings)), sliderSetting: nil, selectionSetting: nil))
+    entries.append(.notice(id: id.count, section: .folders, text: i18n("Settings.Folders.IconSyncInfo", lang)))
     entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabTitleStyle, text: i18n("Extera.TabTitleStyle", lang), value: tabTitleStyleTitle(ExteraSettings.shared.tabTitleStyle, lang: lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .folders, settingName: .tabCounterMode, text: i18n("Extera.TabCounter", lang), value: tabCounterModeTitle(ExteraSettings.shared.tabCounterMode, lang: lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .folders, settingName: .hideAllChats, value: settings.allChatsHidden, text: i18n("Extera.HideAllChats", lang, strings.ChatList_Tabs_AllChats), enabled: true))
@@ -1558,10 +1600,11 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         context.engine.accountData.observeAvailableColorOptions(scope: .replies),
         context.engine.accountData.observeAvailableColorOptions(scope: .profile),
         context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
-        exteraSettingsChanges()
+        exteraSettingsChanges(),
+        context.engine.peers.updatedChatListFilters()
     )
     |> deliverOnMainQueue
-    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors, accountPeer, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors, accountPeer, _, chatListFilters -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let callListSettings: CallListSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.callListSettings]?.get(CallListSettings.self) ?? CallListSettings.defaultSettings
         let experimentalUISettings: ExperimentalUISettings = sharedData.entries[ApplicationSpecificSharedDataKeys.experimentalUISettings]?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
         let translationSettings: TranslationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.translationSettings]?.get(TranslationSettings.self) ?? TranslationSettings.defaultSettings
@@ -1583,7 +1626,7 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         }
         let previewTitle = ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title, username: username)
         let appearance = exteraSettingsAppearance()
-        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, category: category).map {
+        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, chatListFilters: chatListFilters, category: category).map {
             SGStyledItemListEntry(entry: $0, appearance: appearance)
         }
         let title = category.flatMap { i18n($0.titleKey, presentationData.strings.baseLanguageCode) } ?? "exteraGram"

@@ -5,6 +5,7 @@ import TelegramPresentationData
 /// A labelled scale with discrete stops, rather than a continuous slider or a popup selector.
 final class SGDiscreteSelectorControl: UIControl {
     private let trackLayer = CAShapeLayer()
+    private let activeLayer = CAShapeLayer()
     private let stopsLayer = CAShapeLayer()
     private let markerGapLayer = CAShapeLayer()
     private let markerLayer = CAShapeLayer()
@@ -17,6 +18,7 @@ final class SGDiscreteSelectorControl: UIControl {
     private var dragging = false
     private var cancelledForScroll = false
     private var trackY: CGFloat = 51.0
+    private var pendingSelectionAnimationFrom: Int?
     private(set) var selectedIndex = 0
     var valueChanged: ((Int) -> Void)?
 
@@ -24,12 +26,14 @@ final class SGDiscreteSelectorControl: UIControl {
         super.init(frame: frame)
         self.isAccessibilityElement = true
         self.accessibilityTraits = .adjustable
-        for layer in [self.trackLayer, self.stopsLayer, self.markerGapLayer, self.markerLayer] {
+        for layer in [self.trackLayer, self.activeLayer, self.stopsLayer, self.markerGapLayer, self.markerLayer] {
             self.layer.addSublayer(layer)
         }
-        self.trackLayer.lineWidth = 8.0
-        self.trackLayer.lineCap = .round
-        self.trackLayer.fillColor = UIColor.clear.cgColor
+        for layer in [self.trackLayer, self.activeLayer] {
+            layer.lineWidth = 8.0
+            layer.lineCap = .round
+            layer.fillColor = UIColor.clear.cgColor
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -52,9 +56,15 @@ final class SGDiscreteSelectorControl: UIControl {
         return Self.metrics(options: options, width: width, baseSize: baseSize).height
     }
 
+    static func progressFraction(index: Int, count: Int) -> CGFloat {
+        guard count > 1 else { return 0.0 }
+        return CGFloat(max(0, min(count - 1, index))) / CGFloat(count - 1)
+    }
+
     /// Applying model state never emits a callback and never changes this control's frame.
     func update(theme: PresentationTheme, visualStyle: SGItemListVisualStyle, baseSize: CGFloat, value: Int, options: [String], enabled: Bool) {
         let optionsChanged = self.options != options
+        let previousIndex = self.selectedIndex
         self.options = options
         self.theme = theme
         self.visualStyle = visualStyle
@@ -62,6 +72,11 @@ final class SGDiscreteSelectorControl: UIControl {
         // A signal round-trip must not rewind a finger already dragging over the next stop.
         if optionsChanged || !self.isTracking || !enabled {
             self.selectedIndex = max(0, min(max(0, options.count - 1), value))
+            if previousIndex != self.selectedIndex {
+                self.pendingSelectionAnimationFrom = !optionsChanged && !self.dragging && !UIAccessibility.isReduceMotionEnabled ? previousIndex : nil
+            } else if optionsChanged {
+                self.pendingSelectionAnimationFrom = nil
+            }
         }
         while self.labels.count > options.count {
             self.labels.removeLast().removeFromSuperview()
@@ -120,6 +135,12 @@ final class SGDiscreteSelectorControl: UIControl {
             track.addLine(to: CGPoint(x: endX, y: metrics.trackY))
         }
         let selectedX = stopX(self.selectedIndex)
+        let selectedFraction = Self.progressFraction(index: self.selectedIndex, count: self.options.count)
+        let previousIndex = self.pendingSelectionAnimationFrom.map { max(0, min(max(0, self.options.count - 1), $0)) }
+        let previousX = previousIndex.map(stopX)
+        let activePath = track.cgPath
+        let markerPath = UIBezierPath(roundedRect: CGRect(x: selectedX - 1.75, y: metrics.trackY - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+        let markerGapPath = UIBezierPath(roundedRect: CGRect(x: selectedX - 6.0, y: metrics.trackY - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
         let stops = UIBezierPath()
         for index in self.options.indices where index != self.selectedIndex {
             stops.append(UIBezierPath(ovalIn: CGRect(x: stopX(index) - 2.0, y: metrics.trackY - 2.0, width: 4.0, height: 4.0)))
@@ -128,15 +149,43 @@ final class SGDiscreteSelectorControl: UIControl {
         CATransaction.setDisableActions(true)
         self.trackLayer.path = track.cgPath
         self.trackLayer.strokeColor = theme.list.itemSecondaryTextColor.withAlphaComponent(0.65).cgColor
+        self.activeLayer.path = activePath
+        self.activeLayer.strokeColor = theme.list.itemAccentColor.cgColor
+        self.activeLayer.strokeEnd = selectedFraction
         self.stopsLayer.path = stops.cgPath
         self.stopsLayer.fillColor = self.visualStyle.cardColor(theme: theme).withAlphaComponent(1.0).cgColor
-        self.markerGapLayer.path = UIBezierPath(roundedRect: CGRect(x: selectedX - 6.0, y: metrics.trackY - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
+        self.markerGapLayer.path = markerGapPath
         self.markerGapLayer.fillColor = self.visualStyle.cardColor(theme: theme).withAlphaComponent(1.0).cgColor
-        self.markerLayer.path = UIBezierPath(roundedRect: CGRect(x: selectedX - 1.75, y: metrics.trackY - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+        self.markerLayer.path = markerPath
         self.markerLayer.fillColor = theme.list.itemAccentColor.cgColor
         self.markerLayer.isHidden = self.options.isEmpty
         self.markerGapLayer.isHidden = self.options.isEmpty
+        if let previousIndex, let previousX, previousIndex != self.selectedIndex, !UIAccessibility.isReduceMotionEnabled {
+            let progressAnimation = CABasicAnimation(keyPath: "strokeEnd")
+            progressAnimation.fromValue = self.activeLayer.presentation()?.strokeEnd ?? Self.progressFraction(index: previousIndex, count: self.options.count)
+            progressAnimation.toValue = selectedFraction
+            progressAnimation.duration = 0.22
+            progressAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.activeLayer.add(progressAnimation, forKey: "selectorProgress")
+
+            let previousMarkerPath = UIBezierPath(roundedRect: CGRect(x: previousX - 1.75, y: metrics.trackY - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+            let markerAnimation = CABasicAnimation(keyPath: "path")
+            markerAnimation.fromValue = self.markerLayer.presentation()?.path ?? previousMarkerPath
+            markerAnimation.toValue = markerPath
+            markerAnimation.duration = 0.22
+            markerAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.markerLayer.add(markerAnimation, forKey: "selectorMarker")
+
+            let previousGapPath = UIBezierPath(roundedRect: CGRect(x: previousX - 6.0, y: metrics.trackY - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
+            let gapAnimation = CABasicAnimation(keyPath: "path")
+            gapAnimation.fromValue = self.markerGapLayer.presentation()?.path ?? previousGapPath
+            gapAnimation.toValue = markerGapPath
+            gapAnimation.duration = 0.22
+            gapAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.markerGapLayer.add(gapAnimation, forKey: "selectorGap")
+        }
         CATransaction.commit()
+        self.pendingSelectionAnimationFrom = nil
     }
 
     private func index(at point: CGPoint) -> Int {
@@ -156,7 +205,9 @@ final class SGDiscreteSelectorControl: UIControl {
 
     private func select(_ index: Int) {
         guard self.isEnabled, self.options.indices.contains(index), index != self.selectedIndex else { return }
+        let previousIndex = self.selectedIndex
         self.selectedIndex = index
+        self.pendingSelectionAnimationFrom = !self.dragging && !UIAccessibility.isReduceMotionEnabled ? previousIndex : nil
         self.updateAccessibility()
         self.setNeedsLayout()
         self.valueChanged?(index)

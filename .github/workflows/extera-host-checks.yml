@@ -7,6 +7,8 @@ on:
       - 'MODULE.bazel'
       - 'Swiftgram/SGSimpleSettings/**'
       - 'Swiftgram/SGSettingsUI/BUILD'
+      - 'Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift'
+      - 'Swiftgram/SGItemListUI/**'
       - 'Swiftgram/SGMath/**'
       - 'Swiftgram/SGItemListUI/Sources/SliderPercentageItem.swift'
       - 'Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings'
@@ -32,6 +34,11 @@ on:
       - 'submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m'
       - 'submodules/FFMpegBinding/Sources/FFMpegSWResample.m'
       - 'submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/**'
+      - 'submodules/ChatListUI/Sources/Node/ChatListItem.swift'
+      - 'submodules/Display/Source/NavigationBackgroundView.swift'
+      - 'submodules/Display/Tests/NavigationBackgroundFallbackTests.swift'
+      - 'submodules/TelegramUI/Components/GlassBackgroundComponent/Sources/GlassBackgroundComponent.swift'
+      - 'submodules/TelegramUI/Components/NavigationBarComponent/Tests/NavigationBarComponentViewTests.swift'
       - 'Tests/Extera*/**'
       - 'docs/validation/**'
       - '.github/workflows/extera-host-checks.yml'
@@ -86,6 +93,14 @@ jobs:
           python3 tools/run_extera_xctests.py --warnings-as-errors \
             Swiftgram/SGSimpleSettings/Sources/ExteraZalgoFilter.swift \
             Tests/ExteraZalgo/ExteraZalgoFilterTests.swift
+      - name: Sender mini-avatar policy and wiring
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift \
+            Tests/ExteraSenderMiniAvatars/ExteraSenderMiniAvatarPolicyTests.swift
+          python3 Tests/ExteraSenderMiniAvatars/verify_sender_mini_avatars.py
       - name: Durable explicit read queue
         if: ${{ !cancelled() }}
         run: |

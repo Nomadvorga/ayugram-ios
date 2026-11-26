@@ -102,6 +102,16 @@ final class NavigationBarComponentViewTests: XCTestCase {
         XCTAssertEqual(navigationBarGlassTintColor(.generic, theme: self.makeTintedTheme(.orange, glassStyle: .clear)), GlassBackgroundView.TintColor(kind: .custom(style: .clear, color: .orange)))
     }
 
+    func test_staticGlassFallbackKeepsCustomAccentTint() {
+        let accent = GlassBackgroundView.TintColor(kind: .custom(style: .default, color: .systemBlue))
+        XCTAssertEqual(accent.fallbackColor(isDark: false), .systemBlue)
+        XCTAssertEqual(accent.fallbackColor(isDark: true), .systemBlue)
+
+        let transparent = GlassBackgroundView.TintColor(kind: .custom(style: .default, color: .clear))
+        XCTAssertEqual(transparent.fallbackColor(isDark: false), UIColor(white: 0.96, alpha: 1.0))
+        XCTAssertEqual(GlassBackgroundView.TintColor(kind: .panel).fallbackColor(isDark: true), UIColor(white: 0.12, alpha: 1.0))
+    }
+
     // The profile's header steps its glass colour while its buttons stay: the kept capsule takes the new glass, and a
     // colour change alone is not an item change (no in-place animation, no pulse).
     func test_glassTintChange_retintsTheKeptCapsule_withoutAnInPlaceChange() {
@@ -1813,4 +1823,3 @@ func navigationBarTestGlassEffectView(content: UIView, container: UIView) -> UIV
     }
     return nil
 }
-

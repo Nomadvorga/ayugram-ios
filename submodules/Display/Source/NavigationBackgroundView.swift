@@ -5,6 +5,19 @@ import SGSimpleSettings
 
 private var sharedIsReduceTransparencyEnabled: Bool { return UIAccessibility.isReduceTransparencyEnabled }
 
+func navigationBackgroundFallbackColor(color: UIColor, allowsBlur: Bool, reduceTransparency: Bool, forceThemeBlur: Bool, enableBlur: Bool) -> UIColor {
+    if reduceTransparency {
+        return color.withAlphaComponent(1.0)
+    }
+    guard allowsBlur else {
+        // Keep the surface's intended tint when energy policy disables the effect. Promoting a
+        // translucent white tint to an opaque fill made white profile icons disappear on it.
+        return color
+    }
+    let forcedTint = forceThemeBlur && enableBlur && color.cgColor.alpha >= 0.95
+    return forcedTint ? color.withAlphaComponent(0.85) : color
+}
+
 public final class NavigationBackgroundNode: ASDisplayNode {
     /// Style intent is separate from the caller's native enableBlur ceiling.
     public var exteraStyleAllowsBlur = true {
@@ -144,13 +157,7 @@ public final class NavigationBackgroundNode: ASDisplayNode {
         self.lastForceKeepBlur = forceKeepBlur
         self.exteraForceThemeBlur = forceThemeBlur
 
-        if sharedIsReduceTransparencyEnabled || !blurAllowed {
-            transition.updateBackgroundColor(node: self.backgroundNode, color: self._color.withAlphaComponent(1.0))
-        } else {
-            // Keep theme hue, expose a forced backdrop only on natively eligible opaque surfaces.
-            let forcedTint = forceThemeBlur && effectiveEnableBlur && self._color.alpha >= 0.95
-            transition.updateBackgroundColor(node: self.backgroundNode, color: forcedTint ? self._color.withAlphaComponent(0.85) : self._color)
-        }
+        transition.updateBackgroundColor(node: self.backgroundNode, color: navigationBackgroundFallbackColor(color: self._color, allowsBlur: blurAllowed, reduceTransparency: sharedIsReduceTransparencyEnabled, forceThemeBlur: forceThemeBlur, enableBlur: effectiveEnableBlur))
 
         self.updateBackgroundBlur(forceKeepBlur: forceKeepBlur)
     }
@@ -313,12 +320,7 @@ open class BlurredBackgroundView: UIView {
         self.lastForceKeepBlur = forceKeepBlur
         self.exteraForceThemeBlur = forceThemeBlur
 
-        if sharedIsReduceTransparencyEnabled || !blurAllowed {
-            transition.updateBackgroundColor(layer: self.backgroundView.layer, color: color.withAlphaComponent(1.0))
-        } else {
-            let forcedTint = forceThemeBlur && effectiveEnableBlur && color.alpha >= 0.95
-            transition.updateBackgroundColor(layer: self.backgroundView.layer, color: forcedTint ? color.withAlphaComponent(0.85) : color)
-        }
+        transition.updateBackgroundColor(layer: self.backgroundView.layer, color: navigationBackgroundFallbackColor(color: color, allowsBlur: blurAllowed, reduceTransparency: sharedIsReduceTransparencyEnabled, forceThemeBlur: forceThemeBlur, enableBlur: effectiveEnableBlur))
 
         self.updateBackgroundBlur(forceKeepBlur: forceKeepBlur)
     }

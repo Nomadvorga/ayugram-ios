@@ -18,6 +18,7 @@ final class SGItemListRangeControl: UIControl {
     private var start = CGPoint.zero
     private var dragging = false
     private var cancelledForScroll = false
+    private var pendingTransitionFromValue: Int32?
     var updated: ((Int32) -> Void)?
 
     override init(frame: CGRect) {
@@ -47,8 +48,13 @@ final class SGItemListRangeControl: UIControl {
 
     func update(configuration: SGItemListRangeConfiguration, interactionIdentity: AnyHashable?, theme: PresentationTheme, visualStyle: SGItemListVisualStyle, baseSize: CGFloat, enabled: Bool) {
         let rangeChanged = self.interactionIdentity != interactionIdentity || self.configuration?.minimum != configuration.minimum || self.configuration?.maximum != configuration.maximum || self.configuration?.step != configuration.step || self.configuration?.title != configuration.title
+        let previousValue = self.value
+        let hadConfiguration = self.configuration != nil
         if rangeChanged || !enabled { self.cancelTracking(with: nil) }
         if rangeChanged || !self.isTracking || !enabled { self.value = configuration.normalized(Int64(configuration.value)) }
+        if previousValue != self.value {
+            self.pendingTransitionFromValue = hadConfiguration && !rangeChanged && !self.dragging && !UIAccessibility.isReduceMotionEnabled ? previousValue : nil
+        }
         self.configuration = configuration
         self.interactionIdentity = interactionIdentity
         self.baseSize = baseSize
@@ -89,30 +95,57 @@ final class SGItemListRangeControl: UIControl {
         }
         let y = 16.0 + labelHeight + 18.0
         let inset = min(6.0, width / 2.0)
-        let fraction = configuration.lower == configuration.upper ? 0.0 : CGFloat(Int64(self.value) - configuration.lower) / CGFloat(configuration.upper - configuration.lower)
+        let fraction = configuration.fraction(value: self.value)
         let x = inset + max(0.0, width - inset * 2.0) * fraction
         let track = UIBezierPath()
         track.move(to: CGPoint(x: inset, y: y))
         track.addLine(to: CGPoint(x: width - inset, y: y))
-        let active = UIBezierPath()
-        if fraction > 0.0 {
-            active.move(to: CGPoint(x: inset, y: y))
-            active.addLine(to: CGPoint(x: x, y: y))
-        }
+        let previousFraction = self.pendingTransitionFromValue.map { configuration.fraction(value: $0) }
+        let previousX = previousFraction.map { inset + max(0.0, width - inset * 2.0) * $0 }
+        let markerPath = UIBezierPath(roundedRect: CGRect(x: x - 1.75, y: y - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+        let gapPath = UIBezierPath(roundedRect: CGRect(x: x - 6.0, y: y - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.track.path = track.cgPath
-        self.active.path = active.cgPath
-        self.gap.path = UIBezierPath(roundedRect: CGRect(x: x - 6.0, y: y - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
-        self.marker.path = UIBezierPath(roundedRect: CGRect(x: x - 1.75, y: y - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+        self.active.path = track.cgPath
+        self.active.strokeEnd = fraction
+        self.gap.path = gapPath
+        self.marker.path = markerPath
+        if let previousFraction, let previousX, previousFraction != fraction {
+            let progressAnimation = CABasicAnimation(keyPath: "strokeEnd")
+            progressAnimation.fromValue = self.active.presentation()?.strokeEnd ?? previousFraction
+            progressAnimation.toValue = fraction
+            progressAnimation.duration = 0.22
+            progressAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.active.add(progressAnimation, forKey: "rangeProgress")
+
+            let previousMarkerPath = UIBezierPath(roundedRect: CGRect(x: previousX - 1.75, y: y - 13.0, width: 3.5, height: 26.0), cornerRadius: 1.75).cgPath
+            let markerAnimation = CABasicAnimation(keyPath: "path")
+            markerAnimation.fromValue = self.marker.presentation()?.path ?? previousMarkerPath
+            markerAnimation.toValue = markerPath
+            markerAnimation.duration = 0.22
+            markerAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.marker.add(markerAnimation, forKey: "rangeMarker")
+
+            let previousGapPath = UIBezierPath(roundedRect: CGRect(x: previousX - 6.0, y: y - 7.0, width: 12.0, height: 14.0), cornerRadius: 3.0).cgPath
+            let gapAnimation = CABasicAnimation(keyPath: "path")
+            gapAnimation.fromValue = self.gap.presentation()?.path ?? previousGapPath
+            gapAnimation.toValue = gapPath
+            gapAnimation.duration = 0.22
+            gapAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.gap.add(gapAnimation, forKey: "rangeGap")
+        }
         CATransaction.commit()
+        self.pendingTransitionFromValue = nil
     }
 
     private func select(_ value: Int64) {
         guard self.isEnabled, let configuration = self.configuration else { return }
         let value = configuration.normalized(value)
         guard value != self.value else { return }
+        let previousValue = self.value
         self.value = value
+        self.pendingTransitionFromValue = !self.dragging && !UIAccessibility.isReduceMotionEnabled ? previousValue : nil
         self.refreshValue()
         self.updated?(value)
         self.sendActions(for: .valueChanged)

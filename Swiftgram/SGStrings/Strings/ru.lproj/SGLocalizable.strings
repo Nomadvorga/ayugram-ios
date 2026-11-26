@@ -9,6 +9,7 @@
 "Settings.Tabs.WideTabBar.Notice" = "Сохраняет полную ширину панели вкладок, когда некоторые вкладки скрыты.";
 
 "Settings.Folders.BottomTab" = "Папки снизу";
+"Settings.Folders.IconSyncInfo" = "Названия и значки показывают ваши реальные папки Telegram и сохраняют их текущий порядок.";
 "Settings.Folders.BottomTabStyle" = "Стиль папок внизу";
 
 /* Do not translate */

@@ -2,6 +2,65 @@ import UIKit
 import Display
 import TelegramPresentationData
 
+private final class SGFolderTabsPreviewView: UIView {
+    private let scrollView = UIScrollView()
+    private let stackView = UIStackView()
+    private let separator = UIView()
+    private var labels: [UILabel] = []
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.isAccessibilityElement = true
+        self.accessibilityTraits = .staticText
+        self.scrollView.showsHorizontalScrollIndicator = false
+        self.scrollView.isAccessibilityElement = true
+        self.scrollView.accessibilityTraits = .staticText
+        self.addSubview(self.scrollView)
+        self.stackView.axis = .horizontal
+        self.stackView.alignment = .center
+        self.scrollView.addSubview(self.stackView)
+        self.addSubview(self.separator)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(configuration: SGFolderTabsPreviewConfiguration, theme: PresentationTheme, baseSize: CGFloat) {
+        while self.labels.count > configuration.tabs.count {
+            self.labels.removeLast().removeFromSuperview()
+        }
+        while self.labels.count < configuration.tabs.count {
+            let label = UILabel()
+            label.numberOfLines = 1
+            label.lineBreakMode = .byTruncatingTail
+            self.labels.append(label)
+            self.stackView.addArrangedSubview(label)
+        }
+
+        self.stackView.spacing = configuration.compact ? 12.0 : 22.0
+        for (index, tab) in configuration.tabs.enumerated() {
+            let label = self.labels[index]
+            label.text = configuration.displayTitle(for: tab)
+            label.font = Font.medium(baseSize * 0.9)
+            label.textColor = theme.list.itemPrimaryTextColor
+            label.accessibilityLabel = tab.title
+        }
+        self.scrollView.accessibilityLabel = configuration.tabs.map(\.title).joined(separator: ", ")
+        self.separator.backgroundColor = theme.list.itemSeparatorColor
+        self.setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let height = self.bounds.height
+        self.scrollView.frame = CGRect(x: 18.0, y: 4.0, width: max(0.0, self.bounds.width - 36.0), height: max(0.0, height - 14.0))
+        let stackSize = self.stackView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+        let contentWidth = max(self.scrollView.bounds.width, stackSize.width)
+        self.stackView.frame = CGRect(x: 0.0, y: 0.0, width: contentWidth, height: self.scrollView.bounds.height)
+        self.scrollView.contentSize = CGSize(width: contentWidth, height: self.scrollView.bounds.height)
+        self.separator.frame = CGRect(x: 18.0, y: height - 1.0, width: max(0.0, self.bounds.width - 36.0), height: UIScreenPixel)
+    }
+}
+
 /// Integer-only 4...20 control. The marker moves locally before the settings signal returns.
 private final class SGStickerSizeControl: UIControl {
     private let track = CAShapeLayer()
@@ -124,6 +183,7 @@ final class SGSettingsPreviewView: UIView {
     private let large = UILabel()
     private let scale = SGStickerSizeControl(frame: .zero)
     private let scene = SGSettingsIllustrationView(frame: .zero)
+    private let folderTabs = SGFolderTabsPreviewView(frame: .zero)
     private let tileButtons = (0 ..< 3).map { _ in UIButton(type: .custom) }
     private let tileSurfaces = (0 ..< 3).map { _ in UIView() }
     private let tileShapes = (0 ..< 3).map { _ in UIView() }
@@ -139,7 +199,7 @@ final class SGSettingsPreviewView: UIView {
         super.init(frame: frame)
         self.clipsToBounds = true
         self.isAccessibilityElement = false
-        for view in [self.title, self.badge, self.small, self.large, self.scale, self.scene] as [UIView] { self.addSubview(view) }
+        for view in [self.title, self.badge, self.small, self.large, self.scale, self.scene, self.folderTabs] as [UIView] { self.addSubview(view) }
         self.badge.textAlignment = .center
         self.badge.layer.cornerRadius = 5.0
         self.badge.clipsToBounds = true
@@ -209,12 +269,15 @@ final class SGSettingsPreviewView: UIView {
         self.large.font = self.small.font
         let isSticker: Bool
         let isShapes: Bool
+        let isFolderTabs: Bool
         if case .sticker = effectiveKind { isSticker = true } else { isSticker = false }
         if case .stickerShapes = effectiveKind { isShapes = true } else { isShapes = false }
+        if case .folderTabs = effectiveKind { isFolderTabs = true } else { isFolderTabs = false }
         // Do not briefly hide the scale during a model echo: UIKit can cancel its active touch.
         for view in [self.title, self.badge, self.small, self.large, self.scale] as [UIView] { view.isHidden = !isSticker }
         for button in self.tileButtons { button.isHidden = !isShapes }
-        self.scene.isHidden = isShapes
+        self.scene.isHidden = isShapes || isFolderTabs
+        self.folderTabs.isHidden = !isFolderTabs
         switch effectiveKind {
         case let .sticker(configuration):
             self.title.text = configuration.title
@@ -245,6 +308,9 @@ final class SGSettingsPreviewView: UIView {
         case .message:
             self.scene.update(kind: effectiveKind, theme: theme, baseSize: baseSize)
             self.accessibilityElements = []
+        case let .folderTabs(configuration):
+            self.folderTabs.update(configuration: configuration, theme: theme, baseSize: baseSize)
+            self.accessibilityElements = [self.folderTabs]
         }
         self.setNeedsLayout()
     }
@@ -283,6 +349,8 @@ final class SGSettingsPreviewView: UIView {
             }
         case .message:
             self.scene.frame = self.bounds
+        case .folderTabs:
+            self.folderTabs.frame = self.bounds
         }
     }
 }

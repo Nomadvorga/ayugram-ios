@@ -45,6 +45,15 @@ final class SGItemListAppearanceTests: XCTestCase {
         }
     }
 
+    func testDiscreteSelectorProgressCoversThreeStopsInBothDirections() {
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: 0, count: 3), 0.0, accuracy: 0.000001)
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: 1, count: 3), 0.5, accuracy: 0.000001)
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: 2, count: 3), 1.0, accuracy: 0.000001)
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: -1, count: 3), 0.0, accuracy: 0.000001)
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: 3, count: 3), 1.0, accuracy: 0.000001)
+        XCTAssertEqual(SGDiscreteSelectorControl.progressFraction(index: 0, count: 1), 0.0, accuracy: 0.000001)
+    }
+
     func testAppearanceChangesInvalidateUnchangedRowsWithoutChangingIdentity() {
         let entries: [Entry] = [
             .header(id: 1, section: .first, text: "Section", badge: nil),
@@ -88,5 +97,16 @@ final class SGItemListAppearanceTests: XCTestCase {
         let offset = Int64(end) - configuration.lower
         let previous = Int64(end) - offset % configuration.stride
         XCTAssertEqual(configuration.normalized(previous), 98)
+    }
+
+    func testRawRangeProgressFractionHandlesReversedBoundsAndThreeDigitValues() {
+        let configuration = SGItemListRangeConfiguration(value: 0, minimum: 0, maximum: 128, title: "", minimumLabel: "Min", maximumLabel: "Max")
+        XCTAssertEqual(configuration.fraction(value: 0), 0.0, accuracy: 0.000001)
+        XCTAssertEqual(configuration.fraction(value: 1), 1.0 / 128.0, accuracy: 0.000001)
+        XCTAssertEqual(configuration.fraction(value: 100), 100.0 / 128.0, accuracy: 0.000001)
+        XCTAssertEqual(configuration.fraction(value: 128), 1.0, accuracy: 0.000001)
+
+        let reversed = SGItemListRangeConfiguration(value: 0, minimum: 128, maximum: 0, title: "", minimumLabel: "Min", maximumLabel: "Max")
+        XCTAssertEqual(reversed.fraction(value: 64), 0.5, accuracy: 0.000001)
     }
 }

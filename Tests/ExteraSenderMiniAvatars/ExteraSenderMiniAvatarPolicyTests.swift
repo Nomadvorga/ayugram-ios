@@ -3,68 +3,54 @@ import XCTest
 final class ExteraSenderMiniAvatarPolicyTests: XCTestCase {
     private func shouldShow(
         enabled: Bool = true,
-        incoming: Bool = true,
-        groupOrChannel: Bool = true,
-        nativeSenderProfiles: Bool = true,
-        visibleAuthorHeader: Bool = true,
+        group: Bool = true,
         realAuthor: Bool = true,
-        preview: Bool = false,
-        sidePanelOpen: Bool = false
+        messagePreview: Bool = true,
+        draft: Bool = false,
+        activity: Bool = false,
+        specialRow: Bool = false
     ) -> Bool {
         return ExteraSenderMiniAvatarPolicy.shouldShow(
             enabled: enabled,
-            isIncoming: incoming,
-            isGroupOrChannel: groupOrChannel,
-            supportsNativeSenderProfiles: nativeSenderProfiles,
-            hasVisibleAuthorHeader: visibleAuthorHeader,
+            isGroup: group,
             hasRealAuthor: realAuthor,
-            isPreview: preview,
-            isSidePanelOpen: sidePanelOpen
+            hasMessagePreview: messagePreview,
+            hasDraft: draft,
+            hasActivity: activity,
+            isSpecialRow: specialRow
         )
     }
 
-    func testIncomingGroupWithVisibleSenderHeaderShowsMiniAvatar() {
+    func testGroupChatPreviewShowsLastMessageAuthorAvatar() {
         XCTAssertTrue(shouldShow())
     }
 
-    func testIncomingChannelProfileHeaderShowsMiniAvatar() {
-        XCTAssertTrue(shouldShow(groupOrChannel: true))
+    func testPrivateChatDoesNotShowSenderMiniAvatar() {
+        XCTAssertFalse(shouldShow(group: false))
     }
 
-    func testPrivateChatKeepsNativeAvatarRules() {
-        XCTAssertFalse(shouldShow(groupOrChannel: false))
-    }
-
-    func testChannelWithoutNativeSenderHeaderDoesNotInventAnAvatar() {
-        XCTAssertFalse(shouldShow(visibleAuthorHeader: false))
-    }
-
-    func testBroadcastChannelWithoutProfilesKeepsNativeChannelPostLayout() {
-        XCTAssertFalse(shouldShow(nativeSenderProfiles: false))
-    }
-
-    func testMergedOrHiddenHeaderDoesNotGetAnOrphanAvatar() {
-        XCTAssertFalse(shouldShow(visibleAuthorHeader: false))
-    }
-
-    func testAnonymousOrSignatureOnlyAuthorDoesNotGetAnAvatar() {
+    func testAnonymousAuthorDoesNotShowSenderMiniAvatar() {
         XCTAssertFalse(shouldShow(realAuthor: false))
     }
 
-    func testAnonymousAdminUsingTheChatPeerDoesNotGetAnAvatar() {
-        XCTAssertFalse(shouldShow(realAuthor: false))
+    func testMissingPreviewDoesNotShowSenderMiniAvatar() {
+        XCTAssertFalse(shouldShow(messagePreview: false))
     }
 
-    func testOutgoingMessageKeepsNativeAvatarRules() {
-        XCTAssertFalse(shouldShow(incoming: false))
+    func testDraftSuppressesSenderMiniAvatar() {
+        XCTAssertFalse(shouldShow(draft: true))
+    }
+
+    func testTypingActivitySuppressesSenderMiniAvatar() {
+        XCTAssertFalse(shouldShow(activity: true))
+    }
+
+    func testSpecialRowsDoNotShowSenderMiniAvatar() {
+        XCTAssertFalse(shouldShow(specialRow: true))
     }
 
     func testDisabledSettingLeavesNativeLayoutUnchanged() {
         XCTAssertFalse(shouldShow(enabled: false))
     }
 
-    func testPreviewAndSidePanelKeepTheirExistingLayout() {
-        XCTAssertFalse(shouldShow(preview: true))
-        XCTAssertFalse(shouldShow(sidePanelOpen: true))
-    }
 }

@@ -287,6 +287,16 @@ public class GlassBackgroundView: UIView {
             }
         }
 
+        /// A static equivalent for the requested glass tint when effects are unavailable.
+        /// Branded/custom fills must not silently become the neutral panel color.
+        public func fallbackColor(isDark: Bool) -> UIColor {
+            let neutral = UIColor(white: isDark ? 0.12 : 0.96, alpha: 1.0)
+            guard case let .custom(_, color) = self.kind, color.cgColor.alpha > 0.0 else {
+                return neutral
+            }
+            return color
+        }
+
         /// The native glass tint `fraction` of the way from `from` to `to`, as one effect: their tint colors mixed when
         /// their styles match, else `to` from halfway. For native glass only: the custom glass draws a panel otherwise.
         public static func blended(from: TintColor, to: TintColor, fraction: CGFloat, isDark: Bool) -> TintColor {
@@ -954,7 +964,7 @@ public class GlassBackgroundView: UIView {
             if !glassAllowed {
                 nativeView.effect = nil
             }
-            nativeView.backgroundColor = glassAllowed || !isVisible ? .clear : UIColor(white: isDark ? 0.12 : 0.96, alpha: 1.0)
+            nativeView.backgroundColor = glassAllowed || !isVisible ? .clear : tintColor.fallbackColor(isDark: isDark)
         }
     }
     

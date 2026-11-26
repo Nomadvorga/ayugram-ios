@@ -61,6 +61,12 @@ public struct SGItemListRangeConfiguration: Equatable {
         return Int32(min(self.upper, self.lower + steps * self.stride))
     }
 
+    func fraction(value: Int32) -> CGFloat {
+        guard self.upper > self.lower else { return 0.0 }
+        let normalizedValue = self.normalized(Int64(value))
+        return CGFloat(Int64(normalizedValue) - self.lower) / CGFloat(self.upper - self.lower)
+    }
+
     func text(value: Int32) -> String { return String(value) + self.unitSuffix }
 }
 

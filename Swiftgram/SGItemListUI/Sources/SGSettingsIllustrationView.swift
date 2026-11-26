@@ -203,7 +203,7 @@ final class SGSettingsIllustrationView: UIView {
             self.forwardCount.isHidden = !configuration.showForwardCount
             self.forwardIcon.isHidden = !configuration.showForwardCount
             self.forwardIcon.tintColor = self.time.textColor
-        case .stickerShapes: break
+        case .stickerShapes, .folderTabs: break
         }
         self.setNeedsLayout()
     }

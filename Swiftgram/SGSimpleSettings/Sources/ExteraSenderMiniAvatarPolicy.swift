@@ -1,23 +1,20 @@
-/// Shared visibility gate for the persisted sender-mini-avatar preference.
-/// Keep chat-specific eligibility supplied by the bubble's native author layout.
+/// The sender avatar belongs to the last-message preview in a group chat-list row.
 public enum ExteraSenderMiniAvatarPolicy {
     public static func shouldShow(
         enabled: Bool,
-        isIncoming: Bool,
-        isGroupOrChannel: Bool,
-        supportsNativeSenderProfiles: Bool,
-        hasVisibleAuthorHeader: Bool,
+        isGroup: Bool,
         hasRealAuthor: Bool,
-        isPreview: Bool,
-        isSidePanelOpen: Bool
+        hasMessagePreview: Bool,
+        hasDraft: Bool,
+        hasActivity: Bool,
+        isSpecialRow: Bool
     ) -> Bool {
         return enabled
-            && isIncoming
-            && isGroupOrChannel
-            && supportsNativeSenderProfiles
-            && hasVisibleAuthorHeader
+            && isGroup
             && hasRealAuthor
-            && !isPreview
-            && !isSidePanelOpen
+            && hasMessagePreview
+            && !hasDraft
+            && !hasActivity
+            && !isSpecialRow
     }
 }

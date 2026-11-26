@@ -76,11 +76,71 @@ public struct SGMessagePreviewConfiguration: Equatable {
     }
 }
 
+public struct SGFolderTabPreviewItem: Equatable {
+    public var title: String
+    /// UTF-16 ranges for custom-emoji entities in the real folder title.
+    public var iconRanges: [Range<Int>]
+
+    public init(title: String, iconRanges: [Range<Int>] = []) {
+        self.title = title
+        self.iconRanges = iconRanges
+    }
+}
+
+public struct SGFolderTabsPreviewConfiguration: Equatable {
+    public enum TitleStyle: Int, Equatable {
+        case textWithIcons = 0
+        case textOnly = 1
+        case iconsOnly = 2
+    }
+
+    /// These are the account's real visible folder filters, in their current order.
+    public var tabs: [SGFolderTabPreviewItem]
+    public var titleStyle: TitleStyle
+    public var compact: Bool
+
+    public init(tabs: [SGFolderTabPreviewItem], titleStyle: TitleStyle, compact: Bool) {
+        self.tabs = tabs
+        self.titleStyle = titleStyle
+        self.compact = compact
+    }
+
+    public func displayTitle(for tab: SGFolderTabPreviewItem) -> String {
+        guard self.titleStyle != .textWithIcons else { return tab.title }
+        let source = tab.title as NSString
+        let validRanges = tab.iconRanges
+            .filter { $0.lowerBound >= 0 && $0.upperBound <= source.length && !$0.isEmpty }
+            .sorted { $0.lowerBound < $1.lowerBound }
+        guard !validRanges.isEmpty else { return tab.title }
+
+        let result = NSMutableString()
+        if self.titleStyle == .iconsOnly {
+            for range in validRanges {
+                result.append(source.substring(with: NSRange(location: range.lowerBound, length: range.count)))
+            }
+        } else {
+            var cursor = 0
+            for range in validRanges {
+                guard range.lowerBound >= cursor else { continue }
+                result.append(source.substring(with: NSRange(location: cursor, length: range.lowerBound - cursor)))
+                cursor = range.upperBound
+            }
+            if cursor < source.length {
+                result.append(source.substring(from: cursor))
+            }
+        }
+
+        let trimmed = (result as String).trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? tab.title : trimmed
+    }
+}
+
 public enum SGSettingsPreviewKind: Equatable {
     case sticker(SGStickerPreviewConfiguration)
     /// Exactly three tiles, with raw selection ids original=0, rounded=1, bubble=2.
     case stickerShapes(value: Int, options: [String])
     case message(SGMessagePreviewConfiguration)
+    case folderTabs(SGFolderTabsPreviewConfiguration)
 
     var searchableText: String {
         switch self {
@@ -88,6 +148,7 @@ public enum SGSettingsPreviewKind: Equatable {
             return [configuration.title, configuration.smallLabel, configuration.largeLabel].joined(separator: " ")
         case let .stickerShapes(_, options): return options.joined(separator: " ")
         case .message: return ""
+        case let .folderTabs(configuration): return configuration.tabs.map { $0.title }.joined(separator: " ")
         }
     }
 }
@@ -150,6 +211,8 @@ enum SGSettingsPreviewGeometry {
             return 12.0 + min(88.0, tileWidth * 0.85) + 12.0 + labelHeight + 16.0
         case let .message(configuration):
             return 30.0 + ceil(Font.medium(baseSize * 0.82).lineHeight) + self.bodyHeight(configuration, width: width, baseSize: baseSize) + ceil(self.timeFont(configuration, baseSize: baseSize).lineHeight) + 24.0
+        case .folderTabs:
+            return max(72.0, ceil(Font.medium(baseSize * 0.9).lineHeight) + 42.0)
         }
     }
 

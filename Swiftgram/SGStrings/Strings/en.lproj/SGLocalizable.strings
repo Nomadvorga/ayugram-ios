@@ -11,6 +11,7 @@
 "Settings.Tabs.WideTabBar.Notice" = "Keeps the full width of Tab bar when some tabs are hidden.";
 
 "Settings.Folders.BottomTab" = "Folders at Bottom";
+"Settings.Folders.IconSyncInfo" = "Folder names and icons are read from your real Telegram folders and stay in their current order.";
 "Settings.Folders.BottomTabStyle" = "Bottom Folders Style";
 
 /* Do not translate */

@@ -65,11 +65,11 @@ extension SGItemListUIEntry {
         case let .notice(_, _, text):
             return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, content: .notice)
         case let .toggle(_, _, setting, value, text, enabled):
-            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, content: .toggle(value), enabled: enabled, toggle: { arguments.setBoolValue(setting, $0) })
+            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, content: .toggle(value), enabled: enabled, animationIdentity: AnyHashable(self.stableId), toggle: { arguments.setBoolValue(setting, $0) })
         case let .toggleSubtitle(_, _, setting, value, text, subtitle, enabled):
-            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, subtitle: subtitle, content: .toggle(value), enabled: enabled, toggle: { arguments.setBoolValue(setting, $0) })
+            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, subtitle: subtitle, content: .toggle(value), enabled: enabled, animationIdentity: AnyHashable(self.stableId), toggle: { arguments.setBoolValue(setting, $0) })
         case let .expandableToggle(_, _, setting, value, text, selectedCount, totalCount, isExpanded, enabled):
-            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, content: .expandableToggle(value: value, expanded: isExpanded, count: "\(selectedCount)/\(totalCount)"), enabled: enabled, action: {
+            return SGExteraItem(presentationData: presentationData, sectionId: self.section, appearance: arguments.exteraAppearance, title: text, content: .expandableToggle(value: value, expanded: isExpanded, count: "\(selectedCount)/\(totalCount)"), enabled: enabled, animationIdentity: AnyHashable(self.stableId), action: {
                 arguments.setExpanded(setting, !isExpanded)
             }, toggle: { arguments.setBoolValue(setting, $0) })
         case let .checkbox(_, _, setting, value, text, enabled):
@@ -198,6 +198,7 @@ private final class SGExteraItem: ListViewItem, ItemListItem {
     let content: SGExteraContent
     let enabled: Bool
     let tag: ItemListItemTag?
+    let animationIdentity: AnyHashable?
     let action: (() -> Void)?
     let toggle: ((Bool) -> Void)?
     let segmentedValueUpdated: ((Int) -> Void)?
@@ -225,7 +226,7 @@ private final class SGExteraItem: ListViewItem, ItemListItem {
         return AnyEquatable(SGExteraNeighbor(sectionId: self.sectionId, visualStyle: self.visualStyle, appearance: self.appearance, isCard: self.isCard, isCheckbox: self.content.isCheckbox, isTextItem: isText, isHeader: isHeader))
     }
 
-    init(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle = .extera, appearance: SGExteraAppearance = SGExteraAppearance(), title: String, subtitle: String? = nil, icon: UIImage? = nil, content: SGExteraContent, enabled: Bool = true, interactionIdentity: AnyHashable? = nil, tag: ItemListItemTag? = nil, action: (() -> Void)? = nil, toggle: ((Bool) -> Void)? = nil, segmentedValueUpdated: ((Int) -> Void)? = nil, sliderValueUpdated: ((Int32) -> Void)? = nil) {
+    init(presentationData: ItemListPresentationData, sectionId: ItemListSectionId, visualStyle: SGItemListVisualStyle = .extera, appearance: SGExteraAppearance = SGExteraAppearance(), title: String, subtitle: String? = nil, icon: UIImage? = nil, content: SGExteraContent, enabled: Bool = true, interactionIdentity: AnyHashable? = nil, animationIdentity: AnyHashable? = nil, tag: ItemListItemTag? = nil, action: (() -> Void)? = nil, toggle: ((Bool) -> Void)? = nil, segmentedValueUpdated: ((Int) -> Void)? = nil, sliderValueUpdated: ((Int32) -> Void)? = nil) {
         self.presentationData = presentationData
         self.sectionId = sectionId
         self.visualStyle = visualStyle
@@ -236,6 +237,7 @@ private final class SGExteraItem: ListViewItem, ItemListItem {
         self.content = content
         self.enabled = enabled
         self.tag = tag
+        self.animationIdentity = animationIdentity
         self.action = action
         self.toggle = toggle
         self.segmentedValueUpdated = segmentedValueUpdated
@@ -511,6 +513,17 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: height), insets: insets)
             return (layout, { [weak self] in
                 guard let self else { return }
+                let animateToggle: Bool
+                if let previousItem = self.item,
+                   let animationIdentity = item.animationIdentity,
+                   previousItem.animationIdentity == animationIdentity,
+                   let previousValue = previousItem.content.toggleValue,
+                   let currentValue = item.content.toggleValue,
+                   previousValue != currentValue {
+                    animateToggle = !UIAccessibility.isReduceMotionEnabled
+                } else {
+                    animateToggle = false
+                }
                 self.createContent()
                 self.item = item
                 self.view.isAccessibilityElement = false
@@ -697,7 +710,7 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
                 if let toggleValue = item.content.toggleValue {
                     let state = toggleValue ? item.presentationData.strings.VoiceOver_Common_On : item.presentationData.strings.VoiceOver_Common_Off
                     self.toggleButton.accessibilityValue = state
-                    self.updateToggle(value: toggleValue, theme: theme, style: item.appearance.controlStyle)
+                    self.updateToggle(value: toggleValue, theme: theme, style: item.appearance.controlStyle, animated: animateToggle)
                     switch item.content {
                     case let .expandableToggle(_, expanded, _):
                         // Expansion and the setting itself are distinct accessibility elements and touch targets.
@@ -767,15 +780,48 @@ final class SGExteraItemNode: ListViewItemNode, SGOneFromManySourceNode {
         self.arrowLayer.strokeColor = color.cgColor
     }
 
-    private func updateToggle(value: Bool, theme: PresentationTheme, style: SGExteraAppearance.ControlStyle) {
+    private func updateToggle(value: Bool, theme: PresentationTheme, style: SGExteraAppearance.ControlStyle, animated: Bool) {
         let rect = CGRect(x: 10.0, y: 8.0, width: 46.0, height: 28.0)
-        self.trackLayer.path = UIBezierPath(roundedRect: rect, cornerRadius: 14.0).cgPath
+        let trackPath = UIBezierPath(roundedRect: rect, cornerRadius: 14.0).cgPath
+        let oldTrackPath = self.trackLayer.presentation()?.path ?? self.trackLayer.path
+        let oldTrackFill = self.trackLayer.presentation()?.fillColor ?? self.trackLayer.fillColor
+        let oldTrackLineWidth = self.trackLayer.presentation()?.lineWidth ?? self.trackLayer.lineWidth
+        let oldThumbPath = self.thumbLayer.presentation()?.path ?? self.thumbLayer.path
+        let oldThumbFill = self.thumbLayer.presentation()?.fillColor ?? self.thumbLayer.fillColor
+        self.trackLayer.path = trackPath
         self.trackLayer.lineWidth = value || style == .classic ? 0.0 : 1.8
         self.trackLayer.fillColor = value ? theme.list.itemAccentColor.cgColor : theme.list.itemPrimaryTextColor.withAlphaComponent(theme.overallDarkAppearance ? 0.14 : 0.08).cgColor
         self.trackLayer.strokeColor = theme.list.itemSecondaryTextColor.cgColor
         let diameter: CGFloat = style == .classic ? 23.0 : (value ? 21.0 : 14.0)
         let centerX: CGFloat = value ? rect.maxX - 14.0 : rect.minX + 14.0
-        self.thumbLayer.path = UIBezierPath(ovalIn: CGRect(x: centerX - diameter / 2.0, y: rect.midY - diameter / 2.0, width: diameter, height: diameter)).cgPath
+        let thumbPath = UIBezierPath(ovalIn: CGRect(x: centerX - diameter / 2.0, y: rect.midY - diameter / 2.0, width: diameter, height: diameter)).cgPath
+        self.thumbLayer.path = thumbPath
         self.thumbLayer.fillColor = style == .classic ? theme.list.itemCheckColors.foregroundColor.cgColor : (value ? SGItemListVisualStyle.extera.cardColor(theme: theme).cgColor : theme.list.itemSecondaryTextColor.cgColor)
+
+        guard animated else { return }
+        let duration: CFTimeInterval = 0.24
+        let timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        if let oldTrackPath {
+            self.addToggleAnimation(layer: self.trackLayer, keyPath: "path", from: oldTrackPath, to: trackPath, duration: duration, timingFunction: timingFunction)
+        }
+        if let oldTrackFill, let trackFill = self.trackLayer.fillColor {
+            self.addToggleAnimation(layer: self.trackLayer, keyPath: "fillColor", from: oldTrackFill, to: trackFill, duration: duration, timingFunction: timingFunction)
+        }
+        self.addToggleAnimation(layer: self.trackLayer, keyPath: "lineWidth", from: oldTrackLineWidth, to: self.trackLayer.lineWidth, duration: duration, timingFunction: timingFunction)
+        if let oldThumbPath {
+            self.addToggleAnimation(layer: self.thumbLayer, keyPath: "path", from: oldThumbPath, to: thumbPath, duration: duration, timingFunction: timingFunction)
+        }
+        if let oldThumbFill, let thumbFill = self.thumbLayer.fillColor {
+            self.addToggleAnimation(layer: self.thumbLayer, keyPath: "fillColor", from: oldThumbFill, to: thumbFill, duration: duration, timingFunction: timingFunction)
+        }
+    }
+
+    private func addToggleAnimation(layer: CALayer, keyPath: String, from: Any, to: Any, duration: CFTimeInterval, timingFunction: CAMediaTimingFunction) {
+        let animation = CABasicAnimation(keyPath: keyPath)
+        animation.fromValue = from
+        animation.toValue = to
+        animation.duration = duration
+        animation.timingFunction = timingFunction
+        layer.add(animation, forKey: "exteraToggle.\(keyPath)")
     }
 }
