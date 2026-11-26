@@ -58,6 +58,8 @@ jobs:
           submodules: false
       - name: Simulator smoke device selection
         run: python3 -m unittest discover -s tools -p 'test_extera_simulator_smoke.py' -v
+      - name: Native simulator smoke status protocol
+        run: python3 -m unittest discover -s Tests/ExteraVosk -p 'test_simulator_smoke.py' -v
       - name: Calculator and conversions
         run: |
           set -euo pipefail

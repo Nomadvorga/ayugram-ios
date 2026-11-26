@@ -2,6 +2,48 @@
 
 #include "NativeSmokeBridge.h"
 
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char *modelPath;
+    char *pcmPath;
+    char *nativeResultsPath;
+    char *statusPath;
+} VoskSmokeTask;
+
+static BOOL writeStatus(NSURL *statusURL, NSString *status, NSString *phase, NSInteger exitCode) {
+    NSDictionary *value = @{
+        @"status": status,
+        @"phase": phase,
+        @"exit_code": @(exitCode),
+        @"native_results": @"vosk-native-results.jsonl"
+    };
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:&error];
+    return data != nil && error == nil && [data writeToURL:statusURL options:NSDataWritingAtomic error:&error];
+}
+
+static void *runNativeSmoke(void *opaqueTask) {
+    VoskSmokeTask *task = opaqueTask;
+    @autoreleasepool {
+        NSURL *statusURL = [NSURL fileURLWithFileSystemRepresentation:task->statusPath
+                                                          isDirectory:NO
+                                                        relativeToURL:nil];
+        writeStatus(statusURL, @"running", @"native_started", -1);
+
+        int result = extera_vosk_native_smoke(task->modelPath, task->pcmPath, task->nativeResultsPath);
+        writeStatus(statusURL, result == 0 ? @"passed" : @"failed", @"native_complete", result);
+    }
+    free(task->modelPath);
+    free(task->pcmPath);
+    free(task->nativeResultsPath);
+    free(task->statusPath);
+    free(task);
+    return NULL;
+}
+
 @interface VoskSmokeAppDelegate : UIResponder <UIApplicationDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @end
@@ -28,27 +70,39 @@
     NSURL *nativeResultsURL = [cacheURL URLByAppendingPathComponent:@"vosk-native-results.jsonl"];
     NSURL *statusURL = [cacheURL URLByAppendingPathComponent:@"vosk-native-status.json"];
 
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSLog(@"Vosk native smoke started; model=%@ fixture=%@", modelURL.path, pcmURL.path);
-        int result = extera_vosk_native_smoke(modelURL.fileSystemRepresentation, pcmURL.fileSystemRepresentation,
-                                             nativeResultsURL.fileSystemRepresentation);
-        NSLog(@"Vosk native smoke returned with status %d", result);
-        NSDictionary *status = @{
-            @"exit_code": @(result),
-            @"status": result == 0 ? @"passed" : @"failed",
-            @"native_results": nativeResultsURL.lastPathComponent
-        };
-        NSError *error = nil;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:status options:NSJSONWritingPrettyPrinted error:&error];
-        if (data && !error) {
-            [data writeToURL:statusURL options:NSDataWritingAtomic error:&error];
-        }
-        if (error) {
-            NSLog(@"Vosk smoke status write failed: %@", error);
-        } else {
-            NSLog(@"Vosk smoke status saved: %@", statusURL.path);
-        }
-    });
+    writeStatus(statusURL, @"running", @"app_launched", -1);
+
+    VoskSmokeTask *task = calloc(1, sizeof(VoskSmokeTask));
+    if (!task) {
+        writeStatus(statusURL, @"failed", @"task_allocation", 70);
+        return YES;
+    }
+    task->modelPath = strdup(modelURL.fileSystemRepresentation);
+    task->pcmPath = strdup(pcmURL.fileSystemRepresentation);
+    task->nativeResultsPath = strdup(nativeResultsURL.fileSystemRepresentation);
+    task->statusPath = strdup(statusURL.fileSystemRepresentation);
+    if (!task->modelPath || !task->pcmPath || !task->nativeResultsPath || !task->statusPath) {
+        free(task->modelPath);
+        free(task->pcmPath);
+        free(task->nativeResultsPath);
+        free(task->statusPath);
+        free(task);
+        writeStatus(statusURL, @"failed", @"task_paths", 71);
+        return YES;
+    }
+
+    pthread_t worker;
+    int threadError = pthread_create(&worker, NULL, runNativeSmoke, task);
+    if (threadError != 0) {
+        free(task->modelPath);
+        free(task->pcmPath);
+        free(task->nativeResultsPath);
+        free(task->statusPath);
+        free(task);
+        writeStatus(statusURL, @"failed", @"thread_create", threadError);
+        return YES;
+    }
+    pthread_detach(worker);
 
     return YES;
 }

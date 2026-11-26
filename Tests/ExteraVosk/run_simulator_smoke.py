@@ -110,6 +110,19 @@ def stream_command(command, log_path, *, timeout):
         raise SmokeFailure(f"Xcode build exited {return_code}; last output:\n{tail}")
 
 
+def read_app_status(status_path):
+    try:
+        value = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def is_terminal_app_status(status_path):
+    value = read_app_status(status_path)
+    return value is not None and value.get("status") in ("passed", "failed")
+
+
 def launch_until_status(command, status_path, *, timeout):
     """Launch without letting a slow CoreSimulator launch service hide app progress.
 
@@ -126,7 +139,7 @@ def launch_until_status(command, status_path, *, timeout):
     status_seen = False
     try:
         while True:
-            if status_path.is_file():
+            if read_app_status(status_path) is not None:
                 status_seen = True
                 if process.poll() is None:
                     process.terminate()
@@ -506,12 +519,18 @@ def main():
         receipt["simulator"]["launch_output"] = launch_output.strip()
         write_json(receipt_path, receipt)
         deadline = time.monotonic() + 240
-        while time.monotonic() < deadline and not status_path.is_file():
+        app_status = read_app_status(status_path)
+        while time.monotonic() < deadline and not is_terminal_app_status(status_path):
             time.sleep(1)
-        if not status_path.is_file():
-            raise SmokeFailure("Simulator app did not produce native smoke status within 240 seconds")
-        app_status = json.loads(status_path.read_text(encoding="utf-8"))
-        shutil.copyfile(native_path, output_dir / "native-results.jsonl")
+            app_status = read_app_status(status_path)
+        if not is_terminal_app_status(status_path):
+            raise SmokeFailure(
+                "Simulator app did not complete native smoke within 240 seconds; "
+                "last app status: " + json.dumps(app_status, ensure_ascii=False)
+            )
+        app_status = read_app_status(status_path)
+        if native_path.is_file():
+            shutil.copyfile(native_path, output_dir / "native-results.jsonl")
         receipt["app_status"] = app_status
         if app_status.get("status") != "passed" or app_status.get("exit_code") != 0:
             raise SmokeFailure("Simulator app reported native Vosk failure: " + json.dumps(app_status))
