@@ -26,6 +26,23 @@ private final class ExteraDoubleTapActionPicker: UIViewController, UITableViewDa
     private let cancel = UIButton(type: .system)
     private var didChoose = false
 
+    private func iconRole(for action: ExteraChatSettings.DoubleTapAction) -> ExteraUIIconRole? {
+        guard self.incoming else { return nil }
+        switch action {
+        case .disabled: return .disabled
+        case .reaction: return .doubleTapReactions
+        case .reply: return .doubleTapReply
+        case .copy: return .copy
+        case .forward: return .doubleTapForward
+        case .save: return .saved
+        case .repeatMessage: return .repeatAction
+        case .delete: return .delete
+        case .translate: return .translate
+        case .read: return .readUntil
+        case .inherit, .edit: return nil
+        }
+    }
+
     init(context: AccountContext, incoming: Bool, selected: ExteraChatSettings.DoubleTapAction, selectedAction: @escaping (ExteraChatSettings.DoubleTapAction) -> Void) {
         self.incoming = incoming
         self.selected = selected
@@ -128,7 +145,10 @@ private final class ExteraDoubleTapActionPicker: UIViewController, UITableViewDa
         content.text = i18n(key, self.data.strings.baseLanguageCode)
         content.textProperties.color = self.data.theme.list.itemPrimaryTextColor
         content.textProperties.font = UIFont.preferredFont(forTextStyle: .body)
-        content.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 23, weight: .regular))
+        let fallback = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 23, weight: .regular))
+        content.image = self.iconRole(for: action).flatMap { role in
+            ExteraUIIconProvider.current.image(for: role, fallback: fallback)
+        } ?? fallback
         content.imageProperties.tintColor = self.data.theme.list.itemSecondaryTextColor
         content.imageToTextPadding = 24
         cell.contentConfiguration = content

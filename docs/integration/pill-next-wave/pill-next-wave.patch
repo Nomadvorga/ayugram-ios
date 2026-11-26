@@ -1,0 +1,1164 @@
+--- /dev/null
++++ b/Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift
+@@ -0,0 +1,103 @@
++import CoreFoundation
++import Foundation
++
++public struct ExteraPillWeather: Codable, Equatable {
++    public var current = true
++    public var latitude = 55.7558
++    public var longitude = 37.6173
++    public var address = ""
++    public init() {}
++    public var valid: Bool {
++        self.latitude.isFinite && self.longitude.isFinite && (-90 ... 90).contains(self.latitude) && (-180 ... 180).contains(self.longitude) && self.address.count <= 512
++    }
++    public static func temperature(_ celsius: Double, timezone: String) -> String {
++        let fahrenheit = timezone.hasPrefix("US/") || ["America/Nassau", "America/Belize", "America/Cayman", "Pacific/Palau"].contains(timezone)
++        let value = fahrenheit ? celsius * 9 / 5 + 32 : celsius
++        // Java Math.round: floor(x + 0.5), including negative half values.
++        return String(Int(floor(value + 0.5))) + (fahrenheit ? "°F" : "°C")
++    }
++}
++
++public enum ExteraPillCurrency {
++    public static let fiat: [String] = ["AED", "AFN", "ALL", "AMD", "AOA", "ARS", "AUD", "AWG", "AZN", "BAM", "BBD", "BDT", "BHD", "BIF", "BMD", "BND", "BOB", "BRL", "BSD", "BTN", "BWP", "BYN", "BZD", "CAD", "CDF", "CHF", "CLP", "CNY", "COP", "CRC", "CUP", "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ETB", "EUR", "FJD", "FKP", "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD", "HKD", "HNL", "HTG", "HUF", "IDR", "ILS", "INR", "IQD", "IRR", "ISK", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KMF", "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LYD", "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MXN", "MYR", "MZN", "NAD", "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SOS", "SRD", "SSP", "SYP", "SZL", "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "UYU", "UZS", "VES", "VND", "VUV", "WST", "XAF", "XCD", "XOF", "XPF", "YER", "ZAR", "ZMW"]
++    private static let countries: [String: [String]] = ["971":["AE"],"355":["AL"],"374":["AM"],"54":["AR"],"43":["AT"],"61":["AU"],"880":["BD"],"32":["BE"],"359":["BG"],"973":["BH"],"591":["BO"],"55":["BR"],"375":["BY"],"41":["CH"],"225":["CI"],"56":["CL"],"86":["CN"],"57":["CO"],"506":["CR"],"53":["CU"],"357":["CY"],"420":["CZ"],"49":["DE"],"45":["DK"],"213":["DZ"],"372":["EE"],"20":["EG"],"34":["ES"],"358":["FI"],"33":["FR"],"590":["GP"],"594":["GF","GF"],"596":["MQ"],"262":["RE"],"377":["MC"],"689":["PF"],"44":["GB","UK"],"240":["GQ"],"30":["GR"],"502":["GT"],"245":["GW"],"592":["GY"],"852":["HK"],"504":["HN"],"385":["HR"],"36":["HU"],"62":["ID"],"353":["IE"],"972":["IL"],"91":["IN","IN"],"964":["IQ"],"98":["IR"],"354":["IS"],"39":["IT"],"81":["JA","JP"],"962":["JO"],"254":["KE"],"82":["KR"],"965":["KW"],"961":["LB"],"423":["LI"],"94":["LK"],"231":["LR"],"370":["LT"],"352":["LU"],"371":["LV"],"218":["LY"],"212":["MA"],"373":["MD"],"382":["ME"],"261":["MG"],"389":["MK"],"223":["ML"],"853":["MO"],"356":["MT"],"265":["MW"],"52":["MX"],"60":["MY"],"227":["NE"],"234":["NG"],"31":["NL"],"47":["NO"],"64":["NZ"],"968":["OM"],"507":["PA"],"51":["PE"],"63":["PH"],"92":["PK"],"48":["PL"],"351":["PT"],"974":["QA"],"40":["RO"],"7":["RU","KZ"],"966":["SA"],"249":["SD"],"46":["SE"],"65":["SG"],"386":["SI"],"421":["SK"],"503":["SV"],"963":["SY"],"66":["TH"],"216":["TN"],"90":["TR"],"886":["TW"],"255":["TZ"],"380":["UA"],"256":["UG"],"299":["GL"],"27":["ZA"],"593":["EC"],"595":["PY"],"58":["VE"],"505":["NI"],"267":["BW"],"237":["CM"],"236":["CF"],"224":["GN"],"230":["MU"],"221":["SN"],"993":["TM"],"239":["ST"],"93":["AF"],"95":["MM"],"998":["UZ"],"257":["BI"],"268":["SZ"],"238":["CV"],"247":["AC"],"672":["AQ"],"686":["KI"],"378":["SM"],"266":["LS"],"683":["NU"],"994":["AZ"],"222":["MR"],"242":["CG"],"248":["SC"],"856":["LA"],"253":["DJ"],"232":["SL"],"252":["SO"],"678":["VU"],"290":["SH"],"509":["HT"],"688":["TV"],"220":["GM"],"264":["NA"],"599":["AN"],"685":["WS"],"597":["SR"],"297":["AW"],"269":["KM"],"387":["BA"],"243":["CD"],"855":["KH"],"263":["ZW"],"241":["GA"],"682":["CK"],"680":["PW"],"500":["FK"],"960":["MV"],"508":["PM"],"226":["BF"],"681":["WF"],"975":["BT"],"679":["FJ"],"291":["ER"],"850":["KP"],"376":["AD"],"970":["PS"],"350":["GI"],"977":["NP"],"228":["TG"],"251":["ET"],"992":["TJ"],"996":["KG"],"233":["GH"],"260":["ZM"],"674":["NR"],"692":["MH"],"687":["NC"],"677":["SB"],"250":["RW"],"675":["PG"],"235":["TD"],"258":["MZ"],"690":["TK"],"976":["MN"],"229":["BJ"],"298":["FO"],"501":["BZ"],"995":["GE"],"246":["IO"],"691":["FM"],"673":["BN"],"244":["AO"],"676":["TO"],"381":["RS"],"1":["US","AG","AI","AS","BB","BM","BS","CA","DM","DO","GD","GU","JM","KN","KY","LC","MP","MS","PR","SX","TC","TT","VC","VG","VI"],"598":["UY"],"379":["VA"],"84":["VN"],"800":["XT"],"967":["YE"],"888":["FT"]]
++    private static let exponents: [String: Int] = ["AED":2,"AFN":2,"ALL":2,"AMD":2,"AOA":0,"ARS":2,"AUD":2,"AWG":0,"AZN":2,"BAM":2,"BBD":0,"BDT":2,"BHD":3,"BIF":0,"BMD":0,"BND":2,"BOB":2,"BRL":2,"BSD":0,"BTN":0,"BWP":0,"BYN":2,"BZD":0,"CAD":2,"CDF":0,"CHF":2,"CLP":0,"CNY":2,"COP":2,"CRC":2,"CUP":0,"CVE":0,"CZK":2,"DJF":0,"DKK":2,"DOP":2,"DZD":2,"EGP":2,"ETB":2,"EUR":2,"FJD":0,"FKP":0,"GBP":2,"GEL":2,"GHS":2,"GIP":0,"GMD":0,"GNF":0,"GTQ":2,"GYD":0,"HKD":2,"HNL":2,"HTG":0,"HUF":2,"IDR":2,"ILS":2,"INR":2,"IQD":3,"IRR":2,"ISK":0,"JMD":2,"JOD":3,"JPY":0,"KES":2,"KGS":2,"KHR":0,"KMF":0,"KRW":0,"KWD":0,"KYD":0,"KZT":2,"LAK":0,"LBP":2,"LKR":2,"LRD":0,"LSL":0,"LYD":0,"MAD":2,"MDL":2,"MGA":0,"MKD":0,"MMK":2,"MNT":2,"MOP":2,"MRU":0,"MUR":2,"MVR":2,"MWK":0,"MXN":2,"MYR":2,"MZN":2,"NAD":0,"NGN":2,"NIO":2,"NOK":2,"NPR":2,"NZD":2,"OMR":0,"PAB":2,"PEN":2,"PGK":0,"PHP":2,"PKR":2,"PLN":2,"PYG":0,"QAR":2,"RON":2,"RSD":2,"RUB":2,"RWF":0,"SAR":2,"SBD":0,"SCR":0,"SDG":0,"SEK":2,"SGD":2,"SHP":0,"SOS":0,"SRD":0,"SSP":0,"SYP":2,"SZL":0,"THB":2,"TJS":2,"TMT":0,"TND":0,"TOP":0,"TRY":2,"TTD":2,"TWD":2,"TZS":2,"UAH":2,"UGX":0,"USD":2,"UYU":2,"UZS":2,"VES":0,"VND":0,"VUV":0,"WST":0,"XAF":0,"XCD":0,"XOF":0,"XPF":0,"YER":2,"ZAR":2,"ZMW":0]
++    public static func targets(for kind: ExteraBuiltinPill) -> [String] {
++        let values = ["AUTO"] + self.fiat.filter { kind != .usd || $0 != "USD" }
++        let pinned = ["AUTO", "USD", "EUR"].filter { values.contains($0) }
++        return pinned + values.filter { !pinned.contains($0) }
++    }
++    public static func resolve(_ selection: String, phone: String, region: String? = (Locale.current as NSLocale).object(forKey: .countryCode) as? String) -> String {
++        let allowed = Set(self.fiat + ["TON", "BTC", "ETH", "SOL"])
++        let selection = selection.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
++        guard selection == "AUTO" else { return allowed.contains(selection) ? selection : "USD" }
++        let digits = String(phone.filter { $0 >= "0" && $0 <= "9" })
++        // APK findCallingCodeInfo uses the first matching 1...3-digit calling code.
++        let candidates = (1 ... 3).compactMap { length -> [String]? in
++            guard digits.count >= length else { return nil }
++            return self.countries[String(digits.prefix(length))]
++        }.first ?? []
++        guard let country = candidates.first(where: { $0 == region?.uppercased() }) ?? candidates.first,
++              !country.hasPrefix("_") else { return "USD" }
++        let currency = (Locale(identifier: "en_" + country) as NSLocale).object(forKey: .currencyCode) as? String ?? "USD"
++        return allowed.contains(currency) ? currency : "USD"
++    }
++    public static func price(data: Data, base: String, target: String) throws -> String {
++        guard data.count <= 512 * 1024,
++              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
++              let content = object["data"] as? [String: Any], content["currency"] as? String == "USD",
++              let rates = content["rates"] as? [String: Any] else { throw ExteraPillError.invalidConfiguration }
++        func number(_ code: String) throws -> Decimal {
++            if code == "USD" { return 1 }
++            guard let string = rates[code] as? String, string.utf8.count <= 128,
++                  let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")), !value.isNaN, value > 0 else { throw ExteraPillError.invalidConfiguration }
++            return value
++        }
++        func divide(_ lhs: Decimal, _ rhs: Decimal, scale: Int) throws -> Decimal {
++            var a = lhs, b = rhs, result = Decimal(), rounded = Decimal()
++            let status = NSDecimalDivide(&result, &a, &b, .plain)
++            guard status == .noError || status == .lossOfPrecision else { throw ExteraPillError.invalidConfiguration }
++            NSDecimalRound(&rounded, &result, scale, .plain)
++            return rounded
++        }
++        // Reproduce APK reciprocal rounding before dividing baseUSD / targetUSD.
++        let baseUSD = try divide(1, number(base), scale: 16)
++        let targetUSD = try divide(1, number(target), scale: 16)
++        var value = try divide(baseUSD, targetUSD, scale: 12)
++        let digits = self.exponents[target] ?? 0
++        var rounded = Decimal()
++        NSDecimalRound(&rounded, &value, digits, .plain)
++        let formatter = NumberFormatter()
++        formatter.locale = Locale(identifier: "en_US")
++        formatter.numberStyle = .decimal; formatter.usesGroupingSeparator = true
++        formatter.minimumFractionDigits = digits; formatter.maximumFractionDigits = digits
++        guard let text = formatter.string(from: NSDecimalNumber(decimal: rounded)) else { throw ExteraPillError.invalidConfiguration }
++        let overrides: [String: (String, Bool)] = ["USD": ("$", false), "RUB": ("₽", true), "KZT": ("₸", true), "TRY": ("₺", true), "UAH": ("₴", true), "PLN": ("zł", true), "CNY": ("CN¥", false), "BYN": ("Br", true), "ILS": ("₪", false), "CZK": ("Kč", true), "INR": ("₹", false)]
++        if let (symbol, suffix) = overrides[target] { return suffix ? text + " " + symbol : symbol + text }
++        let currencyFormatter = NumberFormatter()
++        currencyFormatter.locale = Locale(identifier: "en_US"); currencyFormatter.numberStyle = .currency; currencyFormatter.currencyCode = target
++        let symbol = currencyFormatter.currencySymbol ?? target
++        if symbol == target || ["$", "kr", "Fr", "₩"].contains(symbol) { return text + " " + target }
++        return symbol + text
++    }
++}
++
++public struct ExteraPillGestureFrame {
++    public let outgoingY: Double
++    public let incomingY: Double
++    public let outgoingAlpha: Double
++    public let incomingAlpha: Double
++    public let outgoingScale: Double
++    public let incomingScale: Double
++    public static func frame(distance: Double, height: Double, hasNeighbor: Bool) -> Self {
++        let height = max(height, 1), p = abs(distance) / height, sign = distance < 0 ? -1.0 : 1.0
++        if !hasNeighbor {
++            return Self(outgoingY: sign * height * (1 - 1 / (p * 0.18 + 1)), incomingY: 0, outgoingAlpha: 1, incomingAlpha: 0, outgoingScale: 1, incomingScale: 0.8)
++        }
++        let progress = min(p, 1)
++        return Self(outgoingY: sign * height * progress, incomingY: -sign * height * (1 - progress), outgoingAlpha: 1 - progress, incomingAlpha: progress, outgoingScale: 1 - progress * 0.2, incomingScale: 0.8 + progress * 0.2)
++    }
++    public static func commits(distance: Double, height: Double, hasNeighbor: Bool) -> Bool {
++        hasNeighbor && height > 0 && abs(distance) > height * 0.25
++    }
++}
+--- /dev/null
++++ b/submodules/ChatListUI/Sources/ExteraPillWeatherSettingsController.swift
+@@ -0,0 +1,80 @@
++import CoreLocation
++import MapKit
++import SGSimpleSettings
++import UIKit
++
++/// Manual map selection does not ask for device location. Only Save persists it.
++final class ExteraPillWeatherSettingsController: UIViewController, MKMapViewDelegate, UISearchBarDelegate {
++    private let account: Int64
++    private let language: String
++    private let map = MKMapView()
++    private let search = UISearchBar()
++    private let mode = UISegmentedControl(items: ["Current Location", "Select Location"])
++    private let address = UILabel()
++    private var value: ExteraPillWeather
++    private var searchRequest: MKLocalSearch?
++    private var revision = 0
++    init(account: Int64, language: String) {
++        self.account = account; self.language = language
++        self.value = ExteraPillStackSettings.shared.weather(account: account)
++        super.init(nibName: nil, bundle: nil)
++    }
++    required init?(coder: NSCoder) { preconditionFailure() }
++    deinit { self.searchRequest?.cancel() }
++    private func text(_ en: String, _ ru: String) -> String { exteraPillText(self.language, en, ru) }
++    override func viewDidLoad() {
++        super.viewDidLoad()
++        self.view.backgroundColor = .systemBackground
++        self.mode.setTitle(self.text("Current Location", "Текущая геопозиция"), forSegmentAt: 0)
++        self.mode.setTitle(self.text("Select Location", "Выбрать место"), forSegmentAt: 1)
++        self.mode.selectedSegmentIndex = self.value.current ? 0 : 1
++        self.mode.addTarget(self, action: #selector(self.modeChanged), for: .valueChanged)
++        self.map.delegate = self; self.map.showsUserLocation = false
++        self.search.delegate = self; self.search.placeholder = self.text("Search location", "Поиск места")
++        self.address.numberOfLines = 0; self.address.text = self.value.address
++        let save = UIButton(type: .system); save.setTitle(self.text("Save", "Сохранить"), for: .normal); save.addTarget(self, action: #selector(self.save), for: .touchUpInside)
++        let cancel = UIButton(type: .system); cancel.setTitle(self.text("Cancel", "Отмена"), for: .normal); cancel.addTarget(self, action: #selector(self.cancel), for: .touchUpInside)
++        let locationSettings = UIButton(type: .system); locationSettings.setTitle(self.text("Location Settings", "Настройки геопозиции"), for: .normal); locationSettings.addTarget(self, action: #selector(self.openLocationSettings), for: .touchUpInside)
++        let content = UIStackView(arrangedSubviews: [self.mode, self.search, self.map, self.address, locationSettings, save, cancel])
++        content.axis = .vertical; content.spacing = 12; content.translatesAutoresizingMaskIntoConstraints = false
++        self.view.addSubview(content)
++        NSLayoutConstraint.activate([content.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor, constant: 16), content.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -16), content.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor, constant: 16), content.bottomAnchor.constraint(lessThanOrEqualTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -16), self.map.heightAnchor.constraint(equalToConstant: 240)])
++        self.map.setRegion(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: self.value.latitude, longitude: self.value.longitude), latitudinalMeters: 8000, longitudinalMeters: 8000), animated: false)
++        let press = UILongPressGestureRecognizer(target: self, action: #selector(self.pick(_:))); self.map.addGestureRecognizer(press)
++        self.modeChanged()
++    }
++    @objc private func modeChanged() {
++        self.value.current = self.mode.selectedSegmentIndex == 0
++        self.map.isHidden = self.value.current; self.search.isHidden = self.value.current; self.address.isHidden = self.value.current
++    }
++    @objc private func pick(_ gesture: UILongPressGestureRecognizer) {
++        guard gesture.state == .began else { return }
++        self.select(self.map.convert(gesture.location(in: self.map), toCoordinateFrom: self.map))
++    }
++    private func select(_ coordinate: CLLocationCoordinate2D) {
++        guard CLLocationCoordinate2DIsValid(coordinate) else { return }
++        self.revision += 1
++        self.value.latitude = coordinate.latitude; self.value.longitude = coordinate.longitude; self.value.address = ""
++        self.map.removeAnnotations(self.map.annotations)
++        let pin = MKPointAnnotation(); pin.coordinate = coordinate; self.map.addAnnotation(pin)
++        self.address.text = String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude)
++    }
++    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
++        searchBar.resignFirstResponder(); self.searchRequest?.cancel()
++        self.revision += 1; let revision = self.revision
++        let request = MKLocalSearch.Request(); request.naturalLanguageQuery = searchBar.text; request.region = self.map.region
++        let search = MKLocalSearch(request: request); self.searchRequest = search
++        search.start { [weak self] result, _ in
++            guard let self, self.revision == revision, let result, !result.mapItems.isEmpty else { return }
++            self.map.setRegion(result.boundingRegion, animated: true)
++            self.select(result.boundingRegion.center)
++            self.value.address = String((result.mapItems.first?.name ?? "").prefix(512))
++            if !self.value.address.isEmpty { self.address.text = self.value.address }
++        }
++    }
++    @objc private func save() { ExteraPillStackSettings.shared.setWeather(self.value, account: self.account); self.dismiss(animated: true) }
++    @objc private func cancel() { self.dismiss(animated: true) }
++    @objc private func openLocationSettings() {
++        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
++    }
++}
+--- /dev/null
++++ b/submodules/ChatListUI/Sources/ExteraPillStorageRing.swift
+@@ -0,0 +1,37 @@
++import UIKit
++
++final class ExteraPillStorageRing: UIView {
++    private let track = CAShapeLayer()
++    private let arc = CAShapeLayer()
++    override init(frame: CGRect) {
++        super.init(frame: frame)
++        for layer in [self.track, self.arc] {
++            layer.fillColor = UIColor.clear.cgColor; layer.lineWidth = 2; layer.lineCap = .round
++            self.layer.addSublayer(layer)
++        }
++        self.arc.strokeEnd = 0.05
++        self.isUserInteractionEnabled = false
++    }
++    convenience init() { self.init(frame: .zero) }
++    required init?(coder: NSCoder) { preconditionFailure() }
++    override func tintColorDidChange() {
++        super.tintColorDidChange()
++        self.track.strokeColor = self.tintColor.withAlphaComponent(50.0 / 255).cgColor
++        self.arc.strokeColor = self.tintColor.cgColor
++    }
++    override func layoutSubviews() {
++        super.layoutSubviews()
++        let path = UIBezierPath(arcCenter: CGPoint(x: self.bounds.midX, y: self.bounds.midY), radius: max(0, min(self.bounds.width, self.bounds.height) / 2 - 1), startAngle: -.pi / 2, endAngle: .pi * 1.5, clockwise: true).cgPath
++        self.track.path = path; self.arc.path = path
++    }
++    func setProgress(_ value: Double) {
++        let progress = CGFloat(min(1, max(0.05, value)))
++        let previous = self.arc.presentation()?.strokeEnd ?? self.arc.strokeEnd
++        self.arc.strokeEnd = progress
++        guard !UIAccessibility.isReduceMotionEnabled else { self.arc.removeAllAnimations(); return }
++        let animation = CABasicAnimation(keyPath: "strokeEnd")
++        animation.fromValue = previous; animation.toValue = progress; animation.duration = 0.65
++        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
++        self.arc.add(animation, forKey: "progress")
++    }
++}
+--- /dev/null
++++ b/submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraPresenceBarrier.swift
+@@ -0,0 +1,140 @@
++import Foundation
++import MtProtoKit
++import ObjectiveC
++import Postbox
++import SGSimpleSettings
++import SwiftSignalKit
++internal import TelegramApi
++
++private let presenceChanged = Notification.Name("ExteraAccountPresenceChanged")
++private var presenceKey: UInt8 = 0
++private let presenceLock = NSLock()
++
++// Owned by one Network; no registry keyed by phone/account slot and no retained Network.
++private final class ExteraPresenceBarrier {
++    private let lock = NSRecursiveLock()
++    private var count = 0
++    let idle = ValuePromise<Bool>(true, ignoreRepeated: true)
++    private var status: ExteraPillEntryStatus?
++    private var statusUptime: TimeInterval = -.infinity
++    private var dialogsUptime: TimeInterval = -.infinity
++
++    func record(_ status: ExteraPillEntryStatus) {
++        self.lock.lock(); defer { self.lock.unlock() }
++        self.status = status; self.statusUptime = ProcessInfo.processInfo.systemUptime
++    }
++    func markDialogs() {
++        self.lock.lock(); defer { self.lock.unlock() }
++        self.dialogsUptime = ProcessInfo.processInfo.systemUptime
++    }
++    func cachedOnAttach() -> ExteraPillEntryStatus? {
++        self.lock.lock(); defer { self.lock.unlock() }
++        let now = ProcessInfo.processInfo.systemUptime
++        return self.count == 0 && now - self.statusUptime < 6.5 && now - self.dialogsUptime < 6.5 ? self.status : nil
++    }
++
++    func begin() {
++        self.lock.lock()
++        self.count += 1
++        self.idle.set(false)
++        self.lock.unlock()
++    }
++    func end() {
++        self.lock.lock()
++        self.count -= 1
++        if self.count == 0 { self.idle.set(true) }
++        self.lock.unlock()
++    }
++}
++
++private func presenceBarrier(_ network: Network) -> ExteraPresenceBarrier {
++    presenceLock.lock(); defer { presenceLock.unlock() }
++    if let value = objc_getAssociatedObject(network, &presenceKey) as? ExteraPresenceBarrier { return value }
++    let value = ExteraPresenceBarrier()
++    objc_setAssociatedObject(network, &presenceKey, value, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
++    return value
++}
++
++// Only wraps presence packets already authorized by the existing ghost/presence owner.
++// Cancellation releases waiting readers but does not claim a server status change.
++func ayuTrackedPresence(network: Network, operation: Signal<Api.Bool, MTRpcError>) -> Signal<Api.Bool, MTRpcError> {
++    return Signal { subscriber in
++        let barrier = presenceBarrier(network)
++        barrier.begin()
++        let once = Atomic<Bool>(value: false)
++        let finish: (Bool) -> Void = { notify in
++            guard !once.swap(true) else { return }
++            barrier.end()
++            if notify {
++                DispatchQueue.main.async { [weak network] in
++                    guard let network else { return }
++                    NotificationCenter.default.post(name: presenceChanged, object: network, userInfo: ["fetch": true])
++                }
++            }
++        }
++        let disposable = operation.start(next: { subscriber.putNext($0) }, error: {
++            finish(true); subscriber.putError($0)
++        }, completed: {
++            finish(true); subscriber.putCompletion()
++        })
++        return ActionDisposable { disposable.dispose(); finish(false) }
++    }
++}
++
++func exteraPresenceBarrier(network: Network) -> Signal<Bool, NoError> {
++    // Wait for operations already in flight; read-only when there is no pending operation.
++    // Restart the 100 ms settle interval when another presence operation begins.
++    return presenceBarrier(network).idle.get()
++    |> mapToSignal { idle -> Signal<Bool, NoError> in
++        return idle ? (.single(true) |> delay(0.1, queue: .mainQueue())) : .never()
++    }
++    |> take(1)
++}
++
++/// Account scope follows the supplied Network object. Emits on the main queue.
++/// true = presence callback/FETCH; false reserved for an external UPDATE event.
++public func exteraPresenceEvents(account: Account) -> Signal<Bool, NoError> {
++    return Signal { subscriber in
++        let observer = NotificationCenter.default.addObserver(forName: presenceChanged, object: nil, queue: .main) { value in
++            guard (value.object as? Network) === account.network || value.userInfo?["owner"] as? Int64 == account.peerId.toInt64() else { return }
++            subscriber.putNext(value.userInfo?["fetch"] as? Bool ?? false)
++        }
++        return ActionDisposable { NotificationCenter.default.removeObserver(observer) }
++    }
++}
++
++func ayuSelfPresenceObserved(peerId: PeerId) {
++    DispatchQueue.main.async {
++        NotificationCenter.default.post(name: presenceChanged, object: nil, userInfo: ["owner": peerId.toInt64(), "fetch": false])
++    }
++}
++func exteraRecordEntryStatus(_ status: ExteraPillEntryStatus, network: Network) { presenceBarrier(network).record(status) }
++public func exteraEntryStatusDialogsAppeared(account: Account) { presenceBarrier(account.network).markDialogs() }
++public func exteraCachedEntryStatusOnAttach(account: Account) -> ExteraPillEntryStatus? { presenceBarrier(account.network).cachedOnAttach() }
++
++func ayuPresenceUpdated(network: Network) {
++    DispatchQueue.main.async { [weak network] in
++        guard let network else { return }
++        NotificationCenter.default.post(name: presenceChanged, object: network, userInfo: ["fetch": false])
++    }
++}
++
++// Preserve existing launch + 200 ms pulse timing even if Online fails or has not
++// replied yet. A caller that merely reads status never creates this operation.
++func ayuPresencePulse(network: Network) -> Signal<Api.Bool, MTRpcError> {
++    return Signal { subscriber in
++        let requests = DisposableSet()
++        let cancelled = Atomic<Bool>(value: false)
++        requests.add(network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true).start())
++        Queue.mainQueue().after(0.2) {
++            guard !cancelled.with({ $0 }) else { return }
++            guard AyuGhostSettings.shared.suppressOnlineStatus else { subscriber.putCompletion(); return }
++            requests.add(network.request(Api.functions.account.updateStatus(offline: .boolTrue), ayuBypassGhost: true).start(next: {
++                subscriber.putNext($0)
++            }, error: { subscriber.putError($0) }, completed: { subscriber.putCompletion() }))
++            // Retain the existing ghost UI bookkeeping; Entry Time never reads it.
++            AyuGhostLastSeen.shared.recordNow()
++        }
++        return ActionDisposable { _ = cancelled.swap(true); requests.dispose() }
++    }
++}
+--- a/Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
++++ b/Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
+@@ -143,6 +143,30 @@
+     public func setCurrency(_ currency: String, account: Int64) {
+         guard currency.count == 3, currency.unicodeScalars.allSatisfy({ (65 ... 90).contains(Int($0.value)) }) else { return }
+         self.defaults.set(currency, forKey: "extera.pillStack.\(account).currency")
++        NotificationCenter.default.post(name: Self.didChange, object: nil)
++    }
++    public func target(_ kind: ExteraBuiltinPill, account: Int64) -> String {
++        if let value = self.defaults.string(forKey: "extera.pillStack.\(account).target.\(kind.rawValue)") { return value }
++        // Preserve an explicitly chosen previous shared target. Do not migrate the
++        // old implicit locale-derived default into a stored override.
++        if let old = self.defaults.string(forKey: "extera.pillStack.\(account).currency"),
++           ExteraPillCurrency.targets(for: kind).contains(old) { return old }
++        return "AUTO"
++    }
++    public func setTarget(_ value: String, kind: ExteraBuiltinPill, account: Int64) {
++        let value = kind == .usd && value == "USD" ? "AUTO" : value
++        guard [.gram, .btc, .usd].contains(kind), ExteraPillCurrency.targets(for: kind).contains(value) else { return }
++        self.defaults.set(value, forKey: "extera.pillStack.\(account).target.\(kind.rawValue)")
++        NotificationCenter.default.post(name: Self.didChange, object: nil)
++    }
++    public func weather(account: Int64) -> ExteraPillWeather {
++        guard let data = self.defaults.data(forKey: "extera.pillStack.\(account).weather"),
++              let value = try? JSONDecoder().decode(ExteraPillWeather.self, from: data), value.valid else { return ExteraPillWeather() }
++        return value
++    }
++    public func setWeather(_ value: ExteraPillWeather, account: Int64) {
++        guard value.valid, let data = try? JSONEncoder().encode(value) else { return }
++        self.defaults.set(data, forKey: "extera.pillStack.\(account).weather")
+         NotificationCenter.default.post(name: Self.didChange, object: nil)
+     }
+     /// APK LastSeenPill: off by default, independently for each signed-in account.
+--- a/submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraAccountEntryStatus.swift
++++ b/submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraAccountEntryStatus.swift
+@@ -1,4 +1,5 @@
+ import Foundation
++import MtProtoKit
+ import SGSimpleSettings
+ import SwiftSignalKit
+ internal import TelegramApi
+@@ -15,11 +16,15 @@
+ /// Read the raw response: the general peer-presence cache deliberately skips the account itself.
+ /// This read does not announce online/offline or manufacture a timestamp on failure.
+ public func exteraRequestAccountEntryStatus(account: Account) -> Signal<ExteraPillEntryStatus?, NoError> {
+-    return account.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]), automaticFloodWait: false)
++    return exteraPresenceBarrier(network: account.network)
++    |> castError(MTRpcError.self)
++    |> mapToSignal { _ in account.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]), automaticFloodWait: false) }
+     |> map { users -> ExteraPillEntryStatus? in
+         for user in users {
+             guard case let .user(data) = user, data.id == account.peerId.id._internalGetInt64Value() else { continue }
+-            return exteraAccountEntryStatus(data.status)
++            let status = exteraAccountEntryStatus(data.status)
++            exteraRecordEntryStatus(status, network: account.network)
++            return status
+         }
+         return nil
+     }
+--- a/submodules/TelegramCore/Sources/Network/AyuGhostRequestFilter.swift
++++ b/submodules/TelegramCore/Sources/Network/AyuGhostRequestFilter.swift
+@@ -178,17 +178,12 @@
+             return
+         }
+     }
++    ayuPresenceUpdated(network: network)
+     // The server shows a sender online anyway; with the pulse it is for 0.2 s only.
+     if settings.pulseOnlineOnSend {
+-        let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true).start()
+-        Queue.mainQueue().after(0.2) {
+-            if AyuGhostSettings.shared.suppressOnlineStatus {
+-                let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue), ayuBypassGhost: true).start()
+-                AyuGhostLastSeen.shared.recordNow()
+-            }
+-        }
++        let _ = ayuTrackedPresence(network: network, operation: ayuPresencePulse(network: network)).start()
+     } else if settings.sendAutomaticOffline {
+-        let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
++        let _ = ayuTrackedPresence(network: network, operation: network.request(Api.functions.account.updateStatus(offline: .boolTrue))).start()
+         AyuGhostLastSeen.shared.recordNow()
+     }
+ }
+--- a/submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift
++++ b/submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift
+@@ -106,7 +106,7 @@
+             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
+         }
+         self.isPerformingUpdate.set(true)
+-        self.currentRequestDisposable.set((request
++        self.currentRequestDisposable.set((ayuTrackedPresence(network: self.network, operation: request)
+         |> `catch` { _ -> Signal<Api.Bool, NoError> in
+             return .single(.boolFalse)
+         }
+--- a/submodules/ChatListUI/Sources/ExteraPillBuiltinProvider.swift
++++ b/submodules/ChatListUI/Sources/ExteraPillBuiltinProvider.swift
+@@ -1,6 +1,8 @@
+ import AccountContext
+ import CoreLocation
+ import Foundation
++import Postbox
++import TelegramUIPreferences
+ import SGSimpleSettings
+ import SwiftSignalKit
+ import TelegramCore
+@@ -24,16 +26,29 @@
+     private var entryTimeExpanded = false
+     private var entryTimeRequestInFlight = false
+     private var selectedKind: ExteraBuiltinPill?
++    private var proxyStatuses: ProxyServersStatuses?
++    private var entryEvents: Disposable?
++    private var eventRefresh: DispatchWorkItem?
++    var storageProgress: ((Double?) -> Void)?
++    private var cachedStorageProgress: Double?
++    private var phoneNumber = ""
++    func updatePhone(_ value: String) { self.phoneNumber = value }
+     var accountId: Int64 { self.context.account.id.int64 }
+-    var currency: String { ExteraPillStackSettings.shared.currency(account: self.accountId) }
++    var currency: String { self.currency(for: self.selectedKind ?? .gram) }
++    func currency(for kind: ExteraBuiltinPill) -> String {
++        ExteraPillCurrency.resolve(ExteraPillStackSettings.shared.target(kind, account: self.accountId), phone: self.phoneNumber)
++    }
+     var locationAuthorizationStatus: CLAuthorizationStatus { self.authorizationManager.authorizationStatus }
+     var weatherSource: String { self.context.currentAppConfiguration.with { $0.data?["weather_search_username"] as? String } ?? "izweatherbot" }
+ 
+     init(context: AccountContext) { self.context = context; super.init() }
+-    deinit { self.disposable.dispose(); self.request?.cancel(); self.entryTimeHideTimer?.invalidate() }
++    deinit { self.disposable.dispose(); self.entryEvents?.dispose(); self.eventRefresh?.cancel(); self.request?.cancel(); self.entryTimeHideTimer?.invalidate() }
+     func text(_ en: String, _ ru: String) -> String { exteraPillText(self.language, en, ru) }
+     func stop() {
+         self.generation.cancel(); self.disposable.set(nil)
++        self.proxyStatuses = nil; self.entryEvents?.dispose(); self.entryEvents = nil
++        self.eventRefresh?.cancel(); self.eventRefresh = nil
++        self.storageProgress?(nil)
+         self.request?.cancel(); self.request = nil
+         self.locationAuthorization?.delegate = nil; self.locationAuthorization = nil
+         self.authorizationAction = nil
+@@ -56,9 +71,11 @@
+             publish(kind.title(self.language) + self.text(" · Tap to allow", " · Разрешить")); return
+         }
+         let ttl: TimeInterval = kind == .weather ? 1200 : (kind == .storage ? 180 : 300)
+-        let cacheKey = self.currency + "." + self.language + "." + (kind == .weather ? self.weatherSource : "")
+-        let weatherAuthorized = kind != .weather || [.authorizedAlways, .authorizedWhenInUse].contains(self.locationAuthorizationStatus)
++        let weatherSettings = ExteraPillStackSettings.shared.weather(account: self.accountId)
++        let cacheKey = self.currency + "." + self.language + "." + (kind == .weather ? self.weatherSource + String(describing: weatherSettings) + TimeZone.current.identifier : "")
++        let weatherAuthorized = kind != .weather || !weatherSettings.current || [.authorizedAlways, .authorizedWhenInUse].contains(self.locationAuthorizationStatus)
+         if kind != .proxy, kind != .entryTime, weatherAuthorized, !force, let cached = self.cache[kind], cached.2 == cacheKey, Date().timeIntervalSince(cached.1) < ttl {
++            if kind == .storage { self.storageProgress?(self.cachedStorageProgress) }
+             publish(cached.0); return
+         }
+         let success: (String) -> Void = { [weak self] value in
+@@ -74,12 +91,21 @@
+         } else { publish(kind.title(self.language) + " …") }
+         switch kind {
+         case .weather:
+-            self.disposable.set((Weather.getWeatherData(context: self.context, load: true) |> deliverOnMainQueue).start(next: { [weak self] state in
++            let weather: Signal<WeatherDataState, NoError>
++            if weatherSettings.current {
++                guard CLLocationManager.locationServicesEnabled() else { publish(self.text("Enable Location Services", "Включите службы геопозиции")); return }
++                weather = Weather.getWeatherData(context: self.context, load: true)
++            }
++            else {
++                weather = Weather.requestWeatherData(context: self.context, location: CLLocationCoordinate2D(latitude: weatherSettings.latitude, longitude: weatherSettings.longitude))
++                |> map { $0.map { WeatherDataState.loaded($0) } ?? .none }
++            }
++            self.disposable.set((weather |> deliverOnMainQueue).start(next: { [weak self] state in
+                 guard let self else { return }
+                 switch state {
+                 case let .loaded(data):
+                     guard data.temperature.isFinite, (-150 ... 100).contains(data.temperature) else { publish(self.text("Weather · Invalid source data", "Погода · Ошибка источника")); return }
+-                    success("\(String(data.emoji.prefix(8))) \(Int(data.temperature.rounded()))°C")
++                    success("\(String(data.emoji.prefix(8))) " + ExteraPillWeather.temperature(data.temperature, timezone: TimeZone.current.identifier))
+                 case .fetching: break
+                 case .notDetermined: publish(self.text("Weather · Allow location", "Погода · Геопозиция"))
+                 case .notAllowed: publish(self.text("Weather · Location denied", "Погода · Нет доступа"))
+@@ -92,34 +118,54 @@
+             let request = ExteraPillRateRequest { [weak self] result in
+                 guard let self, self.generation.accepts(ticket) else { return }
+                 do {
+-                    let value = try ExteraPillExchangeRate.value(data: result.get(), base: base, target: target, locale: Locale(identifier: exteraPillLanguageCode(self.language)))
+-                    success(kind.title(self.language) + " " + value)
++                    let value = try ExteraPillCurrency.price(data: result.get(), base: base, target: target)
++                    success(value)
+                 } catch {
+                     publish(kind.title(self.language) + self.text(" · Rate unavailable", " · Курс недоступен"))
+                 }
+             }
+             self.request = request; request.start()
+         case .storage:
+-            self.disposable.set((self.context.engine.resources.collectStorageUsageStats() |> deliverOnMainQueue).start(next: { stats in
+-                let bytes = stats.totalStats.categories.values.reduce(Int64(0)) { $0 + $1.size }
+-                success(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
++            self.disposable.set((exteraPillStorageUsage(context: self.context) |> deliverOnMainQueue).start(next: { [weak self] stats in
++                guard let self, self.generation.accepts(ticket) else { return }
++                self.cachedStorageProgress = stats.occupiedFraction
++                self.storageProgress?(stats.occupiedFraction)
++                success(ByteCountFormatter.string(fromByteCount: stats.cacheBytes, countStyle: .file))
+             }))
+         case .proxy:
+-            self.disposable.set((self.context.account.networkState |> deliverOnMainQueue).start(next: { [weak self] state in
++            let settings = self.context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
++            |> map { data -> ProxySettings in
++                data.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) ?? .defaultSettings
++            }
++            let statuses = ProxyServersStatuses(network: self.context.account.network, servers: settings |> map { $0.effectiveActiveServer.map { [$0] } ?? [] })
++            self.proxyStatuses = statuses
++            self.disposable.set((combineLatest(settings, statuses.statuses(), self.context.account.networkState) |> deliverOnMainQueue).start(next: { [weak self] settings, statuses, state in
+                 guard let self else { return }
++                guard let active = settings.effectiveActiveServer else { publish(self.text("Proxy", "Прокси")); return }
+                 switch state {
+-                case let .online(proxy), let .updating(proxy):
+-                    if let proxy, proxy.hasConnectionIssues {
+-                        publish(self.text("Proxy · Connection issues", "Прокси · Проблемы соединения"))
+-                    } else {
+-                        publish(proxy == nil ? self.text("Proxy · Off", "Прокси · Выкл.") : self.text("Proxy · Connected", "Прокси · Подключён"))
++                case .online, .updating:
++                    if case let .available(seconds)? = statuses[active], seconds.isFinite, seconds > 0 {
++                        publish("\(min(9999, max(0, Int(min(seconds * 1000, 9999))))) " + self.text("ms", "мс"))
++                    } else { publish(self.text("Connected", "Подключён")) }
++                case .connecting, .waitingForNetwork: publish(self.text("Connecting", "Подключение"))
++                }
++            }))
++        case .entryTime:
++            if ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) {
++                self.entryEvents = exteraPresenceEvents(account: self.context.account).start(next: { [weak self] fetch in
++                    guard let self, self.generation.accepts(ticket) else { return }
++                    self.eventRefresh?.cancel()
++                    let work = DispatchWorkItem { [weak self] in
++                        guard let self, !self.entryTimeRequestInFlight else { return }
++                        self.start(.entryTime, force: true)
+                     }
+-                case let .connecting(proxy):
+-                    publish(proxy == nil ? self.text("Proxy · Off", "Прокси · Выкл.") : self.text("Proxy · Connecting", "Прокси · Подключение"))
+-                case .waitingForNetwork: publish(self.text("Proxy · No network", "Прокси · Нет сети"))
+-                }
+-            }))
+-        case .entryTime:
++                    self.eventRefresh = work
++                    DispatchQueue.main.asyncAfter(deadline: .now() + (fetch ? 0 : 0.25), execute: work)
++                })
++            }
++            if !force, let cached = exteraCachedEntryStatusOnAttach(account: self.context.account) {
++                self.entryTimeStatus = cached; publish(self.entryTimeText(cached)); return
++            }
+             self.entryTimeRequestInFlight = true
+             self.disposable.set((exteraRequestAccountEntryStatus(account: self.context.account) |> deliverOnMainQueue).start(next: { [weak self] status in
+                 guard let self, self.generation.accepts(ticket) else { return }
+--- a/submodules/ChatListUI/Sources/ExteraPillStackView.swift
++++ b/submodules/ChatListUI/Sources/ExteraPillStackView.swift
+@@ -2,14 +2,18 @@
+ import CoreLocation
+ import Display
+ import SGSimpleSettings
++import SwiftSignalKit
++import TelegramCore
+ import TelegramPresentationData
+ import UIKit
+ 
+ /// Actual search-field consumer and settings preview share selection, order and boundary policy.
+-final class ExteraPillStackView: UIView {
++final class ExteraPillStackView: UIView, UIGestureRecognizerDelegate {
+     private let context: AccountContext
+     private let provider: ExteraPillBuiltinProvider
+     private let content = UIView()
++    private let storageRing = ExteraPillStorageRing()
++    private var phoneDisposable: Disposable?
+     private let label = UILabel()
+     private let entryTimeIcon = UIImageView(image: UIImage(systemName: "eye.fill"))
+     private var observers: [NSObjectProtocol] = []
+@@ -21,7 +25,10 @@
+     private var lease: UUID?
+     private var refreshTimer: Timer?
+     private var language = "en"
+-    var hostVisible = false { didSet { self.updateRunning() } }
++    var hostVisible = false { didSet {
++        if self.hostVisible && !oldValue { exteraEntryStatusDialogsAppeared(account: self.context.account) }
++        self.updateRunning()
++    } }
+     var inventoryChanged: (() -> Void)?
+     var hasItems: Bool { !self.ids.isEmpty }
+ 
+@@ -34,10 +41,21 @@
+         self.addSubview(self.content); self.content.addSubview(self.label)
+         self.entryTimeIcon.contentMode = .scaleAspectFit; self.entryTimeIcon.isHidden = true
+         self.content.addSubview(self.entryTimeIcon)
++        self.content.addSubview(self.storageRing); self.storageRing.isHidden = true
++        self.provider.storageProgress = { [weak self] value in
++            self?.storageRing.isHidden = value == nil
++            if let value { self?.storageRing.setProgress(value) }
++        }
++        self.phoneDisposable = (context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)) |> deliverOnMainQueue).start(next: { [weak self] peer in
++            if case let .user(user)? = peer {
++                self?.provider.updatePhone(user.phone ?? "")
++                self?.runningSignature = nil; self?.updateRunning()
++            }
++        })
+         self.isAccessibilityElement = true; self.accessibilityTraits = [.button, .adjustable]
+         self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapped)))
+-        let up = UISwipeGestureRecognizer(target: self, action: #selector(self.swiped(_:))); up.direction = .up; self.addGestureRecognizer(up)
+-        let down = UISwipeGestureRecognizer(target: self, action: #selector(self.swiped(_:))); down.direction = .down; self.addGestureRecognizer(down)
++        let pan = UIPanGestureRecognizer(target: self, action: #selector(self.panned(_:)))
++        pan.delegate = self; self.addGestureRecognizer(pan)
+         self.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:))))
+         self.provider.changed = { [weak self] text in self?.setText(text) }
+         for name in [ExteraPillStackSettings.didChange, ExteraPillSettings.didChange] {
+@@ -55,7 +73,8 @@
+     }
+     required init?(coder: NSCoder) { preconditionFailure() }
+     deinit {
+-        self.provider.stop()
++        self.panDisplayLink?.invalidate()
++        self.provider.stop(); self.phoneDisposable?.dispose()
+         self.refreshTimer?.invalidate()
+         if let lease = self.lease { ExteraPillRuntime.shared.release(lease) }
+         for observer in self.observers { NotificationCenter.default.removeObserver(observer) }
+@@ -66,11 +85,12 @@
+         self.content.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+         let entryTime = self.selected == ExteraBuiltinPill.entryTime.id
+         self.entryTimeIcon.isHidden = !entryTime
+-        if entryTime {
++        if entryTime || self.selected == ExteraBuiltinPill.storage.id {
+             let width = min(max(0, self.bounds.width - 44), self.label.sizeThatFits(self.bounds.size).width)
+             let spacing: CGFloat = width > 0 ? 4 : 0
+             let left = floor((self.bounds.width - 20 - spacing - width) / 2)
+             self.entryTimeIcon.frame = CGRect(x: left, y: floor((self.bounds.height - 20) / 2), width: 20, height: 20)
++            self.storageRing.frame = CGRect(x: left + 2, y: floor((self.bounds.height - 16) / 2), width: 16, height: 16)
+             self.label.frame = CGRect(x: left + 20 + spacing, y: 0, width: width, height: self.bounds.height)
+         } else {
+             self.label.frame = self.bounds.insetBy(dx: 8, dy: 0)
+@@ -82,6 +102,7 @@
+         self.language = language; self.provider.language = language
+         self.label.textColor = theme.list.itemPrimaryTextColor
+         self.entryTimeIcon.tintColor = theme.list.itemPrimaryTextColor
++        self.storageRing.tintColor = theme.list.itemPrimaryTextColor
+         self.backgroundColor = theme.list.itemAccentColor.withAlphaComponent(0.10)
+         self.accessibilityHint = self.text("Swipe up or down to change widget. Hold for options.", "Смахните вверх или вниз для смены виджета. Удерживайте для настроек.")
+         if changed { self.runningSignature = nil; self.updateRunning() }
+@@ -89,6 +110,7 @@
+     private func text(_ en: String, _ ru: String) -> String { exteraPillText(self.language, en, ru) }
+     private func setText(_ text: String) {
+         self.label.text = text
++        if let selected = self.selected { self.rememberedText[selected] = text }
+         self.accessibilityLabel = self.selected == ExteraBuiltinPill.entryTime.id ? ExteraBuiltinPill.entryTime.title(self.language) + (text.isEmpty ? "" : " · " + text) : text
+         self.setNeedsLayout()
+     }
+@@ -103,6 +125,7 @@
+         if previous != self.ids { self.inventoryChanged?() }
+     }
+     private func stop() {
++        self.cancelPan()
+         self.runningSignature = nil; self.provider.stop()
+         self.refreshTimer?.invalidate(); self.refreshTimer = nil
+         if let lease = self.lease { self.lease = nil; ExteraPillRuntime.shared.release(lease) }
+@@ -112,7 +135,7 @@
+         let store = ExteraPillStackSettings.shared
+         let account = self.context.account.id.int64
+         let custom = self.specs.first { ExteraPillStackLayout.customId($0.id) == selected }
+-        let signature = selected + ".\(store.allowsWeather(source: self.provider.weatherSource, account: account)).\(self.provider.weatherSource).\(store.allowed("rates", account: account)).\(custom.map { store.allowsCustom($0, account: account) } ?? false).\(store.currency(account: account)).\(store.entryTimeAutoRefresh(account: account)).\(self.language).\(String(describing: custom))"
++        let signature = selected + ".\(store.allowsWeather(source: self.provider.weatherSource, account: account)).\(self.provider.weatherSource).\(store.allowed("rates", account: account)).\(custom.map { store.allowsCustom($0, account: account) } ?? false).\(ExteraBuiltinPill.from(id: selected).map { store.target($0, account: account) } ?? "").\(ExteraBuiltinPill.from(id: selected).map { self.provider.currency(for: $0) } ?? "").\(store.weather(account: account)).\(TimeZone.current.identifier).\(store.entryTimeAutoRefresh(account: account)).\(self.language).\(String(describing: custom))"
+         guard force || self.runningSignature != signature else { self.updateCustomValue(); return }
+         self.stop(); self.runningSignature = signature
+         if let kind = ExteraBuiltinPill.from(id: selected) {
+@@ -137,6 +160,108 @@
+         self.setText(spec.label + " " + status)
+         self.accessibilityValue = value.error.map { exteraPillErrorDescription($0, languageCode: self.language) }
+     }
++    private var panIncoming: UIView?
++    private var panNext: String?
++    private var panDistance: CGFloat = 0
++    private var panDisplayLink: CADisplayLink?
++    private var panStart: CFTimeInterval = 0
++    private var panFrom: CGFloat = 0
++    private var panTo: CGFloat = 0
++    private var panDuration: Double = 0
++    private var panCommit = false
++    private var rememberedText: [String: String] = [:]
++
++    private func cancelPan() {
++        self.panDisplayLink?.invalidate(); self.panDisplayLink = nil
++        self.panIncoming?.removeFromSuperview(); self.panIncoming = nil
++        self.panNext = nil; self.panDistance = 0
++        self.content.transform = .identity; self.content.alpha = 1
++    }
++    @objc private func panned(_ gesture: UIPanGestureRecognizer) {
++        guard self.ids.count > 1 else { return }
++        switch gesture.state {
++        case .began:
++            self.panDisplayLink?.invalidate(); self.panDisplayLink = nil
++            gesture.setTranslation(CGPoint(x: 0, y: self.panDistance), in: self)
++        case .changed:
++            self.drawPan(gesture.translation(in: self).y)
++        case .ended, .cancelled, .failed:
++            let distance = self.panDistance
++            let commit = gesture.state == .ended && ExteraPillGestureFrame.commits(distance: Double(distance), height: Double(self.bounds.height), hasNeighbor: self.panNext != nil)
++            if UIAccessibility.isReduceMotionEnabled {
++                let next = commit ? self.panNext : nil
++                self.cancelPan(); if let next { self.selectAfterPan(next) }; return
++            }
++            self.panCommit = commit
++            self.panFrom = distance
++            self.panTo = commit ? (distance < 0 ? -self.bounds.height : self.bounds.height) : 0
++            self.panDuration = commit ? 0.25 : 0.20
++            self.panStart = CACurrentMediaTime()
++            let proxy = ExteraPillWeakDisplayLink(target: self, selector: #selector(self.advancePan))
++            let link = CADisplayLink(target: proxy, selector: #selector(ExteraPillWeakDisplayLink.tick(_:)))
++            self.panDisplayLink = link; link.add(to: .main, forMode: .common)
++        default: break
++        }
++    }
++    private func drawPan(_ distance: CGFloat) {
++        let next = self.layout.next(from: self.selected, direction: distance < 0 ? 1 : -1, ids: self.ids)
++        let candidate = next == self.selected ? nil : next
++        if candidate != self.panNext {
++            self.panIncoming?.removeFromSuperview(); self.panIncoming = nil
++            self.panNext = candidate
++            if let candidate {
++                // Render remembered content only. Neighbor preview owns no provider/lease.
++                let preview = UIView(frame: self.bounds)
++                let label = UILabel(frame: self.bounds.insetBy(dx: 8, dy: 0))
++                label.font = self.label.font; label.textColor = self.label.textColor
++                label.textAlignment = .center; label.lineBreakMode = .byTruncatingTail
++                label.text = self.rememberedText[candidate] ?? ExteraBuiltinPill.from(id: candidate)?.title(self.language) ?? self.specs.first(where: { ExteraPillStackLayout.customId($0.id) == candidate })?.label
++                if candidate == ExteraBuiltinPill.entryTime.id {
++                    let eye = UIImageView(image: UIImage(systemName: "eye.fill")); eye.tintColor = self.entryTimeIcon.tintColor; eye.contentMode = .scaleAspectFit
++                    eye.frame = CGRect(x: floor((self.bounds.width - 20) / 2), y: floor((self.bounds.height - 20) / 2), width: 20, height: 20)
++                    // Manual Entry Time always re-enters collapsed.
++                    label.text = ""; preview.addSubview(eye)
++                }
++                preview.addSubview(label); self.addSubview(preview); self.panIncoming = preview
++            }
++        }
++        self.panDistance = distance
++        let frame = ExteraPillGestureFrame.frame(distance: Double(distance), height: Double(self.bounds.height), hasNeighbor: candidate != nil)
++        self.content.transform = CGAffineTransform(translationX: 0, y: CGFloat(frame.outgoingY)).scaledBy(x: CGFloat(frame.outgoingScale), y: CGFloat(frame.outgoingScale))
++        self.content.alpha = CGFloat(frame.outgoingAlpha)
++        self.panIncoming?.transform = CGAffineTransform(translationX: 0, y: CGFloat(frame.incomingY)).scaledBy(x: CGFloat(frame.incomingScale), y: CGFloat(frame.incomingScale))
++        self.panIncoming?.alpha = CGFloat(frame.incomingAlpha)
++    }
++    @objc private func advancePan() {
++        let time = min(1, max(0, (CACurrentMediaTime() - self.panStart) / self.panDuration))
++        let progress: Double
++        if self.panCommit {
++            // Invert cubic x(t) by bisection, then evaluate y(t).
++            var low = 0.0, high = 1.0
++            for _ in 0 ..< 18 {
++                let t = (low + high) / 2
++                let x = 3 * (1 - t) * (1 - t) * t * 0.23 + 3 * (1 - t) * t * t * 0.32 + t * t * t
++                if x < time { low = t } else { high = t }
++            }
++            let t = (low + high) / 2
++            progress = 1 - pow(1 - t, 3)
++        } else {
++            // Android ValueAnimator default AccelerateDecelerateInterpolator.
++            progress = (cos((time + 1) * .pi) / 2) + 0.5
++        }
++        self.drawPan(self.panFrom + (self.panTo - self.panFrom) * CGFloat(progress))
++        if time >= 1 {
++            let next = self.panCommit ? self.panNext : nil
++            self.cancelPan()
++            if let next { self.selectAfterPan(next) }
++        }
++    }
++    private func selectAfterPan(_ next: String) {
++        self.stop(); self.selected = next; self.accessibilityValue = nil
++        ExteraPillStackSettings.shared.update(custom: self.specs) { $0.selected = next }
++        self.updateRunning(); self.setNeedsLayout()
++    }
++
+     private func step(_ direction: Int) {
+         guard let next = self.layout.next(from: self.selected, direction: direction, ids: self.ids), next != self.selected else { return }
+         let outgoing = UIAccessibility.isReduceMotionEnabled ? nil : self.content.snapshotView(afterScreenUpdates: false)
+@@ -156,23 +281,43 @@
+     }
+     override func accessibilityIncrement() { self.step(1) }
+     override func accessibilityDecrement() { self.step(-1) }
+-    @objc private func swiped(_ gesture: UISwipeGestureRecognizer) { self.step(gesture.direction == .up ? 1 : -1) }
++    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
++        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
++        let velocity = pan.velocity(in: self)
++        return self.ids.count > 1 && abs(velocity.y) > abs(velocity.x)
++    }
+     @objc private func tapped() {
+         if self.selected == ExteraBuiltinPill.entryTime.id {
+             guard self.hostVisible, self.window != nil, UIApplication.shared.applicationState == .active else { return }
+             self.provider.entryTimeTapped()
+         } else { self.openOptions() }
+     }
+-    @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) { if gesture.state == .began { self.openOptions() } }
++    @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) { if gesture.state == .began { self.openOptions(longPress: true) } }
+     private var controller: UIViewController? {
+         var responder: UIResponder? = self
+         while let current = responder { if let controller = current as? UIViewController { return controller }; responder = current.next }
+         return nil
+     }
+-    private func openOptions() {
++    private func openOptions(longPress: Bool = false) {
+         guard let selected = self.selected, let controller = self.controller else { return }
+         let kind = ExteraBuiltinPill.from(id: selected)
+         if kind == .entryTime { self.openEntryTimeOptions(controller: controller); return }
++        if longPress, kind == .proxy || kind == .storage {
++            let sheet = UIAlertController(title: kind?.title(self.language), message: nil, preferredStyle: .actionSheet)
++            if kind == .storage {
++                sheet.addAction(UIAlertAction(title: self.text("Storage Usage", "Использование памяти"), style: .default) { [weak self] _ in
++                    guard let self else { return }; self.context.sharedContext.openStorageUsage(context: self.context)
++                })
++                sheet.addAction(UIAlertAction(title: self.text("Refresh", "Обновить"), style: .default) { [weak self] _ in self?.updateRunning(force: true) })
++            }
++            sheet.addAction(UIAlertAction(title: self.text("Settings", "Настройки"), style: .default) { [weak self, weak controller] _ in
++                guard let self, let controller else { return }
++                (controller.navigationController as? NavigationController)?.pushViewController(exteraPillDashboardController(context: self.context))
++            })
++            sheet.addAction(UIAlertAction(title: self.text("Cancel", "Отмена"), style: .cancel))
++            sheet.popoverPresentationController?.sourceView = self; sheet.popoverPresentationController?.sourceRect = self.bounds
++            controller.present(sheet, animated: true); return
++        }
+         if kind == .proxy {
+             (controller.navigationController as? NavigationController)?.pushViewController(self.context.sharedContext.makeProxySettingsController(context: self.context)); return
+         }
+@@ -185,9 +330,12 @@
+         let message: String
+         if kind == .weather {
+             let source = self.provider.weatherSource
+-            message = self.text("Uses Telegram weather bot @\(source). Your authorized current location is sent to that bot for this account while this widget is selected. You can revoke access below.", "Использует погодного бота Telegram @\(source). Разрешённая текущая геопозиция отправляется боту от этого аккаунта, пока выбран виджет. Разрешение можно отозвать ниже.")
++            let mode = store.weather(account: account)
++            let location = mode.current ? self.text("current location", "текущая геопозиция") : self.text("selected map coordinates", "выбранные координаты на карте")
++            message = self.text("Uses Telegram weather bot @\(source). Sends \(location) for this account while selected. You can revoke access below.", "Использует погодного бота Telegram @\(source). Передаёт \(location) от этого аккаунта, пока выбран виджет. Разрешение можно отозвать ниже.")
++
+         } else if kind != nil {
+-            message = self.text("Exchange rate, not a wallet balance. Requests api.coinbase.com without account data. GRAM means TON. Target: ", "Обменный курс. Запрос к api.coinbase.com без данных аккаунта. GRAM означает TON. Валюта: ") + store.currency(account: account)
++            message = self.text("Exchange rate, not a wallet balance. Requests api.coinbase.com without account data. GRAM means TON. Target: ", "Обменный курс. Запрос к api.coinbase.com без данных аккаунта. GRAM означает TON. Валюта: ") + (kind.map { store.target($0, account: account) } ?? "AUTO")
+         } else {
+             let spec = self.specs.first { ExteraPillStackLayout.customId($0.id) == selected }
+             let host = spec.flatMap { URLComponents(string: $0.url)?.host } ?? "HTTP"
+@@ -197,7 +345,7 @@
+         do {
+             sheet.addAction(UIAlertAction(title: allowed ? self.text("Refresh", "Обновить") : self.text("Allow Requests", "Разрешить запросы"), style: .default, handler: { [weak self] _ in
+                 guard let self, self.hostVisible, self.selected == selected else { return }
+-                if kind == .weather, self.provider.locationAuthorizationStatus == .notDetermined {
++                if kind == .weather, store.weather(account: account).current, self.provider.locationAuthorizationStatus == .notDetermined {
+                     self.refreshTimer?.invalidate(); self.refreshTimer = nil
+                     self.provider.requestLocationAuthorization { [weak self] in
+                         guard let self, self.hostVisible, self.selected == selected else { return }
+@@ -215,17 +363,21 @@
+                 }
+             }))
+             if kind == .weather {
+-                sheet.addAction(UIAlertAction(title: self.text("Location Settings", "Настройки геопозиции"), style: .default, handler: { _ in
+-                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
++                sheet.addAction(UIAlertAction(title: self.text("Weather Settings", "Настройки погоды"), style: .default, handler: { [weak self, weak controller] _ in
++                    guard let self, let controller else { return }
++                    controller.present(ExteraPillWeatherSettingsController(account: account, language: self.language), animated: true)
+                 }))
+             }
+             if let kind, [.gram, .btc, .usd].contains(kind) {
+                 sheet.addAction(UIAlertAction(title: self.text("Target Currency", "Валюта курса"), style: .default, handler: { [weak self, weak controller] _ in
+                     guard let self, let controller else { return }
+-                    let alert = UIAlertController(title: self.text("ISO Currency Code", "Код валюты ISO"), message: self.text("For example EUR, USD or RUB. Unsupported pairs show Rate unavailable.", "Например EUR, USD или RUB. Для неподдерживаемой пары выводится «Курс недоступен»."), preferredStyle: .alert)
+-                    alert.addTextField { $0.text = store.currency(account: account); $0.autocapitalizationType = .allCharacters }
+-                    alert.addAction(UIAlertAction(title: self.text("Save", "Сохранить"), style: .default) { _ in store.setCurrency((alert.textFields?.first?.text ?? "").uppercased(), account: account) })
+-                    alert.addAction(UIAlertAction(title: self.text("Cancel", "Отмена"), style: .cancel)); controller.present(alert, animated: true)
++                    let sheet = UIAlertController(title: self.text("Target Currency", "Валюта курса"), message: nil, preferredStyle: .actionSheet)
++                    for code in ExteraPillCurrency.targets(for: kind) {
++                        sheet.addAction(UIAlertAction(title: code + (store.target(kind, account: account) == code ? " ✓" : ""), style: .default) { _ in store.setTarget(code, kind: kind, account: account) })
++                    }
++                    sheet.addAction(UIAlertAction(title: self.text("Cancel", "Отмена"), style: .cancel))
++                    sheet.popoverPresentationController?.sourceView = self; sheet.popoverPresentationController?.sourceRect = self.bounds
++                    controller.present(sheet, animated: true)
+                 }))
+             }
+             if allowed { sheet.addAction(UIAlertAction(title: self.text("Revoke Requests", "Отозвать разрешение"), style: .destructive) { _ in
+--- a/submodules/ChatListUI/Sources/ExteraPillStackController.swift
++++ b/submodules/ChatListUI/Sources/ExteraPillStackController.swift
+@@ -67,6 +67,7 @@
+         let layout = ExteraPillStackSettings.shared.layout.normalized(custom: custom)
+         let changed = self.custom != custom || self.layout.visible != layout.visible || self.layout.hidden != layout.hidden || self.layout.infiniteScrolling != layout.infiniteScrolling
+         self.custom = custom; self.layout = layout
++        self.navigationItem.rightBarButtonItem = layout.visible.isEmpty ? nil : UIBarButtonItem(title: self.text("Reset", "Сбросить"), style: .plain, target: self, action: #selector(self.resetStack))
+         // A swipe only changes selection. Keep its preview cell and animation alive.
+         if self.isViewLoaded && changed { self.table.reloadData() }
+     }
+@@ -93,7 +94,7 @@
+         switch section {
+         case 0: return self.text("Search Stack", "Виджеты в поиске")
+         case 1: return self.text("Settings", "Настройки")
+-        case 2: return self.text("Visible Widgets", "Видимые виджеты")
++        case 2: return self.layout.visible.isEmpty ? nil : self.text("Visible Widgets", "Видимые виджеты")
+         case 3: return self.text("Hidden Widgets", "Скрытые виджеты")
+         default: return "HTTP"
+         }
+@@ -127,13 +128,20 @@
+             let kind = ExteraBuiltinPill.from(id: id)
+             cell.textLabel?.text = self.title(id)
+             cell.imageView?.image = exteraPillWidgetIcon(kind)
+-            if kind == .entryTime { cell.detailTextLabel?.text = self.text("Unavailable: no supported data provider", "Недоступно: нет поддерживаемого источника данных") }
++            if kind == .entryTime { cell.detailTextLabel?.text = self.text("This account’s server status", "Статус этого аккаунта с сервера") }
+             if kind == .gram { cell.detailTextLabel?.text = self.text("TON exchange rate", "Обменный курс TON") }
+             if let spec = self.custom.first(where: { ExteraPillStackLayout.customId($0.id) == id }), !spec.enabled { cell.detailTextLabel?.text = self.text("Disabled in HTTP settings", "Отключена в настройках HTTP") }
+             cell.accessibilityHint = indexPath.section == 2 ? self.text("Tap to hide", "Нажмите, чтобы скрыть") : self.text("Tap to show", "Нажмите, чтобы показать")
+             cell.accessibilityCustomActions = [UIAccessibilityCustomAction(name: self.text("Move up", "Выше"), actionHandler: { [weak self] _ in self?.moveBy(id, section: indexPath.section, delta: -1); return true }), UIAccessibilityCustomAction(name: self.text("Move down", "Ниже"), actionHandler: { [weak self] _ in self?.moveBy(id, section: indexPath.section, delta: 1); return true })]
+         }
+         return cell
++    }
++    @objc private func resetStack() {
++        self.saveLayout { layout in
++            let infinite = layout.infiniteScrolling
++            layout = ExteraPillStackLayout().normalized(custom: self.custom)
++            layout.infiniteScrolling = infinite
++        }
+     }
+     @objc private func infiniteChanged(_ sender: UISwitch) { self.saveLayout { $0.infiniteScrolling = sender.isOn } }
+     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+--- /dev/null
++++ b/submodules/ChatListUI/Sources/ExteraPillStorageUsage.swift
+@@ -0,0 +1,56 @@
++import AccountContext
++import Foundation
++import Postbox
++import SwiftSignalKit
++import TelegramCore
++
++struct ExteraPillStorageUsage {
++    let cacheBytes: Int64
++    let occupiedFraction: Double
++}
++
++/// Aggregate the media/cache of all opened accounts, without walking databases,
++/// credentials or document exports. Shared temp paths are counted once.
++func exteraPillStorageUsage(context: AccountContext) -> Signal<ExteraPillStorageUsage, NoError> {
++    return context.sharedContext.activeAccountsWithInfo
++    |> take(1)
++    |> mapToSignal { value -> Signal<ExteraPillStorageUsage, NoError> in
++        let accounts = value.accounts.map { $0.account }
++        let signals: [Signal<CacheUsageStats, NoError>] = accounts.map { account in
++            TelegramEngine(account: account).resources.collectCacheUsageStats()
++            |> mapToSignal { result -> Signal<CacheUsageStats, NoError> in
++                if case let .result(stats) = result { return .single(stats) }
++                return .complete()
++            }
++            |> take(1)
++        }
++        let combined: Signal<[CacheUsageStats], NoError> = signals.isEmpty ? .single([]) : combineLatest(signals)
++        return combined
++        |> map { values in
++            var bytes: Int64 = 0
++            var tempPaths = Set<String>()
++            func append(_ size: Int64) {
++                let result = bytes.addingReportingOverflow(max(0, size))
++                bytes = result.overflow ? Int64.max : result.partialValue
++            }
++            for stats in values {
++                var mediaSizes: [MediaId: Int64] = [:]
++                for categories in stats.media.values {
++                    for media in categories.values {
++                        for (id, size) in media { mediaSizes[id] = max(mediaSizes[id] ?? 0, size) }
++                    }
++                }
++                for size in mediaSizes.values { append(size) }
++                append(stats.otherSize); append(stats.cacheSize)
++                // The engine reports shared temp paths in every account snapshot.
++                if stats.tempPaths.allSatisfy({ !tempPaths.contains($0) }) { append(stats.tempSize) }
++                tempPaths.formUnion(stats.tempPaths)
++            }
++            let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory())
++            let total = (attributes?[.systemSize] as? NSNumber)?.doubleValue ?? 0
++            let free = (attributes?[.systemFreeSize] as? NSNumber)?.doubleValue ?? 0
++            return ExteraPillStorageUsage(cacheBytes: bytes, occupiedFraction: total > 0 ? min(1, max(0.05, (total - free) / total)) : 0.05)
++        }
++        |> runOn(Queue.concurrentDefaultQueue())
++    }
++}
+--- /dev/null
++++ b/submodules/ChatListUI/Sources/ExteraPillWeakDisplayLink.swift
+@@ -0,0 +1,11 @@
++import UIKit
++
++final class ExteraPillWeakDisplayLink: NSObject {
++    weak var target: NSObject?
++    let selector: Selector
++    init(target: NSObject, selector: Selector) { self.target = target; self.selector = selector }
++    @objc func tick(_ link: CADisplayLink) {
++        guard let target else { link.invalidate(); return }
++        _ = target.perform(self.selector)
++    }
++}
+--- a/submodules/TelegramCore/Sources/UpdatePeers.swift
++++ b/submodules/TelegramCore/Sources/UpdatePeers.swift
+@@ -488,6 +488,9 @@
+ }
+ 
+ func updatePeerPresencesClean(transaction: Transaction, accountPeerId: PeerId, peerPresences: [PeerId: UpdatedApiPresence]) {
++    // Observe an actual self status before the existing cache exclusion removes it.
++    // UI-only notification: no new request, read-state write or presence mutation.
++    if peerPresences[accountPeerId] != nil { ayuSelfPresenceObserved(peerId: accountPeerId) }
+     var parsedPresences: [PeerId: PeerPresence] = [:]
+     for (peerId, status) in peerPresences {
+         let presence = TelegramUserPresence(apiStatus: status.status)
+--- /dev/null
++++ b/submodules/TelegramCore/Tests/ExteraPresenceBarrierTests.swift
+@@ -0,0 +1,44 @@
++import MtProtoKit
++import SwiftSignalKit
++import TelegramApi
++import XCTest
++@testable import TelegramCore
++
++final class ExteraPresenceBarrierTests: StateSyncTestCase {
++    func testTwoPendingOperationsMustBothFinishBeforeReader() {
++        var finishA: (() -> Void)?
++        var finishB: (() -> Void)?
++        let a = ayuTrackedPresence(network: self.network, operation: Signal<Api.Bool, MTRpcError> { subscriber in
++            finishA = { subscriber.putCompletion() }; return EmptyDisposable
++        }).start()
++        let b = ayuTrackedPresence(network: self.network, operation: Signal<Api.Bool, MTRpcError> { subscriber in
++            finishB = { subscriber.putCompletion() }; return EmptyDisposable
++        }).start()
++        let early = self.expectation(description: "no read before both operations finish"); early.isInverted = true
++        let earlyRead = exteraPresenceBarrier(network: self.network).start(next: { _ in early.fulfill() })
++        finishA?(); a.dispose()
++        self.wait(for: [early], timeout: 0.15)
++        earlyRead.dispose()
++        let ready = self.expectation(description: "read after final completion and settle delay")
++        let start = ProcessInfo.processInfo.systemUptime
++        let read = exteraPresenceBarrier(network: self.network).start(next: { _ in
++            XCTAssertGreaterThanOrEqual(ProcessInfo.processInfo.systemUptime - start, 0.09)
++            ready.fulfill()
++        })
++        finishB?()
++        self.wait(for: [ready], timeout: 2)
++        read.dispose(); b.dispose()
++        finishA = nil; finishB = nil
++    }
++
++    func testCancellationReleasesBarrierWithoutCreatingRequests() {
++        let pending = ayuTrackedPresence(network: self.network, operation: Signal<Api.Bool, MTRpcError>.never()).start()
++        let ready = self.expectation(description: "cancel releases read")
++        let read = exteraPresenceBarrier(network: self.network).start(next: { _ in ready.fulfill() })
++        pending.dispose()
++        self.wait(for: [ready], timeout: 2)
++        read.dispose()
++        // Both operations above are synthetic signals. Neither can send a network
++        // presence packet or introduce a read-history/read-contents request.
++    }
++}
+--- /dev/null
++++ b/Tests/ExteraPills/ParityHostTests.swift
+@@ -0,0 +1,47 @@
++import Foundation
++
++final class AyuSettingsStore: @unchecked Sendable {
++    static let suiteName = "ExteraPillParityTests.\(UUID().uuidString)"
++    static let shared = AyuSettingsStore()
++    let userDefaults = UserDefaults(suiteName: AyuSettingsStore.suiteName)!
++}
++
++@main
++private enum ParityHostTests {
++    static func main() throws {
++        defer { AyuSettingsStore.shared.userDefaults.removePersistentDomain(forName: AyuSettingsStore.suiteName) }
++        func expect(_ value: @autoclosure () throws -> Bool, _ text: String) throws {
++            if try !value() { throw NSError(domain: text, code: 1) }
++        }
++        try expect(ExteraPillCurrency.resolve("AUTO", phone: "+79991234567", region: "RU") == "RUB", "Russian account AUTO")
++        try expect(ExteraPillCurrency.resolve("AUTO", phone: "+77001234567", region: "KZ") == "KZT", "Shared +7 regional disambiguation")
++        try expect(ExteraPillCurrency.resolve("AUTO", phone: "+12025550123", region: "CA") == "CAD", "Shared +1 regional disambiguation")
++        try expect(ExteraPillCurrency.resolve("AUTO", phone: "", region: "RU") == "USD", "No phone has USD fallback")
++        try expect(ExteraPillCurrency.resolve("ZZZ", phone: "+7999", region: "RU") == "USD", "Unknown explicit currency")
++        try expect(Array(ExteraPillCurrency.targets(for: .gram).prefix(3)) == ["AUTO", "USD", "EUR"], "Pinned currency order")
++        try expect(!ExteraPillCurrency.targets(for: .usd).contains("USD"), "USD target excluded only for USD pill")
++        let json = Data(#"{"data":{"currency":"USD","rates":{"TON":"0.25","BTC":"0.00002","EUR":"0.9","RUB":"90","JPY":"150"}}}"#.utf8)
++        try expect(try ExteraPillCurrency.price(data: json, base: "TON", target: "USD") == "$4.00", "TON is exchange rate")
++        try expect(try ExteraPillCurrency.price(data: json, base: "BTC", target: "RUB") == "4,500,000.00 ₽", "Reciprocal cross rate and suffix")
++        try expect(try ExteraPillCurrency.price(data: json, base: "USD", target: "JPY") == "¥150", "APK currency exponent and symbol")
++        try expect(ExteraPillWeather.temperature(-0.5, timezone: "Europe/Moscow") == "0°C", "Java negative-half rounding")
++        try expect(ExteraPillWeather.temperature(0, timezone: "US/Eastern") == "32°F", "Literal APK US alias")
++        try expect(ExteraPillWeather.temperature(0, timezone: "America/New_York") == "0°C", "APK does not include canonical US timezone")
++        try expect(ExteraPillWeather.temperature(10, timezone: "America/Nassau") == "50°F", "Exact listed Fahrenheit timezone")
++        let p = ExteraPillGestureFrame.frame(distance: -8, height: 32, hasNeighbor: true)
++        try expect(p.outgoingY == -8 && p.incomingY == 24 && p.outgoingAlpha == 0.75 && p.incomingAlpha == 0.25, "Quarter drag geometry")
++        try expect(abs(p.outgoingScale - 0.95) < 0.000001 && abs(p.incomingScale - 0.85) < 0.000001, "Quarter drag scale")
++        try expect(!ExteraPillGestureFrame.commits(distance: 8, height: 32, hasNeighbor: true), "Strict quarter threshold")
++        try expect(ExteraPillGestureFrame.commits(distance: 8.01, height: 32, hasNeighbor: true), "Above quarter commits")
++        try expect(!ExteraPillGestureFrame.commits(distance: 80, height: 32, hasNeighbor: false), "Finite boundary never commits")
++        let boundary = ExteraPillGestureFrame.frame(distance: 32, height: 32, hasNeighbor: false)
++        try expect(abs(boundary.outgoingY - 32 * (1 - 1 / 1.18)) < 0.000001 && boundary.outgoingAlpha == 1, "APK nonlinear resistance")
++        let store = ExteraPillStackSettings(userDefaults: AyuSettingsStore.shared.userDefaults)
++        try expect(store.target(.gram, account: 1) == "AUTO" && store.weather(account: 1).current, "APK defaults")
++        store.setTarget("EUR", kind: .gram, account: 1)
++        try expect(store.target(.btc, account: 1) == "AUTO" && store.target(.gram, account: 2) == "AUTO", "Per-pill and account isolation")
++        store.setTarget("USD", kind: .usd, account: 1)
++        try expect(store.target(.usd, account: 1) == "AUTO", "Forbidden USD retains AUTO")
++        print("PASS: next-wave production model fixtures")
++    }
++}

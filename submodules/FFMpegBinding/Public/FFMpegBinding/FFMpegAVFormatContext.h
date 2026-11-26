@@ -54,6 +54,7 @@ extern int FFMpegCodecIdAV1;
 - (void)seekFrameForStreamIndex:(int32_t)streamIndex pts:(int64_t)pts positionOnKeyframe:(bool)positionOnKeyframe;
 - (void)seekFrameForStreamIndex:(int32_t)streamIndex byteOffset:(int64_t)byteOffset;
 - (bool)readFrameIntoPacket:(FFMpegPacket *)packet;
+- (int32_t)readFrameStatusIntoPacket:(FFMpegPacket *)packet NS_SWIFT_NAME(readFrameStatus(into:));
 - (NSArray<NSNumber *> *)streamIndicesForType:(FFMpegAVFormatStreamType)type;
 - (bool)isAttachedPicAtStreamIndex:(int32_t)streamIndex;
 - (int)codecIdAtStreamIndex:(int32_t)streamIndex;

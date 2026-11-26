@@ -148,6 +148,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     private var badgeDisposable: Disposable?
     private var badgeIconDisposable: Disposable?
+    private var uiIconObservation: ExteraUIIconObservation?
     
     private var didAppear = false
     private var dismissSearchOnDisappear = false
@@ -401,12 +402,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         icon = UIImage(bundleImageName: "Chat List/Tabs/IconChats")
                     }
                     
-                    self.tabBarItem.image = icon
-                    self.tabBarItem.selectedImage = icon
-                    if !self.presentationData.reduceMotion {
+                    let provider = ExteraUIIconProvider.current
+                    self.tabBarItem.image = provider.image(for: .chats, fallback: icon)
+                    self.tabBarItem.selectedImage = self.tabBarItem.image
+                    if !self.presentationData.reduceMotion && !provider.hasImage(for: .chats) {
                         self.tabBarItem.animationName = "TabChats"
                         self.tabBarItem.animationOffset = CGPoint(x: 0.0, y: UIScreenPixel)
                     }
+                    self.uiIconObservation = ExteraUIIconObservation { [weak self] in self?.updateUIIconTab() }
                     
                     self.primaryContext?.leftButton = NavigationBarComponent.Button(id: "edit",
                         content: .text(title: self.presentationData.strings.Common_Edit, isBold: false),
@@ -421,6 +424,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
                             tint: .generic,
                             requiresOwnSection: true,
+                            glassCornerRadius: ExteraStyleSettings.shared.controlStyle == .material ? 14.0 : nil,
                             //
                             action: { [weak self] _ in
                                 self?.composePressed()
@@ -1020,6 +1024,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
     }
     
+    private func updateUIIconTab() {
+        guard case .chatList(.root) = self.location else { return }
+        let provider = ExteraUIIconProvider.current
+        let native = UIImage(bundleImageName: useSpecialTabBarIcons() ? "Chat List/Tabs/Holiday/IconChats" : "Chat List/Tabs/IconChats")
+        self.tabBarItem.image = provider.image(for: .chats, fallback: native)
+        self.tabBarItem.selectedImage = self.tabBarItem.image
+        self.tabBarItem.animationName = self.presentationData.reduceMotion || provider.hasImage(for: .chats) ? nil : "TabChats"
+    }
+
     private func updateThemeAndStrings() {
         if case .chatList(.root) = self.location {
             self.tabBarItem.title = self.presentationData.strings.DialogList_Title
@@ -1027,11 +1040,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             backBarButtonItem.accessibilityLabel = self.presentationData.strings.Common_Back
             self.navigationItem.backBarButtonItem = backBarButtonItem
             
-            if !self.presentationData.reduceMotion {
-                self.tabBarItem.animationName = "TabChats"
-            } else {
-                self.tabBarItem.animationName = nil
-            }
+            self.updateUIIconTab()
         } else {
             let backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
             backBarButtonItem.accessibilityLabel = self.presentationData.strings.Common_Back
@@ -7144,7 +7153,7 @@ private final class ChatListLocationContext {
         // MARK: Swiftgram
         let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
         // MARK: AyuGram — cheap notification-driven value, so the header reacts without polling.
-        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar })
+        let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar }, ayuSettingValueSignal { ExteraStyleSettings.shared.controlStyle.rawValue })
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()
@@ -7622,6 +7631,7 @@ private final class ChatListLocationContext {
                         // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
                         tint: .generic,
                         requiresOwnSection: true,
+                        glassCornerRadius: ExteraStyleSettings.shared.controlStyle == .material ? 14.0 : nil,
                         //
                         action: { [weak self] _ in
                             self?.parentController?.composePressed()

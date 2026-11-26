@@ -336,7 +336,12 @@ extension ChatControllerImpl {
                 }
                 
                 let isSecret = self.presentationInterfaceState.copyProtectionEnabled || self.presentationInterfaceState.myCopyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
-                let controller = makeContextController(presentationData: self.presentationData, source: source, items: actionsSignal, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret, hideReactionPanelTail: hideReactionPanelTail)
+                let styledActions = actionsSignal |> map { items -> ContextController.Items in
+                    var items = items
+                    items.exteraStyleIsMessageMenu = true
+                    return items
+                }
+                let controller = makeContextController(presentationData: self.presentationData, source: source, items: styledActions, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret, hideReactionPanelTail: hideReactionPanelTail)
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }

@@ -1,0 +1,101 @@
+    private var panIncoming: UIView?
+    private var panNext: String?
+    private var panDistance: CGFloat = 0
+    private var panDisplayLink: CADisplayLink?
+    private var panStart: CFTimeInterval = 0
+    private var panFrom: CGFloat = 0
+    private var panTo: CGFloat = 0
+    private var panDuration: Double = 0
+    private var panCommit = false
+    private var rememberedText: [String: String] = [:]
+
+    private func cancelPan() {
+        self.panDisplayLink?.invalidate(); self.panDisplayLink = nil
+        self.panIncoming?.removeFromSuperview(); self.panIncoming = nil
+        self.panNext = nil; self.panDistance = 0
+        self.content.transform = .identity; self.content.alpha = 1
+    }
+    @objc private func panned(_ gesture: UIPanGestureRecognizer) {
+        guard self.ids.count > 1 else { return }
+        switch gesture.state {
+        case .began:
+            self.panDisplayLink?.invalidate(); self.panDisplayLink = nil
+            gesture.setTranslation(CGPoint(x: 0, y: self.panDistance), in: self)
+        case .changed:
+            self.drawPan(gesture.translation(in: self).y)
+        case .ended, .cancelled, .failed:
+            let distance = self.panDistance
+            let commit = gesture.state == .ended && ExteraPillGestureFrame.commits(distance: Double(distance), height: Double(self.bounds.height), hasNeighbor: self.panNext != nil)
+            if UIAccessibility.isReduceMotionEnabled {
+                let next = commit ? self.panNext : nil
+                self.cancelPan(); if let next { self.selectAfterPan(next) }; return
+            }
+            self.panCommit = commit
+            self.panFrom = distance
+            self.panTo = commit ? (distance < 0 ? -self.bounds.height : self.bounds.height) : 0
+            self.panDuration = commit ? 0.25 : 0.20
+            self.panStart = CACurrentMediaTime()
+            let proxy = ExteraPillWeakDisplayLink(target: self, selector: #selector(self.advancePan))
+            let link = CADisplayLink(target: proxy, selector: #selector(ExteraPillWeakDisplayLink.tick(_:)))
+            self.panDisplayLink = link; link.add(to: .main, forMode: .common)
+        default: break
+        }
+    }
+    private func drawPan(_ distance: CGFloat) {
+        let next = self.layout.next(from: self.selected, direction: distance < 0 ? 1 : -1, ids: self.ids)
+        let candidate = next == self.selected ? nil : next
+        if candidate != self.panNext {
+            self.panIncoming?.removeFromSuperview(); self.panIncoming = nil
+            self.panNext = candidate
+            if let candidate {
+                // Render remembered content only. Neighbor preview owns no provider/lease.
+                let preview = UIView(frame: self.bounds)
+                let label = UILabel(frame: self.bounds.insetBy(dx: 8, dy: 0))
+                label.font = self.label.font; label.textColor = self.label.textColor
+                label.textAlignment = .center; label.lineBreakMode = .byTruncatingTail
+                label.text = self.rememberedText[candidate] ?? ExteraBuiltinPill.from(id: candidate)?.title(self.language) ?? self.specs.first(where: { ExteraPillStackLayout.customId($0.id) == candidate })?.label
+                if candidate == ExteraBuiltinPill.entryTime.id {
+                    let eye = UIImageView(image: UIImage(systemName: "eye.fill")); eye.tintColor = self.entryTimeIcon.tintColor; eye.contentMode = .scaleAspectFit
+                    eye.frame = CGRect(x: floor((self.bounds.width - 20) / 2), y: floor((self.bounds.height - 20) / 2), width: 20, height: 20)
+                    // Manual Entry Time always re-enters collapsed.
+                    label.text = ""; preview.addSubview(eye)
+                }
+                preview.addSubview(label); self.addSubview(preview); self.panIncoming = preview
+            }
+        }
+        self.panDistance = distance
+        let frame = ExteraPillGestureFrame.frame(distance: Double(distance), height: Double(self.bounds.height), hasNeighbor: candidate != nil)
+        self.content.transform = CGAffineTransform(translationX: 0, y: CGFloat(frame.outgoingY)).scaledBy(x: CGFloat(frame.outgoingScale), y: CGFloat(frame.outgoingScale))
+        self.content.alpha = CGFloat(frame.outgoingAlpha)
+        self.panIncoming?.transform = CGAffineTransform(translationX: 0, y: CGFloat(frame.incomingY)).scaledBy(x: CGFloat(frame.incomingScale), y: CGFloat(frame.incomingScale))
+        self.panIncoming?.alpha = CGFloat(frame.incomingAlpha)
+    }
+    @objc private func advancePan() {
+        let time = min(1, max(0, (CACurrentMediaTime() - self.panStart) / self.panDuration))
+        let progress: Double
+        if self.panCommit {
+            // Invert cubic x(t) by bisection, then evaluate y(t).
+            var low = 0.0, high = 1.0
+            for _ in 0 ..< 18 {
+                let t = (low + high) / 2
+                let x = 3 * (1 - t) * (1 - t) * t * 0.23 + 3 * (1 - t) * t * t * 0.32 + t * t * t
+                if x < time { low = t } else { high = t }
+            }
+            let t = (low + high) / 2
+            progress = 1 - pow(1 - t, 3)
+        } else {
+            // Android ValueAnimator default AccelerateDecelerateInterpolator.
+            progress = (cos((time + 1) * .pi) / 2) + 0.5
+        }
+        self.drawPan(self.panFrom + (self.panTo - self.panFrom) * CGFloat(progress))
+        if time >= 1 {
+            let next = self.panCommit ? self.panNext : nil
+            self.cancelPan()
+            if let next { self.selectAfterPan(next) }
+        }
+    }
+    private func selectAfterPan(_ next: String) {
+        self.stop(); self.selected = next; self.accessibilityValue = nil
+        ExteraPillStackSettings.shared.update(custom: self.specs) { $0.selected = next }
+        self.updateRunning(); self.setNeedsLayout()
+    }

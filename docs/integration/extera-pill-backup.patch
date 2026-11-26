@@ -1,0 +1,60 @@
+diff --git a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+--- a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
++++ b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+@@ -67,13 +67,18 @@
+         case integerSet(Set<Int>)
+         case string(Set<String>)
+         case text(maximumLength: Int, allowedCharacters: CharacterSet?)
+         case exactHosts
+         case navigationConfiguration
++        case pillConfiguration
+ 
+         func validate(_ object: Any) throws -> Value {
+             switch self {
++            case .pillConfiguration:
++                guard let value = object as? String else { throw BackupError.invalidValue }
++                let layout = try ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys)
++                return .string(ExteraPillPortableSettings.configurationJSON(layout))
+             case .navigationConfiguration:
+                 guard let value = object as? String, let data = value.data(using: .utf8) else { throw BackupError.invalidValue }
+                 try ExteraSettingsBackup.rejectDuplicateKeys(data)
+                 guard ExteraNavigationSettings.isValidConfigurationJSON(value) else { throw BackupError.invalidValue }
+                 return .string(value)
+@@ -154,10 +159,25 @@
+         }, write: {
+             if case let .string(value) = $0 { precondition(ExteraNavigationSettings.shared.restoreConfigurationJSON(value)) }
+         })
+     }
+ 
++    private static func pillConfiguration() -> Setting {
++        return Setting(name: ExteraPillPortableSettings.key, rule: .pillConfiguration,
++            defaultValue: .string(ExteraPillPortableSettings.configurationJSON(ExteraPillStackLayout())), read: {
++                .string(ExteraPillPortableSettings.configurationJSON(ExteraPillStackSettings.shared.layout))
++            }, write: {
++                // ValidatedBackup and the encoded default are the only sources. Decode before
++                // entering the setter; no malformed document can cause a partial layout write.
++                guard case let .string(value) = $0,
++                      let layout = try? ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys) else {
++                    preconditionFailure("Pill backup value must have passed complete validation")
++                }
++                ExteraPillPortableSettings.applyValidated(layout, settings: ExteraPillStackSettings.shared, custom: ExteraPillSettings.shared.pills)
++            })
++    }
++
+     private static func aiTemperature(_ name: String) -> Setting {
+         return Setting(name: name, rule: .integer(0 ... 20), defaultValue: .integer(10), read: {
+             let value = ExteraAISettings.shared.configuration.temperature
+             return .integer(value.isFinite ? Int((max(0.0, min(2.0, value)) * 10.0).rounded()) : 10)
+         }, aiWrite: { configuration, value in
+@@ -259,10 +279,11 @@
+         aiBoolean("extera.ai.showInstantViewSummaries", \.showInstantViewSummaries),
+         aiBoolean("extera.ai.showResponseOnly", \.showResponseOnly, defaultValue: false),
+         aiBoolean("extera.ai.insertAsQuote", \.insertAsQuote),
+         aiTemperature("extera.ai.temperatureTenths"),
+         navigationConfiguration(),
++        pillConfiguration(),
+         aiSummaryPolicy("extera.ai.replaceTelegramSummaries"),
+         aiEditorPolicy("extera.ai.replaceTelegramEditor"),
+         boolean("extera.browser.automaticFilterUpdates", defaultValue: true, read: { ExteraBrowserFilters.shared.automaticUpdates }, write: { ExteraBrowserFilters.shared.automaticUpdates = $0 }),
+         boolean("extera.stickers.unlimitedRecent", read: { ExteraStickerSettings.shared.unlimitedRecentStickers }, write: { ExteraStickerSettings.shared.unlimitedRecentStickers = $0 }),
+         integer("extera.stickers.size", allowed: Set(4 ... 20), defaultValue: 12, read: { ExteraStickerSettings.shared.size }, write: { ExteraStickerSettings.shared.size = $0 }),

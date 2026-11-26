@@ -48,6 +48,7 @@ public protocol SGItemListSection: Equatable {
 public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Hashable, OneFromManySetting: Hashable, DisclosureLink: Hashable, ActionType: Hashable> {
     let context: AccountContext
     public let visualStyle: SGItemListVisualStyle
+    public let exteraAppearance: SGExteraAppearance
     //
     let setBoolValue: (BoolSetting, Bool) -> Void
     let updateSliderValue: (SliderSetting, Int32) -> Void
@@ -62,6 +63,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
     public init(
         context: AccountContext,
         visualStyle: SGItemListVisualStyle = .native,
+        exteraAppearance: SGExteraAppearance = SGExteraAppearance(),
         //
         setBoolValue: @escaping (BoolSetting, Bool) -> Void = { _,_ in },
         updateSliderValue: @escaping (SliderSetting, Int32) -> Void = { _,_ in },
@@ -74,6 +76,7 @@ public final class SGItemListArguments<BoolSetting: Hashable, SliderSetting: Has
     ) {
         self.context = context
         self.visualStyle = visualStyle
+        self.exteraAppearance = exteraAppearance
         //
         self.setBoolValue = setBoolValue
         self.updateSliderValue = updateSliderValue
@@ -101,6 +104,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
     case oneFromManySelector(id: Int, section: Section, settingName: OneFromManySetting, text: String, value: String, enabled: Bool)
     /// A labelled discrete scale; value is an index into options, never a continuous amount.
     case segmentedSelector(id: Int, section: Section, settingName: OneFromManySetting, value: Int, options: [String], enabled: Bool)
+    /// Exactly two vector style choices. Options supply localized accessibility labels.
+    case appearanceStyle(id: Int, section: Section, settingName: OneFromManySetting, value: Int, options: [String], enabled: Bool)
+    /// A raw integer scale, independent of the percentage slider and sticker scale.
+    case valueSlider(id: Int, section: Section, settingName: SliderSetting, configuration: SGItemListRangeConfiguration, enabled: Bool)
     case disclosure(id: Int, section: Section, link: DisclosureLink, text: String)
     case disclosureSubtitle(id: Int, section: Section, link: DisclosureLink, text: String, subtitle: String, iconName: String)
     case peerColorDisclosurePreview(id: Int, section: Section, name: String, color: UIColor)
@@ -140,6 +147,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return sectionId.rawValue
         case let .segmentedSelector(_, sectionId, _, _, _, _):
             return sectionId.rawValue
+        case let .appearanceStyle(_, sectionId, _, _, _, _), let .valueSlider(_, sectionId, _, _, _):
+            return sectionId.rawValue
             
         case let .action(_, sectionId, _, _, _):
             return sectionId.rawValue
@@ -178,6 +187,8 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
         case let .oneFromManySelector(stableIdValue, _, _, _, _, _):
             return stableIdValue
         case let .segmentedSelector(stableIdValue, _, _, _, _, _):
+            return stableIdValue
+        case let .appearanceStyle(stableIdValue, _, _, _, _, _), let .valueSlider(stableIdValue, _, _, _, _):
             return stableIdValue
         case let .action(stableIdValue, _, _, _, _):
             return stableIdValue
@@ -226,6 +237,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             return id1 == id2 && section1 == section2 && settingName1 == settingName2 && text1 == text2 && value1 == value2 && enabled1 == enabled2
         case let (.segmentedSelector(id1, section1, setting1, value1, options1, enabled1), .segmentedSelector(id2, section2, setting2, value2, options2, enabled2)):
             return id1 == id2 && section1 == section2 && setting1 == setting2 && value1 == value2 && options1 == options2 && enabled1 == enabled2
+        case let (.appearanceStyle(id1, section1, setting1, value1, options1, enabled1), .appearanceStyle(id2, section2, setting2, value2, options2, enabled2)):
+            return id1 == id2 && section1 == section2 && setting1 == setting2 && value1 == value2 && options1 == options2 && enabled1 == enabled2
+        case let (.valueSlider(id1, section1, setting1, configuration1, enabled1), .valueSlider(id2, section2, setting2, configuration2, enabled2)):
+            return id1 == id2 && section1 == section2 && setting1 == setting2 && configuration1 == configuration2 && enabled1 == enabled2
         case let (.action(id1, section1, actionType1, text1, kind1), .action(id2, section2, actionType2, text2, kind2)):
             return id1 == id2 && section1 == section2 && actionType1 == actionType2 && text1 == text2 && kind1 == kind2
             
@@ -288,7 +303,7 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
             let selectionUpdated: ((Int) -> Void)? = selectionSetting.map { setting in
                 return { arguments.setSegmentedValue(setting, $0) }
             }
-            return sgSettingsPreviewItem(presentationData: presentationData, sectionId: self.section, visualStyle: arguments.visualStyle, kind: kind, sliderUpdated: sliderUpdated, selectionUpdated: selectionUpdated)
+            return sgSettingsPreviewItem(presentationData: presentationData, sectionId: self.section, visualStyle: arguments.visualStyle, appearance: arguments.exteraAppearance, kind: kind, sliderUpdated: sliderUpdated, selectionUpdated: selectionUpdated)
         case let .percentageSlider(_, _, setting, value):
             return SliderPercentageItem(
                 theme: presentationData.theme,
@@ -319,6 +334,10 @@ public enum SGItemListUIEntry<Section: SGItemListSection, BoolSetting: Hashable,
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) // Closing search keyboard if active
                     arguments.action(actionType)
             })
+        case let .appearanceStyle(_, _, setting, value, options, enabled):
+            return sgAppearanceStyleItem(presentationData: presentationData, sectionId: self.section, visualStyle: arguments.visualStyle, appearance: arguments.exteraAppearance, value: value, options: options, enabled: enabled, updated: { arguments.setSegmentedValue(setting, $0) })
+        case let .valueSlider(_, _, setting, configuration, enabled):
+            return sgValueSliderItem(presentationData: presentationData, sectionId: self.section, visualStyle: arguments.visualStyle, appearance: arguments.exteraAppearance, configuration: configuration, interactionIdentity: AnyHashable([AnyHashable(self.stableId), AnyHashable(setting)]), enabled: enabled, updated: { arguments.updateSliderValue(setting, $0) })
         case let .searchInput(_, _, title, text, placeholder):
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: text, placeholder: placeholder, returnKeyType: .done, spacing: 3.0, clearType: .always, selectAllOnFocus: true, secondaryStyle: true, sectionId: self.section, textUpdated: { input in arguments.searchInput(input) }, action: {}, dismissKeyboardOnEnter: true)
         }
@@ -362,8 +381,10 @@ public func filterSGItemListUIEntrires<Section: SGItemListSection & Hashable, Bo
             return false // Assuming percentage sliders don't have searchable text
         case .oneFromManySelector(_, _, _, let text, let value, _):
             return text.lowercased().contains(query) || value.lowercased().contains(query)
-        case .segmentedSelector(_, _, _, _, let options, _):
+        case .segmentedSelector(_, _, _, _, let options, _), .appearanceStyle(_, _, _, _, let options, _):
             return options.contains { $0.lowercased().contains(query) }
+        case let .valueSlider(_, _, _, configuration, _):
+            return [configuration.title, configuration.minimumLabel, configuration.maximumLabel].contains { $0.lowercased().contains(query) }
         case .disclosure(_, _, _, let text):
             return text.lowercased().contains(query)
         case .disclosureSubtitle(_, _, _, let text, let subtitle, _):

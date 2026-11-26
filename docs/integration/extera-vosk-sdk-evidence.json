@@ -1,0 +1,176 @@
+{
+  "zip": {
+    "file": "libvosk-0.1.2.xcframework.zip",
+    "bytes": 48290797,
+    "sha256": "1891ad61293278363f75f2b4e5313c606183d0acd14f4b1ff1a71f5629c676f9"
+  },
+  "libraries": [
+    {
+      "path": "libvosk.xcframework/ios-arm64_armv7_armv7s/libvosk.a",
+      "bytes": 98579576,
+      "sha256": "a6705b01390ec42a33f4f3b83ac4f2d760d74bf15e5a82cf7ea1710aca1115f9",
+      "slices": [
+        {
+          "arch": "armv7",
+          "cpuType": "0xc",
+          "cpuSubtype": 9,
+          "offset": 68,
+          "bytes": 31029208,
+          "alignmentExponent": 2,
+          "sha256": "58ef54445171e8296bb447ce8278b6fecc8f2610db9d256c5f15c6d12ea52e69",
+          "objects": 223,
+          "platforms": [
+            {
+              "platform": "iOS legacy",
+              "minimum": "10.3.0",
+              "sdk": "15.2.0",
+              "objects": 223
+            }
+          ],
+          "versionLoadCommands": {
+            "0x25": 223
+          },
+          "buildVersionTools": {},
+          "requiredMissing": [],
+          "undefinedOutsideArchiveCount": 345
+        },
+        {
+          "arch": "armv7s",
+          "cpuType": "0xc",
+          "cpuSubtype": 11,
+          "offset": 31029276,
+          "bytes": 31165408,
+          "alignmentExponent": 2,
+          "sha256": "ef15e3e1f4e6ddfed9c90716c02eb6f9fe2a434262f68aab6302d6a716a29c5a",
+          "objects": 223,
+          "platforms": [
+            {
+              "platform": "iOS legacy",
+              "minimum": "10.3.0",
+              "sdk": "15.2.0",
+              "objects": 223
+            }
+          ],
+          "versionLoadCommands": {
+            "0x25": 223
+          },
+          "buildVersionTools": {},
+          "requiredMissing": [],
+          "undefinedOutsideArchiveCount": 341
+        },
+        {
+          "arch": "arm64",
+          "cpuType": "0x100000c",
+          "cpuSubtype": 0,
+          "offset": 62194688,
+          "bytes": 36384888,
+          "alignmentExponent": 3,
+          "sha256": "ee6e8c195ca009a2729cca8812754bf04d906e8c0847509e6f47586d6b486bcb",
+          "objects": 223,
+          "platforms": [
+            {
+              "platform": "iOS legacy",
+              "minimum": "10.3.0",
+              "sdk": "15.2.0",
+              "objects": 223
+            }
+          ],
+          "versionLoadCommands": {
+            "0x25": 223
+          },
+          "buildVersionTools": {},
+          "requiredMissing": [],
+          "undefinedOutsideArchiveCount": 328
+        }
+      ]
+    },
+    {
+      "path": "libvosk.xcframework/ios-arm64_x86_64-simulator/libvosk.a",
+      "bytes": 73146600,
+      "sha256": "7933cf4794fad8f066de78ed1b6f70797b41ce3f43b5944e151c6a1f6c08d76c",
+      "slices": [
+        {
+          "arch": "x86_64",
+          "cpuType": "0x1000007",
+          "cpuSubtype": 3,
+          "offset": 48,
+          "bytes": 36787648,
+          "alignmentExponent": 3,
+          "sha256": "86c47a5c99d23c79b8bd922ccffc12d4896a68f86ffe248ad587d176f7ca580b",
+          "objects": 223,
+          "platforms": [
+            {
+              "platform": "iOS legacy",
+              "minimum": "10.3.0",
+              "sdk": "15.2.0",
+              "objects": 223
+            }
+          ],
+          "versionLoadCommands": {
+            "0x25": 223
+          },
+          "buildVersionTools": {},
+          "requiredMissing": [],
+          "undefinedOutsideArchiveCount": 333
+        },
+        {
+          "arch": "arm64",
+          "cpuType": "0x100000c",
+          "cpuSubtype": 0,
+          "offset": 36787696,
+          "bytes": 36358904,
+          "alignmentExponent": 3,
+          "sha256": "873ec6ce80f1462909a3ba5441a26ef75614729c768a0e878ff88e1907a22e6d",
+          "objects": 223,
+          "platforms": [
+            {
+              "platform": "iOS Simulator",
+              "minimum": "14.0.0",
+              "sdk": "15.2.0",
+              "objects": 223
+            }
+          ],
+          "versionLoadCommands": {
+            "0x32": 223
+          },
+          "buildVersionTools": {
+            "3:0x2c70000": 223
+          },
+          "requiredMissing": [],
+          "undefinedOutsideArchiveCount": 328
+        }
+      ]
+    }
+  ],
+  "members": [
+    "libvosk.xcframework/",
+    "libvosk.xcframework/ios-arm64_armv7_armv7s/",
+    "libvosk.xcframework/ios-arm64_armv7_armv7s/libvosk.a",
+    "libvosk.xcframework/ios-arm64_x86_64-simulator/",
+    "libvosk.xcframework/ios-arm64_x86_64-simulator/libvosk.a",
+    "libvosk.xcframework/Info.plist"
+  ],
+  "infoPlistSHA256": "f49eaea7e01317282d355629f6d23d4f235ae3b9895f0050339bafeea4a53bec",
+  "availableLibraries": [
+    {
+      "LibraryIdentifier": "ios-arm64_armv7_armv7s",
+      "LibraryPath": "libvosk.a",
+      "SupportedArchitectures": [
+        "arm64",
+        "armv7",
+        "armv7s"
+      ],
+      "SupportedPlatform": "ios"
+    },
+    {
+      "LibraryIdentifier": "ios-arm64_x86_64-simulator",
+      "LibraryPath": "libvosk.a",
+      "SupportedArchitectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "SupportedPlatform": "ios",
+      "SupportedPlatformVariant": "simulator"
+    }
+  ]
+}

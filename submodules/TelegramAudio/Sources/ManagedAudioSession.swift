@@ -546,6 +546,8 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     private var failedMicrophoneAttempt: MicrophoneAttempt?
     private var microphoneSettingsObserver: NSObjectProtocol?
     private var observedMicrophone = ExteraChatAppearanceSettings.shared.microphone
+    private var appliedPlaybackMixing: Bool?
+    private var playbackSettingsObserver: NSObjectProtocol?
     
     private let zeroVolumeEvents = ValuePipe<Void>()
     public func didActivateWithZeroVolume() -> Signal<Void, NoError> {
@@ -569,6 +571,15 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                     self.failedMicrophoneAttempt = nil
                     self.applyRecordingMicrophoneInput()
                 }
+            }
+        }
+        self.playbackSettingsObserver = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            queue.async {
+                guard let self, self.holders.contains(where: { $0.active }),
+                      let (type, outputMode) = self.currentTypeAndOutputMode,
+                      let mixing = type.exteraMixesPlaybackWithOtherAudio(pauseOtherAudio: ExteraChatMediaSettings.shared.pauseOtherAudio),
+                      self.appliedPlaybackMixing != mixing else { return }
+                self.setup(type: type, outputMode: outputMode, activateNow: self.isActiveValue)
             }
         }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance(), queue: nil, using: { [weak self] _ in
@@ -621,6 +632,9 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     deinit {
         self.deactivateTimer?.invalidate()
         if let observer = self.microphoneSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = self.playbackSettingsObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -1103,7 +1117,8 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         
         let wasPlaybackActive = self.currentTypeAndOutputMode?.0.isPlay ?? false
         
-        if self.currentTypeAndOutputMode == nil || self.currentTypeAndOutputMode! != (type, outputMode) {
+        let playbackMixing = type.exteraMixesPlaybackWithOtherAudio(pauseOtherAudio: ExteraChatMediaSettings.shared.pauseOtherAudio)
+        if self.currentTypeAndOutputMode == nil || self.currentTypeAndOutputMode! != (type, outputMode) || self.appliedPlaybackMixing != playbackMixing {
             if !type.isRecord {
                 self.recordingInputSessionIsActive = false
                 self.ownsRecordingSpeakerOverride = false
@@ -1119,6 +1134,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                 }
             }
             self.currentTypeAndOutputMode = (type, outputMode)
+            self.appliedPlaybackMixing = playbackMixing
             
             do {
                 let nativeCategory = nativeCategoryForType(type, headphones: self.isHeadsetPluggedInValue, outputMode: outputMode)
@@ -1126,13 +1142,16 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                 managedAudioSessionLog("ManagedAudioSession setting category for \(type) (native: \(nativeCategory)) activateNow: \(activateNow)")
                 var options: AVAudioSession.CategoryOptions = []
                 switch type {
-                case let .play(mixWithOthers):
-                    if mixWithOthers {
+                case .play:
+                    if playbackMixing == true {
                         options.insert(.mixWithOthers)
                     }
                 case .ambient:
                     options.insert(.mixWithOthers)
                 case .playWithPossiblePortOverride:
+                    if playbackMixing == true {
+                        options.insert(.mixWithOthers)
+                    }
                     if case .playAndRecord = nativeCategory {
                         options.insert(.allowBluetoothA2DP)
                     }

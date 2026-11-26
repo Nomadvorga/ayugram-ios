@@ -41,6 +41,83 @@
     {
       "pack": "base.solar",
       "roles": [
+        "gift",
+        "birthday"
+      ],
+      "asset": "ExteraUI_solar_menu_gift",
+      "source": "msg_gift_premium_solar.xml",
+      "sha256": "ef6f7fd8dc5b4b2154a0b91317ce23faf80172a0c30df147da2a576f4ccf05da",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_gift_premium_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_gift_premium_solar.xml",
+      "apkDecodedSha256": "c3b599403bf3b558327629ddbd5e5d9f15c9dbeee41d7e1d786445de19a4f835",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "da81204acb6058944dc3467a2fbc6c86b4e15e5efe79814643d63b1e1f3ee8ea",
+        "icon@2x.png": "c8bfff11f1b75302545300c5da30a268360bfa1b019d850c5c682f167f59a606",
+        "icon@3x.png": "a1ad1ba92ea7c5cb789474f484f7a020b5c0d4f8a6232fd936f78c9031ce61aa"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "doubleTapReply"
+      ],
+      "asset": "ExteraUI_solar_menu_reply",
+      "source": "msg_reply_solar.xml",
+      "sha256": "1191a07441f7c8a62f77acf5247231dc6e0785a2669a621e6a582ad2710207e0",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_reply_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reply_solar.xml",
+      "apkDecodedSha256": "79a870e8737cb9b57a36595748b53801e0c4a35a48a0d2b838f0871fad39542d",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "50d5f32491535ead1dd77cafa253850d3e02339cca35249e38caebc9f35080b9",
+        "icon@2x.png": "63a032c91e18c795d8615a90d62778dc9d4f9c72a80cb3106a2443eb73cd3b84",
+        "icon@3x.png": "d44ce7f476fc76fce41be7b4ec1aa442ef724243492fd3edd5a030e61b01ec88"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "priceTag"
+      ],
+      "asset": "ExteraUI_solar_menu_tag_edit",
+      "source": "menu_tag_edit_solar.xml",
+      "sha256": "37156ef0e548a40074f1580f571d14ba067c0e8a4bf19a5e1c00ee5647674994",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/menu_tag_edit_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_tag_edit_solar.xml",
+      "apkDecodedSha256": "688ebee47a21b9c468ab05be9265522d83f63dfebabf2a0ee87935972ad3cae0",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e19ed1406a4744c88ff07aa8f0ffa79e4f05914ec2841a2f618b95dda535d528",
+        "icon@2x.png": "926b365e0830c952a0265e71f7ad31dbc18695bd49ac0cab14ade207c7b4f1d9",
+        "icon@3x.png": "395bbf743bd7cc2b4de866feb545dd9f8810f793aa1035ed2e52ef226a8cbcb9"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "factCheck"
+      ],
+      "asset": "ExteraUI_solar_menu_verification",
+      "source": "menu_verification_solar.xml",
+      "sha256": "516c130e567428d880c516efa5573413f618e390f8c536ef883b5cf6401f6a93",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/menu_verification_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_verification_solar.xml",
+      "apkDecodedSha256": "735e57c2e322d7cc0b970376e229f7a495e3162c21e8cb2d588d589f763fb9f3",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "5393c2e2369ea8cf9863421ca79da499e59a94ce1d790b4b54469d05b51a9a6f",
+        "icon@2x.png": "3050e4030be62598bb5ade7d4cf2a71c3feb136580666eed766da126ca5813f9",
+        "icon@3x.png": "7a969fbe44ce4a7b8ef981a21998ab023b9b24b424105467a19a212c8ae41f07"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "wallet"
       ],
       "asset": "ExteraUI_solar_menu_wallet",
@@ -98,6 +175,25 @@
     {
       "pack": "base.solar",
       "roles": [
+        "admins"
+      ],
+      "asset": "ExteraUI_solar_msg_admins",
+      "source": "msg_admins_solar.xml",
+      "sha256": "05665fbef6fc0cc821b35c8980b4eaaff6f2f21a5de1512131654c3449816368",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_admins_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_admins_solar.xml",
+      "apkDecodedSha256": "41e4837d743121823bde8c95bcf7648a5837ebbe45f5fa0ef08d0fddfe16411c",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "f41ae3fe143c8b8ea602a98f6621f1736fa443dda4c9f5adc187b18cfcf591d7",
+        "icon@2x.png": "a0a75cc60d405e16552d462b1b24fe654b1c59a59560f45419ae75bf1a8be70f",
+        "icon@3x.png": "ae68241c97e2cf4249d4c698a355ef6fa3d3440c1ac924be1fcecd6528be291e"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "archive"
       ],
       "asset": "ExteraUI_solar_msg_archive",
@@ -117,6 +213,64 @@
     {
       "pack": "base.solar",
       "roles": [
+        "back"
+      ],
+      "asset": "ExteraUI_solar_msg_arrow_back",
+      "source": "ic_ab_back_solar.xml",
+      "sha256": "0cf18166f9386562d39d1ce66ab2430f4deae49b870bb8fdc22efe50863494c5",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/ic_ab_back_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/ic_ab_back_solar.xml",
+      "apkDecodedSha256": "9e537c6e4ee8db46c4a09979e24f8231f662348c707b420ad3f69bf50d05d44c",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "5729d49a5020fb67dda9563957b21eec79abbe2a2ca8336327b57e37a84a85a2",
+        "icon@2x.png": "bd0743a5a703caa3887cff1d93a146ee9b005019aa36dd4c12782b887383f31f",
+        "icon@3x.png": "a0ebe3ffa618d9aaa4c0506c20aa70dce56c56f6b9dbaf034a8daf6e5ca93135"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "selfExpiring"
+      ],
+      "asset": "ExteraUI_solar_msg_autodelete",
+      "source": "msg_autodelete_solar.xml",
+      "sha256": "bc28a38b4c05cf563c8fe11b8790616769050900f3354a4c18bc4de080be78c0",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_autodelete_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_autodelete_solar.xml",
+      "apkDecodedSha256": "8b685954c284318cf1cfe4fbeedb5c087d8c7fabe1d08b8fe300071045fa50e9",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "ea48a24d0bc7e4236159a146b0cd23184504d134c287777742da9fe56c734d5e",
+        "icon@2x.png": "fdaa256416c368bfc0526e7bd203ed02f851baa8ed788b2aa43f66d9902005f3",
+        "icon@3x.png": "69333c12b9a8d8eb57c222a0c2e27717ae82b0c383468f076f073a8705615f0a"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "block",
+        "disabled"
+      ],
+      "asset": "ExteraUI_solar_msg_block",
+      "source": "msg_block_solar.xml",
+      "sha256": "b5093d0d923ef676d8c3f84e2a274be56c60108e346395ffd5695479b7da1e57",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_block_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_block_solar.xml",
+      "apkDecodedSha256": "5626f795cb229ac47b9ec8c48c3b3872b277bfff112470f521d11e2f40d6bbff",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "4ca004de51c1a34582c3199d55c084ba2c544f27932bef31c2f8267c42474624",
+        "icon@2x.png": "0acb78a70e5ed47c01eec8fb674eb40bf674c20b2452bcae1abccaf3d52bbf12",
+        "icon@3x.png": "184530270813c257d17799f4b816995c4938303086bb67566af497c1bc3dfec6"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "bots"
       ],
       "asset": "ExteraUI_solar_msg_bots",
@@ -131,6 +285,63 @@
         "icon@1x.png": "04e82d5014242e49a13898c7f603916eae07de9f8f3ac727b9ea7277141baedb",
         "icon@2x.png": "a892bde77645315e444e5819bab28969678420ee2485b5f0f33d33121ad9d0c3",
         "icon@3x.png": "1318d58c6246f8aaf3734a32e471adc8944507b4ccdd63e147e17ae14663041b"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "powerSaving"
+      ],
+      "asset": "ExteraUI_solar_msg_brightness_low",
+      "source": "msg_brightness_low_solar.xml",
+      "sha256": "f6bce740a4030df106ffe263c2d92e13381a3444b432bf34ef8156c423805ad3",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_brightness_low_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_brightness_low_solar.xml",
+      "apkDecodedSha256": "253cb8195d7660af3137220b1b7366b56804e61aad26a6928881a18f894da437",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "60feefb4f1d7fbcd8232dadee99212625753542d074e1c511c80319145a4e074",
+        "icon@2x.png": "72f841032a671724692b3d75d46127de5395af2fe8b71c59a42d29eb621368a5",
+        "icon@3x.png": "4d8435281b48c7a08ab7d1142a05354bfbd60ec90c61529421c32c787393049c"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "calendar"
+      ],
+      "asset": "ExteraUI_solar_msg_calendar",
+      "source": "msg_calendar_solar.xml",
+      "sha256": "483f23165f04ec2c21464ae6d006ba46332271368937e82b2a61c17bbac47bef",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_calendar_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_calendar_solar.xml",
+      "apkDecodedSha256": "a12e0af4552bb9cd00c03d4a799bd1e8c24169c6a10c05a4b483cd0eda7f968d",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "df9973ee37d94099c901d29bf58ea7d55fd416a1da839b4c22fd27a439b9b9c0",
+        "icon@2x.png": "eadcf025c4ab3bb38a4249d3f4e20cc7adf54882f66a14bf60d7ed8c902388bb",
+        "icon@3x.png": "b60304799cfd56a0b127288eace8916c9b9aa0c368abf3f67410625c3ca4eee4"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "schedule"
+      ],
+      "asset": "ExteraUI_solar_msg_calendar2",
+      "source": "msg_calendar2_solar.xml",
+      "sha256": "872a09d96c98d17b4e0b136639a46640d58aac38228b4061970fa4bed0f42110",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_calendar2_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_calendar2_solar.xml",
+      "apkDecodedSha256": "262984a2391e02eec279b697c7aeb2a953f7fcac746748aeb23c83594c79aed4",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "35f7ab5fe480f242dcdb3f29a4c74ceebc729b9ce04aa2a77bb11704953fa7f0",
+        "icon@2x.png": "7c4704d7910b9f33df7768e4829e933ecfa33f92f322afe9d073fa87294e33cb",
+        "icon@3x.png": "494606e19c0cca2b708056ebf0cf7a3462c1bf0b704be598f34923ce3317707c"
       }
     },
     {
@@ -174,6 +385,25 @@
     {
       "pack": "base.solar",
       "roles": [
+        "clear"
+      ],
+      "asset": "ExteraUI_solar_msg_clear",
+      "source": "msg_clear_solar.xml",
+      "sha256": "15fc8179284611f86b0e7cfcabe41ac2ce5de713f4f16d37c7db4d278a53c9a3",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_clear_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_clear_solar.xml",
+      "apkDecodedSha256": "ae91c2a5d1e9069a18e7ee960c2f646211faa871e20880544912d1ea7e2140ce",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e9cb3590eeaacfec15bab0f56cea083ad46a6f3cb2a52a656f33d475d700da90",
+        "icon@2x.png": "6c24a187518c3d17c44d7009aefb4c1e9bc4adaa7b46287e8472347c62ffddf5",
+        "icon@3x.png": "3b9dff495c89cb687784e8a9967c1fe258bc14b498257beab0094082692cdc9f"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "contacts"
       ],
       "asset": "ExteraUI_solar_msg_contacts",
@@ -207,6 +437,25 @@
         "icon@1x.png": "5af041e6b80b125d304eac66bbbceed7b739b832250700617b0121e5ff338e0a",
         "icon@2x.png": "344149370c5e6e762c62bf49f63c7a1a0f20d3bce953b742bd2114d165b359ab",
         "icon@3x.png": "b74fcab85dde8cb68eb052f5582e94583938fdec785896972a616c7a86e09e8e"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "customize"
+      ],
+      "asset": "ExteraUI_solar_msg_customize",
+      "source": "msg_photo_settings_solar.xml",
+      "sha256": "53e62bc37211c1aabb3c398839f48b7e60eca1a1b836cf179209a1884b084eda",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_photo_settings_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_photo_settings_solar.xml",
+      "apkDecodedSha256": "a4dcc692530ae462554835997072a304c6930fb4df29a084bcdf7c956c4256a3",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2b6c94dd0f283665871b9cb8d1fc9a286252802e16c16038654cd96356f6597f",
+        "icon@2x.png": "048cbcc96cf68a8d1a968d50bf5b4a62366b306dea6a5a2d3da81d1c3d47fd8c",
+        "icon@3x.png": "204230d67e10bf468419ba9a108ddb73ca2448d7d98e836dad90328de3fd7d90"
       }
     },
     {
@@ -269,6 +518,63 @@
     {
       "pack": "base.solar",
       "roles": [
+        "chatHistory"
+      ],
+      "asset": "ExteraUI_solar_msg_discuss",
+      "source": "msg_ask_question_solar.xml",
+      "sha256": "cac7799f5674f6578eb8ba9154396529056aff75b3a6dd549f2d51f7eaf30449",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_ask_question_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_ask_question_solar.xml",
+      "apkDecodedSha256": "d51ee4c589bb50229b46650954a759dfcbb312f19e34d56f887d8abd461d9c8f",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e1e02566177ee5739e0ea442344b9da70a347c80e43aaba4fe8045e5a57378cc",
+        "icon@2x.png": "95a3932f73dd7bc6a1d6e06a7b8afde8bfec0583669f2a2b22e684b5e0084b58",
+        "icon@3x.png": "1b91feb7e807a773e58bdaa318f0bc0d87994ec76967f4840bfdbc3e6ec1eeb2"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "message"
+      ],
+      "asset": "ExteraUI_solar_msg_discussion",
+      "source": "msg_discussion_solar.xml",
+      "sha256": "a1949d85162207fd842ad382f228a69e17660f68abb13313bdf5ebb8f4c888b3",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_discussion_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_discussion_solar.xml",
+      "apkDecodedSha256": "b751b5b3f08bae660a989792273dbc77714c92a0198e17384adff63ce157130e",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "341597411335a979ec20114183c19425eff35f0c93942875f5cfe0689fa6a27f",
+        "icon@2x.png": "1726f891581cc9274550a92d031501f854a7e0bc3b58b6b2133590d966f01157",
+        "icon@3x.png": "e702e53b7ec19566c86e35490c70e230849c282241999a3cb5952c5f81e88a75"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "download"
+      ],
+      "asset": "ExteraUI_solar_msg_download",
+      "source": "msg_download_solar.xml",
+      "sha256": "535bdf644d830ebe019ee70a675fa092911281b7241d4f3a6626a029fb368d69",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_download_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_download_solar.xml",
+      "apkDecodedSha256": "b00fa0566f249f37d5f501b8c78d445bb6bf1f5f19da77cb33fc14b402cdc653",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "9280934f137e7a34e6f905f8982664bb1e25c741567dc0f433715253cdb803e0",
+        "icon@2x.png": "fb71c86246ce7cde297e090ca7c167e9f294038c8aa71dd58ed328cf8e5c5b60",
+        "icon@3x.png": "be000f3f0deb97a38be1c2017f3b8f2a8e9a5a3c28e1b4a100db6d803af4f6c9"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "edit"
       ],
       "asset": "ExteraUI_solar_msg_edit",
@@ -283,6 +589,177 @@
         "icon@1x.png": "1b2357d6cbc04207bbddaac0d5a4850b2d18038e3c9b3ccc4e21470486d3889b",
         "icon@2x.png": "36041ae25d5a8bc461412a862bc09b3bba0fea3deb6f45adcc6644b068e2999c",
         "icon@3x.png": "5bf8849aa54ff938cf9fa48f4b2176677aa448b32405280b205af9c4c47741b6"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "emoji"
+      ],
+      "asset": "ExteraUI_solar_msg_emoji_smiles",
+      "source": "input_smile_solar.xml",
+      "sha256": "d13af71f8b8609dad7c250dc14b6d25e265b8605c39b87163ee5c4602dc3b384",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/input_smile_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/input_smile_solar.xml",
+      "apkDecodedSha256": "53040928662f0f70c56dd0dce6bdee42d34c5cb36053ef8e6c2141ddab2e9b60",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "042d0212e9d9c9f0ef7c764f7292d32d363af1e67f74cac694e60a44ce73aad0",
+        "icon@2x.png": "669c96001e2350bd2b316c0083110b3fe046833a693452e9e471611cad2db1b0",
+        "icon@3x.png": "4f59b6acccf294811d65d3c1a4321568ec4768c5a028e97d8eecab0a9f4587f5"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "favorite"
+      ],
+      "asset": "ExteraUI_solar_msg_fave",
+      "source": "msg_fave_solar.xml",
+      "sha256": "a14e3c556cb357f6f8a17d0ee9cf9e0c601a87da86de8515f33770c0247f8753",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_fave_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_fave_solar.xml",
+      "apkDecodedSha256": "b0cb77fc229cd8f2e81c7fb3cacc61cad49067e2d55c5a6dca574a3009499b27",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "988fec2114c2572cfc431dd40e167f36a5458e3b7c4935079cfcb55e8728f1bc",
+        "icon@2x.png": "5a480a66387dba545dab2bac94c615bebaedb7c92e945399ad2ab6f0162e56cf",
+        "icon@3x.png": "10ced57c8abc0a2a41cd65386d038584863464f93ed34d9cd357b1ef31392161"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "file"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_data_files",
+      "source": "msg_filled_data_files_solar.xml",
+      "sha256": "2ecdbc46a7d63b343431c5e9f8d8b44a5aa6c60cf3f046f56652ef69872a9759",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_data_files_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_files_solar.xml",
+      "apkDecodedSha256": "390881a4a9bad4b50ec3d27d22e5b82ecde7b0f6b39cef32c53f2b6b66c19968",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "b8ab834d5eb944b56f6221ca303df2ccdd98dec19e707b32be5d6ed8efdc3da4",
+        "icon@2x.png": "600d477d0ac830539a849eb5797f9843ff090e7385d1200d9e419a0e498f37df",
+        "icon@3x.png": "85f13ac5d349d488b9b964986fb604dd0205100589e3617527178ae9487d40a1"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "music"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_data_music",
+      "source": "msg_filled_data_music_solar.xml",
+      "sha256": "59c89863198cb353a74cab932ed0a34cf123f1c681f1a6eddde5bb7ccae0c64f",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_data_music_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_music_solar.xml",
+      "apkDecodedSha256": "f52f3a15b3d551a6c11826d77fde449fb45baa1b4ce39ecf21a8f40d6ec2f2ca",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "c3c7313be59365c40cdf046f508f5baf379840287e3ebb0544f31fd7c135821e",
+        "icon@2x.png": "9f4c8ef720b11a7b1d507c347cdb4c6c5a0b4bad0061fa7a2fea857c2ec9bbeb",
+        "icon@3x.png": "b820a87cf7d10a139813bba3925d51083981cbefd338e1327c3c0441eb865c97"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "upload"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_data_sent",
+      "source": "msg_filled_data_sent_solar.xml",
+      "sha256": "4b3f76084d833249927cdfb4ae04926990c2d374662c98887b28b33f848960b3",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_data_sent_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_sent_solar.xml",
+      "apkDecodedSha256": "0cd54e07afa305ff18ccd0e05f594716b66b546e478d17670d237cf4622d3661",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2c9dee6d85c1a68f81f9ba5a84f248e95e461b6d535832ef7377b29beeeb3a67",
+        "icon@2x.png": "fc23ace5d8adc6ecb4508fdd1aee66742f4ae02255088db8c0b3eea86247dffa",
+        "icon@3x.png": "44adda100b9a429b8acb8385268081542159e0a3c535cd8be4245aa4bf2ade7b"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "video"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_data_videos",
+      "source": "msg_filled_data_videos_solar.xml",
+      "sha256": "210f2d523853c7669725f7f2492d50cd4e39e55d4859a2840373b61a4a942bec",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_data_videos_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_videos_solar.xml",
+      "apkDecodedSha256": "6e6399ee24165f74c5331bcaacadb609797f2d4c0ab2d6a4a3bf782da889aca6",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "317cfb9ba316529c7ac88c28be0fa1b4790133d936d318be8a29523acdf233d7",
+        "icon@2x.png": "f9cdaedebf338ec0ce0fcdddd80908b90e7032c9f745e0375e6e8e1bde31eb5d",
+        "icon@3x.png": "f1eceec3962f7cac5e09fa862d5e59fd8263d90249318b324bab68543abb5a56"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "voice"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_data_voice",
+      "source": "msg_filled_data_voice_solar.xml",
+      "sha256": "4f3230b59c46b58f22050e4e12a43edfce5717e425117584a79f9cecda5dc6e9",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_data_voice_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_voice_solar.xml",
+      "apkDecodedSha256": "fb31dbbec0c7bc53ecf85b2e75d2c541b3497281c8d88c27587eb119df9f2257",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2f2a221f120aba535846ac5919abf3eafaaedabd0061c23ab6d07c3225623aa0",
+        "icon@2x.png": "e2de6a84542e26425a7c797b6664eabb81bc146eaabe295f7ce244b1b29dd08d",
+        "icon@3x.png": "5d2518453cfbb50e7257d82317e2b346f007fa1fdace360f2c711ec06cf679f7"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "dataUsage"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_datausage",
+      "source": "msg_filled_datausage_solar.xml",
+      "sha256": "7ad19ac6812a0208cfe9d2a09016ec3bf83660c31b97529591e3edccc045943f",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_datausage_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_datausage_solar.xml",
+      "apkDecodedSha256": "bef76694579282cf3ae380f49e382da3f5b08fe7ecb4257890ef92b8db41eb26",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "205dd5f25dbfbd295d9129fe93058a2c89d3b4dc26f1983cdd4eac342cfecc19",
+        "icon@2x.png": "56a3ea4f367bea1fc1fd215e1d30ae15053b121af21504bf4913c67c97d0e0b6",
+        "icon@3x.png": "5ea7bbe055ce846693caf791bf4f189e3920189dfc2730ca9a96fb2ae95b6a6f"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "storageUsage"
+      ],
+      "asset": "ExteraUI_solar_msg_filled_storageusage",
+      "source": "msg_filled_storageusage_solar.xml",
+      "sha256": "bdab4ebe63c1fe53bcd48a674422d8d242bb7f1a94dd0ad5cd23b64aa44783a3",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_filled_storageusage_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_storageusage_solar.xml",
+      "apkDecodedSha256": "479cad12b18c02ea3a40332cb7e1def204c653ac9d47e53476a2f0e638e083a5",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "35847e013425f9de5abd84a360a80a96134cf2c66099f68bf54cd5b5282e0349",
+        "icon@2x.png": "b10c768d2bf9e78c69855929e58ff5d650a529a4ea423fcb410c445b3aca2c77",
+        "icon@3x.png": "ba0f4a311d7b2a6c660051aee18399a0033a4fd1616010729a8721f9d6ece471"
       }
     },
     {
@@ -307,6 +784,44 @@
     {
       "pack": "base.solar",
       "roles": [
+        "doubleTapForward"
+      ],
+      "asset": "ExteraUI_solar_msg_forward",
+      "source": "msg_share_solar.xml",
+      "sha256": "c95c3135aeedbe1f7f35c16096f8256624ca141013bf8bce8bb10a4aed23b69e",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_share_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_share_solar.xml",
+      "apkDecodedSha256": "45f051425063dfefb6cd70a7e4b6da8483f9c3c380b7193568dcf4595c84aaac",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "91c24060c78f2acc71ea84f40d6f51239a3c442036abf6704e5304d707c050f1",
+        "icon@2x.png": "473b3ca743235737ed74e9b2024b6ae738672bcba873c74208426294f2f0d74d",
+        "icon@3x.png": "57d5d78c8bf552226c894486754815158885389c35b0023f0b5740a11387c0a1"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "gif"
+      ],
+      "asset": "ExteraUI_solar_msg_gif",
+      "source": "msg_gif_solar.xml",
+      "sha256": "5a3d359c466720fea371fb13ee5d24cd81ece5285d972a7378b9344fd4917aef",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_gif_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_gif_solar.xml",
+      "apkDecodedSha256": "dee1ea78487cb1393e70b00c64a55e4a03acccd9671e78190e6a5c6c14ff70e5",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "eb38dd339d96dec80e990dae374df9f4c5e3d6c9a696058c775cd8d0b661d1f6",
+        "icon@2x.png": "7c5684a16cc8aceee2da5b53db9522ac1ff47216cb50e4c2a5853e897d5b69fa",
+        "icon@3x.png": "69dc98dfc40da4521f00883326de8e7eba07d563930702d27ae883cac9b1c346"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "groups"
       ],
       "asset": "ExteraUI_solar_msg_groups",
@@ -326,7 +841,46 @@
     {
       "pack": "base.solar",
       "roles": [
-        "info"
+        "draw"
+      ],
+      "asset": "ExteraUI_solar_msg_header_draw",
+      "source": "msg_header_draw_solar.xml",
+      "sha256": "cd34953694f887741db0654767446e5c7e3ef5276572502b28b53fbc66279435",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_header_draw_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_header_draw_solar.xml",
+      "apkDecodedSha256": "266a8808b2c026ed791c40e6174fb138d81e3b92bf2713f6c75ec4add271753c",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "44b54694bc667743e0e92314d8f328c74042ad50e2b6f6bb62c406a9714930a8",
+        "icon@2x.png": "029b2d7229edadd82aef07aa65940c6900386360086ae3df2469ed683b2ec10d",
+        "icon@3x.png": "fabcf0c5ce47954b2582b209e907a0ac47fcf2f6a994386a18d04c6bccfde2b3"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "support"
+      ],
+      "asset": "ExteraUI_solar_msg_help",
+      "source": "msg_psa_solar.xml",
+      "sha256": "500b130f418502b1919e4416dc3849a22baf81ad73a3d2b0d177c9f84e09e620",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_psa_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_psa_solar.xml",
+      "apkDecodedSha256": "daeb17a95543778472c4a97e8f1bad23eebaa4685494eb65c72ff9b47422ee05",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "665633cd411a392cfa524dcd7b1aa4eef82ee8216ea13ec7279d39e8aa88e359",
+        "icon@2x.png": "bdcb08b3e52caed0ea3436f86ba8879916934ce2856fe026fddcf6215033e547",
+        "icon@3x.png": "eafec183708e37a427dc503d28939e8eaf11a0e62d58f91f27e04fd1ed085a66"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "info",
+        "faq"
       ],
       "asset": "ExteraUI_solar_msg_info",
       "source": "msg_info_solar.xml",
@@ -402,6 +956,101 @@
     {
       "pack": "base.solar",
       "roles": [
+        "location"
+      ],
+      "asset": "ExteraUI_solar_msg_location",
+      "source": "msg_location_solar.xml",
+      "sha256": "f719f426ab58d11ffac32fd056d16ac1e37eb3ee0a4340f7d29b5a86dc1ac486",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_location_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_location_solar.xml",
+      "apkDecodedSha256": "6993cbd7beb01fc2e263a048d9ba011624ea7b2031ef4954d047814f6906a796",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d01ce90ae05f42e53595597cd0007e7a61707adc3a675d0dea4456daac3da53b",
+        "icon@2x.png": "34aa35f7fec07e255e802e68650f676fc8fec56b2f33ee08b477870cff0814cb",
+        "icon@3x.png": "d43b81e4bc838c59c590bb5ea74c0dbdce0291c05e18ce07526936504598bfb3"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "recentActions"
+      ],
+      "asset": "ExteraUI_solar_msg_log",
+      "source": "msg_log_solar.xml",
+      "sha256": "84104fae78ab295e24e37df03947ab54573afac75eff2fffd920f43578a6f53d",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_log_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_log_solar.xml",
+      "apkDecodedSha256": "21905a6367c2ecf59789d7123be1b0aa03b7459fae718f973adfc85a9aa05f29",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "3061888df6adc2fc5a79b8bffc4078690dc4e720c82978c59fe9eb7dc7f14589",
+        "icon@2x.png": "6eced2c177cc3442b7c23f0bc62e6fc33f95c6ef749355aa98a8b291b6281d98",
+        "icon@3x.png": "95263cd08137dfb39cb05f13085533d83496f6cc3036a5b2206f62df3c4965dc"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "read"
+      ],
+      "asset": "ExteraUI_solar_msg_markread",
+      "source": "msg_markread_solar.xml",
+      "sha256": "a7f899726fa477322fb22758ec9df71bc29c2985e8011698210815e30b8f107b",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_markread_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_markread_solar.xml",
+      "apkDecodedSha256": "2424669adb56283ca2ce273c7b0ac36118ed88b45ee212b18ddc5a0e7dacd5ff",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "5023c8015d527a4d6fd2126613daa370e01301b1da0d2049f9ca54548beba4d0",
+        "icon@2x.png": "f768a94c2246e943be3bed139e7830dcc2b0371d423e49597ad1a3c433253a9f",
+        "icon@3x.png": "0196761163ec3c216bf17c1498bfd93fff0336315ea6b4fdbc805e3f74fc6f4f"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "stories"
+      ],
+      "asset": "ExteraUI_solar_msg_menu_stories",
+      "source": "msg_menu_stories_solar.xml",
+      "sha256": "196ce539020eb0ba992427ca06280cbd964596a78414ccc70682d984c7e1451d",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_menu_stories_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_menu_stories_solar.xml",
+      "apkDecodedSha256": "1ef85b9a215632990d11c05f7fc3097fc007bfd5933f34ddff120e88f3aea631",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "49e8e1a8a6c00ccd1a199f297f6c4b8c4e90787fd3158e502418624c92747e19",
+        "icon@2x.png": "a9feb04d42bbb9be2be4268cb6426ca4e9235257ebe9a280e79b116371bc93c6",
+        "icon@3x.png": "20c85dbdebac3f330e42118a49af09fc5bba6c98b527f4a33a30e43c38273a42"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "goToMessage"
+      ],
+      "asset": "ExteraUI_solar_msg_message",
+      "source": "msg_message_solar.xml",
+      "sha256": "f9b7ecd140ea50bae298d4eed6a9ad4e7dd5b5f65b9a74669a07027e882d123a",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_message_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_message_solar.xml",
+      "apkDecodedSha256": "d57cfb0044b789b395f75272db5b514eecc9ac15b132fd9a45243d842f64f40e",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "8447d7c4c7303ce718fb11b442f833e3092ae64a52cebc7f72639923fe2ef347",
+        "icon@2x.png": "d2eed2f41d716d8792caafe556dc5d011dd5a460507b93ded384a7531411a9cb",
+        "icon@3x.png": "18a4ab327afcccf401e6e91a2baed7b1cc6e714f20b4a4f758381e8d57febdf5"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "chats"
       ],
       "asset": "ExteraUI_solar_msg_msgbubble3",
@@ -416,6 +1065,25 @@
         "icon@1x.png": "9cef2face9976c7a37e9bd3131285236b13e291380ef9ecee1b4aa36e9d47069",
         "icon@2x.png": "98f2476f53d3d9b78b8b103fffb4e37750ae888d4d37c05610758f7f4a651861",
         "icon@3x.png": "889cb91bdc02054390043f6e7b77432da0aba52f4541d54514237fec7e4f85d1"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "changePhone"
+      ],
+      "asset": "ExteraUI_solar_msg_newphone",
+      "source": "msg_newphone_solar.xml",
+      "sha256": "b823ac8d4bfa2186d912294e8b3c713b0f1a3059083294a2f623739cc7c364f5",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_newphone_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_newphone_solar.xml",
+      "apkDecodedSha256": "b96b826b67b715e9bf1225436b583d646992d0b44373dc62eb972147ec45a761",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "f8d633700a52332b6a5a206cafd0ce0ddef4295ad348b27d997c1b5630b5ce13",
+        "icon@2x.png": "d6542e98269dc8cdfb293fb835374aed135577aa3f16bd62eef7e1cda481e691",
+        "icon@3x.png": "edb1d9a00618c2367929d8b27dd871e9b71bc987954a882afd668fcb1a1f47d1"
       }
     },
     {
@@ -459,6 +1127,26 @@
     {
       "pack": "base.solar",
       "roles": [
+        "restrict",
+        "permissions"
+      ],
+      "asset": "ExteraUI_solar_msg_permissions",
+      "source": "msg_permissions_solar.xml",
+      "sha256": "e64ce19fe44c288bc87a54d1c7c06019b3cd5ef35ad690f3f56d4066e0235691",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_permissions_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_permissions_solar.xml",
+      "apkDecodedSha256": "7341de5c7d09b83ea7dcb666a4f5f61f59689cc4a9400b79671456cd84fa9ad2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "6cfed1babec32392b0089a61a21b887b81aa12a64fc00b98d36f86be366697b3",
+        "icon@2x.png": "9d725b57043b6e0ce18cf6e6ff93743b6039213eaacc15eca6f923404436fce6",
+        "icon@3x.png": "986b9676c2f47a5a6856f3b5bece25495a160f4d7ba039df4f7e58296456b177"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "photo"
       ],
       "asset": "ExteraUI_solar_msg_photos",
@@ -497,6 +1185,44 @@
     {
       "pack": "base.solar",
       "roles": [
+        "key"
+      ],
+      "asset": "ExteraUI_solar_msg_pin_code",
+      "source": "msg_pin_code_solar.xml",
+      "sha256": "a81e42bed882e22ea22187295515db77502905f9c290d8c93d3656b5238e37eb",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_pin_code_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_pin_code_solar.xml",
+      "apkDecodedSha256": "5bce774aff5271cc674e5a24c974262d3aa3dd0d8dc9845458d2dbe84fe43205",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d532e967967a833772e070764e8c8f1c27062d16da1f2b2e271311c74c8b3175",
+        "icon@2x.png": "99b05855994778dd8b8b2a87d4e5f3978c7f57f8f9811d6f5c88824d9f2e381d",
+        "icon@3x.png": "451d16994e6431d6f8d9032fcc27e845a32053d1c82f89a5dd32bdd7a1acc253"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "stopPoll"
+      ],
+      "asset": "ExteraUI_solar_msg_pollstop",
+      "source": "msg_pollstop_solar.xml",
+      "sha256": "2c903f1b31e032051fd9a4e49eae710157131bf90fc47066dd615ddced280508",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_pollstop_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_pollstop_solar.xml",
+      "apkDecodedSha256": "ce1853077d765fdbbda359383884f5735b7db3746ed47b191ac1297aeb6a8039",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "70c64443dca3710813b7d5288a1618a97009259c28f7781be699425f7e191c24",
+        "icon@2x.png": "0ed7136298f11a3b01feeb11d6e936b46d1e8fed71c174db06eda6c5616e9654",
+        "icon@3x.png": "f9f50c024153780adb50d07f877c9849e73867adeb715797cf84e702f22a08ce"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "qrCode"
       ],
       "asset": "ExteraUI_solar_msg_qrcode",
@@ -511,6 +1237,122 @@
         "icon@1x.png": "5d2eb97de562351819fef1e4c9228fd0b666af987cc708baf891f3066178d9b0",
         "icon@2x.png": "ff17e6e63b7942bb968dabf0404df80f347cc6fe848d7ce3c0804318ed3a0338",
         "icon@3x.png": "46d5daefc22c5e167b7040e804f4ac0a578f777e9ba008d7d0ed2fb6f178e622"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "thumbsDown"
+      ],
+      "asset": "ExteraUI_solar_msg_rate_down",
+      "source": "msg_rate_down_solar.xml",
+      "sha256": "5dc7f412fcf0875fe76224d33de4676965ce7e40bd3ced540601f20fed374c97",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_rate_down_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_rate_down_solar.xml",
+      "apkDecodedSha256": "d174d6bb296d8b877999e19940487834ad78d723562f399764250825d39500a6",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "f3909ab5ee0c07b59b287624f2c0335b97e2c4beba443b9a14d55bf88dec575f",
+        "icon@2x.png": "b671bff5e64297d9dc9210bd1cf7b1a5932a7b253caebb0d9ee475e1c8700b8f",
+        "icon@3x.png": "ebbc7198ecb276785ac002d801b9508229a939ba15cdbe3ba6cfdd84d0a26dc8"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "rate",
+        "thumbsUp"
+      ],
+      "asset": "ExteraUI_solar_msg_rate_up",
+      "source": "msg_rate_up_solar.xml",
+      "sha256": "1c45f5d8b19c75133a201393d7a2d9545023ae30da8560a4d6bbf26829f9f754",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_rate_up_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_rate_up_solar.xml",
+      "apkDecodedSha256": "49fbac0f1c2fdb56a450cdeb166e85b1b2c1ba1d2a690bfd327074cdbcc880c1",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "cbe2d037785dfd2e8b1302a768cb493a0a41f5c1ac96dadbaeecffbb82bb8b5c",
+        "icon@2x.png": "6b73f8df2120fca184a7c4bacfd143821f5295a601ee1e3cf0398cb74d33d002",
+        "icon@3x.png": "23b87b4aa7ec9f6519e62b5c134c13cddda15a2e2aeb8ab4f5ef164f7b17cfd3"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "reactions"
+      ],
+      "asset": "ExteraUI_solar_msg_reactions",
+      "source": "msg_reactions_solar.xml",
+      "sha256": "197dea810b8d730a65a80c96751d92fc1e9bfc3cd289f95ac794488d55454cd6",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_reactions_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reactions_solar.xml",
+      "apkDecodedSha256": "edc6b8858c249a683a7478bb06c01b6eec76b4fff5d7594f03693a627e06d4a2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1426e1dfc599e01f326cbaf51d9416a6a6f345cabe8934d4b2af12b5182b9c3d",
+        "icon@2x.png": "b035244bb5b23a86ae51fae148f256f00fa94362500f4fa15c2b3fbcd804ed7e",
+        "icon@3x.png": "36c4cdca68db691cc896093264996b5d329aefccad486289d8afdf8a6c08c697"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "doubleTapReactions"
+      ],
+      "asset": "ExteraUI_solar_msg_reactions2",
+      "source": "msg_reactions_solar.xml",
+      "sha256": "197dea810b8d730a65a80c96751d92fc1e9bfc3cd289f95ac794488d55454cd6",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_reactions_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reactions_solar.xml",
+      "apkDecodedSha256": "edc6b8858c249a683a7478bb06c01b6eec76b4fff5d7594f03693a627e06d4a2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1426e1dfc599e01f326cbaf51d9416a6a6f345cabe8934d4b2af12b5182b9c3d",
+        "icon@2x.png": "b035244bb5b23a86ae51fae148f256f00fa94362500f4fa15c2b3fbcd804ed7e",
+        "icon@3x.png": "36c4cdca68db691cc896093264996b5d329aefccad486289d8afdf8a6c08c697"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "time",
+        "clock"
+      ],
+      "asset": "ExteraUI_solar_msg_recent",
+      "source": "msg_recent_solar.xml",
+      "sha256": "d935f291791484aea6ee7ed47b9e1e1c999c3928a2f541390d5214903c2fc149",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_recent_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_recent_solar.xml",
+      "apkDecodedSha256": "3afb7e64c4b99e14bb734caf6c034bbfce61668e6217b6d9258ee4eb29637281",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "8716522f0b4daeecbe28e42a98626db7431098bfa5b6bd1bda2d13d929b6896f",
+        "icon@2x.png": "e1864112075599027030b7668990f2d9af3cebd2b1fb9a72a8beb8aa48ee451c",
+        "icon@3x.png": "38651afeee619e4d3bf6ea3b45cedb2332ab7f935ecfe69d5325fac9904c1bfe"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "repeatAction"
+      ],
+      "asset": "ExteraUI_solar_msg_repeat",
+      "source": "msg_repeat_solar.xml",
+      "sha256": "582f1860dc1bd404240a5f29c334588dc602be9816e58a6b4fd3bd68612d7f44",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_repeat_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_repeat_solar.xml",
+      "apkDecodedSha256": "3508012b3526272657abab7f3720b9bf0a23a14a15de70e4d5636426d65ddc6e",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "efc33c4697476b0a19c0e7b599e8fd01d25cf8460477ec9fa92a2719e9552430",
+        "icon@2x.png": "5a6b62296658c3422f6612a7d54644c41aad4a21e33f16c642f9c77feb5e6711",
+        "icon@3x.png": "e360882e20398c0352b86c44af3830178a657cb9b3f7e97a5261006becb596a5"
       }
     },
     {
@@ -549,6 +1391,44 @@
         "icon@1x.png": "12176b3cd21fbee14bb1983a530c741b3f2cb74ec48408baf4f71d5427be2fba",
         "icon@2x.png": "a33e9071e7fa50ea5ab3532ed9c07c3ab5ed9151802c9a8ce8316b53c94f861a",
         "icon@3x.png": "5ca851c401cf2d957783154fbcba37a453184cda750e60d2e31d00d20988eab1"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "requests"
+      ],
+      "asset": "ExteraUI_solar_msg_requests",
+      "source": "msg_contact_add_solar.xml",
+      "sha256": "3ff888c93a61b26b89c9d853125c32a0dd99382dcd55eb270c5ba647e4839278",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_contact_add_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_contact_add_solar.xml",
+      "apkDecodedSha256": "650b34e7f554233dcc784e521b54b2e5e644bbf4a24d216e6f49595c785275ed",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "5185aaf938d510228c57435747d5e784e5e5612a0eb8fca2dd0251d533153eec",
+        "icon@2x.png": "d050412771e3793c62089b69de6775049b8103525df2cba38e0820ba02eac023",
+        "icon@3x.png": "5561aae73bf913522dc39a5ad85a4d726b17553d41c1d95bd6bdbb24e3a9ca6a"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "reload"
+      ],
+      "asset": "ExteraUI_solar_msg_retry",
+      "source": "msg_retry_solar.xml",
+      "sha256": "0a03a6581f7065ba21c82c45ad45b3734f0d422652818937b8ab5c1097c5285e",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_retry_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_retry_solar.xml",
+      "apkDecodedSha256": "4a02c7a7114b6c3cbb279e48bfcd5b68f8c7b8d4203b0a5e6c14348baf575f6c",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "85c2b1bdb5741906bc574ec042154da9d4680c9b7877de7b74e44d19dbddf109",
+        "icon@2x.png": "e4323ce6ef7c447c8968d50f02ce809d42da792671a51ee41c2685b9ad245842",
+        "icon@3x.png": "a79aacc22123ac2270421d482a2198616ef83f209b5e2a39717ba327a9a89653"
       }
     },
     {
@@ -611,7 +1491,8 @@
     {
       "pack": "base.solar",
       "roles": [
-        "select"
+        "select",
+        "selectAll"
       ],
       "asset": "ExteraUI_solar_msg_select",
       "source": "msg_select_solar.xml",
@@ -625,6 +1506,25 @@
         "icon@1x.png": "cd2e8150e310f96b54a7cc24ff736c844e5efa479511cc3863555e09cd9f5232",
         "icon@2x.png": "dc2501edeb237b711fd7e70d6b129e99dc7bc6d58393476071889efba57e50bb",
         "icon@3x.png": "dfdb17b090fb5e8b9cbe6a96eead0c81a14ac9293f7dda2b1c0b861e4d88c0c0"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "resend"
+      ],
+      "asset": "ExteraUI_solar_msg_send",
+      "source": "msg_send_solar.xml",
+      "sha256": "1233f79229dd165f037d1d9a7d5b637752a49221fdbd0297efb336d5304a5285",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_send_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_send_solar.xml",
+      "apkDecodedSha256": "78a349654b36582b12f4af0ffd61bfabafd9f12fd866df457082e8e6f0d4b177",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "95e0a6604d498478a0581aaf5a6e26d0e545d9440c12ac4ca2fe56a50ca9d9d9",
+        "icon@2x.png": "ea15586ff7935f0847a82c503cf416382457850c6146a13602d4dc5042fb65b7",
+        "icon@3x.png": "a58d249646095f9a2addb98b7ead5627777aaca847a34aa141780b01faf29699"
       }
     },
     {
@@ -668,6 +1568,44 @@
     {
       "pack": "base.solar",
       "roles": [
+        "speed"
+      ],
+      "asset": "ExteraUI_solar_msg_speed",
+      "source": "msg_speed_solar.xml",
+      "sha256": "68090459228eba20689a615a2454b53edda540750947fac4b9f14e981388254b",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_speed_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_speed_solar.xml",
+      "apkDecodedSha256": "43f6d7451863d26c9e491e7cef561be2b60d8b94156e01b754f0eaefb5fac644",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "3be9cdfbf2f512e6a563cff5e68dfdc76cfeeae4d404398b0cd0521659a87103",
+        "icon@2x.png": "76e820c9cf52a50779be348fee81ebd51d0c58af259a8e397ee6a414a724ff9f",
+        "icon@3x.png": "54c92c551ad83d7eeb68957a68a68ab7f5a8e6a196814d244ec49b1489e42b6b"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "statistics"
+      ],
+      "asset": "ExteraUI_solar_msg_stats",
+      "source": "msg_stats_solar.xml",
+      "sha256": "b20536063dba760da8f45f70d700406df1d9c017956a9a4c16fd58c65aacc4d4",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_stats_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_stats_solar.xml",
+      "apkDecodedSha256": "61a1a70a6407a53826466a626cf1624ba8d0f7ec9cc7bb7780a376f071c5baec",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e4bb981229396eb29b113553443b729fbaee8fed7f3d0c001878a585f9b3c147",
+        "icon@2x.png": "0cff38df672b209e7295106eea3029edb3d08a31b70a42c566dee0134bf0a55e",
+        "icon@3x.png": "680493c0accf5a9c3aa1480eec0a5b2a7e5826370d1cb5f730061ad7189d12c9"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
         "stickers"
       ],
       "asset": "ExteraUI_solar_msg_sticker",
@@ -690,17 +1628,93 @@
         "appearance"
       ],
       "asset": "ExteraUI_solar_msg_theme",
-      "source": "msg_theme_solar.xml",
-      "sha256": "721aaf477eb1847819e1e98e1f4add3907ab8c533551e14181cb373cf9a85508",
-      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_theme_solar.xml",
-      "apkDecodedPath": "resources/res/drawable/msg_theme_solar.xml",
-      "apkDecodedSha256": "a740c48fbca2b674506ca4e8698e98d19c8ddd8e74876671ab32dcb8284a0577",
+      "source": "menu_profile_colors_solar.xml",
+      "sha256": "76b3a92a87ae315751a17f29c08ddf4d6dccba7543f03b81d3cd9ea0817b4285",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/menu_profile_colors_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_profile_colors_solar.xml",
+      "apkDecodedSha256": "4f0ac19ccc8dd7396737ce94c9812c66a99f7d23fbf7c02b3ecf81d06e40c743",
       "geometryMatchesAPK": true,
       "generated": {
         "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
-        "icon@1x.png": "ccef3bc0c2082db20a328e9002ca91175b7b6d46c28d485d5a6af019ae576003",
-        "icon@2x.png": "1bec7ddd825eaa397be9af2adf271381658923e01cb64bd659670823dd5f1e53",
-        "icon@3x.png": "c72a03cd1734b70e30a08f1287c810651e574aa6336f3eccbfffc0dc8dbcaf34"
+        "icon@1x.png": "c2bfed2cd86786dae3bddfaae57fd9fc1d3a46116199bf294aa7e931cad9c165",
+        "icon@2x.png": "6b89cc7e080f32afd987a47904d805d0b51c7e25eaa31560ec27b758038a0736",
+        "icon@3x.png": "ce18c7652032f5d7913a46aa509afe026c6946c85b8ce3ec52872b377dceb182"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "downloadTone"
+      ],
+      "asset": "ExteraUI_solar_msg_tone_add",
+      "source": "msg_tone_add_solar.xml",
+      "sha256": "83f402776af878df89baefe04ba649e17814e68eae68e29e2b176f29b10b2635",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_tone_add_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_tone_add_solar.xml",
+      "apkDecodedSha256": "179973a6c82c74a7b747d0674b23a33da892ead5e3dd7c466194e67d73848e3e",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "4ce4306da2dc539972773f3bfd31b563e2d666162a20cb614f3d143284b321c8",
+        "icon@2x.png": "aee5e61d20015f722e5ff572b45617019577876ec70dcfca969373736db1ca26",
+        "icon@3x.png": "f45bdc98315d2501d9d10499fc07257f2f4c5d1f8c22f69e2aec8312de28de69"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "topics"
+      ],
+      "asset": "ExteraUI_solar_msg_topics",
+      "source": "msg_topics_solar.xml",
+      "sha256": "8740668e8b9a2b4aade0e9f4137c21066349f52e6eb1fd43574434a7ad0c8a44",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_topics_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_topics_solar.xml",
+      "apkDecodedSha256": "c0e40a948ed0a4709f9c2cc84a7d53375e791bc33ca138b191b757b597376e78",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "f207c72682b97b23e503ba34c43afc24b8502483b0865a274e22aa94b4a19321",
+        "icon@2x.png": "ab723f6a1465f370170a0b66067e3f6fc0029ddeced889fb83980f1dacca0454",
+        "icon@3x.png": "89f72d44b3417cdb1c7ccd3665a08b1be42b409662d734311a31b2726c53e2b4"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "translate"
+      ],
+      "asset": "ExteraUI_solar_msg_translate",
+      "source": "msg_translate_solar.xml",
+      "sha256": "79157504e404ba4d413825234c17ef551127bd5df4077bacdb6da88b08b2d862",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_translate_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_translate_solar.xml",
+      "apkDecodedSha256": "65bc90b04ff8c49ecfa4ac2787c314512e1c69e0a87b6953401d764e8fab63be",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1af27048c65e87ae2c5df8e396637456e0fc604e1634ea50c833edfdde9ac810",
+        "icon@2x.png": "55dc9d4e40a8dae05ca5e59271a183eeae45ea49670adde19f6d42a6d293248f",
+        "icon@3x.png": "cdc9f44c1c3625058116d7ab79f6fdea1656e582e4121531764c6a5bd7bda7c2"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "unfavorite"
+      ],
+      "asset": "ExteraUI_solar_msg_unfave",
+      "source": "msg_unfave_solar.xml",
+      "sha256": "a636fb32fdad5584f5a36a649e230f633081035409a780ef191be20aa87acd3d",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_unfave_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_unfave_solar.xml",
+      "apkDecodedSha256": "658147730a093386fba7be5a08e7202c8612a8989c6ddd6e97e61e28ea0d12bd",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "73ea0b0bc77114fd34e1205183889a0b1bdfb4063ed60d1f3947593416dfc1ac",
+        "icon@2x.png": "475b98404fca2288dfb28cc9277ad9a4388314ce31d39efc99b784e7abb2a5ae",
+        "icon@3x.png": "0c43135bb098201c4ff99f271259490c08ea85b8397c7d0009d8619d6443b36d"
       }
     },
     {
@@ -723,6 +1737,82 @@
       }
     },
     {
+      "pack": "base.solar",
+      "roles": [
+        "unvote"
+      ],
+      "asset": "ExteraUI_solar_msg_unvote",
+      "source": "msg_unvote_solar.xml",
+      "sha256": "ccea2e19a021a77b26da12035b12754c2ef88823a3df6b41a1c090eb60a30eea",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_unvote_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_unvote_solar.xml",
+      "apkDecodedSha256": "d151fad878c66047126a336ac42c79d96e08a29b2fee93f14fe6d256d8fe8873",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "9df8bed64d835419d73b2bc9e347c0cbd2558f037bc28bcf1f1822ec87a735d9",
+        "icon@2x.png": "7bfddc3358ba6361e07c2e5a9a571f672a88b1b00ad9c4ffc30e00ac81dec648",
+        "icon@3x.png": "cea1a031ef5518b32e73a728b2f5a97711b4418d0cdd3ab9966286767e32fb53"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "readUntil"
+      ],
+      "asset": "ExteraUI_solar_msg_view_file",
+      "source": "msg_message_solar.xml",
+      "sha256": "f9b7ecd140ea50bae298d4eed6a9ad4e7dd5b5f65b9a74669a07027e882d123a",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_message_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_message_solar.xml",
+      "apkDecodedSha256": "d57cfb0044b789b395f75272db5b514eecc9ac15b132fd9a45243d842f64f40e",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "8447d7c4c7303ce718fb11b442f833e3092ae64a52cebc7f72639923fe2ef347",
+        "icon@2x.png": "d2eed2f41d716d8792caafe556dc5d011dd5a460507b93ded384a7531411a9cb",
+        "icon@3x.png": "18a4ab327afcccf401e6e91a2baed7b1cc6e714f20b4a4f758381e8d57febdf5"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "replies"
+      ],
+      "asset": "ExteraUI_solar_msg_viewreplies",
+      "source": "msg_viewreplies_solar.xml",
+      "sha256": "27ea09c8430fa2e323748b0f5940ed51ddfb9d8e97a8e3427fc418379a1230bf",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_viewreplies_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_viewreplies_solar.xml",
+      "apkDecodedSha256": "010cf97132818c9745fac4223e55dcec081326e511c1430f8f082c0ddb6bb3cf",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "c7925fecb66d79feb6ca6fbfaa4c80483cbfa55db2fdaf5d0e183df38759e7d3",
+        "icon@2x.png": "c11479385770a05ca7533918c1eac721dcddf280be94da05951aead3aa0c66e9",
+        "icon@3x.png": "cee3f460240279ee925965ec4da2fb69e2f45b8b94a7e3c6075cbd648c526f45"
+      }
+    },
+    {
+      "pack": "base.solar",
+      "roles": [
+        "views"
+      ],
+      "asset": "ExteraUI_solar_msg_views",
+      "source": "msg_views_solar.xml",
+      "sha256": "ff1a9a7b664682d3cd47a5716cbc4043b3aa9236a272ef9ab5743ff3de951d49",
+      "gitPath": "TMessagesProj/src/main/res-solar/drawable/msg_views_solar.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_views_solar.xml",
+      "apkDecodedSha256": "f4b4172add56072d756c315ce0d4e4a460409ed8be3eb4a9219bf9b23681b6be",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1be06a64b07fa49d739a51bad2bc1ec395e9f27984a3a5cd6cb8f3e0d3ba4942",
+        "icon@2x.png": "92c94830e55c597c93980659391b32c750d941b7ef344c8f2b2e9ab9960d407b",
+        "icon@3x.png": "eff35345a70666fe45e5df464458500d58809849b427550719ceffd907363ef0"
+      }
+    },
+    {
       "pack": "base.remix",
       "roles": [
         "ghost"
@@ -739,6 +1829,83 @@
         "icon@1x.png": "d078265ca0008a50c99af7250d36b72ae6fb808cc843253e29583d61999b18a2",
         "icon@2x.png": "ad54e926002848964c4dc53a6aedf2cede2a6e4c970bf21bf376f6abfd72e559",
         "icon@3x.png": "d29ab0e883f070af40b005ada487b83513a5f246ec5ce9c962c738caed12ad44"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "gift",
+        "birthday"
+      ],
+      "asset": "ExteraUI_remix_menu_gift",
+      "source": "msg_gift_premium_remix.xml",
+      "sha256": "d42d43e7f3943ae02df1e7950f86dde65c194bff07700c59756f826a38b5e563",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_gift_premium_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_gift_premium_remix.xml",
+      "apkDecodedSha256": "b7a202b9cf64d286e5eae0cf44d86f1367f7029128030c0454194dd822df0db6",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2bc191556899caf8dda0f57655f3b48d3b85a3c080d1af1470d1449ea4ce6241",
+        "icon@2x.png": "7300f8260a76c91e96229d0762af1b83933859f23c81db7cbd9aeffadfded5a1",
+        "icon@3x.png": "babf0bb72383b1e863e2c9314906a0d87e3f109c61f914bc0c8f1d6b8d2221c9"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "doubleTapReply"
+      ],
+      "asset": "ExteraUI_remix_menu_reply",
+      "source": "msg_reply_remix.xml",
+      "sha256": "01c932d2d625afc9117adfeb9b325594395d3d4dd5c41e6670167df249ea0705",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_reply_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reply_remix.xml",
+      "apkDecodedSha256": "16bce9d85d372dd0ecf6fa9b40d16c4cc0e60e68e6e1fcef01f12b79b77fa4b0",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "c7d0a8e14c6678b91ce5d30480733c351d5baf251553eddacaaa0ad2e8de1ff4",
+        "icon@2x.png": "9ffa0fb669823ee8ef4e541acdfc95de6ac1efee9a4becc20b638ef1062fd4df",
+        "icon@3x.png": "e45b6ed9419ab99183f53b6cb31d1ffe5592f0a0b04c2d1ce99f8d4bccfd79bc"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "priceTag"
+      ],
+      "asset": "ExteraUI_remix_menu_tag_edit",
+      "source": "menu_tag_edit_remix.xml",
+      "sha256": "76c510847a28501f81c23241720aeed574a88f9ab46d838eabfd674f3d2e44f8",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/menu_tag_edit_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_tag_edit_remix.xml",
+      "apkDecodedSha256": "8ebaf6d79a5ed66cf8ec7b16684002c4a295b3ef5a50f78ab5e48c782677abb7",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "a339977359565b8fb0af8d4ecedae2091e53242dbf57aba6890c13c35af2e65e",
+        "icon@2x.png": "6b9cf9284fd2ae112188805ecc225dbd32710d497f5dfd8ecf155ea0fe56f2ec",
+        "icon@3x.png": "f0dc3783752c35656a8317f14d82f3beeb7ec848fc21e6dba236fd135bd4dd89"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "factCheck"
+      ],
+      "asset": "ExteraUI_remix_menu_verification",
+      "source": "menu_verification_remix.xml",
+      "sha256": "11802f74296c2d873a7a2ceeff3f50c99c554ad152fe6c683b33ec07bd822a43",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/menu_verification_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_verification_remix.xml",
+      "apkDecodedSha256": "13147a3e7040e91de791970ac909c96567e25b81beac2608989a8f41a1e42990",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d5b0e8d682da68985b7b301977fea8e584509a1904dd0421494fe2eb25d87c68",
+        "icon@2x.png": "91b0a906633b39cadda8a0b0e68dff303198d730d8c7e12b7c382dcea93145f2",
+        "icon@3x.png": "63c8fb281b21e73ef947cb1a3dd12db94851680f28138faf2a1e890490c8fcff"
       }
     },
     {
@@ -801,6 +1968,25 @@
     {
       "pack": "base.remix",
       "roles": [
+        "admins"
+      ],
+      "asset": "ExteraUI_remix_msg_admins",
+      "source": "msg_admins_remix.xml",
+      "sha256": "7d4ad7adec916f635759b68c534d03663044f203f1520ca3f14748fea2701258",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_admins_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_admins_remix.xml",
+      "apkDecodedSha256": "c18e1a0f6b41cdcef1797f576f3ea50dda0fd932ddd696c1ab902fb254f9b637",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "bfbc3a40dca895f0012c2b6ef022b74a4932abeb226d517926e7221a37b0fc29",
+        "icon@2x.png": "36a31a8384a9c86b4753bfa08435e47f8837fe189a97362d116d6813bbb2a0ed",
+        "icon@3x.png": "b22bdf1f8e8386ec563aa3797b4c07623513c8204162ce100f0759e06ba8f836"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "archive"
       ],
       "asset": "ExteraUI_remix_msg_archive",
@@ -820,6 +2006,64 @@
     {
       "pack": "base.remix",
       "roles": [
+        "back"
+      ],
+      "asset": "ExteraUI_remix_msg_arrow_back",
+      "source": "ic_ab_back_remix.xml",
+      "sha256": "2e3468bdab0a6d202ad6c4bf47825309fd85752d33f8a6f2cc0bcc98d1796ebf",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/ic_ab_back_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/ic_ab_back_remix.xml",
+      "apkDecodedSha256": "023577b7428e6ff7f35c3b0f98f7e29963646a420a8769fe41c99d6ec5445dbf",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "892c647df2bad2043492d4f34e17d027d309696412e5c8040586f34c737f358b",
+        "icon@2x.png": "8c13617cfbf0d845979825c692870bdec0c7bb6831a95533131d4a92698b0480",
+        "icon@3x.png": "3450f5d9dba398e42182e693ed0b3d55292cbb252969da755a4875c361c882f9"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "selfExpiring"
+      ],
+      "asset": "ExteraUI_remix_msg_autodelete",
+      "source": "msg_autodelete_remix.xml",
+      "sha256": "adb6d1c3701d0e19422a21fe87e54a7704f0dcb34ff1ddd168393d923d985bbe",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_autodelete_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_autodelete_remix.xml",
+      "apkDecodedSha256": "ac1ddf4eeb3e7a48705287b4252040a6b51db263ebf3f96287a33ca6252248e2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "7eefbc88c667c563d89d23981c81322b8ab521127fd6a78c8adb7fda953a142c",
+        "icon@2x.png": "200e459f21a4ef91b0132356aaa50ce248c9e9a32d0aa098a7520d25ca46a88f",
+        "icon@3x.png": "27eda7cfdc3dfae55582640f82052af1f853846ff4da0f2bafb735d3afa20024"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "block",
+        "disabled"
+      ],
+      "asset": "ExteraUI_remix_msg_block",
+      "source": "msg_block_remix.xml",
+      "sha256": "4b8442390c3c9f70afdbb357c79c53e660f9e9aafa8bda1083a7e02a5b805173",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_block_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_block_remix.xml",
+      "apkDecodedSha256": "1adafce9ed4b87f4d76f4b5f45135eb211ab018e9c269fe29b8ef43b6796d314",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "495c31c2ac7b748e8635ad971b6a41f683a789fc413d8790a8dde31eb2416774",
+        "icon@2x.png": "465c702751d0b0c363abde268aaa0ce5437f16814da097094260f7950f615fea",
+        "icon@3x.png": "911c8e75f3bbc5402216002a0ea971e0a8e23f77a00a0179b15d1da4dfe235a0"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "bots"
       ],
       "asset": "ExteraUI_remix_msg_bots",
@@ -834,6 +2078,63 @@
         "icon@1x.png": "8cf6e04f04bccdb5e017685c8ad071059597058db04b88ba58b59937d32c00e8",
         "icon@2x.png": "cfd55acaadf57c5f491f92e5a8c7679ab10296aca985781c01d4fabff7ddd032",
         "icon@3x.png": "61da7fbddcb28617f765d1a6577b7dbe451093d33ea17c5de11ebed30c103e57"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "powerSaving"
+      ],
+      "asset": "ExteraUI_remix_msg_brightness_low",
+      "source": "msg_brightness_low_remix.xml",
+      "sha256": "c72d7f231b9fca7dd39518b29c49319d86a07a88794fe500e960896c0b364ff7",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_brightness_low_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_brightness_low_remix.xml",
+      "apkDecodedSha256": "df2dab9227d1dd8f5d8c73f5692b8a7f61bda4fddf9cfe190d3d4974d6656341",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "03e5bec5e6d64e9d396eba066d28b42389cbf7c71f37d03788ed33b7e7c49409",
+        "icon@2x.png": "01f7252d842144867a23bb9904302f1821eec91871388070bcd1748889d5d0da",
+        "icon@3x.png": "789dd2234f0e52f01aad47a3954fc2563a672412fe78261bb8b477d1b562e38d"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "calendar"
+      ],
+      "asset": "ExteraUI_remix_msg_calendar",
+      "source": "msg_calendar_remix.xml",
+      "sha256": "a3bfe66b4f8f941f34069993dacbf85bd68f0cef2711c8adfc839c8b5f08fda7",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_calendar_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_calendar_remix.xml",
+      "apkDecodedSha256": "065dfa66b493821a44b23b0dc74c1e611b350d4382089d135c797f14d5c3bc6a",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "658a4ff1fa218f9f544f9121293ef2cd877884276cab6f86735dd34d737290ea",
+        "icon@2x.png": "9fa6526d83f8fa9e21144a7e1a8b1ab493c1cad6433507beda277f4d9d561357",
+        "icon@3x.png": "08e88e4702819df55e0c978457df90eede1a22292c8340c244ac103f568db8a3"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "schedule"
+      ],
+      "asset": "ExteraUI_remix_msg_calendar2",
+      "source": "msg_calendar2_remix.xml",
+      "sha256": "511d9c64595b8108952bc414ee8f3209c7ba329987d9dfd1f0d2fede9b3d9e45",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_calendar2_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_calendar2_remix.xml",
+      "apkDecodedSha256": "c0c1f8fe243836a12109134aa705baf3ec18ffef8f6ce74ec27278beb348f559",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "4b868ae4b9d6f03cdb8de778adcc5e5a9b1bfdb7c25b5ab056da0c75cad6eede",
+        "icon@2x.png": "cd0391059c5281b7eba0df85cd519d85242ee9993b5e7299d55ba8dc77d3dc64",
+        "icon@3x.png": "ddc3a412548e7030c39c3f3535a321e9be76a096975a6a2375c0451be97cabc1"
       }
     },
     {
@@ -877,6 +2178,25 @@
     {
       "pack": "base.remix",
       "roles": [
+        "clear"
+      ],
+      "asset": "ExteraUI_remix_msg_clear",
+      "source": "msg_clear_remix.xml",
+      "sha256": "daf3603865fdd2895b7788558426444f84e45fc95df02e5a990fcb641c6376c6",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_clear_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_clear_remix.xml",
+      "apkDecodedSha256": "5d7811843a78a4560a6c36398c69bbebfd1b6f6deebbb4d5dcf2613e8f81d755",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "cb1e84d3143e432be59580a5a2f2376101f9576be5905679dac8def8316a3a01",
+        "icon@2x.png": "d37409f0864ec4a5c7c146c81185298969cd857d3024695271ff96e2c5316bc0",
+        "icon@3x.png": "fd90a6d0df9375c5beea3735d997847e3e25220ef828c3835d3b3a140b2c9aca"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "contacts"
       ],
       "asset": "ExteraUI_remix_msg_contacts",
@@ -910,6 +2230,25 @@
         "icon@1x.png": "64782c621e855456626c35ff639f9af25215af6e2e49af975123c1a927e46aa8",
         "icon@2x.png": "cb1c82ace03f8565332b516ad74b04ec18f1e14ec89b88b7d43dc07e89fe2461",
         "icon@3x.png": "a02826542975f5c4e84dc7d5c150287b8cf77312e854ddfffbfed5ce8a90f404"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "customize"
+      ],
+      "asset": "ExteraUI_remix_msg_customize",
+      "source": "msg_photo_settings_remix.xml",
+      "sha256": "08cc40156b41f31c8231652163817966694f70662d6b2c933d40dc161606134a",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_photo_settings_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_photo_settings_remix.xml",
+      "apkDecodedSha256": "c097895099fa8bfe03dd677afc3ece92826e4b4ad0d9fc1c5eb5fe732bcfb6c5",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d0dbbad4ce487c6220334788c8e659619450cdcb8aee0a0209491b24dafd4696",
+        "icon@2x.png": "f4a614f397673c33e5a52ef67e6774316933ae551ebcc2553f9662ff296109d0",
+        "icon@3x.png": "289851ab114d31d08adb5d30e28f5af6ee94d073535caba9be9a9a434389a2d2"
       }
     },
     {
@@ -972,6 +2311,63 @@
     {
       "pack": "base.remix",
       "roles": [
+        "chatHistory"
+      ],
+      "asset": "ExteraUI_remix_msg_discuss",
+      "source": "msg_ask_question_remix.xml",
+      "sha256": "dafa38878793da6467c60c03823af428f22cc88b52a38e7dd5c034c000fb4d6a",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_ask_question_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_ask_question_remix.xml",
+      "apkDecodedSha256": "00d60e6a13ea1b7e99375fe87dcebb989c56f01fb1e7e3a55c5ef0b4a1980fc4",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "618212c67dd4ebadde466994042c7b0fa0740c37e874fbdb7d523c4ba3b8ccaa",
+        "icon@2x.png": "dbea8776b9a2979e003e9c904b0a331ffeb8b49d2775531d61b7368d01ffa8e1",
+        "icon@3x.png": "8c97d7a33f16b742e36f76a42abe606de133a55a8296b1155270b2c9d89e5ec1"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "message"
+      ],
+      "asset": "ExteraUI_remix_msg_discussion",
+      "source": "msg_discussion_remix.xml",
+      "sha256": "591cb12c629a5e0335066e3360e23d495deebd6620511297d4d7e93ac6522cb5",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_discussion_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_discussion_remix.xml",
+      "apkDecodedSha256": "a7bccb49b69eac244186d44add73b521b05325f65874157ab9b4e19472971b1a",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "51caab0eb622d2bbd82229d49135855127b8702cb62dc8b51b50e5f8577d4185",
+        "icon@2x.png": "accf0e2eb216365abb1c635b87e51459d32e26f546441cf00d86c4227b8c2b0b",
+        "icon@3x.png": "5c1e6336ceb80942d993b14de0a68baa1897cc14e800f1b35da9f3fba0cd240a"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "download"
+      ],
+      "asset": "ExteraUI_remix_msg_download",
+      "source": "msg_download_remix.xml",
+      "sha256": "2e8b0d10bbd333ae8b872ce23004a586f8d692f893c0ae6fd1d71362d8532d29",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_download_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_download_remix.xml",
+      "apkDecodedSha256": "ba196c1de17ea29f8b51a9f9596a4fb0fffd0f34bf37eb2fddef4434c801fd17",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "7938ffd79d1d08c3e059a36c11b4109d2896fb813f56157d44be839dd407b098",
+        "icon@2x.png": "2a6693d83c9ca7771f77ca584c2ac16e72624e0cab00cbbde9662ef5b93f18d8",
+        "icon@3x.png": "8a9437cdff00d8d044fea51956bc1c5bf6826bf0463e3760c788a9fd09a0ab15"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "edit"
       ],
       "asset": "ExteraUI_remix_msg_edit",
@@ -986,6 +2382,177 @@
         "icon@1x.png": "5dc2eddd1de216b8c96c044c69c0a0a7ca8210914744645d3f6b1e6e5df4ab69",
         "icon@2x.png": "b975029428eb0f4cd98406febd1694841c1d4c9cc375ffbcbc88976f63e60479",
         "icon@3x.png": "925687f56c8691ac611c847623ced0a31a0c7e73f30d403669e67b54a5b8fc01"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "emoji"
+      ],
+      "asset": "ExteraUI_remix_msg_emoji_smiles",
+      "source": "input_smile_remix.xml",
+      "sha256": "23d51532cdad454cbacf5220902f477736298e24223b836e35da797819e10a29",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/input_smile_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/input_smile_remix.xml",
+      "apkDecodedSha256": "1eda223517b5069152da01eb473a71feb5474f1e69bf04c1c68a1fdac336895c",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "51e513dee9ca902fe595a15762808b4368835ccef27fc35d1066d2e7a8a7e761",
+        "icon@2x.png": "532b7f4ef48f48eecad0a13170413c281af5bc7eac3b63f2d4a27455afad517e",
+        "icon@3x.png": "8e322102eb14f95a41a9f5b9f109116df25752eaff89b0644071c5f846f8dba4"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "favorite"
+      ],
+      "asset": "ExteraUI_remix_msg_fave",
+      "source": "msg_fave_remix.xml",
+      "sha256": "71d36f50fa19ada2e33f2b5337429d5645be4e17b3792f6725353779144208ef",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_fave_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_fave_remix.xml",
+      "apkDecodedSha256": "6c95929c0100d141e3b7c04814cc1b726cedd77e0799a3a486083c47658e6cc9",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d1a25844a9df8e3f4f95912d23f4dc79afaef2a69d42a54fd6179c90a787ee49",
+        "icon@2x.png": "ba324fa3ca71ab7db9a2312bb746cbc8d8b8bc16ec0dc0f27c0767e3a3ab794a",
+        "icon@3x.png": "7d53c228444d4e9f7197ac4ea4c2c6fee5cd3780e3aaf05d14fe844859f7d491"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "file"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_data_files",
+      "source": "msg_filled_data_files_remix.xml",
+      "sha256": "58b46b8b47cf3017ef76f616870698d9c24c562f8e4eb9fce9c9b2a484bf1994",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_data_files_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_files_remix.xml",
+      "apkDecodedSha256": "ea0b203907a3500f405eef792e7414423d7a608a3b4d8b1a14e7a29229fd76d7",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2275f9b3328d0bffd6ad1dfe893c88bd9ca7f2b297bd2a72e83df9f0166a6462",
+        "icon@2x.png": "96fa71ae9456544794f2ce718dc641595cc07d1c506f91afe084e7fdc789f5dd",
+        "icon@3x.png": "d9a7e0b899de5c0d9a59916d80de5c87721f1179f94cc3329f2155a13ee1258a"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "music"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_data_music",
+      "source": "msg_filled_data_music_remix.xml",
+      "sha256": "b9129ceb05ee233a1fd3907edb45f1446bd75cf9df3902798af0be4b9bc80ea5",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_data_music_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_music_remix.xml",
+      "apkDecodedSha256": "fb26375f8a13e2cc0fdce33a9e513dad0a880f1556a63217338af2f7dc384343",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "de7c4b4ca900b1b35183c7dcd418684ca20a0f2ac2ff84a742da073f731ec843",
+        "icon@2x.png": "e2230d845963924fe50d1101b0c049053fd2c6ec2cb031a4e34adfd450f11d72",
+        "icon@3x.png": "9c7754d939f04dc0e852ee30e013567a26d8ddc310426b6d84b4e732323d51af"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "upload"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_data_sent",
+      "source": "msg_filled_data_sent_remix.xml",
+      "sha256": "6223662fb3d4e2500895833102dbadc4373f3d2c308ed17ddba31cf0e1fe83fd",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_data_sent_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_sent_remix.xml",
+      "apkDecodedSha256": "afed4e144484f91fcb3235b22bb730cfdfb12576561171a89d0e538ea9972d44",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "59a63c6035b6428e24b9166787d086292ef1a152d560ef2c3a4d5dd276bf079b",
+        "icon@2x.png": "aaa2b26d47e5e7c05fcf72c3504b84f392ca4b720b3af95d70c5a10cc75adb52",
+        "icon@3x.png": "6faf9afc7612ade5491f8b5bb0296082118af789dfd2d17310ca2b101909bb03"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "video"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_data_videos",
+      "source": "msg_filled_data_videos_remix.xml",
+      "sha256": "f8e48c771bc75aa96ac386789f101968f638ee17674faa9bd0049925b5c5d3f0",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_data_videos_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_videos_remix.xml",
+      "apkDecodedSha256": "63c2f043065dd1f62943d66d52ed6afcef1e3f6050e96ffe2fe9f6d834fb13af",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "a6e4bb29bc418d599c3a1fc7c20207598fa6dd040bad2912b526396482d81c70",
+        "icon@2x.png": "eab5d488838f585917c58f4184e7be357675cf7d4824dfd63f78d1ee6d54b9ef",
+        "icon@3x.png": "aa9aaa3579397944e605a59e787dba9203eb344cd95830864b55cbe858297fd4"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "voice"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_data_voice",
+      "source": "msg_filled_data_voice_remix.xml",
+      "sha256": "4665f864488d62f82c0c9d012ba44d0197deb225c838136308ccd77de2557b45",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_data_voice_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_data_voice_remix.xml",
+      "apkDecodedSha256": "4af0e2aaa3ae932ecc9054516d87e18b95fbffa39af9e0988548d1cf3796b2be",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "6e8e8d70368efaa0cea615fed95e815a38455ff5f2c79ef3a391734f7265089e",
+        "icon@2x.png": "e3dc65c798a4968f469ab016d7e95c3c342586b02feae549d2feb041635c2c62",
+        "icon@3x.png": "b6de33b0a6b61688b79f583ce8fb65f370d501987ff59558211fa8fff5d45619"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "dataUsage"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_datausage",
+      "source": "msg_filled_datausage_remix.xml",
+      "sha256": "246802254be7174e30a3f5fe3cc8870905fd2342f17fec94ad7feb65dfa341ca",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_datausage_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_datausage_remix.xml",
+      "apkDecodedSha256": "e8f7c71c82adaad8a88c50523420a1f5172c850a9491dfb30c3d27d28a06b46d",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "20367ca12d74365a8d3bbc2b6ee565ffa5f5cebfe39e6cf869a7483ade288943",
+        "icon@2x.png": "de00465fc1e25c4d97a35275503b7abbaa76d3e62f6ebcdd38c4ee15b1d8ab3d",
+        "icon@3x.png": "673374e22ebffebce9d6ae68d2cf8c9cc8de4bb51a12adef0d2e86d60a9a3f8d"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "storageUsage"
+      ],
+      "asset": "ExteraUI_remix_msg_filled_storageusage",
+      "source": "msg_filled_storageusage_remix.xml",
+      "sha256": "d166500280aa2f07e23a56ad52731df8e65633cb02d4688f1ffc356ca2aa022e",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_filled_storageusage_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_filled_storageusage_remix.xml",
+      "apkDecodedSha256": "d9b9ab520a517cf3b8d7ec5b4420ed20aa2c0a40a518278455c96b052e30d797",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "39b5a7d3941216e48c5c15c043ac75e2d94ceb184a258d821ae76a3ad34690a7",
+        "icon@2x.png": "b8645c55eca62a12b291f59dc5b049aae90be0666efd50a3f1b569d899c593b6",
+        "icon@3x.png": "ec0e63106d2df8486d6683c042613b59af5049e011621c87954c2440c165b109"
       }
     },
     {
@@ -1010,6 +2577,44 @@
     {
       "pack": "base.remix",
       "roles": [
+        "doubleTapForward"
+      ],
+      "asset": "ExteraUI_remix_msg_forward",
+      "source": "msg_share_remix.xml",
+      "sha256": "6c6739e577c0acc446d75c58af19f6786a5e8bda8baf0141010be99cdf51c841",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_share_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_share_remix.xml",
+      "apkDecodedSha256": "99e1101e08945fab39a25290cfb1b997fe00e6e9f1f8de3258fe6d78279380d8",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "032a7bc047ba398803459770bb80e4f23271f65a4b4ef700d9609ae30f29bbdf",
+        "icon@2x.png": "a49022677c53232391b04e7ca22710d786765666d5fbdb4924cf42ab4af65c1e",
+        "icon@3x.png": "ce17792b1202ff2f17f4a26a1cb0d0a693d89e1c5f83d1f2616c4247c601fdf5"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "gif"
+      ],
+      "asset": "ExteraUI_remix_msg_gif",
+      "source": "msg_gif_remix.xml",
+      "sha256": "0637950bdd33a455dc30cac816b43834089909c89157f5ce2c80cac5696d170d",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_gif_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_gif_remix.xml",
+      "apkDecodedSha256": "4a7bd143a255e078be56406603c749bbd611e6b329720952d9ad1f80842a98f6",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "db618435fb1104eb8c0673cf62e5ebfc8908d3cd4fa3112b46e2c5b0a8056f71",
+        "icon@2x.png": "7de91297360523e3096884e965b5b56430c94f63901e2398800722d7455a24dd",
+        "icon@3x.png": "259d42e05d4fc64222041af9c8a42af02f88e69a279a84ea560b661899658b58"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "groups"
       ],
       "asset": "ExteraUI_remix_msg_groups",
@@ -1029,7 +2634,46 @@
     {
       "pack": "base.remix",
       "roles": [
-        "info"
+        "draw"
+      ],
+      "asset": "ExteraUI_remix_msg_header_draw",
+      "source": "msg_header_draw_remix.xml",
+      "sha256": "847ac5c67cd939d99733ce19c235754eaf9597dfa02aefdc10aa80fbf546d178",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_header_draw_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_header_draw_remix.xml",
+      "apkDecodedSha256": "531595eb075569d75b3d34c00788a1d61f491911cbf12b176ed0cb11e3b20008",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "a4015927161ee5e2fef55dc57ab9d09965cb78fb4cc1bdeb734ac8e4b445a19a",
+        "icon@2x.png": "7f4b0654f1187956b50df95bf4ff8aa5f24b43e510a77da3b7d82be4413645b9",
+        "icon@3x.png": "9740aab5e24013a3d59dbb528cddc2590e8538872aa6f778d208f6df512437cf"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "support"
+      ],
+      "asset": "ExteraUI_remix_msg_help",
+      "source": "msg_psa_remix.xml",
+      "sha256": "da1f0ffaf1d5cac4a96c12e993a2ff4c1f59a0b0aa11a7b32d43daa9da4cc760",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_psa_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_psa_remix.xml",
+      "apkDecodedSha256": "36b4afc5c996d9b7fc200afc318988c56e3e67b11dce78bca80487e3270be347",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1cbacf286576a77ffc669bc9df45622e772f4c6ad7d89a2611203b4835646a4e",
+        "icon@2x.png": "b4b918a449bc8e89b25a182a3a0c50952e369cdc03882f45563a2ac3e0087c5c",
+        "icon@3x.png": "dee0a4f851f021ec8a7f87dffab4fa2cd8b3aa60f1d2bf78e534f809bdca4400"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "info",
+        "faq"
       ],
       "asset": "ExteraUI_remix_msg_info",
       "source": "msg_info_remix.xml",
@@ -1105,6 +2749,101 @@
     {
       "pack": "base.remix",
       "roles": [
+        "location"
+      ],
+      "asset": "ExteraUI_remix_msg_location",
+      "source": "msg_location_remix.xml",
+      "sha256": "4b3e2a4b3ed216a7a33bf34cbcd422cf58a0f8f361ed32ef5d0d2923492b8b4e",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_location_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_location_remix.xml",
+      "apkDecodedSha256": "b19ee4a1d48fa23410949fa8dfed6136d80f69be90926279ae04eeca240b1507",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d95deff81573c24e2d40bfd08c17d8545338005a34df19dc3c9993ccdc2921a8",
+        "icon@2x.png": "e052c8dab02252e039c076078292c666915b992399cf26713961894a3188fa3b",
+        "icon@3x.png": "472f284722ad70d4956056e6b1db59cbd781c8596497f4884910b63c77a5c815"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "recentActions"
+      ],
+      "asset": "ExteraUI_remix_msg_log",
+      "source": "msg_log_remix.xml",
+      "sha256": "77d8f352b093f296bf8eceadefc8eff6f7fcf9433b8cea3b6104066fcd2c5433",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_log_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_log_remix.xml",
+      "apkDecodedSha256": "a1ccba870ccd0751ef9b6e2c85d6d067edc646bce9f742f79501bab4463b8c03",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "dd8a6c214a4c2565342a4466e0a0d65a8203e7282c257fd7f14d056fe7cb84bf",
+        "icon@2x.png": "24c4a304263862466eeb55fc7bae7ffb3ef34e2657de326f55686b719faf9acf",
+        "icon@3x.png": "d1c57312050da8059353abc9d63b4437b0bee13b1d50ba1a078e27824cb6b338"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "read"
+      ],
+      "asset": "ExteraUI_remix_msg_markread",
+      "source": "msg_markread_remix.xml",
+      "sha256": "9a54fcff9750f05be472a413ba07341525d8be782ce3bb3eb809b3da82250fb5",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_markread_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_markread_remix.xml",
+      "apkDecodedSha256": "826a7e588e6e553148beddd57854cd83849d54f848cb72eb0d5acfe6c5be3f95",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e4402884c3404de38792ac52bf9b4970df6b5c75ae2ce55b7957092f9bddb101",
+        "icon@2x.png": "b9545af1fa7b9ce93a96e92b8956b81011c1f54b8ec1bbf3c5f126d5c3bfc581",
+        "icon@3x.png": "2591392b6bacafd740553fc9e966662be950256158ebbc99b39daa72ec955f2d"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "stories"
+      ],
+      "asset": "ExteraUI_remix_msg_menu_stories",
+      "source": "msg_menu_stories_remix.xml",
+      "sha256": "5740c024d63215670430b3628173cac6a09614ce05931b687625c4e3d11ab7c4",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_menu_stories_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_menu_stories_remix.xml",
+      "apkDecodedSha256": "fb927bd2fc2507f6e99c36253926a10a94e2ed19b2c56d95bccec74a984bb935",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "a332d0e9a32202fbf5c5db9f7e689fde4758905bf79cca61f782c176328e0e35",
+        "icon@2x.png": "08c2350701a72ba1f51175aca3a8e944b6b6a6c4d9ac57b188835f4035efb444",
+        "icon@3x.png": "24d5beefd72dfaad97fd2b68b57f4905b5d3e94481ddd2b41355cedda9f73b89"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "goToMessage"
+      ],
+      "asset": "ExteraUI_remix_msg_message",
+      "source": "msg_message_remix.xml",
+      "sha256": "dada612d11b35ebf3f1ee0aa4f8ada3741b209ddbabe9ac51a6224cd74de78fc",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_message_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_message_remix.xml",
+      "apkDecodedSha256": "f1d3733b8a6db0982a65cc13695e354ee0080d1b797aca0165e834d6d7b4f82a",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "ba10b79566ef04a053aedf6ab7354a1e96fc85cfc32fb8dc19d5734696244c88",
+        "icon@2x.png": "1f326d1a4f2e6b102b4aa24b7806ee568d3059b2d3fb3728c50e9029701ee129",
+        "icon@3x.png": "fc7bbafe666d2032b489ac821a6c22fcdfd98d3c1083add1db2a48181e86d453"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "chats"
       ],
       "asset": "ExteraUI_remix_msg_msgbubble3",
@@ -1119,6 +2858,25 @@
         "icon@1x.png": "e9dc027f8e56d446fdc4836caba0eb87b9141b981ca5cdd6bf48b42e04cc5a21",
         "icon@2x.png": "1347c5b23ab106308a58c6e93b8b21f64e753be8c9cbde6084714489147b5b7d",
         "icon@3x.png": "b86955b023ee7cb3fa59848aefc538c91bb0434d14f5bc030bc2ce7772789f06"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "changePhone"
+      ],
+      "asset": "ExteraUI_remix_msg_newphone",
+      "source": "msg_newphone_remix.xml",
+      "sha256": "750c8a88a8b3045f7ee7666beed4f543194da6d1a8d6d97cc4d75928e6f515be",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_newphone_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_newphone_remix.xml",
+      "apkDecodedSha256": "0835f837c4a4f6def47a58dcae0b5ce086aaca0343a4e57fe1fe27a6664b6922",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "e76b72e32073a63f66f66813a56daf5a615ff81f44678650390325e899d34952",
+        "icon@2x.png": "16798e2f83f9cb2aaffa751162ae310489465c3f056038816a2c45c1071b517b",
+        "icon@3x.png": "00b2708f84bc7725d886015f703029e98568e5fb3ea559a0e1a3560a5106d96f"
       }
     },
     {
@@ -1162,6 +2920,26 @@
     {
       "pack": "base.remix",
       "roles": [
+        "restrict",
+        "permissions"
+      ],
+      "asset": "ExteraUI_remix_msg_permissions",
+      "source": "msg_permissions_remix.xml",
+      "sha256": "ae090c24b5bf87e1509018cba188b3e4265c6e9475ad60e12991d7d2f0210485",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_permissions_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_permissions_remix.xml",
+      "apkDecodedSha256": "b16fb1d3e35ec8bb8a31d5042b449db2be47e8241939fc9a0579dae63d4b4398",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "d4de1624f352885ba33a56ee0e9e8ff6e2a7a11785cf43df6744b02383045587",
+        "icon@2x.png": "959a580199813c42452d33cfe5a1624695906be23c7c058fa1add11603441ac6",
+        "icon@3x.png": "39f1bd72958666bcfb865a40877e9cf5b419eeb6734149f2f9e2bbda1ff2955b"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "photo"
       ],
       "asset": "ExteraUI_remix_msg_photos",
@@ -1200,6 +2978,44 @@
     {
       "pack": "base.remix",
       "roles": [
+        "key"
+      ],
+      "asset": "ExteraUI_remix_msg_pin_code",
+      "source": "msg_pin_code_remix.xml",
+      "sha256": "f572b38ea85b9fe1bf4be41d907af8adc7a4d29a71e5669cbdb59fb4e746c76a",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_pin_code_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_pin_code_remix.xml",
+      "apkDecodedSha256": "51cc27338e47f613c20348f92ab4b2f1b29e69442ee4dcd2d67940b79418e38b",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "ff5e2054b6800f83a42c0e23040ec257ad090692c967c82697586c345528a65d",
+        "icon@2x.png": "79fcb10bfb428abe1c4e3ad475ce5c12b1b2ff79c3e020dd9b86425dce24e78a",
+        "icon@3x.png": "1f2ef8ae5b0474d857a0d1392914bb1a1ce34e0d11a96aa9fc6d68c02b562bbf"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "stopPoll"
+      ],
+      "asset": "ExteraUI_remix_msg_pollstop",
+      "source": "msg_pollstop_remix.xml",
+      "sha256": "6b9269882a3c46a1e0aad40c0d73024d85cfe2762e6ee8f2818d95f0f3a82a3c",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_pollstop_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_pollstop_remix.xml",
+      "apkDecodedSha256": "7d33356df49c1b60047b0cc85e3613e4f90ff769ac9d4a2c4a8dcbb6fd9a6ffd",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "93b6a52811fdab9f45cb811719901ae4aa2a389b54dc086122484bbc4e304415",
+        "icon@2x.png": "d839599c1a80afa1e7ec13c9a717e22e082e6eae0fa88be627a891196593b44c",
+        "icon@3x.png": "e899910b03e8f19c8128d3ba09656427e7a6b3da7318925627e0f1a84d86a5e5"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "qrCode"
       ],
       "asset": "ExteraUI_remix_msg_qrcode",
@@ -1214,6 +3030,122 @@
         "icon@1x.png": "3d66d893d5a8252313b57662c479318c6eafbc7e0ea7706a3119907313eb919e",
         "icon@2x.png": "d3a062dd1d3870e2cf17788d2d2892b2bd88d71b5a5284fdda0b409be4aaacb2",
         "icon@3x.png": "7e84045ceb9aa6e0cc5b8380c9fdde2527710ad4965eab2eedd86bcd92389755"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "thumbsDown"
+      ],
+      "asset": "ExteraUI_remix_msg_rate_down",
+      "source": "msg_rate_down_remix.xml",
+      "sha256": "6d6376dff0ebca7fc682a98ccdb648dabd5c8696f49a840e0bf3cc828fcda9e0",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_rate_down_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_rate_down_remix.xml",
+      "apkDecodedSha256": "3e45a24eadc72d751f9c6910527974143d3ce63a2d52edd52d033517e5c4b3ab",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "8819c09fac651f6ac2ee1e3ad5ebbe6f04f924c260ae3ee56c8a6d12af76c562",
+        "icon@2x.png": "6a01330e58664541a5d18bd65173b1a6cdbdb2a6e1cec41286234033e4c234af",
+        "icon@3x.png": "e99e343db25be94d69c9e698d93013d4240a42df765ce83e3d9cfa38cb9157f9"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "rate",
+        "thumbsUp"
+      ],
+      "asset": "ExteraUI_remix_msg_rate_up",
+      "source": "msg_rate_up_remix.xml",
+      "sha256": "e97c6ab26e72abe2d72bcb87bdbd34d54315999ad9d1587988a9160b2c7cb1f2",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_rate_up_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_rate_up_remix.xml",
+      "apkDecodedSha256": "9b1aa944db7c5c397942d236719dcf3d80cc1686c823aab3944eae6d4b162d65",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "5be32af505d47e5da49acd823c6fd831f907d9d5050cd2119618258f3d0bfd00",
+        "icon@2x.png": "577184081535ef290012f1b747d65fb22f7bc52cfb1ddb8c1a33c56346a3ce4a",
+        "icon@3x.png": "af8fb289c14f593d7b593806fb3d0c90d68845de22f3fc13c60487597262666d"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "reactions"
+      ],
+      "asset": "ExteraUI_remix_msg_reactions",
+      "source": "msg_reactions_remix.xml",
+      "sha256": "bb9dc9c109e1317f0f696056aa02c67e39dd0d4a7b9e420411acbc94c6485434",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_reactions_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reactions_remix.xml",
+      "apkDecodedSha256": "f5a0006e245dfd268e35750bbb7cb4d5b51208ab88ce16a008434487d07d73d2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "96eff7ba2a93bb1e75a6f2baa06c7d830f9d96770d9f21599185c1fa51dbead8",
+        "icon@2x.png": "61ad2a4b2f7ad3f891c4cfc51ebdb2bbe2ebf465a16404515ca958b0c6153aca",
+        "icon@3x.png": "1e0af79150151979929808cd26e4e5a2612067dbb7f20eb310c6a32050fa3321"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "doubleTapReactions"
+      ],
+      "asset": "ExteraUI_remix_msg_reactions2",
+      "source": "msg_reactions_remix.xml",
+      "sha256": "bb9dc9c109e1317f0f696056aa02c67e39dd0d4a7b9e420411acbc94c6485434",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_reactions_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_reactions_remix.xml",
+      "apkDecodedSha256": "f5a0006e245dfd268e35750bbb7cb4d5b51208ab88ce16a008434487d07d73d2",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "96eff7ba2a93bb1e75a6f2baa06c7d830f9d96770d9f21599185c1fa51dbead8",
+        "icon@2x.png": "61ad2a4b2f7ad3f891c4cfc51ebdb2bbe2ebf465a16404515ca958b0c6153aca",
+        "icon@3x.png": "1e0af79150151979929808cd26e4e5a2612067dbb7f20eb310c6a32050fa3321"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "time",
+        "clock"
+      ],
+      "asset": "ExteraUI_remix_msg_recent",
+      "source": "msg_recent_remix.xml",
+      "sha256": "7f9808c872bf174dc3f0f121097a6f688aed9634e7557e86640bb9ce588fdf0b",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_recent_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_recent_remix.xml",
+      "apkDecodedSha256": "2f98bbc0d002158d3dd7e372290444e7852a9f6d33368775415dd7294f361ae1",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "17a85db66410dc3923a04924394a09144bdd2b084978014a14076a26d2ca0425",
+        "icon@2x.png": "0f9f7137a4d094c9e2a7dd16529cd321411d571b24282f81f434c6885f740ded",
+        "icon@3x.png": "1f88eb6962015f4a424a7f9cc2424322cb4ee804f7ebd37e208136070b592882"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "repeatAction"
+      ],
+      "asset": "ExteraUI_remix_msg_repeat",
+      "source": "msg_repeat_remix.xml",
+      "sha256": "6c95de8e27088cb2ac0b9d2405c36765878efedd4d1c86ee9565f7e8dfe5d143",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_repeat_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_repeat_remix.xml",
+      "apkDecodedSha256": "30c4cf9db9037ccd6e9658dba2246ede1d925ded646eb936d9ac271faff4e72b",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1639f1ad0170ea37c3ce739744228d74ad4d91c838d1efe589873ef53fcaf87a",
+        "icon@2x.png": "a494b0ba2b2657de91d352f62a56e6d27351f942f6a5ea3154acacf47780d403",
+        "icon@3x.png": "1db0119748a05b472a4e9ba2449bd44d026967d82973d119116c630309f2350d"
       }
     },
     {
@@ -1252,6 +3184,44 @@
         "icon@1x.png": "a42fedb6452612b5860055d2928dfc53db0cb1cb9666676cf917216807b7008d",
         "icon@2x.png": "89558f7516f09a58e0650ab6412077dcea0d0e2b13d92bb84bc4cf82a0649b3f",
         "icon@3x.png": "ce8427d7e7b5a4683b76599b9df4ef3c14d86c5078c09484442322e093f83759"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "requests"
+      ],
+      "asset": "ExteraUI_remix_msg_requests",
+      "source": "msg_contact_add_remix.xml",
+      "sha256": "bedd76110f7f8b499cc65d309e1cf0932a9abe561a0254ed77593c97cd4aebb8",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_contact_add_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_contact_add_remix.xml",
+      "apkDecodedSha256": "798ca5e32b2d302b1a0daf8ed23c4ebe1491be3dde7952324c9f5253e0aeed5f",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "cc5297c505325ac416080f001b49d4cc872e53633da6fb6958b40ce47a3e77e1",
+        "icon@2x.png": "df0121eea5830729b3b3f881578a88fd088bea64f2d0927c5c5e721440ee853a",
+        "icon@3x.png": "c9a516cc02707ab3ea7ebff347cce3b38dfe5b5de784a28e577480241edf2632"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "reload"
+      ],
+      "asset": "ExteraUI_remix_msg_retry",
+      "source": "msg_retry_remix.xml",
+      "sha256": "0c352da89f054d08676c0598dcb5301312928cd8ea460839a850ba5ae082a9aa",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_retry_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_retry_remix.xml",
+      "apkDecodedSha256": "cc03f81c758a136403c4720d494c7b39aa5b863efa66ee31d380b815db9a298b",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "afe99a8135fbd3037304aea23b2823c529375f25f2b2f950cc89140670663800",
+        "icon@2x.png": "179b1eae167c27858897ec8232911800c216d6870f18b2b136d2716dc4a474e1",
+        "icon@3x.png": "7475a6648fe68cd103da55e4299063255f8576ed905b5f80de9739647896eb34"
       }
     },
     {
@@ -1314,7 +3284,8 @@
     {
       "pack": "base.remix",
       "roles": [
-        "select"
+        "select",
+        "selectAll"
       ],
       "asset": "ExteraUI_remix_msg_select",
       "source": "msg_select_remix.xml",
@@ -1328,6 +3299,25 @@
         "icon@1x.png": "21062ba6f7ee041d49d0da69fc4ebb6b6656dc016879bafe6021a3d13b1acdae",
         "icon@2x.png": "8ad53b30acac340dd3bd141fdfea17b5f3e00d7fd32ea84dc0a6a7636ec41857",
         "icon@3x.png": "a6d4d2f77a91d7dac069e543bb92495fc0c9ba77902ce8c4b49e5eaebf61659b"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "resend"
+      ],
+      "asset": "ExteraUI_remix_msg_send",
+      "source": "msg_send_remix.xml",
+      "sha256": "a5da0c8dddf1f74ae5ed995d6d84e2bf8e893b64b5ceff5864e75274d082c4ef",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_send_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_send_remix.xml",
+      "apkDecodedSha256": "75b1cac69ef77d1ee923f1004b77323c65875c50fc16bb22477a9ccd3b4d01ca",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "1d6f9930d58659f99dcd33db722e86967e5842ff03556dc3d34cfaf224b2881f",
+        "icon@2x.png": "b37854eac1896fac37445de98733ca42a3a91e30e31d68e07bc1d25ee40a1a16",
+        "icon@3x.png": "75930442b2b659df35edd0e90db7cfd745d8745b652bc743aaefb1bcbf4ab48a"
       }
     },
     {
@@ -1371,6 +3361,44 @@
     {
       "pack": "base.remix",
       "roles": [
+        "speed"
+      ],
+      "asset": "ExteraUI_remix_msg_speed",
+      "source": "msg_speed_remix.xml",
+      "sha256": "5740c024d63215670430b3628173cac6a09614ce05931b687625c4e3d11ab7c4",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_speed_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_speed_remix.xml",
+      "apkDecodedSha256": "fb927bd2fc2507f6e99c36253926a10a94e2ed19b2c56d95bccec74a984bb935",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "a332d0e9a32202fbf5c5db9f7e689fde4758905bf79cca61f782c176328e0e35",
+        "icon@2x.png": "08c2350701a72ba1f51175aca3a8e944b6b6a6c4d9ac57b188835f4035efb444",
+        "icon@3x.png": "24d5beefd72dfaad97fd2b68b57f4905b5d3e94481ddd2b41355cedda9f73b89"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "statistics"
+      ],
+      "asset": "ExteraUI_remix_msg_stats",
+      "source": "msg_stats_remix.xml",
+      "sha256": "3f4ee5554d1e66e9409ff407ca0e22935dbb0ae656d3eb330a73c99f00095361",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_stats_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_stats_remix.xml",
+      "apkDecodedSha256": "042254be6f8d59cc93c5e6fb0e0520a30ca07d7bb1f3fd7d79dc2cc5e9fe6927",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "baeb199de06329d2e28e9e95b88db5dc0c752c8044ae0c6015d6d6092bdafbd6",
+        "icon@2x.png": "679e14a214aace4247504f4e36471a0ced278d346f8575b582f4f0322c2da72c",
+        "icon@3x.png": "1fcfa851aeb46b4bf94c8758aa320a36841e01b2508f367d3e980dff204fb52b"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
         "stickers"
       ],
       "asset": "ExteraUI_remix_msg_sticker",
@@ -1393,10 +3421,10 @@
         "appearance"
       ],
       "asset": "ExteraUI_remix_msg_theme",
-      "source": "msg_theme_remix.xml",
+      "source": "menu_profile_colors_remix.xml",
       "sha256": "2c41514c7cb8cf7e1e440c3e353e012a9f04e99430f13d47a943cdcf23d1d19e",
-      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_theme_remix.xml",
-      "apkDecodedPath": "resources/res/drawable/msg_theme_remix.xml",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/menu_profile_colors_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/menu_profile_colors_remix.xml",
       "apkDecodedSha256": "84bbbcc5bd40191c3d59355f8612e1d1adbbcaf55392d7b50078be29ae1a9b91",
       "geometryMatchesAPK": true,
       "generated": {
@@ -1404,6 +3432,82 @@
         "icon@1x.png": "bdd78fd12407d2d506def2de48e1413e54800b9584c971f832354ce73061492e",
         "icon@2x.png": "e9c9da24c4f9585a02c20160ac4a5285d0eec07b312b6255325d7ff9d70d8cd4",
         "icon@3x.png": "53fd132ccceb62b0fb51681aa3e66b1d5b23a682ed19036ba13b24e8c7e41d0f"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "downloadTone"
+      ],
+      "asset": "ExteraUI_remix_msg_tone_add",
+      "source": "msg_tone_add_remix.xml",
+      "sha256": "e3835c286c60c4981adf455e929ff0d277404794efd2a441166cba0f3758875c",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_tone_add_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_tone_add_remix.xml",
+      "apkDecodedSha256": "c7e1435e30d2b24550a4e74d95027f73f958d3b7955fd2e156e142109f73a7d1",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2d4cbc637b542c16ec2a5ff043601cc19f4da7181885e9f3bdef593bbc1cfc49",
+        "icon@2x.png": "940454026cc7eaa99d4526c641c7bf037666cb8fb701785eba55fde24f9b14df",
+        "icon@3x.png": "ee3aa327958be6991d496002cb2c6461938a38f73a743d00686a3b48fad64ab2"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "topics"
+      ],
+      "asset": "ExteraUI_remix_msg_topics",
+      "source": "msg_topics_remix.xml",
+      "sha256": "030d86a239bc25f8223087f50683a3799299dd6c4f53e12ce33d5485e86d772b",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_topics_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_topics_remix.xml",
+      "apkDecodedSha256": "a224e17bb21c0783c4b16393f18d371e23f73348bacc7446da1c429a56f29085",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "765fdec6bb00280d11de500258a4189389dd728b4ca09a9d55e9a797da9cbd43",
+        "icon@2x.png": "574488b089f55796a6c7a5e3ce91664dbc55b46a658bd97a68833944cb7d202c",
+        "icon@3x.png": "def9e67f95628c90ba1f8de9fa8999ff93efc17fa6668375abcba3e1cadf6ad9"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "translate"
+      ],
+      "asset": "ExteraUI_remix_msg_translate",
+      "source": "msg_translate_remix.xml",
+      "sha256": "8efecabd01310c0b4b66c803e6b7d58c3c57007a79d5cd0a08e4e14c16ee4d9b",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_translate_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_translate_remix.xml",
+      "apkDecodedSha256": "12ffe1dc63ce8028ae9df613184cfc0d209f9b97f5f18dfb1c2f2300cdb2ab6a",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "b027cc58c484bd3740630293ebf7780828ad8508ea2bdbc059813bddd19e8d2a",
+        "icon@2x.png": "96a743df84e8d7bb91cbe2bf9f68523a5b9583a0471fb54c09bb4ba222151108",
+        "icon@3x.png": "ee1e338002f7c0c548fb137631ae182eb85c733aaa352bf0d77b95c4eba9c259"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "unfavorite"
+      ],
+      "asset": "ExteraUI_remix_msg_unfave",
+      "source": "msg_unfave_remix.xml",
+      "sha256": "b9cf10b0c677be2f2a9df4415d7b737baa717197ce8d64a0b2551aea42d38893",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_unfave_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_unfave_remix.xml",
+      "apkDecodedSha256": "ae8bf00fc449d77636be26bb99b012604b0c6e976f0ec639855f8aa0b1e5be44",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "9906890cd7f15fdd8eb0a024dcdc1e4b8017b1834fdf5619c91244bfdcb12e69",
+        "icon@2x.png": "da1b0cfe85167120a33428841752cfc5cb556bfbabb5b1cc9651493f32238c8f",
+        "icon@3x.png": "d62fe870548b64dea3ecb1aa0ce5dba0e98777a9952db89225e3d8e64aa05704"
       }
     },
     {
@@ -1423,6 +3527,82 @@
         "icon@1x.png": "0675ed569f0b3eee8cb08e4e6d0b29ba264daef1bc48553d2a9108fd6c6e2d8a",
         "icon@2x.png": "2b6fa9c08527f7ad291ce80a52d139bc4fe482ae258c9b8a4c4e9d3921f283de",
         "icon@3x.png": "dc3a3e35e4d4d1b2d21adc8395f37fa3893585568e56ece6cd88041dbb4e1387"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "unvote"
+      ],
+      "asset": "ExteraUI_remix_msg_unvote",
+      "source": "msg_unvote_remix.xml",
+      "sha256": "b77b23d45b6465ea397a4678cea5512439b12c9e2a18f81c4dde4d3b5e7dcf4e",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_unvote_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_unvote_remix.xml",
+      "apkDecodedSha256": "f675dc73d7cc5738935d4c9a330ea2ae50b41b66f04a9600b5cf4e334cb53edf",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "2c13eeffbacd175b07f986e7d06c576c6f06540a6b720b17ac25892e64793bbc",
+        "icon@2x.png": "8782be6a3df3877f1c5c95317bf57e86bb6daf2efe9b06e16e8d19b3d1ea8f24",
+        "icon@3x.png": "48763a74e3e679b19dfcf192dba6e19e170889e928098909b720d66db896fce8"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "readUntil"
+      ],
+      "asset": "ExteraUI_remix_msg_view_file",
+      "source": "msg_message_remix.xml",
+      "sha256": "dada612d11b35ebf3f1ee0aa4f8ada3741b209ddbabe9ac51a6224cd74de78fc",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_message_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_message_remix.xml",
+      "apkDecodedSha256": "f1d3733b8a6db0982a65cc13695e354ee0080d1b797aca0165e834d6d7b4f82a",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "ba10b79566ef04a053aedf6ab7354a1e96fc85cfc32fb8dc19d5734696244c88",
+        "icon@2x.png": "1f326d1a4f2e6b102b4aa24b7806ee568d3059b2d3fb3728c50e9029701ee129",
+        "icon@3x.png": "fc7bbafe666d2032b489ac821a6c22fcdfd98d3c1083add1db2a48181e86d453"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "replies"
+      ],
+      "asset": "ExteraUI_remix_msg_viewreplies",
+      "source": "msg_viewreplies_remix.xml",
+      "sha256": "269241c5b6747a9add9f25173cd365d45c5034c732bbde755225a39e95068e0c",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_viewreplies_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_viewreplies_remix.xml",
+      "apkDecodedSha256": "9e3a1c16c97f5d9563167af31eff7754d3cf16ed8daa5247c165cd26c984091f",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "7d7a0affd2dd04a172c25f7fd4845d43b921fb2c536ef79694886a520c1fac00",
+        "icon@2x.png": "68f14b73ac8530d654124fc3b2c22b5b2efe97083017b49b96bce484d816270e",
+        "icon@3x.png": "dc1ce4c7841786559ccdd5ee5ce3ad7e42b695cc8458bda0ca460598a343283f"
+      }
+    },
+    {
+      "pack": "base.remix",
+      "roles": [
+        "views"
+      ],
+      "asset": "ExteraUI_remix_msg_views",
+      "source": "msg_views_remix.xml",
+      "sha256": "aa58f6bad7aee1933b5fe3a7f043be299155478a259a4d668ca793edd1b04f96",
+      "gitPath": "TMessagesProj/src/main/res-remix/drawable/msg_views_remix.xml",
+      "apkDecodedPath": "resources/res/drawable/msg_views_remix.xml",
+      "apkDecodedSha256": "207c402c011005417282f22398f0b3df8d55fc6c43b08436713571eecf2eea7d",
+      "geometryMatchesAPK": true,
+      "generated": {
+        "Contents.json": "a691b0ceceb69e19fb1bd5970152136096e6ee5109a97f1e8a27630e6b59e347",
+        "icon@1x.png": "65cb82b691980f066aee7e64a903e0cd4536cc11f3aeff7b0c8d73ab2c606504",
+        "icon@2x.png": "a5fb09d2c3f22d3bcd231cdfad5ff5ef2e7da42c8aa5b696a27a36bdeb626361",
+        "icon@3x.png": "adb71af2415c998968800f3c83665c24c384ed655202c3ddf63ed528f475e929"
       }
     }
   ]

@@ -1,0 +1,26 @@
+{
+  "purpose": "Fix sender mini avatars in real chat bubble author headers and preserve live setting updates.",
+  "productionFiles": [
+    "Swiftgram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift",
+    "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift",
+    "submodules/TelegramUI/Sources/ChatHistoryListNode.swift"
+  ],
+  "testFiles": [
+    "Tests/ExteraSenderMiniAvatars/ExteraSenderMiniAvatarPolicyTests.swift",
+    "Tests/ExteraSenderMiniAvatars/verify_sender_mini_avatars.py"
+  ],
+  "supportFiles": [
+    "Tests/ExteraSenderMiniAvatars/README.md",
+    "Tests/ExteraSenderMiniAvatars/owned-files.json"
+  ],
+  "existingPreference": {
+    "key": "extera.senderMiniAvatars",
+    "default": false,
+    "writer": "SGSettingsController",
+    "storeNotification": "ayuSettingsDidChangeNotification"
+  },
+  "newDependencies": [],
+  "rootOwnedFilesModified": [],
+  "visualRuntimeValidation": "Pending iOS build and recorded-frame review; Windows host has no Swift/UIKit simulator toolchain.",
+  "commitOrPush": false
+}

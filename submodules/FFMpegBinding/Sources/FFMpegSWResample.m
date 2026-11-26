@@ -19,6 +19,16 @@
     NSUInteger _ratio;
     void *_buffer;
     int _bufferSize;
+
+    SwrContext *_transcriptionContext;
+    int _transcriptionRate;
+    int _transcriptionFormat;
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+    AVChannelLayout _transcriptionLayout;
+#else
+    uint64_t _transcriptionLayout;
+#endif
+    bool _transcriptionDraining;
 }
 
 @end
@@ -40,6 +50,10 @@
 }
 
 - (void)dealloc {
+    swr_free(&_transcriptionContext);
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+    av_channel_layout_uninit(&_transcriptionLayout);
+#endif
     if (_context) {
         swr_free(&_context);
     }
@@ -149,6 +163,90 @@
     }
     
     return [[NSData alloc] initWithBytes:_buffer length:numFrames * _destinationChannelCount * 2];
+}
+
+// This converter is isolated from the playback resampler's legacy nil contract.
+- (NSData * _Nullable)resampleForTranscription:(FFMpegAVFrame * _Nullable)frame {
+    AVFrame *input = frame == nil ? NULL : (AVFrame *)[frame impl];
+    if ((enum AVSampleFormat)_destinationSampleFormat != AV_SAMPLE_FMT_S16 ||
+        _destinationSampleRate <= 0 || _destinationSampleRate > 192000 ||
+        _destinationChannelCount < 1 || _destinationChannelCount > 2) {
+        return nil;
+    }
+    if (input != NULL) {
+        if (_transcriptionDraining || input->sample_rate <= 0 ||
+            input->sample_rate > 192000 || input->nb_samples <= 0 ||
+            (int64_t)input->nb_samples > (int64_t)input->sample_rate * 10 ||
+            input->extended_data == NULL) {
+            return nil;
+        }
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+        int channels = input->ch_layout.nb_channels;
+#else
+        int channels = input->channels;
+        uint64_t layout = input->channel_layout != 0 ? input->channel_layout : av_get_default_channel_layout(channels);
+#endif
+        if (channels < 1 || channels > 64) { return nil; }
+        if (_transcriptionContext == NULL) {
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+            if (!av_channel_layout_check(&input->ch_layout) ||
+                av_channel_layout_copy(&_transcriptionLayout, &input->ch_layout) < 0) {
+                return nil;
+            }
+            AVChannelLayout outputLayout;
+            av_channel_layout_default(&outputLayout, _destinationChannelCount);
+            int status = swr_alloc_set_opts2(&_transcriptionContext,
+                &outputLayout, AV_SAMPLE_FMT_S16, _destinationSampleRate,
+                &_transcriptionLayout, (enum AVSampleFormat)input->format,
+                input->sample_rate, 0, NULL);
+            av_channel_layout_uninit(&outputLayout);
+            if (status < 0) { return nil; }
+#else
+            _transcriptionLayout = layout;
+            _transcriptionContext = swr_alloc_set_opts(NULL,
+                av_get_default_channel_layout(_destinationChannelCount),
+                AV_SAMPLE_FMT_S16, _destinationSampleRate,
+                layout, (enum AVSampleFormat)input->format,
+                input->sample_rate, 0, NULL);
+#endif
+            if (_transcriptionContext == NULL || swr_init(_transcriptionContext) < 0) {
+                return nil;
+            }
+            _transcriptionRate = input->sample_rate;
+            _transcriptionFormat = input->format;
+        } else {
+            // A format change requires draining/reconfiguration; fail explicitly
+            // rather than silently discarding the previous converter's tail.
+            if (!swr_is_initialized(_transcriptionContext) ||
+                input->sample_rate != _transcriptionRate ||
+                input->format != _transcriptionFormat) { return nil; }
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+            if (av_channel_layout_compare(&_transcriptionLayout, &input->ch_layout) != 0) { return nil; }
+#else
+            if (layout != _transcriptionLayout) { return nil; }
+#endif
+        }
+    } else {
+        _transcriptionDraining = true;
+        if (_transcriptionContext == NULL) { return [NSData data]; }
+        if (!swr_is_initialized(_transcriptionContext)) { return nil; }
+    }
+
+    // Ask SWR for its delay-aware bound for both input and NULL-input flushes.
+    // Repeated flush calls stop only when zero output is produced.
+    int capacity = swr_get_out_samples(_transcriptionContext, input == NULL ? 0 : input->nb_samples);
+    if (capacity < 0 || capacity > (int64_t)_destinationSampleRate * 10) { return nil; }
+    capacity = MAX(1, capacity);
+    size_t bytes = (size_t)capacity * (size_t)_destinationChannelCount * 2;
+    uint8_t *output = malloc(bytes);
+    if (output == NULL) { return nil; }
+    int frames = swr_convert(_transcriptionContext, &output, capacity,
+        input == NULL ? NULL : (const uint8_t **)input->extended_data,
+        input == NULL ? 0 : input->nb_samples);
+    if (frames < 0 || frames > capacity) { free(output); return nil; }
+    return [[NSData alloc] initWithBytesNoCopy:output
+        length:(NSUInteger)frames * (NSUInteger)_destinationChannelCount * 2
+        freeWhenDone:YES];
 }
 
 @end

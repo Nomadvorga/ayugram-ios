@@ -147,48 +147,48 @@ public struct PresentationResourcesSettings {
     public static var appearance: UIImage? { return packedIcon(.appearance, color: colorLightBlue, fallback: nativeAppearance) }
     private static let nativeLanguage = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorPurple])
     public static var language: UIImage? { return packedIcon(.language, color: colorPurple, fallback: nativeLanguage) }
-    public static let powerSaving = renderSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])
+    public static var powerSaving: UIImage? { return packedIcon(.powerSaving, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])) }
     public static let business = renderSettingsIcon(name: "Item List/Icons/Business", backgroundColors: [UIColor(rgb: 0xA95CE3), UIColor(rgb: 0xF16B80)])
     private static let nativeMyProfile = renderSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
     public static var myProfile: UIImage? { return packedIcon(.profile, color: colorRed, fallback: nativeMyProfile) }
     
-    public static let birthday = renderSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])
+    public static var birthday: UIImage? { return packedIcon(.birthday, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])) }
     public static let aiTools = renderSettingsIcon(name: "Item List/Icons/AITools", backgroundColors: [colorPurple])
-    public static let yourColor = renderSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorLightBlue])
+    public static var yourColor: UIImage? { return packedIcon(.draw, color: colorLightBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorLightBlue])) }
     
-    public static let storageUsage = renderSettingsIcon(name: "Item List/Icons/Pie", backgroundColors: [colorOrange])
-    public static let dataUsage = renderSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorPurple])
+    public static var storageUsage: UIImage? { return packedIcon(.storageUsage, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/Pie", backgroundColors: [colorOrange])) }
+    public static var dataUsage: UIImage? { return packedIcon(.dataUsage, color: colorPurple, fallback: renderSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorPurple])) }
     
     public static let cellular = renderSettingsIcon(name: "Item List/Icons/Cellular", backgroundColors: [colorGreen])
     public static let wifi = renderSettingsIcon(name: "Item List/Icons/Wifi", backgroundColors: [colorBlue])
     
-    public static let privateChats = renderSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])
-    public static let groups = renderSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorGreen])
-    public static let channels = renderSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorOrange])
-    public static let stories = renderSettingsIcon(name: "Item List/Icons/Stories", backgroundColors: [colorViolet])
-    public static let reactions = renderSettingsIcon(name: "Item List/Icons/Reactions", backgroundColors: [UIColor(rgb: 0xFF2D55)])
+    public static var privateChats: UIImage? { return packedIcon(.profile, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])) }
+    public static var groups: UIImage? { return packedIcon(.groups, color: colorGreen, fallback: renderSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorGreen])) }
+    public static var channels: UIImage? { return packedIcon(.channel, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorOrange])) }
+    public static var stories: UIImage? { return packedIcon(.stories, color: colorViolet, fallback: renderSettingsIcon(name: "Item List/Icons/Stories", backgroundColors: [colorViolet])) }
+    public static var reactions: UIImage? { return packedIcon(.reactions, color: UIColor(rgb: 0xFF2D55), fallback: renderSettingsIcon(name: "Item List/Icons/Reactions", backgroundColors: [UIColor(rgb: 0xFF2D55)])) }
     
-    public static let photos = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorOrange])
-    public static let videos = renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorRed])
-    public static let files = renderSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorBlue])
-    public static let gifs = renderSettingsIcon(name: "Item List/Icons/Gif", backgroundColors: [colorOrange])
-    public static let stickersGreen = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorGreen])
-    public static let emoji = renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorLightBlue])
-    public static let emojiTeal = renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorTeal])
+    public static var photos: UIImage? { return packedIcon(.photo, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorOrange])) }
+    public static var videos: UIImage? { return packedIcon(.video, color: colorRed, fallback: renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorRed])) }
+    public static var files: UIImage? { return packedIcon(.file, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorBlue])) }
+    public static var gifs: UIImage? { return packedIcon(.gif, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/Gif", backgroundColors: [colorOrange])) }
+    public static var stickersGreen: UIImage? { return packedIcon(.stickers, color: colorGreen, fallback: renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorGreen])) }
+    public static var emoji: UIImage? { return packedIcon(.emoji, color: colorLightBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorLightBlue])) }
+    public static var emojiTeal: UIImage? { return packedIcon(.emoji, color: colorTeal, fallback: renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorTeal])) }
     public static let archivedSticker = renderSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
     public static let trendingSticker = renderSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
     public static let effects = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
-    public static let photosBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
-    public static let clock = renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
-    public static let photosLightBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])
-    public static let videosBlue = renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorBlue])
+    public static var photosBlue: UIImage? { return packedIcon(.photo, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])) }
+    public static var clock: UIImage? { return packedIcon(.clock, color: colorPurple, fallback: renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])) }
+    public static var photosLightBlue: UIImage? { return packedIcon(.photo, color: colorLightBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])) }
+    public static var videosBlue: UIImage? { return packedIcon(.video, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorBlue])) }
     
-    public static let block = renderSettingsIcon(name: "Item List/Icons/Block", backgroundColors: [colorRed])
-    public static let activeSessions = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorBlue])
+    public static var block: UIImage? { return packedIcon(.block, color: colorRed, fallback: renderSettingsIcon(name: "Item List/Icons/Block", backgroundColors: [colorRed])) }
+    public static var activeSessions: UIImage? { return packedIcon(.devices, color: colorBlue, fallback: renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorBlue])) }
     public static let faceId = renderSettingsIcon(name: "Item List/Icons/FaceId", backgroundColors: [colorGreen])
-    public static let lockOrange = renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorOrange])
-    public static let passkeys = renderSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])
-    public static let timer = renderSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])
+    public static var lockOrange: UIImage? { return packedIcon(.privacy, color: colorOrange, fallback: renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorOrange])) }
+    public static var passkeys: UIImage? { return packedIcon(.key, color: colorViolet, fallback: renderSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])) }
+    public static var timer: UIImage? { return packedIcon(.selfExpiring, color: colorPurple, fallback: renderSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])) }
     public static let email = renderSettingsIcon(name: "Item List/Icons/Email", backgroundColors: [colorViolet])
         
     public static let premium = generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in

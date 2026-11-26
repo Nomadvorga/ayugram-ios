@@ -556,6 +556,8 @@ public struct ContextControllerItems {
     public var tipSignal: Signal<ContextControllerTip?, NoError>?
     public var dismissed: (() -> Void)?
     public var usesClearGlass: Bool
+    /// Opt into the message-menu style preference; unrelated menus retain native intent.
+    public var exteraStyleIsMessageMenu: Bool = false
     public var glassBlurRadius: CGFloat?
     /// A list menu is at least 220pt wide; a menu of short items can lower that floor. It still fits its widest item.
     public var minimumListWidth: CGFloat?

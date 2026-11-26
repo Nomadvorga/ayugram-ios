@@ -67,6 +67,7 @@ private final class ExteraPillStackController: ViewController, UITableViewDataSo
         let layout = ExteraPillStackSettings.shared.layout.normalized(custom: custom)
         let changed = self.custom != custom || self.layout.visible != layout.visible || self.layout.hidden != layout.hidden || self.layout.infiniteScrolling != layout.infiniteScrolling
         self.custom = custom; self.layout = layout
+        self.navigationItem.rightBarButtonItem = layout.visible.isEmpty ? nil : UIBarButtonItem(title: self.text("Reset", "Сбросить"), style: .plain, target: self, action: #selector(self.resetStack))
         // A swipe only changes selection. Keep its preview cell and animation alive.
         if self.isViewLoaded && changed { self.table.reloadData() }
     }
@@ -93,7 +94,7 @@ private final class ExteraPillStackController: ViewController, UITableViewDataSo
         switch section {
         case 0: return self.text("Search Stack", "Виджеты в поиске")
         case 1: return self.text("Settings", "Настройки")
-        case 2: return self.text("Visible Widgets", "Видимые виджеты")
+        case 2: return self.layout.visible.isEmpty ? nil : self.text("Visible Widgets", "Видимые виджеты")
         case 3: return self.text("Hidden Widgets", "Скрытые виджеты")
         default: return "HTTP"
         }
@@ -127,13 +128,20 @@ private final class ExteraPillStackController: ViewController, UITableViewDataSo
             let kind = ExteraBuiltinPill.from(id: id)
             cell.textLabel?.text = self.title(id)
             cell.imageView?.image = exteraPillWidgetIcon(kind)
-            if kind == .entryTime { cell.detailTextLabel?.text = self.text("Unavailable: no supported data provider", "Недоступно: нет поддерживаемого источника данных") }
+            if kind == .entryTime { cell.detailTextLabel?.text = self.text("This account’s server status", "Статус этого аккаунта с сервера") }
             if kind == .gram { cell.detailTextLabel?.text = self.text("TON exchange rate", "Обменный курс TON") }
             if let spec = self.custom.first(where: { ExteraPillStackLayout.customId($0.id) == id }), !spec.enabled { cell.detailTextLabel?.text = self.text("Disabled in HTTP settings", "Отключена в настройках HTTP") }
             cell.accessibilityHint = indexPath.section == 2 ? self.text("Tap to hide", "Нажмите, чтобы скрыть") : self.text("Tap to show", "Нажмите, чтобы показать")
             cell.accessibilityCustomActions = [UIAccessibilityCustomAction(name: self.text("Move up", "Выше"), actionHandler: { [weak self] _ in self?.moveBy(id, section: indexPath.section, delta: -1); return true }), UIAccessibilityCustomAction(name: self.text("Move down", "Ниже"), actionHandler: { [weak self] _ in self?.moveBy(id, section: indexPath.section, delta: 1); return true })]
         }
         return cell
+    }
+    @objc private func resetStack() {
+        self.saveLayout { layout in
+            let infinite = layout.infiniteScrolling
+            layout = ExteraPillStackLayout().normalized(custom: self.custom)
+            layout.infiniteScrolling = infinite
+        }
     }
     @objc private func infiniteChanged(_ sender: UISwitch) { self.saveLayout { $0.infiniteScrolling = sender.isOn } }
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

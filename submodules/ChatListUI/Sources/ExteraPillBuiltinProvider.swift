@@ -1,6 +1,7 @@
 import AccountContext
 import CoreLocation
 import Foundation
+import TelegramUIPreferences
 import SGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
@@ -19,22 +20,43 @@ final class ExteraPillBuiltinProvider: NSObject, CLLocationManagerDelegate {
     private lazy var authorizationManager = CLLocationManager()
     private var cache: [ExteraBuiltinPill: (String, Date, String)] = [:]
     private var authorizationAction: (() -> Void)?
+    private var entryTimeHideTimer: Timer?
+    private var entryTimeStatus: ExteraPillEntryStatus?
+    private var entryTimeExpanded = false
+    private var entryTimeRequestInFlight = false
+    private var selectedKind: ExteraBuiltinPill?
+    private var proxyStatuses: ProxyServersStatuses?
+    private var entryEvents: Disposable?
+    private var eventRefresh: DispatchWorkItem?
+    var storageProgress: ((Double?) -> Void)?
+    private var cachedStorageProgress: Double?
+    private var phoneNumber = ""
+    func updatePhone(_ value: String) { self.phoneNumber = value }
     var accountId: Int64 { self.context.account.id.int64 }
-    var currency: String { ExteraPillStackSettings.shared.currency(account: self.accountId) }
+    var currency: String { self.currency(for: self.selectedKind ?? .gram) }
+    func currency(for kind: ExteraBuiltinPill) -> String {
+        ExteraPillCurrency.resolve(ExteraPillStackSettings.shared.target(kind, account: self.accountId), phone: self.phoneNumber)
+    }
     var locationAuthorizationStatus: CLAuthorizationStatus { self.authorizationManager.authorizationStatus }
     var weatherSource: String { self.context.currentAppConfiguration.with { $0.data?["weather_search_username"] as? String } ?? "izweatherbot" }
 
     init(context: AccountContext) { self.context = context; super.init() }
-    deinit { self.disposable.dispose(); self.request?.cancel() }
+    deinit { self.disposable.dispose(); self.entryEvents?.dispose(); self.eventRefresh?.cancel(); self.request?.cancel(); self.entryTimeHideTimer?.invalidate() }
     func text(_ en: String, _ ru: String) -> String { exteraPillText(self.language, en, ru) }
     func stop() {
         self.generation.cancel(); self.disposable.set(nil)
+        self.proxyStatuses = nil; self.entryEvents?.dispose(); self.entryEvents = nil
+        self.eventRefresh?.cancel(); self.eventRefresh = nil
+        self.storageProgress?(nil)
         self.request?.cancel(); self.request = nil
         self.locationAuthorization?.delegate = nil; self.locationAuthorization = nil
         self.authorizationAction = nil
+        self.entryTimeHideTimer?.invalidate(); self.entryTimeHideTimer = nil
+        self.entryTimeExpanded = false; self.entryTimeRequestInFlight = false; self.selectedKind = nil
     }
     func start(_ kind: ExteraBuiltinPill, force: Bool = false) {
         self.stop()
+        self.selectedKind = kind
         let ticket = self.generation.begin(kind.id)
         let publish: (String) -> Void = { [weak self] value in
             guard let self, self.generation.accepts(ticket) else { return }
@@ -48,24 +70,41 @@ final class ExteraPillBuiltinProvider: NSObject, CLLocationManagerDelegate {
             publish(kind.title(self.language) + self.text(" · Tap to allow", " · Разрешить")); return
         }
         let ttl: TimeInterval = kind == .weather ? 1200 : (kind == .storage ? 180 : 300)
-        let cacheKey = self.currency + "." + self.language + "." + (kind == .weather ? self.weatherSource : "")
-        let weatherAuthorized = kind != .weather || [.authorizedAlways, .authorizedWhenInUse].contains(self.locationAuthorizationStatus)
-        if kind != .proxy, weatherAuthorized, !force, let cached = self.cache[kind], cached.2 == cacheKey, Date().timeIntervalSince(cached.1) < ttl {
+        let weatherSettings = ExteraPillStackSettings.shared.weather(account: self.accountId)
+        let cacheKey = self.currency + "." + self.language + "." + (kind == .weather ? self.weatherSource + String(describing: weatherSettings) + TimeZone.current.identifier : "")
+        let weatherAuthorized = kind != .weather || !weatherSettings.current || [.authorizedAlways, .authorizedWhenInUse].contains(self.locationAuthorizationStatus)
+        if kind != .proxy, kind != .entryTime, weatherAuthorized, !force, let cached = self.cache[kind], cached.2 == cacheKey, Date().timeIntervalSince(cached.1) < ttl {
+            if kind == .storage { self.storageProgress?(self.cachedStorageProgress) }
             publish(cached.0); return
         }
         let success: (String) -> Void = { [weak self] value in
             guard let self, self.generation.accepts(ticket) else { return }
             self.cache[kind] = (value, Date(), cacheKey); publish(value)
         }
-        publish(kind.title(self.language) + " …")
+        if kind == .entryTime, !force, !ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) {
+            publish(""); return
+        }
+        if kind == .entryTime {
+            let cached = ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) ? self.entryTimeStatus : nil
+            publish(cached.map { self.entryTimeText($0) } ?? "…")
+        } else { publish(kind.title(self.language) + " …") }
         switch kind {
         case .weather:
-            self.disposable.set((Weather.getWeatherData(context: self.context, load: true) |> deliverOnMainQueue).start(next: { [weak self] state in
+            let weather: Signal<WeatherDataState, NoError>
+            if weatherSettings.current {
+                guard CLLocationManager.locationServicesEnabled() else { publish(self.text("Enable Location Services", "Включите службы геопозиции")); return }
+                weather = Weather.getWeatherData(context: self.context, load: true)
+            }
+            else {
+                weather = Weather.requestWeatherData(context: self.context, location: CLLocationCoordinate2D(latitude: weatherSettings.latitude, longitude: weatherSettings.longitude))
+                |> map { $0.map { WeatherDataState.loaded($0) } ?? .none }
+            }
+            self.disposable.set((weather |> deliverOnMainQueue).start(next: { [weak self] state in
                 guard let self else { return }
                 switch state {
                 case let .loaded(data):
                     guard data.temperature.isFinite, (-150 ... 100).contains(data.temperature) else { publish(self.text("Weather · Invalid source data", "Погода · Ошибка источника")); return }
-                    success("\(String(data.emoji.prefix(8))) \(Int(data.temperature.rounded()))°C")
+                    success("\(String(data.emoji.prefix(8))) " + ExteraPillWeather.temperature(data.temperature, timezone: TimeZone.current.identifier))
                 case .fetching: break
                 case .notDetermined: publish(self.text("Weather · Allow location", "Погода · Геопозиция"))
                 case .notAllowed: publish(self.text("Weather · Location denied", "Погода · Нет доступа"))
@@ -78,35 +117,88 @@ final class ExteraPillBuiltinProvider: NSObject, CLLocationManagerDelegate {
             let request = ExteraPillRateRequest { [weak self] result in
                 guard let self, self.generation.accepts(ticket) else { return }
                 do {
-                    let value = try ExteraPillExchangeRate.value(data: result.get(), base: base, target: target, locale: Locale(identifier: exteraPillLanguageCode(self.language)))
-                    success(kind.title(self.language) + " " + value)
+                    let value = try ExteraPillCurrency.price(data: result.get(), base: base, target: target)
+                    success(value)
                 } catch {
                     publish(kind.title(self.language) + self.text(" · Rate unavailable", " · Курс недоступен"))
                 }
             }
             self.request = request; request.start()
         case .storage:
-            self.disposable.set((self.context.engine.resources.collectStorageUsageStats() |> deliverOnMainQueue).start(next: { stats in
-                let bytes = stats.totalStats.categories.values.reduce(Int64(0)) { $0 + $1.size }
-                success(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+            self.disposable.set((exteraPillStorageUsage(context: self.context) |> deliverOnMainQueue).start(next: { [weak self] stats in
+                guard let self, self.generation.accepts(ticket) else { return }
+                self.cachedStorageProgress = stats.occupiedFraction
+                self.storageProgress?(stats.occupiedFraction)
+                success(ByteCountFormatter.string(fromByteCount: stats.cacheBytes, countStyle: .file))
             }))
         case .proxy:
-            self.disposable.set((self.context.account.networkState |> deliverOnMainQueue).start(next: { [weak self] state in
+            let settings = self.context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
+            |> map { data -> ProxySettings in
+                data.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) ?? .defaultSettings
+            }
+            let statuses = ProxyServersStatuses(network: self.context.account.network, servers: settings |> map { $0.effectiveActiveServer.map { [$0] } ?? [] })
+            self.proxyStatuses = statuses
+            self.disposable.set((combineLatest(settings, statuses.statuses(), self.context.account.networkState) |> deliverOnMainQueue).start(next: { [weak self] settings, statuses, state in
                 guard let self else { return }
+                guard let active = settings.effectiveActiveServer else { publish(self.text("Proxy", "Прокси")); return }
                 switch state {
-                case let .online(proxy), let .updating(proxy):
-                    if let proxy, proxy.hasConnectionIssues {
-                        publish(self.text("Proxy · Connection issues", "Прокси · Проблемы соединения"))
-                    } else {
-                        publish(proxy == nil ? self.text("Proxy · Off", "Прокси · Выкл.") : self.text("Proxy · Connected", "Прокси · Подключён"))
-                    }
-                case let .connecting(proxy):
-                    publish(proxy == nil ? self.text("Proxy · Off", "Прокси · Выкл.") : self.text("Proxy · Connecting", "Прокси · Подключение"))
-                case .waitingForNetwork: publish(self.text("Proxy · No network", "Прокси · Нет сети"))
+                case .online, .updating:
+                    if case let .available(seconds)? = statuses[active], seconds.isFinite, seconds > 0 {
+                        publish("\(min(9999, max(0, Int(min(seconds * 1000, 9999))))) " + self.text("ms", "мс"))
+                    } else { publish(self.text("Connected", "Подключён")) }
+                case .connecting, .waitingForNetwork: publish(self.text("Connecting", "Подключение"))
                 }
             }))
         case .entryTime:
-            publish(self.text("Entry Time · Unavailable", "Время захода · Недоступно"))
+            if ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) {
+                self.entryEvents = exteraPresenceEvents(account: self.context.account).start(next: { [weak self] fetch in
+                    guard let self, self.generation.accepts(ticket) else { return }
+                    self.eventRefresh?.cancel()
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let self, !self.entryTimeRequestInFlight else { return }
+                        self.start(.entryTime, force: true)
+                    }
+                    self.eventRefresh = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (fetch ? 0 : 0.25), execute: work)
+                })
+            }
+            if !force, let cached = exteraCachedEntryStatusOnAttach(account: self.context.account) {
+                self.entryTimeStatus = cached; publish(self.entryTimeText(cached)); return
+            }
+            self.entryTimeRequestInFlight = true
+            self.disposable.set((exteraRequestAccountEntryStatus(account: self.context.account) |> deliverOnMainQueue).start(next: { [weak self] status in
+                guard let self, self.generation.accepts(ticket) else { return }
+                self.entryTimeRequestInFlight = false
+                if let status { self.entryTimeStatus = status }
+                publish(self.entryTimeStatus.map { self.entryTimeText($0) } ?? self.text("Status unavailable", "Статус недоступен"))
+                self.entryTimeExpanded = true
+                if !ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) {
+                    self.entryTimeHideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                        guard let self, self.generation.accepts(ticket) else { return }
+                        self.entryTimeExpanded = false; self.entryTimeHideTimer = nil; publish("")
+                    }
+                }
+            }))
+        }
+    }
+    /// Non-periodic APK mode ignores repeated taps while the result is expanded or loading.
+    func entryTimeTapped() {
+        guard self.selectedKind == .entryTime, !self.entryTimeRequestInFlight,
+              !self.entryTimeExpanded || ExteraPillStackSettings.shared.entryTimeAutoRefresh(account: self.accountId) else { return }
+        self.start(.entryTime, force: true)
+    }
+    private func entryTimeText(_ status: ExteraPillEntryStatus) -> String {
+        let now = self.context.account.network.getApproximateRemoteTimestamp()
+        switch status.presentation(serverNow: now) {
+        case .online: return self.text("Online", "В сети")
+        case .longAgo: return self.text("A long time ago", "Был(а) давно")
+        case let .lastSeen(timestamp):
+            let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: exteraPillLanguageCode(self.language))
+            formatter.timeStyle = .short
+            formatter.dateStyle = Calendar.current.isDate(date, inSameDayAs: Date(timeIntervalSince1970: TimeInterval(now))) ? .none : .short
+            return formatter.string(from: date)
         }
     }
     /// Called only after the user accepted the weather source explanation.

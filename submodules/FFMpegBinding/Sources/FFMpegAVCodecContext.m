@@ -5,6 +5,10 @@
 
 #import "libavformat/avformat.h"
 #import "libavcodec/avcodec.h"
+#include <errno.h>
+
+const int32_t FFMpegAVErrorAgain = AVERROR(EAGAIN);
+const int32_t FFMpegAVErrorEnd = AVERROR_EOF;
 
 static enum AVPixelFormat getPreferredPixelFormat(__unused AVCodecContext *ctx, __unused const enum AVPixelFormat *pix_fmts) {
     return AV_PIX_FMT_VIDEOTOOLBOX;
@@ -58,6 +62,14 @@ static enum AVPixelFormat getPreferredPixelFormat(__unused AVCodecContext *ctx, 
 - (bool)open {
     int result = avcodec_open2(_impl, (AVCodec *)[_codec impl], nil);
     return result >= 0;
+}
+
+- (int32_t)sendEndStatus {
+    return avcodec_send_packet(_impl, NULL);
+}
+
+- (int32_t)receiveStatusIntoFrame:(FFMpegAVFrame *)frame {
+    return avcodec_receive_frame(_impl, (AVFrame *)[frame impl]);
 }
 
 - (bool)sendEnd {

@@ -418,12 +418,22 @@ private final class SoftwareAudioStream {
 private func SoftwareAudioSource_readPacketCallback(userData: UnsafeMutableRawPointer?, buffer: UnsafeMutablePointer<UInt8>?, bufferSize: Int32) -> Int32 {
     let context = Unmanaged<SoftwareAudioSource>.fromOpaque(userData!).takeUnretainedValue()
     if let fd = context.fd {
-        let result = read(fd, buffer, Int(bufferSize))
+        var result = read(fd, buffer, Int(bufferSize))
+        if context.strictTranscriptionSource {
+            while result < 0 && errno == EINTR {
+                result = read(fd, buffer, Int(bufferSize))
+            }
+            if result < 0 {
+                context.transcriptionIOFailed = true
+                return -(errno == 0 ? EIO : errno)
+            }
+        }
         if result == 0 {
             return FFMPEG_CONSTANT_AVERROR_EOF
         }
         return Int32(result)
     }
+    if context.strictTranscriptionSource { context.transcriptionIOFailed = true; return -EIO }
     return FFMPEG_CONSTANT_AVERROR_EOF
 }
 
@@ -433,11 +443,28 @@ private func SoftwareAudioSource_seekCallback(userData: UnsafeMutableRawPointer?
         if (whence & FFMPEG_AVSEEK_SIZE) != 0 {
             return Int64(context.size)
         } else {
-            lseek(fd, off_t(offset), SEEK_SET)
-            return offset
+            if context.strictTranscriptionSource {
+                var result = lseek(fd, off_t(offset), SEEK_SET)
+                while result < 0 && errno == EINTR {
+                    result = lseek(fd, off_t(offset), SEEK_SET)
+                }
+                if result < 0 {
+                    context.transcriptionIOFailed = true
+                    return -1
+                }
+                return Int64(result)
+            } else {
+                lseek(fd, off_t(offset), SEEK_SET)
+                return offset
+            }
         }
     }
+    if context.strictTranscriptionSource { context.transcriptionIOFailed = true; return -1 }
     return 0
+}
+
+public enum SoftwareAudioTranscriptionError: Error {
+    case decodeFailed
 }
 
 public final class SoftwareAudioSource {
@@ -448,6 +475,11 @@ public final class SoftwareAudioSource {
     private let path: String
     fileprivate let fd: Int32?
     fileprivate let size: Int32
+    fileprivate var transcriptionIOFailed = false
+    fileprivate let strictTranscriptionSource: Bool
+    private var transcriptionDrainSent = false
+    private var transcriptionFinished = false
+    private var transcriptionFailed = false
     
     private var hasReadToEnd: Bool = false
     
@@ -457,12 +489,18 @@ public final class SoftwareAudioSource {
     
     // Decodes to mono, the format voice message conversion expects.
     public convenience init(path: String) {
-        self.init(path: path, ignoreEditList: false, isPlayback: false)
+        self.init(path: path, ignoreEditList: false, isPlayback: false, forTranscription: false)
+    }
+
+    /// Enables strict I/O and EOF checks before probing and the initial seek.
+    public convenience init(path: String, forTranscription: Bool) {
+        self.init(path: path, ignoreEditList: false, isPlayback: false, forTranscription: forTranscription)
     }
 
     // isPlayback keeps a stereo source stereo.
-    init(path: String, ignoreEditList: Bool, isPlayback: Bool) {
+    init(path: String, ignoreEditList: Bool, isPlayback: Bool, forTranscription: Bool = false) {
         let _ = FFMpegMediaFrameSourceContextHelpers.registerFFMpegGlobals
+        self.strictTranscriptionSource = forTranscription
         
         var s = stat()
         stat(path, &s)
@@ -613,6 +651,63 @@ public final class SoftwareAudioSource {
         }
     }
     
+    /// Dedicated sequential reader: use a fresh instance, without seek or mixing
+    /// other read APIs. nil means codec AND resampler drain completed; failures throw.
+    public func readSampleBufferForTranscription(checkCancellation: () throws -> Void) throws -> CMSampleBuffer? {
+        try checkCancellation()
+        guard self.strictTranscriptionSource, !self.transcriptionIOFailed,
+              !self.transcriptionFailed, !self.readingError,
+              let stream = self.audioStream, let format = self.avFormatContext,
+              self.fd != nil else { throw SoftwareAudioTranscriptionError.decodeFailed }
+        if self.transcriptionFinished { return nil }
+        do {
+            while true {
+                try checkCancellation()
+                // Receive before reading another packet. Multiple outputs remain
+                // in the codec, not in an unbounded Swift delayedFrames array.
+                switch try stream.decoder.readForTranscription(checkCancellation: checkCancellation) {
+                case let .sample(sample):
+                    return sample
+                case .end:
+                    guard self.transcriptionDrainSent, !self.transcriptionIOFailed else {
+                        throw SoftwareAudioTranscriptionError.decodeFailed
+                    }
+                    self.transcriptionFinished = true
+                    return nil
+                case .needsInput:
+                    // EAGAIN is forbidden after a successful NULL send.
+                    guard !self.transcriptionDrainSent else { throw SoftwareAudioTranscriptionError.decodeFailed }
+                }
+
+                while true {
+                    try checkCancellation()
+                    let packet = FFMpegPacket()
+                    let status = format.readFrameStatus(into: packet)
+                    guard !self.transcriptionIOFailed else { throw SoftwareAudioTranscriptionError.decodeFailed }
+                    if status == FFMpegAVErrorEnd {
+                        guard stream.decoder.sendEndForTranscription() == 0 else {
+                            throw SoftwareAudioTranscriptionError.decodeFailed
+                        }
+                        self.transcriptionDrainSent = true
+                        break
+                    }
+                    guard status == 0 else { throw SoftwareAudioTranscriptionError.decodeFailed }
+                    if Int(packet.streamIndex) != stream.index { continue }
+                    // receive just returned EAGAIN, so send must accept input.
+                    // A simultaneous send EAGAIN is a codec protocol error: fail
+                    // the operation instead of dropping this packet and continuing.
+                    guard stream.decoder.sendPacketForTranscription(packet) == 0 else {
+                        throw SoftwareAudioTranscriptionError.decodeFailed
+                    }
+                    break
+                }
+            }
+        } catch {
+            self.transcriptionFailed = true
+            throw error
+        }
+    }
+
     public func readEncodedFrame() -> (Data, Int)? {
         guard let _ = self.audioStream, let _ = self.avFormatContext else {
             return nil

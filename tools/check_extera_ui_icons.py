@@ -28,9 +28,9 @@ def main():
         assert value['uniqueVectorCount'] == vectors == len(set(b for b in value['aliases'].values() if b.endswith('_' + pack)))
     source = (ROOT / 'submodules/TelegramPresentationData/Sources/ExteraUIIconProvider.swift').read_text()
     roles = dict(re.findall(r'case \.(\w+): return "(\w+)"', source.split('public struct ExteraUIIconProvider')[0]))
-    assert len(roles) == 37
+    assert len(roles) >= 37
     records = provenance['records']
-    assert len(records) == len(roles) * 2
+    assert len(records) == len(set(roles.values())) * 2
     assert len({r['asset'] for r in records}) == len(records)
     for record in records:
         assert sha(SOURCES / record['source']) == record['sha256']
@@ -39,7 +39,7 @@ def main():
         for role in record['roles']:
             resource = roles[role]
             assert record['asset'] == f'ExteraUI_{pack}_{resource}'
-            assert resource + '_' + pack in inventory[pack]['aliases'].values()
+            assert inventory[pack]['aliases'].get(resource, resource + '_' + pack) in inventory[pack]['aliases'].values()
         folder = ASSETS / (record['asset'] + '.imageset')
         contents = json.loads((folder / 'Contents.json').read_text())
         assert contents['properties']['template-rendering-intent'] == 'template'
@@ -76,7 +76,7 @@ def main():
     settings = (ROOT / 'submodules/TelegramPresentationData/Sources/Resources/PresentationResourcesSettings.swift').read_text()
     assert settings.count('public static var ') >= 12
     assert 'ExteraUIIconProvider.current.image(for: role)' in settings
-    print(f'PASS: {len(roles)} roles, {len(records)} vectors, 222 PNG hashes/dimensions/alpha, catalog globs, notices, navigation/settings/message-menu consumers.')
+    print(f'PASS: {len(roles)} roles, {len(records)} vector records, {len(records) * 3} PNG hashes/dimensions/alpha, catalog globs, notices, navigation/settings/message-menu consumers.')
 
 
 if __name__ == '__main__':

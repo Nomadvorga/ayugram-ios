@@ -10,6 +10,9 @@ final class FFMpegAudioFrameDecoder: MediaTrackFrameDecoder {
     private let audioFrame: FFMpegAVFrame?
     private var resetDecoderOnNextFrame = true
     
+    private var transcriptionDecoderEnded = false
+    private var transcriptionSamples: Int64 = 0
+    private let sampleRate: Int
     private let channelCount: Int
     private let formatDescription: CMAudioFormatDescription
     
@@ -24,6 +27,7 @@ final class FFMpegAudioFrameDecoder: MediaTrackFrameDecoder {
         self.codecContext = codecContext
         self.audioFrame = FFMpegAVFrame()
         self.channelCount = channelCount
+        self.sampleRate = sampleRate
         
         self.swrContext = FFMpegSWResample(sourceChannelCount: Int(codecContext.channels()), sourceSampleRate: Int(codecContext.sampleRate()), sourceSampleFormat: codecContext.sampleFormat(), destinationChannelCount: channelCount, destinationSampleRate: sampleRate, destinationSampleFormat: FFMPEG_AV_SAMPLE_FMT_S16)
         
@@ -173,6 +177,75 @@ final class FFMpegAudioFrameDecoder: MediaTrackFrameDecoder {
         self.resetDecoderOnNextFrame = true
     }
     
+    enum TranscriptionRead {
+        case sample(CMSampleBuffer)
+        case needsInput
+        case end
+    }
+
+    func sendPacketForTranscription(_ packet: FFMpegPacket) -> Int32 {
+        return packet.send(toDecoder: self.codecContext)
+    }
+
+    func sendEndForTranscription() -> Int32 {
+        return self.codecContext.sendEndStatus()
+    }
+
+    func readForTranscription(checkCancellation: () throws -> Void) throws -> TranscriptionRead {
+        guard let audioFrame = self.audioFrame else { throw SoftwareAudioTranscriptionError.decodeFailed }
+        while true {
+            try checkCancellation()
+            let data: Data
+            if self.transcriptionDecoderEnded {
+                guard let tail = self.swrContext.resampleForTranscription(nil) else {
+                    throw SoftwareAudioTranscriptionError.decodeFailed
+                }
+                if tail.isEmpty { return .end }
+                data = tail
+            } else {
+                let status = self.codecContext.receiveStatus(into: audioFrame)
+                if status == FFMpegAVErrorAgain { return .needsInput }
+                if status == FFMpegAVErrorEnd {
+                    self.transcriptionDecoderEnded = true
+                    continue
+                }
+                guard status == 0, let converted = self.swrContext.resampleForTranscription(audioFrame) else {
+                    throw SoftwareAudioTranscriptionError.decodeFailed
+                }
+                if converted.isEmpty { continue } // Valid resampler buffering.
+                data = converted
+            }
+            guard data.count % (2 * self.channelCount) == 0 else {
+                throw SoftwareAudioTranscriptionError.decodeFailed
+            }
+            let count = data.count / (2 * self.channelCount)
+            guard count > 0, count <= self.sampleRate * 10,
+                  self.transcriptionSamples <= Int64(self.sampleRate) * 3600 - Int64(count) else {
+                throw SoftwareAudioTranscriptionError.decodeFailed
+            }
+            var block: CMBlockBuffer?
+            guard CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil,
+                blockLength: data.count, blockAllocator: nil, customBlockSource: nil,
+                offsetToData: 0, dataLength: data.count, flags: 0, blockBufferOut: &block) == noErr,
+                let blockBuffer = block else { throw SoftwareAudioTranscriptionError.decodeFailed }
+            let copied = data.withUnsafeBytes { bytes -> OSStatus in
+                guard let base = bytes.baseAddress else { return -1 }
+                return CMBlockBufferReplaceDataBytes(with: base, blockBuffer: blockBuffer,
+                    offsetIntoDestination: 0, dataLength: data.count)
+            }
+            guard copied == noErr else { throw SoftwareAudioTranscriptionError.decodeFailed }
+            var sample: CMSampleBuffer?
+            guard CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: nil,
+                dataBuffer: blockBuffer, formatDescription: self.formatDescription,
+                sampleCount: count, presentationTimeStamp: CMTime(value: self.transcriptionSamples,
+                    timescale: CMTimeScale(self.sampleRate)),
+                packetDescriptions: nil, sampleBufferOut: &sample) == noErr,
+                let sampleBuffer = sample else { throw SoftwareAudioTranscriptionError.decodeFailed }
+            self.transcriptionSamples += Int64(count)
+            return .sample(sampleBuffer)
+        }
+    }
+
     func sendEndToDecoder() -> Bool {
         return true
     }

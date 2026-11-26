@@ -106,7 +106,7 @@ private final class AccountPresenceManagerImpl {
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         }
         self.isPerformingUpdate.set(true)
-        self.currentRequestDisposable.set((request
+        self.currentRequestDisposable.set((ayuTrackedPresence(network: self.network, operation: request)
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
         }

@@ -29,7 +29,7 @@ def make_harness(repo):
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
     start = backup.index("    private static let settings: [Setting] = [")
     end = backup.index("\n    private static let settingsByName:", start)
-    flags = "\n".join(line for line in backup[start:end].splitlines() if any(helper in line for helper in ["aiBoolean(", "aiTemperature(", "aiSummaryPolicy("]))
+    flags = "\n".join(line for line in backup[start:end].splitlines() if any(helper in line for helper in ["aiBoolean(", "aiTemperature(", "aiSummaryPolicy(", "aiEditorPolicy("]))
     backup = backup[:start] + '''    private static let settings: [Setting] = [
 ''' + flags + '''
         boolean("extera.fixture", read: { SGSimpleSettings.shared.fixture }, write: { SGSimpleSettings.shared.fixture = $0 }),
@@ -151,7 +151,7 @@ require(aiNotifications == 0, "failed update emitted AI success notification")
 
 let exported = try JSONSerialization.jsonObject(with: ExteraSettingsBackup.exportData()) as! [String: Any]
 let exportedSettings = exported["settings"] as! [String: Any]
-require(Set(exportedSettings.keys) == ["extera.fixture", "extera.ai.showEditor", "extera.ai.showSummaries", "extera.ai.showInstantViewSummaries", "extera.ai.showResponseOnly", "extera.ai.insertAsQuote", "extera.ai.temperatureTenths", "extera.ai.replaceTelegramSummaries"], "unexpected AI backup scope")
+require(Set(exportedSettings.keys) == ["extera.fixture", "extera.ai.showEditor", "extera.ai.showSummaries", "extera.ai.showInstantViewSummaries", "extera.ai.showResponseOnly", "extera.ai.insertAsQuote", "extera.ai.temperatureTenths", "extera.ai.replaceTelegramSummaries", "extera.ai.replaceTelegramEditor"], "unexpected AI backup scope")
 let beforeValidation = store.strings
 let writesBeforeValidation = store.writes
 for flag in ["showEditor", "showSummaries", "showInstantViewSummaries", "showResponseOnly", "insertAsQuote"] {
@@ -200,10 +200,24 @@ expected.showResponseOnly = false
 expected.insertAsQuote = true
 expected.temperature = 1.0
 expected.replaceTelegramSummaries = nil
+expected.useForTextProcessing = nil
 require(ExteraAISettings.shared.configuration == expected, "reset changed private configuration or missed flag defaults")
 require(store.writes == writes + 1 && !simple.fixture, "reset did not apply defaults in one AI write")
 require(ExteraAISettings.shared.history(accountId: "account") == privateHistory, "reset changed history")
 require(store.strings["credential-sentinel"] == "private-key", "reset changed credential sentinel")
+
+for invalid in [true, "auto", "", NSNull()] as [Any] {
+    mustThrow("invalid editor policy accepted") { _ = try document(["extera.ai.replaceTelegramEditor": invalid]) }
+}
+for (policy, value) in [("automatic", nil), ("enabled", true), ("disabled", false)] as [(String, Bool?)] {
+    let beforeEditorImport = ExteraAISettings.shared.configuration
+    writes = store.writes
+    try ExteraSettingsBackup.apply(document(["extera.ai.replaceTelegramEditor": policy]))
+    var expectedEditorImport = beforeEditorImport
+    expectedEditorImport.useForTextProcessing = value
+    require(ExteraAISettings.shared.configuration == expectedEditorImport, "editor import changed unrelated AI settings")
+    require(store.writes == writes + 1, "editor policy must use one transactional AI write")
+}
 
 for (policy, value) in [("automatic", nil), ("enabled", true), ("disabled", false)] as [(String, Bool?)] {
     writes = store.writes

@@ -138,12 +138,118 @@ public final class ExteraPillStackSettings: @unchecked Sendable {
     public func currency(account: Int64) -> String {
         if let value = self.defaults.string(forKey: "extera.pillStack.\(account).currency") { return value }
         if #available(iOS 16.0, macOS 13.0, *) { return Locale.current.currency?.identifier ?? "USD" }
-        return Locale.current.currencyCode ?? "USD"
+        return (Locale.current as NSLocale).object(forKey: .currencyCode) as? String ?? "USD"
     }
     public func setCurrency(_ currency: String, account: Int64) {
         guard currency.count == 3, currency.unicodeScalars.allSatisfy({ (65 ... 90).contains(Int($0.value)) }) else { return }
         self.defaults.set(currency, forKey: "extera.pillStack.\(account).currency")
         NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+    public func target(_ kind: ExteraBuiltinPill, account: Int64) -> String {
+        if let value = self.defaults.string(forKey: "extera.pillStack.\(account).target.\(kind.rawValue)") { return value }
+        // Preserve an explicitly chosen previous shared target. Do not migrate the
+        // old implicit locale-derived default into a stored override.
+        if let old = self.defaults.string(forKey: "extera.pillStack.\(account).currency"),
+           ExteraPillCurrency.targets(for: kind).contains(old) { return old }
+        return "AUTO"
+    }
+    public func setTarget(_ value: String, kind: ExteraBuiltinPill, account: Int64) {
+        let value = kind == .usd && value == "USD" ? "AUTO" : value
+        guard [.gram, .btc, .usd].contains(kind), ExteraPillCurrency.targets(for: kind).contains(value) else { return }
+        self.defaults.set(value, forKey: "extera.pillStack.\(account).target.\(kind.rawValue)")
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+    public func weather(account: Int64) -> ExteraPillWeather {
+        guard let data = self.defaults.data(forKey: "extera.pillStack.\(account).weather"),
+              let value = try? JSONDecoder().decode(ExteraPillWeather.self, from: data), value.valid else { return ExteraPillWeather() }
+        return value
+    }
+    public func setWeather(_ value: ExteraPillWeather, account: Int64) {
+        guard value.valid, let data = try? JSONEncoder().encode(value) else { return }
+        self.defaults.set(data, forKey: "extera.pillStack.\(account).weather")
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+    /// APK LastSeenPill: off by default, independently for each signed-in account.
+    public func entryTimeAutoRefresh(account: Int64) -> Bool {
+        self.defaults.bool(forKey: "extera.pillStack.\(account).entryTimeAutoRefresh")
+    }
+    public func setEntryTimeAutoRefresh(_ value: Bool, account: Int64) {
+        self.defaults.set(value, forKey: "extera.pillStack.\(account).entryTimeAutoRefresh")
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+}
+
+/// Server status of the account itself, not authorization creation time or a local ghost clock.
+/// Keep the wire variants distinct: an offline timestamp must never be interpreted as Online.
+public enum ExteraPillEntryStatus: Equatable {
+    case online(until: Int32)
+    case offline(at: Int32)
+    case longAgo
+
+    public enum Presentation: Equatable {
+        case online
+        case lastSeen(Int32)
+        case longAgo
+    }
+    public func presentation(serverNow: Int32) -> Presentation {
+        switch self {
+        case let .online(until) where until > serverNow: return .online
+        case let .online(timestamp), let .offline(timestamp):
+            return timestamp > 0 ? .lastSeen(timestamp) : .longAgo
+        case .longAgo: return .longAgo
+        }
+    }
+}
+
+/// Portable layout only. No account identifiers, endpoints, grants, cached values or locations.
+/// Pure validation lets a backup importer validate all sections before changing any preferences.
+public enum ExteraPillStackDocument {
+    public static let maximumFileSize = 64 * 1024
+    private struct Document: Codable {
+        let version: Int
+        let layout: ExteraPillStackLayout
+        private enum CodingKeys: String, CodingKey { case version, layout }
+        private enum LayoutKeys: String, CodingKey { case visible, hidden, infiniteScrolling, selected }
+        init(version: Int, layout: ExteraPillStackLayout) { self.version = version; self.layout = layout }
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            self.version = try values.decode(Int.self, forKey: .version)
+            let fields = try values.nestedContainer(keyedBy: LayoutKeys.self, forKey: .layout)
+            var layout = ExteraPillStackLayout()
+            layout.visible = try fields.decode([String].self, forKey: .visible)
+            layout.hidden = try fields.decode([String].self, forKey: .hidden)
+            layout.infiniteScrolling = try fields.decode(Bool.self, forKey: .infiniteScrolling)
+            layout.selected = try fields.decodeIfPresent(String.self, forKey: .selected)
+            self.layout = layout
+        }
+    }
+
+    public static func validate(_ layout: ExteraPillStackLayout, custom: [ExteraPillSpec]) throws -> ExteraPillStackLayout {
+        guard custom.count <= ExteraPillSettings.maximumPills else { throw ExteraPillError.limitReached }
+        let inventory = ExteraBuiltinPill.allCases.map { $0.id } + custom.map { ExteraPillStackLayout.customId($0.id) }
+        let ids = layout.visible + layout.hidden
+        guard Set(inventory).count == inventory.count,
+              ids.count == inventory.count, Set(ids).count == ids.count,
+              Set(ids) == Set(inventory),
+              layout.selected == nil || layout.visible.contains(layout.selected!) else { throw ExteraPillError.invalidFile }
+        return layout
+    }
+    public static func decode(_ data: Data, custom: [ExteraPillSpec]) throws -> ExteraPillStackLayout {
+        guard data.count <= Self.maximumFileSize,
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(object.keys) == Set(["version", "layout"]),
+              let layout = object["layout"] as? [String: Any],
+              Set(layout.keys).isSubset(of: Set(["visible", "hidden", "infiniteScrolling", "selected"])),
+              Set(["visible", "hidden", "infiniteScrolling"]).isSubset(of: Set(layout.keys)) else { throw ExteraPillError.invalidFile }
+        let document = try JSONDecoder().decode(Document.self, from: data)
+        guard document.version == 1 else { throw ExteraPillError.unsupportedVersion }
+        return try Self.validate(document.layout, custom: custom)
+    }
+    public static func encode(_ layout: ExteraPillStackLayout, custom: [ExteraPillSpec]) throws -> Data {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(Document(version: 1, layout: try Self.validate(layout, custom: custom)))
+        guard data.count <= Self.maximumFileSize else { throw ExteraPillError.invalidFile }
+        return data
     }
 }
 

@@ -150,7 +150,9 @@ extension ChatControllerImpl {
                 
                 self.canReadHistory.set(false)
                 
-                let controller = makeContextController(presentationData: self.presentationData, source: .extracted(ChatMessageReactionContextExtractedContentSource(chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, contentView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+                var menuItems = ContextController.Items(content: .list(items))
+                menuItems.exteraStyleIsMessageMenu = true
+                let controller = makeContextController(presentationData: self.presentationData, source: .extracted(ChatMessageReactionContextExtractedContentSource(chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, contentView: sourceView)), items: .single(menuItems), recognizer: nil, gesture: gesture)
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -371,6 +373,7 @@ extension ChatControllerImpl {
                 
                 self.canReadHistory.set(false)
                 
+                items.exteraStyleIsMessageMenu = true
                 let controller = makeContextController(presentationData: self.presentationData, source: .extracted(ChatMessageReactionContextExtractedContentSource(chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, contentView: sourceView)), items: .single(items), recognizer: nil, gesture: gesture)
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)

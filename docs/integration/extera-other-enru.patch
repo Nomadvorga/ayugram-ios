@@ -1,0 +1,60 @@
+diff --git a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+--- a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
++++ b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+@@ -1 +1,26 @@
++"Extera.Other.Support" = "Support";
++"Extera.Other.SupportInfo" = "Support development. Available supporter rewards and their terms are described by each project on its payment page.";
++"Extera.Other.LoadingSupport" = "Loading support options…";
++"Extera.Other.SupportUnavailable" = "Support options could not be loaded. No payment details are stored in this app.";
++"Extera.Other.RefreshSupport" = "Refresh Support Options";
++"Extera.Other.NotIncluded" = "Not included";
++"Extera.Other.TelemetryInfo" = "This iOS build does not include Google Analytics or Crashlytics collection. These services cannot be enabled here. This does not control Telegram service logs or Apple's system diagnostics, and does not erase data previously sent by other apps or builds.";
++"Extera.Other.Additional" = "Additional Settings";
++"Extera.Other.Open" = "Open";
++"Extera.Other.WalletConfirm" = "Open your wallet with this destination and your Telegram account ID as the payment comment? Review the amount and confirm any transfer in your wallet.";
++"Extera.Other.PaymentComment" = "Payment comment";
++"Extera.Other.OpenWallet" = "Open Wallet";
++"Extera.Other.WalletUnavailable" = "No wallet could open this link. Copy the destination address instead? The payment comment is your Telegram account ID.";
++"Extera.Other.CopyAddress" = "Copy Address";
++"Extera.Other.CopyDetails" = "Copy Details";
++"Extera.Other.DeleteIntro" = "Continue to Telegram's account deletion options for the current account? Nothing is deleted on this screen. Telegram will explain the consequences and require further confirmation.";
++"Extera.Other.Continue" = "Continue";
++"Extera.Other.DeleteUnavailable" = "Could Not Load Account Options";
++"Extera.Other.DeleteRetry" = "Check your connection and try again. Your account has not been changed.";
++"Extera.Other.Retry" = "Retry";
++"Extera.Other.LoadingAccount" = "Loading account security configuration…";
++
++// Other: support/telemetry/account composition, frames 66–67.
++// Firebase collection is not linked in this build; no opt-in is persisted.
++
+ "Telescope.PaidMediaConflict" = "Round videos cannot be sold as paid media. Turn off “Send as Round Video” or remove the media price, then try again.";
+diff --git a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+--- a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
++++ b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+@@ -1 +1,26 @@
++"Extera.Other.Support" = "Поддержка";
++"Extera.Other.SupportInfo" = "Поддержите разработку. Доступные награды для спонсоров и их условия каждый проект описывает на своей платёжной странице.";
++"Extera.Other.LoadingSupport" = "Загрузка способов поддержки…";
++"Extera.Other.SupportUnavailable" = "Не удалось загрузить способы поддержки. Платёжные реквизиты не сохраняются в приложении.";
++"Extera.Other.RefreshSupport" = "Обновить способы поддержки";
++"Extera.Other.NotIncluded" = "Не включено в сборку";
++"Extera.Other.TelemetryInfo" = "В этой сборке iOS нет сбора данных Google Analytics и Crashlytics. Включить эти службы здесь нельзя. Это не управляет служебными журналами Telegram или системной диагностикой Apple и не удаляет данные, ранее отправленные другими приложениями или сборками.";
++"Extera.Other.Additional" = "Дополнительные настройки";
++"Extera.Other.Open" = "Открыть";
++"Extera.Other.WalletConfirm" = "Открыть кошелёк с этим адресом и ID вашего аккаунта Telegram в комментарии к платежу? Проверьте сумму и подтвердите перевод в кошельке.";
++"Extera.Other.PaymentComment" = "Комментарий к платежу";
++"Extera.Other.OpenWallet" = "Открыть кошелёк";
++"Extera.Other.WalletUnavailable" = "Кошелёк не смог открыть ссылку. Скопировать адрес получателя? В комментарии к платежу укажите ID своего аккаунта Telegram.";
++"Extera.Other.CopyAddress" = "Скопировать адрес";
++"Extera.Other.CopyDetails" = "Скопировать реквизиты";
++"Extera.Other.DeleteIntro" = "Перейти к вариантам удаления текущего аккаунта в Telegram? На этом экране ничего не удаляется. Telegram объяснит последствия и запросит дополнительное подтверждение.";
++"Extera.Other.Continue" = "Продолжить";
++"Extera.Other.DeleteUnavailable" = "Не удалось загрузить параметры аккаунта";
++"Extera.Other.DeleteRetry" = "Проверьте соединение и повторите попытку. Ваш аккаунт не изменён.";
++"Extera.Other.Retry" = "Повторить";
++"Extera.Other.LoadingAccount" = "Загрузка параметров безопасности аккаунта…";
++
++// Other: support/telemetry/account composition, frames 66–67.
++// Firebase collection is not linked in this build; no opt-in is persisted.
++
+ "Settings.ContentSettings" = "Настройки контента";

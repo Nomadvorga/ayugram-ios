@@ -6,6 +6,14 @@ import SGSimpleSettings
 private var sharedIsReduceTransparencyEnabled: Bool { return UIAccessibility.isReduceTransparencyEnabled }
 
 public final class NavigationBackgroundNode: ASDisplayNode {
+    /// Style intent is separate from the caller's native enableBlur ceiling.
+    public var exteraStyleAllowsBlur = true {
+        didSet {
+            guard self.exteraStyleAllowsBlur != oldValue else { return }
+            self.updateColor(color: self._color, forceKeepBlur: self.lastForceKeepBlur, transition: .immediate)
+        }
+    }
+    private var exteraForceThemeBlur = false
     private var _color: UIColor
 
     public var color: UIColor {
@@ -72,7 +80,7 @@ public final class NavigationBackgroundNode: ASDisplayNode {
             self.scheduledUpdate = true
             return
         }
-        if self.enableBlur && ExteraEnergyRuntime.allows(.blur) && !sharedIsReduceTransparencyEnabled && ((self._color.alpha > .ulpOfOne && self._color.alpha < 0.95) || forceKeepBlur) {
+        if self.enableBlur && self.exteraStyleAllowsBlur && ExteraEnergyRuntime.allows(.blur) && !sharedIsReduceTransparencyEnabled && ((self._color.alpha > .ulpOfOne && self._color.alpha < 0.95) || forceKeepBlur || ExteraStyleSettings.shared.forceBlur) {
             if self.effectView == nil {
                 let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
 
@@ -121,11 +129,12 @@ public final class NavigationBackgroundNode: ASDisplayNode {
     }
 
     public func updateColor(color: UIColor, enableBlur: Bool? = nil, enableSaturation: Bool? = nil, forceKeepBlur: Bool = false, transition: ContainedViewLayoutTransition) {
-        let blurAllowed = ExteraEnergyRuntime.allows(.blur)
+        let blurAllowed = self.exteraStyleAllowsBlur && ExteraEnergyRuntime.allows(.blur)
+        let forceThemeBlur = ExteraStyleSettings.shared.forceBlur
         let effectiveEnableBlur = enableBlur ?? self.enableBlur
         let effectiveEnableSaturation = enableSaturation ?? self.enableSaturation
         
-        if self._color.isEqual(color) && self.enableBlur == effectiveEnableBlur && self.enableSaturation == effectiveEnableSaturation && self.exteraBlurAllowed == blurAllowed && self.lastForceKeepBlur == forceKeepBlur {
+        if self._color.isEqual(color) && self.enableBlur == effectiveEnableBlur && self.enableSaturation == effectiveEnableSaturation && self.exteraBlurAllowed == blurAllowed && self.lastForceKeepBlur == forceKeepBlur && self.exteraForceThemeBlur == forceThemeBlur {
             return
         }
         self._color = color
@@ -133,11 +142,14 @@ public final class NavigationBackgroundNode: ASDisplayNode {
         self.enableSaturation = effectiveEnableSaturation
         self.exteraBlurAllowed = blurAllowed
         self.lastForceKeepBlur = forceKeepBlur
+        self.exteraForceThemeBlur = forceThemeBlur
 
         if sharedIsReduceTransparencyEnabled || !blurAllowed {
             transition.updateBackgroundColor(node: self.backgroundNode, color: self._color.withAlphaComponent(1.0))
         } else {
-            transition.updateBackgroundColor(node: self.backgroundNode, color: self._color)
+            // Keep theme hue, expose a forced backdrop only on natively eligible opaque surfaces.
+            let forcedTint = forceThemeBlur && effectiveEnableBlur && self._color.alpha >= 0.95
+            transition.updateBackgroundColor(node: self.backgroundNode, color: forcedTint ? self._color.withAlphaComponent(0.85) : self._color)
         }
 
         self.updateBackgroundBlur(forceKeepBlur: forceKeepBlur)
@@ -187,6 +199,13 @@ public final class NavigationBackgroundNode: ASDisplayNode {
 }
 
 open class BlurredBackgroundView: UIView {
+    public var exteraStyleAllowsBlur = true {
+        didSet {
+            guard self.exteraStyleAllowsBlur != oldValue, let color = self._color else { return }
+            self.updateColor(color: color, forceKeepBlur: self.lastForceKeepBlur, transition: .immediate)
+        }
+    }
+    private var exteraForceThemeBlur = false
     private var _color: UIColor?
 
     private var enableBlur: Bool
@@ -233,7 +252,7 @@ open class BlurredBackgroundView: UIView {
     }
     
     private func updateBackgroundBlur(forceKeepBlur: Bool) {
-        if let color = self._color, self.enableBlur && ExteraEnergyRuntime.allows(.blur) && !sharedIsReduceTransparencyEnabled && ((color.alpha > .ulpOfOne && color.alpha < 0.95) || forceKeepBlur) {
+        if let color = self._color, self.enableBlur && self.exteraStyleAllowsBlur && ExteraEnergyRuntime.allows(.blur) && !sharedIsReduceTransparencyEnabled && ((color.alpha > .ulpOfOne && color.alpha < 0.95) || forceKeepBlur || ExteraStyleSettings.shared.forceBlur) {
             if self.effectView == nil {
                 let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
 
@@ -281,21 +300,24 @@ open class BlurredBackgroundView: UIView {
     }
 
     public func updateColor(color: UIColor, enableBlur: Bool? = nil, forceKeepBlur: Bool = false, transition: ContainedViewLayoutTransition) {
-        let blurAllowed = ExteraEnergyRuntime.allows(.blur)
+        let blurAllowed = self.exteraStyleAllowsBlur && ExteraEnergyRuntime.allows(.blur)
+        let forceThemeBlur = ExteraStyleSettings.shared.forceBlur
         let effectiveEnableBlur = enableBlur ?? self.enableBlur
 
-        if self._color == color && self.enableBlur == effectiveEnableBlur && self.exteraBlurAllowed == blurAllowed && self.lastForceKeepBlur == forceKeepBlur {
+        if self._color == color && self.enableBlur == effectiveEnableBlur && self.exteraBlurAllowed == blurAllowed && self.lastForceKeepBlur == forceKeepBlur && self.exteraForceThemeBlur == forceThemeBlur {
             return
         }
         self._color = color
         self.enableBlur = effectiveEnableBlur
         self.exteraBlurAllowed = blurAllowed
         self.lastForceKeepBlur = forceKeepBlur
+        self.exteraForceThemeBlur = forceThemeBlur
 
         if sharedIsReduceTransparencyEnabled || !blurAllowed {
             transition.updateBackgroundColor(layer: self.backgroundView.layer, color: color.withAlphaComponent(1.0))
         } else {
-            transition.updateBackgroundColor(layer: self.backgroundView.layer, color: color)
+            let forcedTint = forceThemeBlur && effectiveEnableBlur && color.alpha >= 0.95
+            transition.updateBackgroundColor(layer: self.backgroundView.layer, color: forcedTint ? color.withAlphaComponent(0.85) : color)
         }
 
         self.updateBackgroundBlur(forceKeepBlur: forceKeepBlur)

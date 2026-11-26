@@ -672,6 +672,9 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
     }
     
     func replaceItems(items: ContextController.Items, animated: Bool?) {
+        self.actionsStackNode.exteraStyleIsMessageMenu = items.exteraStyleIsMessageMenu
+        self.additionalActionsStackNode.exteraStyleIsMessageMenu = items.exteraStyleIsMessageMenu
+        self.reactionContextNode?.exteraStyleIsMessageMenu = items.exteraStyleIsMessageMenu
         self.actionsStackNode.usesClearGlass = items.usesClearGlass
         self.actionsStackNode.glassBlurRadius = items.glassBlurRadius
         self.actionsStackNode.minimumListWidth = items.minimumListWidth
@@ -882,6 +885,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 reactionContextNode.displayTail = !controller.hideReactionPanelTail
                 reactionContextNode.alignsToAnchorLeadingEdge = alignsToContentLeadingEdge
                 self.reactionContextNode = reactionContextNode
+                reactionContextNode.exteraStyleIsMessageMenu = self.actionsStackNode.exteraStyleIsMessageMenu
                 self.addSubnode(reactionContextNode)
                 
                 if transition.isAnimated {
@@ -2430,4 +2434,3 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
         }
     }
 }
-

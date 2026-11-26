@@ -1,0 +1,26 @@
+{
+  "Extera.ChatAppearance.AdvancedTextSize": {
+    "en": "More Text Settings",
+    "ru": "Другие настройки текста"
+  },
+  "Extera.ChatAppearance.ConfigureNightTheme": {
+    "en": "Configure Night Theme",
+    "ru": "Настроить ночную тему"
+  },
+  "Extera.ChatAppearance.PauseOtherAudio": {
+    "en": "Pause Other Audio During Playback",
+    "ru": "Пауза другого аудио при воспроизведении"
+  },
+  "Extera.ChatAppearance.PauseOtherAudioInfo": {
+    "en": "When off, audible media can mix with audio from other apps. This does not enable simultaneous Telegram players or change recording and calls. Audio already paused by iOS may need to be resumed in its app.",
+    "ru": "Если выключено, звук медиа может смешиваться со звуком других приложений. Это не включает одновременные плееры Telegram и не меняет запись и звонки. Уже остановленное системой аудио может потребоваться запустить в его приложении."
+  },
+  "Extera.ChatAppearance.ShareEnabled": {
+    "en": "Chat suggestions are enabled · Choose categories and account",
+    "ru": "Подсказки чатов включены · Выбор категорий и аккаунта"
+  },
+  "Extera.ChatAppearance.ShareDisabled": {
+    "en": "Chat suggestions are disabled · Choose categories and account",
+    "ru": "Подсказки чатов выключены · Выбор категорий и аккаунта"
+  }
+}

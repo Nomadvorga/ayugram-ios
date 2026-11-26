@@ -104,7 +104,7 @@ def main():
                            'packArtworkAliasCount': len(pack_pairs), 'uniqueVectorCount': len(set(b for a, b in pack_pairs)),
                            'aliases': dict(pairs)}
         for resource in sorted(set(roles.values())):
-            android_name = resource + '_' + pack
+            android_name = inventory[pack]['aliases'].get(resource, resource + '_' + pack)
             assert android_name in inventory[pack]['aliases'].values(), android_name
             git_path = f'TMessagesProj/src/main/res-{pack}/drawable/{android_name}.xml'
             data = git(git_path)

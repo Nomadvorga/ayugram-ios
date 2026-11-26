@@ -589,6 +589,15 @@ public class GlassBackgroundView: UIView {
     public private(set) var params: Params?
 
     public static var useCustomGlassImpl: Bool = false
+    /// Only message-menu/reaction hosts opt into the menu preference.
+    public var exteraStyleIsMessageMenu = false {
+        didSet {
+            guard self.exteraStyleIsMessageMenu != oldValue, let layout = self.exteraLayout else { return }
+            self.update(size: layout.size, shape: layout.shape, isDark: layout.isDark, tintColor: layout.tint, isInteractive: layout.interactive, isVisible: layout.visible, transition: .immediate)
+        }
+    }
+    private let exteraOutlineLayer = CAShapeLayer()
+    private let exteraHighlightLayer = CAShapeLayer()
     private var exteraGlassAllowed: Bool?
     private var exteraObservation: ExteraEnergyObservation?
     private var exteraLayout: (size: CGSize, shape: Shape, isDark: Bool, tint: TintColor, interactive: Bool, visible: Bool)?
@@ -729,7 +738,9 @@ public class GlassBackgroundView: UIView {
 
     func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
         self.exteraLayout = (size, shape, isDark, tintColor, isInteractive, isVisible)
-        let glassAllowed = ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
+        let styleAllowsGlass = !self.exteraStyleIsMessageMenu || ExteraStyleSettings.shared.glassMessageMenu
+        let glassAllowed = styleAllowsGlass && ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
+        self.updateExteraOutline(size: size, shape: shape, isDark: isDark, isVisible: isVisible, transition: transition)
         if self.exteraGlassAllowed != glassAllowed {
             self.exteraGlassAllowed = glassAllowed
             // Rebuild the effect when energy/accessibility changes with identical geometry/tint.
@@ -776,7 +787,7 @@ public class GlassBackgroundView: UIView {
                     style = .normal
                 }
             }
-            legacyView.update(size: size, shape: shape, style: style, transition: transition)
+            legacyView.update(size: size, shape: shape, style: style, enableGlass: glassAllowed, transition: transition)
             legacyView.backgroundColor = glassAllowed ? .clear : UIColor(white: isDark ? 0.12 : 0.96, alpha: 1.0)
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
             transition.setAlpha(view: legacyView, alpha: isVisible ? 1.0 : 0.0)
@@ -947,6 +958,34 @@ public class GlassBackgroundView: UIView {
         }
     }
     
+    private func updateExteraOutline(size: CGSize, shape: Shape, isDark: Bool, isVisible: Bool, transition: ComponentTransition) {
+        let border = ExteraStyleSettings.shared.glassBorder
+        if border == .none && self.exteraOutlineLayer.superlayer == nil { return }
+        if self.exteraOutlineLayer.superlayer == nil {
+            self.layer.addSublayer(self.exteraOutlineLayer)
+            self.layer.addSublayer(self.exteraHighlightLayer)
+            for layer in [self.exteraOutlineLayer, self.exteraHighlightLayer] {
+                layer.fillColor = UIColor.clear.cgColor
+                layer.lineWidth = UIScreenPixel
+            }
+            self.exteraHighlightLayer.lineCap = .round
+        }
+        let inset = min(UIScreenPixel / 2.0, max(0.0, min(size.width, size.height) / 2.0))
+        let rect = CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
+        let path = Self.generateRoundedRectPath(rect: rect, cornerRadii: shape.cornerRadii(for: size).insetBy(inset))
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.exteraOutlineLayer.isHidden = border == .none || !isVisible
+        self.exteraHighlightLayer.isHidden = border != .highlights || !isVisible
+        transition.setShapeLayerPath(layer: self.exteraOutlineLayer, path: path)
+        transition.setShapeLayerPath(layer: self.exteraHighlightLayer, path: path)
+        self.exteraOutlineLayer.strokeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: border == .highlights ? 0.1 : 0.2).cgColor
+        self.exteraHighlightLayer.strokeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: 0.36).cgColor
+        self.exteraHighlightLayer.strokeStart = 0.03
+        self.exteraHighlightLayer.strokeEnd = 0.28
+        CATransaction.commit()
+    }
+
     override public func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
     }

@@ -11,6 +11,10 @@ typedef NS_ENUM(NSUInteger, FFMpegAVCodecContextReceiveResult)
     FFMpegAVCodecContextReceiveResultSuccess,
 };
 
+// Raw status access for clients that must distinguish drain from errors.
+extern const int32_t FFMpegAVErrorAgain;
+extern const int32_t FFMpegAVErrorEnd;
+
 @class FFMpegAVCodec;
 @class FFMpegAVFrame;
 
@@ -25,6 +29,8 @@ typedef NS_ENUM(NSUInteger, FFMpegAVCodecContextReceiveResult)
 
 - (bool)open;
 - (bool)sendEnd;
+- (int32_t)sendEndStatus;
+- (int32_t)receiveStatusIntoFrame:(FFMpegAVFrame *)frame NS_SWIFT_NAME(receiveStatus(into:));
 - (void)setupHardwareAccelerationIfPossible;
 // Sets `skip_loop_filter = AVDISCARD_ALL`, disabling H.264/HEVC in-loop deblocking.
 // Deblocked frames are also prediction references, so this drifts from the encoder's

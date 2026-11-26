@@ -256,6 +256,25 @@ public extension TelegramEngine {
         public func collectCacheUsageStats(peerId: PeerId? = nil, additionalCachePaths: [String] = [], logFilesPath: String? = nil) -> Signal<CacheUsageStatsResult, NoError> {
             return _internal_collectCacheUsageStats(account: self.account, peerId: peerId, additionalCachePaths: additionalCachePaths, logFilesPath: logFilesPath)
         }
+
+        /// A Postbox-independent physical cache summary for account-level consumers.
+        /// Resource bytes are already deduplicated by the native resource ID scan.
+        public func collectCacheUsageSummary() -> Signal<EngineCacheUsageSummary, NoError> {
+            return self.collectCacheUsageStats()
+            |> filter { result in
+                if case .result = result {
+                    return true
+                } else {
+                    return false
+                }
+            }
+            |> map { result in
+                guard case let .result(stats) = result else {
+                    preconditionFailure("Cache usage summary filtered a non-result event")
+                }
+                return EngineCacheUsageSummary(resourceBytes: stats.totalResourceSize, cacheBytes: stats.cacheSize, temporaryBytes: stats.tempSize)
+            }
+        }
         
         public func collectStorageUsageStats() -> Signal<AllStorageUsageStats, NoError> {
             return _internal_collectStorageUsageStats(account: self.account)

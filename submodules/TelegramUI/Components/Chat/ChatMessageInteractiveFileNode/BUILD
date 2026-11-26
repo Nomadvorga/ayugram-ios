@@ -37,6 +37,7 @@ swift_library(
         "//submodules/ShimmerEffect",
         "//submodules/Media/ConvertOpusToAAC",
         "//submodules/Media/LocalAudioTranscription",
+        "//submodules/Media/VoskSpeechAudio:VoskSpeechAudio",
         "//submodules/TextSelectionNode",
         "//submodules/TelegramUI/Components/AudioTranscriptionPendingIndicatorComponent",
         "//submodules/UndoUI",

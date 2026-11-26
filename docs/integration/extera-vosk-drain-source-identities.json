@@ -1,0 +1,11 @@
+{
+  "submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h": "2fe7e46174eae1e63d4f603f95eeb09d2f67b283872d118ffc20041be99022ca",
+  "submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m": "9b332448c568cb58293434bf4c3c5d31bb10bf846553effc4e104e1509b772ee",
+  "submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h": "e3bb43387612ace9dcf7ff39c2b5834c7e2588ef8cbc5a35d4d9731465178a88",
+  "submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m": "d50f134d4691005d8d038255e7c261e49167f8c280f41c736d6ec8142006c6e3",
+  "submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h": "10999abb2a50e4efa53f48085b946f9c88315eb6434b18ca387daaf39572a706",
+  "submodules/FFMpegBinding/Sources/FFMpegSWResample.m": "4e91dbf308591c7f942b92b94ade3673c27b858670c0e54d0841f9f46bcc1ab3",
+  "submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift": "ae4fa0b42bddd3a26161b149ffff69b135a4a3b07671bd4f028d83deb2fdca3d",
+  "submodules/MediaPlayer/Sources/SoftwareVideoSource.swift": "604a8c2245eb67e853f6e16cc661ddda47bb109ad136367d4b2f81052f460652",
+  "submodules/Media/VoskSpeechAudio/Sources/VoskSoftwareAudioSource.swift": "82b13f01da5d4124723180082f1c6852b839d400c4ce6846472e8ebe747f06e9"
+}

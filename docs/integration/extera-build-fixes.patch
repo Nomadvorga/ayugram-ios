@@ -1,0 +1,33 @@
+diff --git a/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift b/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
+--- a/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
++++ b/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
+@@ -156,7 +156,7 @@
+             self.categoryRows = categories.map { key, symbol, category in
+                 self.row(i18n(key, lang), symbol: symbol, action: { [weak self] in
+                     guard let self else { return }
+-                    self.push(ayuSettingsController(context: self.context, category: category))
++                    self.pushOverviewController(ayuSettingsController(context: self.context, category: category))
+                 })
+             }
+         } else {
+@@ -164,7 +164,7 @@
+             self.categoryRows = categories.map { key, symbol, category in
+                 self.row(i18n(key, lang), symbol: symbol, action: { [weak self] in
+                     guard let self else { return }
+-                    self.push(sgSettingsController(context: self.context, category: category))
++                    self.pushOverviewController(sgSettingsController(context: self.context, category: category))
+                 })
+             }
+         }
+@@ -199,9 +199,9 @@
+         self.updateLayout()
+     }
+ 
+-    private func push(_ controller: ViewController) { (self.navigationController as? NavigationController)?.pushViewController(controller) }
++    private func pushOverviewController(_ controller: ViewController) { (self.navigationController as? NavigationController)?.pushViewController(controller) }
+     @objc private func goBack() { let _ = self.navigationController?.popViewController(animated: true) }
+-    @objc private func openSearch() { self.push(sgSettingsController(context: self.context, showOverview: false)) }
++    @objc private func openSearch() { self.pushOverviewController(sgSettingsController(context: self.context, showOverview: false)) }
+     @objc private func openAttribution() {
+         self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: "https://github.com/exteraSquad/exteraGram", forceExternal: false, presentationData: self.data, navigationController: self.navigationController as? NavigationController, dismissInput: {})
+     }

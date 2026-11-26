@@ -441,6 +441,17 @@ public enum MessageBubbleActionButtonPosition {
 public func messageBubbleActionButtonImage(color: UIColor, strokeColor: UIColor, position: MessageBubbleActionButtonPosition, bubbleCorners: PresentationChatBubbleCorners) -> UIImage {
     let largeRadius: CGFloat = bubbleCorners.mainRadius
     let smallRadius: CGFloat = (bubbleCorners.mergeBubbleCorners && largeRadius >= 10.0) ? bubbleCorners.auxiliaryRadius : bubbleCorners.mainRadius
+    if largeRadius <= 0.0 {
+        // Square bubbles still need a non-empty stretchable button background.
+        // The rounded path below derives its canvas from 2 * radius, which is zero here.
+        return generateImage(CGSize(width: 3.0, height: 3.0), contextGenerator: { size, context in
+            context.setFillColor(color.cgColor)
+            context.fill(CGRect(origin: .zero, size: size))
+            context.setStrokeColor(strokeColor.cgColor)
+            context.setLineWidth(1.0)
+            context.stroke(CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5))
+        })!.stretchableImage(withLeftCapWidth: 1, topCapHeight: 1)
+    }
     let size: CGSize
     if case .middle = position {
         size = CGSize(width: smallRadius + smallRadius, height: smallRadius + smallRadius)

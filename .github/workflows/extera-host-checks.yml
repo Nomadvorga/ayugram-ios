@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'MODULE.bazel'
       - 'Swiftgram/SGSimpleSettings/**'
+      - 'Swiftgram/SGSettingsUI/BUILD'
       - 'Swiftgram/SGMath/**'
       - 'Swiftgram/SGItemListUI/Sources/SliderPercentageItem.swift'
       - 'Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings'
@@ -16,6 +18,20 @@ on:
       - 'submodules/TelegramUI/Sources/ExteraLyrics*Parser.swift'
       - 'submodules/GalleryUI/Sources/ExteraImageSearch*.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ExteraTakeout*.swift'
+      - 'submodules/VoskNative/**'
+      - 'submodules/Media/VoskSpeech/**'
+      - 'submodules/Media/VoskSpeechAudio/**'
+      - 'submodules/Media/LocalAudioTranscription/Sources/VoskTranscriptionResult.swift'
+      - 'submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift'
+      - 'submodules/MediaPlayer/Sources/SoftwareVideoSource.swift'
+      - 'submodules/MediaPlayer/Tests/SoftwareAudioTranscriptionDrainTests.swift'
+      - 'submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h'
+      - 'submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h'
+      - 'submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h'
+      - 'submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m'
+      - 'submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m'
+      - 'submodules/FFMpegBinding/Sources/FFMpegSWResample.m'
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/**'
       - 'Tests/Extera*/**'
       - 'docs/validation/**'
       - '.github/workflows/extera-host-checks.yml'
@@ -96,6 +112,26 @@ jobs:
             Swiftgram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift \
             Tests/ExteraAdmin/ExteraAdminSettingsTests.swift \
             Tests/ExteraAdmin/ExteraAdminHeaderPolicyTests.swift
+      - name: Other composition and payment destination policy
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
+            Tests/ExteraOther/ExteraOtherSettingsModelTests.swift
+      - name: Native chat playback settings
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift \
+            Tests/ExteraNativeChat/ExteraChatMediaSettingsTests.swift
+      - name: Style persistence and normalization
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraStyleSettings.swift \
+            Swiftgram/SGSimpleSettings/Tests/ExteraStyleSettingsTests.swift
       - name: Camera zoom and volume policy
         if: ${{ !cancelled() }}
         run: |
@@ -124,6 +160,13 @@ jobs:
           set -euo pipefail
           python3 Tests/ExteraSpeech/verify_integration.py
           python3 Tests/ExteraSpeech/run_host_tests.py
+      - name: Vosk catalogue, archive safety and model lifecycle
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 Tests/ExteraVosk/verify_catalogue.py
+          python3 Tests/ExteraVosk/run_native_tests.py
+          python3 Tests/ExteraVosk/run_host_tests.py
       - name: AI generation and response formatting
         if: ${{ !cancelled() }}
         run: |
@@ -141,6 +184,7 @@ jobs:
             Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
             Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
             Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
+            Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift \
             Tests/ExteraPills/ExteraPillHostTests.swift \
             -o "$RUNNER_TEMP/extera-pill-tests"
           "$RUNNER_TEMP/extera-pill-tests"

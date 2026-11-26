@@ -1936,6 +1936,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         var allowFullWidth = false
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
+        var supportsNativeSenderProfiles = true
+        if let channel = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case let .broadcast(info) = channel.info {
+            supportsNativeSenderProfiles = info.flags.contains(.messagesShouldHaveProfiles)
+        }
         
         /*let isInlinePage = false
         for attribute in item.message.attributes {
@@ -3148,6 +3152,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         var hasTitleAvatar = false
         var hasTitleTopicNavigation = false
+        var miniSenderAvatarPeer: EnginePeer?
         
         if displayHeader {
             let bubbleWidthInsets: CGFloat = mosaicRange == nil ? layoutConstants.text.bubbleInsets.left + layoutConstants.text.bubbleInsets.right : 0.0
@@ -3163,6 +3168,18 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     } else {
                         hasTitleTopicNavigation = item.chatLocation.threadId == nil
                     }
+                } else if ExteraSenderMiniAvatarPolicy.shouldShow(
+                    enabled: ExteraSettings.shared.senderMiniAvatars,
+                    isIncoming: incoming,
+                    isGroupOrChannel: chatLocationPeerId.isGroupOrChannel,
+                    supportsNativeSenderProfiles: supportsNativeSenderProfiles,
+                    hasVisibleAuthorHeader: displayAuthorInfo && authorNameString != nil,
+                    hasRealAuthor: effectiveAuthor.map { $0.id != chatLocationPeerId && $0.id.namespace != Namespaces.Peer.Empty } ?? false,
+                    isPreview: isPreview,
+                    isSidePanelOpen: isSidePanelOpen
+                ), let effectiveAuthor {
+                    hasTitleAvatar = true
+                    miniSenderAvatarPeer = EnginePeer(effectiveAuthor)
                 }
                 
                 let inlineBotNameColor = messageTheme.accentTextColor
@@ -4375,6 +4392,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 contentOrigin: contentOrigin.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 nameNodeOriginY: layoutInsets.top + nameNodeOriginY + detachedContentNodesHeight + additionalTopHeight,
                 hasTitleAvatar: hasTitleAvatar,
+                miniSenderAvatarPeer: miniSenderAvatarPeer,
                 hasTitleTopicNavigation: hasTitleTopicNavigation,
                 authorNameColor: authorNameColor,
                 layoutConstants: layoutConstants,
@@ -4459,6 +4477,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         contentOrigin: CGPoint,
         nameNodeOriginY: CGFloat,
         hasTitleAvatar: Bool,
+        miniSenderAvatarPeer: EnginePeer?,
         hasTitleTopicNavigation: Bool,
         authorNameColor: UIColor?,
         layoutConstants: ChatMessageItemLayoutConstants,
@@ -4747,16 +4766,17 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 
                 let nameNavigateFrame = CGRect(origin: CGPoint(x: backgroundFrame.maxX - 10.0 - nameNavigationSize.width, y: nameNodeFrame.minY - 4.0), size: nameNavigationSize)
                 
-                if let peer = item.content.firstMessage.author, peer.smallProfileImage != nil {
-                    nameAvatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme.theme, peer: EnginePeer(peer), displayDimensions: nameAvatarFrame.size)
+                let titleAvatarPeer = miniSenderAvatarPeer ?? item.content.firstMessage.author.flatMap(EnginePeer.init)
+                if let peer = titleAvatarPeer, peer.smallProfileImage != nil {
+                    nameAvatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme.theme, peer: peer, displayDimensions: nameAvatarFrame.size)
                 } else {
                     var overrideImage: AvatarNodeImageOverride?
-                    if let peer = item.content.firstMessage.author.flatMap(EnginePeer.init) {
+                    if let peer = titleAvatarPeer {
                         if peer.isDeleted {
                             overrideImage = .deletedIcon
                         }
                     }
-                    nameAvatarNode.setPeer(context: item.context, theme: item.presentationData.theme.theme, peer: item.content.firstMessage.author.flatMap(EnginePeer.init), overrideImage: overrideImage, displayDimensions: nameAvatarFrame.size)
+                    nameAvatarNode.setPeer(context: item.context, theme: item.presentationData.theme.theme, peer: titleAvatarPeer, overrideImage: overrideImage, displayDimensions: nameAvatarFrame.size)
                 }
                 nameAvatarNode.updateSize(size: nameAvatarFrame.size)
                 

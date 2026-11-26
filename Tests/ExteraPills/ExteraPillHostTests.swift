@@ -38,6 +38,8 @@ private enum ExteraPillHostTests {
         try self.stackOrdering()
         try self.providers()
         try self.requestScopes()
+        try self.entryTime()
+        try self.portableStackDocument()
         print("PASS: \(self.assertions) production pill path/format/validation/import/persistence/localization/stack/provider assertions")
     }
 
@@ -324,5 +326,76 @@ private enum ExteraPillHostTests {
         defaults.set(Data("{".utf8), forKey: ExteraPillStackSettings.key)
         try self.expect(ExteraPillStackSettings(userDefaults: defaults).layout == ExteraPillStackLayout(), "Malformed layout safely defaults without granting visibility")
         defaults.removeObject(forKey: ExteraPillStackSettings.key)
+    }
+
+    private static func entryTime() throws {
+        let defaults = AyuSettingsStore.shared.userDefaults
+        let store = ExteraPillStackSettings(userDefaults: defaults)
+        try self.expect(!store.entryTimeAutoRefresh(account: 501) && !store.entryTimeAutoRefresh(account: 502), "Entry Time auto-refresh defaults off in both accounts")
+        store.setEntryTimeAutoRefresh(true, account: 501)
+        try self.expect(ExteraPillStackSettings(userDefaults: defaults).entryTimeAutoRefresh(account: 501), "Entry Time account preference survives store recreation")
+        try self.expect(!store.entryTimeAutoRefresh(account: 502), "Entry Time preference never leaks across accounts")
+        store.setEntryTimeAutoRefresh(false, account: 501)
+        try self.expect(!store.entryTimeAutoRefresh(account: 501), "Entry Time periodic refresh can be disabled")
+        try self.expect(ExteraPillEntryStatus.online(until: 101).presentation(serverNow: 100) == .online, "Only an unexpired server Online variant shows Online")
+        try self.expect(ExteraPillEntryStatus.online(until: 100).presentation(serverNow: 100) == .lastSeen(100), "Online expiry boundary uses the server timestamp")
+        try self.expect(ExteraPillEntryStatus.online(until: 99).presentation(serverNow: 100) == .lastSeen(99), "Expired Online displays its actual timestamp")
+        try self.expect(ExteraPillEntryStatus.offline(at: 101).presentation(serverNow: 100) == .lastSeen(101), "Future Offline is never converted into Online by a clock comparison")
+        for timestamp in [Int32(0), Int32(-1)] {
+            try self.expect(ExteraPillEntryStatus.offline(at: timestamp).presentation(serverNow: 100) == .longAgo, "Missing last seen never substitutes the local current time")
+            try self.expect(ExteraPillEntryStatus.online(until: timestamp).presentation(serverNow: 100) == .longAgo, "Nonpositive expired Online uses APK fallback")
+        }
+        try self.expect(ExteraPillEntryStatus.longAgo.presentation(serverNow: 100) == .longAgo, "Coarse/hidden/missing status matches APK long-ago fallback")
+    }
+
+    private static func portableStackDocument() throws {
+        let custom = [ExteraPillSpec(id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!, label: "Private endpoint", url: "https://example.com/?token=never-export")]
+        var layout = ExteraPillStackLayout().normalized(custom: custom)
+        layout.setVisible("builtin.entryTime", true)
+        layout.setVisible(ExteraPillStackLayout.customId(custom[0].id), true)
+        layout.selected = "builtin.entryTime"; layout.infiniteScrolling = false
+        let store = ExteraPillStackSettings(userDefaults: AyuSettingsStore.shared.userDefaults)
+        store.allowCustom(custom[0], account: 501, value: true)
+        store.allowWeather(source: "source_bot", account: 501, value: true)
+        let previousLayout = store.layout
+        let data = try ExteraPillStackDocument.encode(layout, custom: custom)
+        try self.expect(try ExteraPillStackDocument.decode(data, custom: custom) == layout, "Portable layout preserves order, visibility, selection and finite mode exactly")
+        let json = String(decoding: data, as: UTF8.self)
+        for forbidden in ["token", "example.com", "source_bot", "weatherSource", "allow", "currency", "entryTimeAutoRefresh", "501"] {
+            try self.expect(!json.contains(forbidden), "Portable layout excludes endpoint secrets, source grants and account settings: \(forbidden)")
+        }
+        try self.expect(store.layout == previousLayout && store.allowsCustom(custom[0], account: 501) && store.allowsWeather(source: "source_bot", account: 501), "Pure document encode/decode never changes live preferences or grants")
+        try self.expectThrows("Custom UUIDs must be resolved against incoming HTTP configuration") { _ = try ExteraPillStackDocument.decode(data, custom: []) }
+        let fixture = #"{"version":1,"layout":{"visible":[],"hidden":["builtin.weather","builtin.gram","builtin.btc","builtin.usd","builtin.storage","builtin.proxy","builtin.entryTime"],"infiniteScrolling":true}}"#
+        try self.expect(try ExteraPillStackDocument.decode(Data(fixture.utf8), custom: []) == ExteraPillStackLayout(), "Literal portable v1 defaults decode without normalization")
+        let nullSelection = fixture.replacingOccurrences(of: "\"infiniteScrolling\":true", with: "\"infiniteScrolling\":true,\"selected\":null")
+        try self.expect(try ExteraPillStackDocument.decode(Data(nullSelection.utf8), custom: []) == ExteraPillStackLayout(), "Explicit null selection is portable")
+        let malformed = [
+            fixture.replacingOccurrences(of: "\"version\":1", with: "\"version\":2"),
+            fixture.replacingOccurrences(of: "\"version\":1", with: "\"version\":true"),
+            fixture.replacingOccurrences(of: "\"version\":1,", with: ""),
+            fixture.replacingOccurrences(of: "\"layout\":", with: "\"allow\":true,\"layout\":"),
+            fixture.replacingOccurrences(of: "\"visible\":[]", with: "\"visible\":[],\"weatherSource\":\"injected\""),
+            fixture.replacingOccurrences(of: "\"visible\":[]", with: "\"visible\":null"),
+            fixture.replacingOccurrences(of: "\"visible\":[]", with: "\"visible\":false"),
+            fixture.replacingOccurrences(of: "\"visible\":[]", with: "\"visible\":[\"builtin.weather\"]"),
+            fixture.replacingOccurrences(of: "\"builtin.entryTime\"", with: "\"builtin.weather\""),
+            fixture.replacingOccurrences(of: "\"builtin.entryTime\"", with: "\"builtin.unknown\""),
+            fixture.replacingOccurrences(of: ",\"builtin.entryTime\"", with: ""),
+            fixture.replacingOccurrences(of: "\"infiniteScrolling\":true", with: "\"infiniteScrolling\":1"),
+            fixture.replacingOccurrences(of: "\"infiniteScrolling\":true", with: "\"infiniteScrolling\":null"),
+            fixture.replacingOccurrences(of: "\"infiniteScrolling\":true", with: "\"selected\":\"builtin.weather\""),
+            fixture.replacingOccurrences(of: "\"infiniteScrolling\":true", with: "\"infiniteScrolling\":true,\"selected\":\"builtin.weather\""),
+            #"{"version":1,"layout":{"visible":[],"hidden":null,"infiniteScrolling":true}}"#,
+            "[]", "null", "{"
+        ]
+        for invalid in malformed {
+            try self.expectThrows("Malformed/unknown/duplicate/incomplete portable layout is rejected") { _ = try ExteraPillStackDocument.decode(Data(invalid.utf8), custom: []) }
+        }
+        try self.expectThrows("Portable document size cap") { _ = try ExteraPillStackDocument.decode(Data(repeating: 32, count: ExteraPillStackDocument.maximumFileSize + 1), custom: []) }
+        var invalid = layout; invalid.selected = "builtin.proxy"
+        try self.expectThrows("Encode also rejects hidden selection") { _ = try ExteraPillStackDocument.encode(invalid, custom: custom) }
+        try self.expectThrows("Duplicate incoming custom UUID cannot masquerade as a complete inventory") { _ = try ExteraPillStackDocument.validate(layout, custom: custom + custom) }
+        try self.expect(store.layout == previousLayout && store.allowsCustom(custom[0], account: 501), "Failed document validation is transactional and retains remote grants")
     }
 }

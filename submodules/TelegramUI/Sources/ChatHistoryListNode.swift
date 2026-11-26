@@ -2748,6 +2748,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             settings.removeMessageTail, settings.replyColors, settings.replyEmoji, settings.replyBackground, settings.showForwardsCount,
             settings.showPollResultsBeforeVoting,
             ExteraSettings.shared.disableNumberRounding, ExteraSettings.shared.replaceEditedWithIcon, ExteraSettings.shared.hideShareButton,
+            ExteraSettings.shared.senderMiniAvatars,
             ExteraSettings.shared.filterZalgo, AyuCustomizationSettings.shared.simpleQuotesAndReplies,
             SGSimpleSettings.shared.hideReactions, SGSimpleSettings.shared.stickerTimestamp, SGSimpleSettings.shared.secondsInMessages,
             SGSimpleSettings.shared.wideChannelPosts, SGSimpleSettings.shared.filterZalgoText

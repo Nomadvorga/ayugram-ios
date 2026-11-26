@@ -21,8 +21,10 @@ public struct CacheUsageStats {
     public let tempPaths: [String]
     public let tempSize: Int64
     public let immutableSize: Int64
+    /// Total allocated media-resource bytes, counted once per resource ID.
+    public let totalResourceSize: Int64
 
-    public init(media: [PeerId: [PeerCacheUsageCategory: [MediaId: Int64]]], mediaResourceIds: [MediaId: [MediaResourceId]], peers: [EnginePeer.Id: EnginePeer], otherSize: Int64, otherPaths: [String], cacheSize: Int64, tempPaths: [String], tempSize: Int64, immutableSize: Int64) {
+    public init(media: [PeerId: [PeerCacheUsageCategory: [MediaId: Int64]]], mediaResourceIds: [MediaId: [MediaResourceId]], peers: [EnginePeer.Id: EnginePeer], otherSize: Int64, otherPaths: [String], cacheSize: Int64, tempPaths: [String], tempSize: Int64, immutableSize: Int64, totalResourceSize: Int64 = 0) {
         self.media = media
         self.mediaResourceIds = mediaResourceIds
         self.peers = peers
@@ -32,6 +34,20 @@ public struct CacheUsageStats {
         self.tempPaths = tempPaths
         self.tempSize = tempSize
         self.immutableSize = immutableSize
+        self.totalResourceSize = totalResourceSize
+    }
+}
+
+/// Narrow engine-facing storage totals without exposing Postbox media identifiers.
+public struct EngineCacheUsageSummary: Equatable {
+    public let resourceBytes: Int64
+    public let cacheBytes: Int64
+    public let temporaryBytes: Int64
+
+    public init(resourceBytes: Int64, cacheBytes: Int64, temporaryBytes: Int64) {
+        self.resourceBytes = resourceBytes
+        self.cacheBytes = cacheBytes
+        self.temporaryBytes = temporaryBytes
     }
 }
 
@@ -875,7 +891,8 @@ func _internal_collectCacheUsageStats(account: Account, peerId: PeerId? = nil, a
                                     cacheSize: cacheSize,
                                     tempPaths: tempPaths,
                                     tempSize: tempSize,
-                                    immutableSize: immutableSize
+                                    immutableSize: immutableSize,
+                                    totalResourceSize: state.totalSize
                                 )))
                                 subscriber.putCompletion()
                             }

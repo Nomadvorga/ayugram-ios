@@ -57,6 +57,13 @@ final class ReactionContextBackgroundNode: ASDisplayNode {
     private let smallCircleSize: CGFloat
     
     private let backgroundView: BlurredBackgroundView
+    var exteraStyleIsMessageMenu = false {
+        didSet {
+            self.glassBackgroundView?.view.exteraStyleIsMessageMenu = self.exteraStyleIsMessageMenu
+            self.glassTailViews?.largeCircle.exteraStyleIsMessageMenu = self.exteraStyleIsMessageMenu
+            self.glassTailViews?.smallCircle.view.exteraStyleIsMessageMenu = self.exteraStyleIsMessageMenu
+        }
+    }
     private let glassBackgroundView: (container: GlassBackgroundContainerView, view: GlassBackgroundView)?
     // The tail's drops; only with `hasTail`. The large one is in the bar's glass container so it merges with the bar where
     // they touch, the small one in a container of its own so it stays apart from the large one.

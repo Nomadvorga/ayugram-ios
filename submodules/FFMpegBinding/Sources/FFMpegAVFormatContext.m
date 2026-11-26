@@ -115,6 +115,11 @@ static int get_stream_rotation(const AVStream *stream) {
     av_seek_frame(_impl, streamIndex, byteOffset, options);
 }
 
+- (int32_t)readFrameStatusIntoPacket:(FFMpegPacket *)packet {
+    [packet reuse];
+    return av_read_frame(_impl, (AVPacket *)[packet impl]);
+}
+
 - (bool)readFrameIntoPacket:(FFMpegPacket *)packet {
     [packet reuse];
     int result = av_read_frame(_impl, (AVPacket *)[packet impl]);

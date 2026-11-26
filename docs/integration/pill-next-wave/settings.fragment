@@ -1,0 +1,24 @@
+    public func target(_ kind: ExteraBuiltinPill, account: Int64) -> String {
+        if let value = self.defaults.string(forKey: "extera.pillStack.\(account).target.\(kind.rawValue)") { return value }
+        // Preserve an explicitly chosen previous shared target. Do not migrate the
+        // old implicit locale-derived default into a stored override.
+        if let old = self.defaults.string(forKey: "extera.pillStack.\(account).currency"),
+           ExteraPillCurrency.targets(for: kind).contains(old) { return old }
+        return "AUTO"
+    }
+    public func setTarget(_ value: String, kind: ExteraBuiltinPill, account: Int64) {
+        let value = kind == .usd && value == "USD" ? "AUTO" : value
+        guard [.gram, .btc, .usd].contains(kind), ExteraPillCurrency.targets(for: kind).contains(value) else { return }
+        self.defaults.set(value, forKey: "extera.pillStack.\(account).target.\(kind.rawValue)")
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+    public func weather(account: Int64) -> ExteraPillWeather {
+        guard let data = self.defaults.data(forKey: "extera.pillStack.\(account).weather"),
+              let value = try? JSONDecoder().decode(ExteraPillWeather.self, from: data), value.valid else { return ExteraPillWeather() }
+        return value
+    }
+    public func setWeather(_ value: ExteraPillWeather, account: Int64) {
+        guard value.valid, let data = try? JSONEncoder().encode(value) else { return }
+        self.defaults.set(data, forKey: "extera.pillStack.\(account).weather")
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }

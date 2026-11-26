@@ -1,4 +1,5 @@
 import SGSimpleSettings
+import VoskSpeechAudio
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -439,15 +440,19 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 let transcriptionMessageId = message.id
                 let transcriptionFileId = arguments.file.fileId
                 let transcriptionResourceId = arguments.file.resource.id
+                // Capture backend/languages at request start: a settings change
+                // during resource lookup cannot redirect an in-flight request.
+                let useVosk = ExteraVoskSettings.shared.isSelected
+                let chatLocale = arguments.controllerInteraction.sgGetChatPredictedLang()
+                let appLocale = presentationData.strings.baseLanguageCode
+                let transcriptionLocale = chatLocale ?? appLocale
                 
-                if context.sharedContext.immediateExperimentalUISettings.localTranscription || !arguments.associatedData.isPremium || SGSimpleSettings.shared.transcriptionBackend == SGSimpleSettings.TranscriptionBackend.apple.rawValue {
+                if useVosk || context.sharedContext.immediateExperimentalUISettings.localTranscription || !arguments.associatedData.isPremium || SGSimpleSettings.shared.transcriptionBackend == SGSimpleSettings.TranscriptionBackend.apple.rawValue {
                     guard ExteraSpeechSettings.shared.isEnabled else {
                         self.audioTranscriptionState = .collapsed
                         self.requestUpdateLayout(true)
                         return
                     }
-                    let appLocale = presentationData.strings.baseLanguageCode
-                    let transcriptionLocale = arguments.controllerInteraction.sgGetChatPredictedLang() ?? appLocale
                     
                     let signal: Signal<LocallyTranscribedAudio?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: message.id))
                     |> mapToSignal { message -> Signal<String?, NoError> in
@@ -466,20 +471,22 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             return .single(data.path)
                         }
                     }
-                    |> mapToSignal { result -> Signal<String?, NoError> in
-                        guard let result = result else {
-                            return .single(nil)
+                    |> mapToSignal { path -> Signal<LocallyTranscribedAudio?, NoError> in
+                        guard let path else { return .single(nil) }
+                        if useVosk {
+                            return transcribeVoskAudio(path: path, chatLocale: chatLocale, appLocale: appLocale)
+                            |> map { value -> LocallyTranscribedAudio? in
+                                guard let value else { return nil }
+                                return makeVoskTranscribedAudio(text: value.text, isFinal: value.isFinal)
+                            }
                         }
-                        return convertOpusToAAC(sourcePath: result, allocateTempFile: {
+                        return convertOpusToAAC(sourcePath: path, allocateTempFile: {
                             return EngineTempBox.shared.tempFile(fileName: "audio.m4a").path
                         })
-                    }
-                    |> mapToSignal { result -> Signal<LocallyTranscribedAudio?, NoError> in
-                        guard let result = result else {
-                            return .single(nil)
+                        |> mapToSignal { converted -> Signal<LocallyTranscribedAudio?, NoError> in
+                            guard let converted else { return .single(nil) }
+                            return transcribeAudio(path: converted, appLocale: transcriptionLocale)
                         }
-                        
-                        return transcribeAudio(path: result, appLocale: transcriptionLocale)
                     }
                     
                     self.transcribeDisposable = (signal

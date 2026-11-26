@@ -178,17 +178,12 @@ func ayuGhostRequestSucceeded(_ description: FunctionDescription, network: Netwo
             return
         }
     }
+    ayuPresenceUpdated(network: network)
     // The server shows a sender online anyway; with the pulse it is for 0.2 s only.
     if settings.pulseOnlineOnSend {
-        let _ = network.request(Api.functions.account.updateStatus(offline: .boolFalse), ayuBypassGhost: true).start()
-        Queue.mainQueue().after(0.2) {
-            if AyuGhostSettings.shared.suppressOnlineStatus {
-                let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue), ayuBypassGhost: true).start()
-                AyuGhostLastSeen.shared.recordNow()
-            }
-        }
+        let _ = ayuTrackedPresence(network: network, operation: ayuPresencePulse(network: network)).start()
     } else if settings.sendAutomaticOffline {
-        let _ = network.request(Api.functions.account.updateStatus(offline: .boolTrue)).start()
+        let _ = ayuTrackedPresence(network: network, operation: network.request(Api.functions.account.updateStatus(offline: .boolTrue))).start()
         AyuGhostLastSeen.shared.recordNow()
     }
 }

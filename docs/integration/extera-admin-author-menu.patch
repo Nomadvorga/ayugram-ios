@@ -1,0 +1,23 @@
+diff --git a/submodules/TelegramUI/Sources/ChatController.swift b/submodules/TelegramUI/Sources/ChatController.swift
+--- a/submodules/TelegramUI/Sources/ChatController.swift
++++ b/submodules/TelegramUI/Sources/ChatController.swift
+@@ -4862,8 +4862,9 @@
+                 }
+             }
+             
+-            let _ = (dataSignal
+-            |> deliverOnMainQueue).startStandalone(next: { [weak self] peer, message in
++            let _ = (combineLatest(dataSignal, strongSelf.exteraAdminShortcutItems(authorId: peer.id))
++            |> deliverOnMainQueue).startStandalone(next: { [weak self] data, adminItems in
++                let (peer, _) = data
+                 guard let strongSelf = self, let peer = peer else {
+                     return
+                 }
+@@ -4916,6 +4917,7 @@
+                         strongSelf.activateSearch(domain: .member(peer._asPeer()))
+                     })))
+                 }
++                items.append(contentsOf: adminItems)
+                 
+                 strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
+                 

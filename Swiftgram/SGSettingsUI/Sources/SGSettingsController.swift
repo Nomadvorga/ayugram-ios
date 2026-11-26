@@ -239,6 +239,7 @@ private enum SGSliderSetting: String {
 }
 
 private enum SGDisclosureLink: String {
+    case styleSettings
     case readReceipts
     case energySettings
     case uiIconPacks
@@ -563,6 +564,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
 
     // Application: bundled alternate icons with an explicit preview/confirmation.
     entries.append(.header(id: id.count, section: .application, text: i18n("Extera.Application", lang), badge: nil))
+    entries.append(.disclosure(id: id.count, section: .application, link: .styleSettings, text: i18n("Extera.Style.Title", lang)))
     entries.append(.disclosure(id: id.count, section: .application, link: .appIcon, text: strings.Appearance_AppIcon))
     entries.append(.disclosure(id: id.count, section: .application, link: .energySettings, text: strings.PowerSavingScreen_Title))
     entries.append(.disclosureSubtitle(id: id.count, section: .application, link: .uiIconPacks, text: i18n("Extera.UIIcons.Title", lang), subtitle: i18n("Extera.UIIcons.Info", lang), iconName: "square.grid.2x2"))
@@ -683,7 +685,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.oneFromManySelector(id: id.count, section: .camera, settingName: .videoMessagesCamera, text: i18n("Extera.VideoMessagesCamera", lang), value: i18n(cameraChoiceKey(ExteraMediaSettings.shared.videoMessagesCamera), lang), enabled: !ExteraMediaSettings.shared.rememberLastUsedCamera))
 
     entries.append(.header(id: id.count, section: .speechRecognition, text: i18n("Extera.SpeechRecognition", lang), badge: nil))
-    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .transcriptionBackend, text: i18n("Extera.TranscriptionBackend", lang), value: i18n(settings.transcriptionBackendEnum == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .transcriptionBackend, text: i18n("Extera.TranscriptionBackend", lang), value: ExteraVoskSettings.shared.isSelected ? "Vosk" : i18n(settings.transcriptionBackendEnum == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), enabled: true))
     entries.append(.disclosure(id: id.count, section: .speechRecognition, link: .speechRecognition, text: i18n("Extera.SpeechLanguagesAndModels", lang)))
     entries.append(.toggle(id: id.count, section: .speechRecognition, settingName: .appleSpeechOnDeviceOnly, value: ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly, text: i18n("Extera.SpeechOnDeviceOnly", lang), enabled: true))
     entries.append(.notice(id: id.count, section: .speechRecognition, text: i18n("Extera.SpeechRecognitionInfo", lang)))
@@ -831,6 +833,11 @@ private func downloadSpeedBoostTitle(_ value: String, lang: String) -> String {
 }
 
 public func sgSettingsController(context: AccountContext, category: SGSettingsCategory? = nil, showOverview: Bool = true) -> ViewController {
+    if category == .other && showOverview {
+        return exteraOtherSettingsController(context: context, backupAction: exteraOtherBackupAction(context: context), additionalSettings: {
+            return sgSettingsController(context: context, category: .other, showOverview: false)
+        })
+    }
     if category == nil && showOverview {
         return exteraSettingsOverviewController(context: context, ayu: false)
     }
@@ -1367,11 +1374,17 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             }
         case .transcriptionBackend:
             for value in SGSimpleSettings.TranscriptionBackend.allCases {
-                options.append(SGOneFromManyOption(title: i18n(value == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), isSelected: SGSimpleSettings.shared.transcriptionBackendEnum == value, action: {
+                options.append(SGOneFromManyOption(title: i18n(value == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), isSelected: !ExteraVoskSettings.shared.isSelected && SGSimpleSettings.shared.transcriptionBackendEnum == value, action: {
+                    ExteraVoskSettings.shared.isSelected = false
                     SGSimpleSettings.shared.transcriptionBackend = value.rawValue
                     simplePromise.set(true)
                 }))
             }
+            options.append(SGOneFromManyOption(title: "Vosk", isSelected: ExteraVoskSettings.shared.isSelected, action: {
+                ExteraVoskSettings.shared.isSelected = true
+                simplePromise.set(true)
+                pushControllerImpl?(sgVoskRecognitionController(context: context))
+            }))
         case .translationProvider:
             for value in SGSimpleSettings.TranslationBackend.allCases {
                 options.append(SGOneFromManyOption(title: translationProviderTitle(value, lang: lang), isSelected: SGSimpleSettings.shared.translationBackendEnum == value, action: {
@@ -1454,8 +1467,14 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         presentOneFromManyImpl?(setting, options)
     }, openDisclosureLink: { link in
         switch link {
+        case .styleSettings:
+            pushControllerImpl?(exteraStyleSettingsController(context: context))
         case .speechRecognition:
-            pushControllerImpl?(sgSpeechRecognitionController(context: context))
+            if ExteraVoskSettings.shared.isSelected {
+                pushControllerImpl?(sgVoskRecognitionController(context: context))
+            } else {
+                pushControllerImpl?(sgSpeechRecognitionController(context: context))
+            }
         case .appIcon:
             pushControllerImpl?(exteraAppIconController(context: context))
         case .uiIconPacks:
@@ -1538,9 +1557,11 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
         sharedData,
         context.engine.accountData.observeAvailableColorOptions(scope: .replies),
         context.engine.accountData.observeAvailableColorOptions(scope: .profile),
-        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
+        exteraSettingsChanges()
     )
-    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors, accountPeer -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> deliverOnMainQueue
+    |> map { _, state, presentationData, sharedData, availableReplyColors, availableProfileColors, accountPeer, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let callListSettings: CallListSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.callListSettings]?.get(CallListSettings.self) ?? CallListSettings.defaultSettings
         let experimentalUISettings: ExperimentalUISettings = sharedData.entries[ApplicationSpecificSharedDataKeys.experimentalUISettings]?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
         let translationSettings: TranslationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.translationSettings]?.get(TranslationSettings.self) ?? TranslationSettings.defaultSettings
@@ -1561,7 +1582,10 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             username = nil
         }
         let previewTitle = ExteraSettings.shared.chatListTitleText(firstName: firstName, lastName: lastName, chatsTitle: presentationData.strings.DialogList_Title, username: username)
-        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, category: category)
+        let appearance = exteraSettingsAppearance()
+        let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, translationSettings: translationSettings, nameColors: nameColors, state: state, previewTitle: previewTitle, category: category).map {
+            SGStyledItemListEntry(entry: $0, appearance: appearance)
+        }
         let title = category.flatMap { i18n($0.titleKey, presentationData.strings.baseLanguageCode) } ?? "exteraGram"
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)

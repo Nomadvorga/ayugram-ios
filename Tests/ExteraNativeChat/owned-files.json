@@ -1,0 +1,49 @@
+{
+  "baseline": "9598c2c090f4a469714ae98e2c3a9c2cbda6311b",
+  "swiftSources": [
+    "Swiftgram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift",
+    "Swiftgram/SGSettingsUI/Sources/ExteraChatValueSliderItem.swift",
+    "Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
+    "submodules/TelegramUIPreferences/Sources/ExteraNativeChatControls.swift",
+    "submodules/SettingsUI/Sources/Themes/ExteraNativeChatAppearanceAdapter.swift",
+    "submodules/SettingsUI/Sources/Data and Storage/ExteraSensitiveContentSettingsController.swift",
+    "submodules/TelegramAudio/Sources/ExteraPlaybackAudioPolicy.swift",
+    "submodules/TelegramAudio/Sources/ManagedAudioSession.swift",
+    "submodules/TelegramPresentationData/Sources/ChatMessageBubbleImages.swift",
+    "Tests/ExteraNativeChat/ExteraChatMediaSettingsTests.swift",
+    "submodules/TelegramAudio/Tests/ExteraPlaybackAudioPolicyTests.swift",
+    "submodules/TelegramPresentationData/Tests/ExteraNativeChatControlsTests.swift",
+    "submodules/SettingsUI/Sources/Themes/ExteraInlineChatThemes.swift",
+    "submodules/SettingsUI/Sources/Themes/ExteraSelectChatTheme.swift",
+    "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift",
+    "submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/ThemeGridController.swift",
+    "submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/ExteraWallpaperSearchController.swift",
+    "submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/WallpaperSearchState.swift",
+    "Tests/ExteraNativeChat/WallpaperSearchStateTests.swift"
+  ],
+  "supportFiles": [
+    "Tests/ExteraNativeChat/owned-files.json",
+    "Tests/ExteraNativeChat/README.md",
+    "docs/extera-native-chat-settings.md",
+    "docs/integration/extera-native-chat-strings.json"
+  ],
+  "additionalBuildDependencies": [
+    "submodules/SettingsUI/BUILD: //submodules/Emoji:Emoji (direct import from ExteraInlineChatThemes.swift)"
+  ],
+  "strictBooleanBackup": [
+    {"key": "extera.chatMedia.pauseOtherAudio", "default": true, "owner": "ExteraChatMediaSettings.shared.pauseOtherAudio"}
+  ],
+  "hostTests": {
+    "sources": [
+      "Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
+      "Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
+      "Tests/ExteraNativeChat/ExteraChatMediaSettingsTests.swift",
+      "submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/WallpaperSearchState.swift",
+      "Tests/ExteraNativeChat/WallpaperSearchStateTests.swift"
+    ]
+  },
+  "nativeTestTargets": [
+    "//submodules/TelegramAudio:TelegramAudioTests",
+    "//submodules/TelegramPresentationData:TelegramPresentationDataTests"
+  ]
+}

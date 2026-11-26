@@ -13,6 +13,11 @@ files = [
     root / "submodules/ChatListUI/Sources/ChatListController.swift",
     root / "submodules/ChatListUI/Sources/ChatListControllerNode.swift",
     root / "Tests/ExteraPills/ExteraPillHostTests.swift",
+    root / "Tests/ExteraPills/ParityHostTests.swift",
+    root / "submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraAccountEntryStatus.swift",
+    root / "submodules/TelegramCore/Sources/TelegramEngine/Resources/CollectCacheUsageStats.swift",
+    root / "submodules/TelegramCore/Sources/TelegramEngine/Resources/TelegramEngineResources.swift",
+    root / "submodules/TelegramCore/Tests/ExteraAccountEntryStatusTests.swift",
 ]
 failed = False
 for path in files:

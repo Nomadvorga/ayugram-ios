@@ -1,0 +1,46 @@
+diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+--- a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
++++ b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+@@ -832,5 +832,10 @@
+ public func sgSettingsController(context: AccountContext, category: SGSettingsCategory? = nil, showOverview: Bool = true) -> ViewController {
++    if category == .other && showOverview {
++        return exteraOtherSettingsController(context: context, backupAction: exteraOtherBackupAction(context: context), additionalSettings: {
++            return sgSettingsController(context: context, category: .other, showOverview: false)
++        })
++    }
+     if category == nil && showOverview {
+         return exteraSettingsOverviewController(context: context, ayu: false)
+     }
+     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
+diff --git a/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift b/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
+--- a/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
++++ b/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
+@@ -42,3 +42,16 @@
++/// Retain the same backup coordinator for the direct Other-card actions. No persistence logic is
++/// duplicated; reset uses the existing confirmation and complete shared-preference transactions.
++func exteraOtherBackupAction(context: AccountContext) -> (ViewController, ExteraOtherSettingsModel.SettingsAction) -> Void {
++    let actions = ExteraBackupActions(context: context)
++    return { controller, action in
++        actions.controller = controller
++        switch action {
++        case .exportSettings: actions.perform(.exportSettings)
++        case .resetSettings: actions.perform(.resetSettings)
++        }
++    }
++}
++
+ /// Push this controller from the exteraGram Other category. No action changes account or plugin data.
+ public func exteraBackupController(context: AccountContext) -> ViewController {
+     let actions = ExteraBackupActions(context: context)
+diff --git a/.github/workflows/extera-host-checks.yml b/.github/workflows/extera-host-checks.yml
+--- a/.github/workflows/extera-host-checks.yml
++++ b/.github/workflows/extera-host-checks.yml
+@@ -99,2 +99,8 @@
++      - name: Other composition and payment destination policy
++        if: ${{ !cancelled() }}
++        run: |
++          python3 tools/run_extera_xctests.py --warnings-as-errors \
++            Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
++            Tests/ExteraOther/ExteraOtherSettingsModelTests.swift
+       - name: Camera zoom and volume policy
+         if: ${{ !cancelled() }}

@@ -373,6 +373,9 @@ public final class ReactionContextNode: ASDisplayNode, ASScrollViewDelegate {
     private let requestUpdateOverlayWantsToBeBelowKeyboard: (ContainedViewLayoutTransition) -> Void
     
     private let backgroundNode: ReactionContextBackgroundNode
+    public var exteraStyleIsMessageMenu = false {
+        didSet { self.backgroundNode.exteraStyleIsMessageMenu = self.exteraStyleIsMessageMenu }
+    }
     
     private let contentTintContainer: ASDisplayNode
     private let contentContainer: ASDisplayNode

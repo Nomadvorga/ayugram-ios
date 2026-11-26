@@ -117,6 +117,8 @@ public final class CallListController: TelegramBaseController {
     private let clearDisposable = MetaDisposable()
     private var createConferenceCallDisposable: Disposable?
     
+    private var uiIconObservation: ExteraUIIconObservation?
+
     public init(
         context: AccountContext,
         mode: CallListControllerMode,
@@ -146,11 +148,13 @@ public final class CallListController: TelegramBaseController {
                 icon = UIImage(bundleImageName: "Chat List/Tabs/IconCalls")
             }
             self.tabBarItem.title = self.presentationData.strings.Calls_TabTitle
-            self.tabBarItem.image = icon
-            self.tabBarItem.selectedImage = icon
-            if !self.presentationData.reduceMotion {
+            let provider = ExteraUIIconProvider.current
+            self.tabBarItem.image = provider.image(for: .calls, fallback: icon)
+            self.tabBarItem.selectedImage = self.tabBarItem.image
+            if !self.presentationData.reduceMotion && !provider.hasImage(for: .calls) {
                 self.tabBarItem.animationName = "TabCalls"
             }
+            self.uiIconObservation = ExteraUIIconObservation { [weak self] in self?.updateUIIconTab() }
         }
         
         self.segmentedTitleView.indexUpdated = { [weak self] index in
@@ -196,6 +200,15 @@ public final class CallListController: TelegramBaseController {
         self.createConferenceCallDisposable?.dispose()
     }
     
+    private func updateUIIconTab() {
+        guard case .tab = self.mode else { return }
+        let provider = ExteraUIIconProvider.current
+        let native = UIImage(bundleImageName: useSpecialTabBarIcons() ? "Chat List/Tabs/Holiday/IconCalls" : "Chat List/Tabs/IconCalls")
+        self.tabBarItem.image = provider.image(for: .calls, fallback: native)
+        self.tabBarItem.selectedImage = self.tabBarItem.image
+        self.tabBarItem.animationName = self.presentationData.reduceMotion || provider.hasImage(for: .calls) ? nil : "TabCalls"
+    }
+
     private func updateThemeAndStrings() {
         let index = self.segmentedTitleView.index
         self.segmentedTitleView.segments = [self.presentationData.strings.Calls_All, self.presentationData.strings.Calls_Missed]
@@ -203,11 +216,7 @@ public final class CallListController: TelegramBaseController {
         self.segmentedTitleView.index = index
             
         self.tabBarItem.title = self.presentationData.strings.Calls_TabTitle
-        if !self.presentationData.reduceMotion {
-            self.tabBarItem.animationName = "TabCalls"
-        } else {
-            self.tabBarItem.animationName = nil
-        }
+        self.updateUIIconTab()
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         switch self.mode {
             case .tab:

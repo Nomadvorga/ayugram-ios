@@ -39,6 +39,18 @@ private final class ExteraBackupTemporaryFile {
     }
 }
 
+/// Reuse the backup coordinator for the direct Other-card actions.
+func exteraOtherBackupAction(context: AccountContext) -> (ViewController, ExteraOtherSettingsModel.SettingsAction) -> Void {
+    let actions = ExteraBackupActions(context: context)
+    return { controller, action in
+        actions.controller = controller
+        switch action {
+        case .exportSettings: actions.perform(.exportSettings)
+        case .resetSettings: actions.perform(.resetSettings)
+        }
+    }
+}
+
 /// Push this controller from the exteraGram Other category. No action changes account or plugin data.
 public func exteraBackupController(context: AccountContext) -> ViewController {
     let actions = ExteraBackupActions(context: context)

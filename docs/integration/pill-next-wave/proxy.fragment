@@ -1,0 +1,17 @@
+            let settings = self.context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
+            |> map { data -> ProxySettings in
+                data.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) ?? .defaultSettings
+            }
+            let statuses = ProxyServersStatuses(network: self.context.account.network, servers: settings |> map { $0.effectiveActiveServer.map { [$0] } ?? [] })
+            self.proxyStatuses = statuses
+            self.disposable.set((combineLatest(settings, statuses.statuses(), self.context.account.networkState) |> deliverOnMainQueue).start(next: { [weak self] settings, statuses, state in
+                guard let self else { return }
+                guard let active = settings.effectiveActiveServer else { publish(self.text("Proxy", "Прокси")); return }
+                switch state {
+                case .online, .updating:
+                    if case let .available(seconds)? = statuses[active], seconds.isFinite, seconds > 0 {
+                        publish("\(min(9999, max(0, Int(min(seconds * 1000, 9999))))) " + self.text("ms", "мс"))
+                    } else { publish(self.text("Connected", "Подключён")) }
+                case .connecting, .waitingForNetwork: publish(self.text("Connecting", "Подключение"))
+                }
+            }))

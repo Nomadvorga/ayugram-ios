@@ -128,12 +128,12 @@ final class LegacyGlassView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(size: CGSize, cornerRadius: CGFloat, style: Style, transition: ComponentTransition) {
-        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), style: style, transition: transition)
+    func update(size: CGSize, cornerRadius: CGFloat, style: Style, enableGlass: Bool = true, transition: ComponentTransition) {
+        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), style: style, enableGlass: enableGlass, transition: transition)
     }
 
-    func update(size: CGSize, shape: GlassBackgroundView.Shape, style: Style, transition: ComponentTransition) {
-        let glassAllowed = ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
+    func update(size: CGSize, shape: GlassBackgroundView.Shape, style: Style, enableGlass: Bool = true, transition: ComponentTransition) {
+        let glassAllowed = enableGlass && ExteraEnergyRuntime.allows(.liquidGlass) && ExteraEnergyRuntime.allows(.blur)
         if self.exteraGlassAllowed != glassAllowed {
             self.exteraGlassAllowed = glassAllowed
             self.params = nil
@@ -151,7 +151,7 @@ final class LegacyGlassView: UIView {
             return
         }
         
-        if previousParams?.style != style {
+        if glassAllowed && previousParams?.style != style {
             if let blurFilter = CALayer.blur(), let colorMatrixFilter = CALayer.colorMatrix() {
                 switch style {
                 case .clear:
@@ -204,7 +204,7 @@ final class LegacyGlassView: UIView {
         }
         transition.setFrame(layer: backdropLayer, frame: CGRect(origin: CGPoint(), size: size))
         
-        if #available(iOS 17.0, *), DeviceMetrics.performance.isGraphicallyCapable {
+        if #available(iOS 17.0, *), glassAllowed, DeviceMetrics.performance.isGraphicallyCapable {
             let size = CGSize(width: max(1.0, size.width), height: max(1.0, size.height))
             let cornerRadius = min(min(size.width, size.height) * 0.5, shape.maximumCornerRadius(for: size))
             let displacementMagnitudePoints: CGFloat = 20.0

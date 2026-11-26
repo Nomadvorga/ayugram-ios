@@ -488,6 +488,9 @@ func updatePeerPresences(transaction: Transaction, accountPeerId: PeerId, peerPr
 }
 
 func updatePeerPresencesClean(transaction: Transaction, accountPeerId: PeerId, peerPresences: [PeerId: UpdatedApiPresence]) {
+    // Observe an actual self status before the existing cache exclusion removes it.
+    // UI-only notification: no new request, read-state write or presence mutation.
+    if peerPresences[accountPeerId] != nil { ayuSelfPresenceObserved(peerId: accountPeerId) }
     var parsedPresences: [PeerId: PeerPresence] = [:]
     for (peerId, status) in peerPresences {
         let presence = TelegramUserPresence(apiStatus: status.status)

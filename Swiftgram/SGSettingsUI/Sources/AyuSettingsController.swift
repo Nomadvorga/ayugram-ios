@@ -331,10 +331,14 @@ public func ayuSettingsController(context: AccountContext, category: AyuSettings
         }
     )
 
-    let signal = combineLatest(updatePromise.get(), context.sharedContext.presentationData)
-    |> map { _, presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    let signal = combineLatest(updatePromise.get(), context.sharedContext.presentationData, exteraSettingsChanges())
+    |> deliverOnMainQueue
+    |> map { _, presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(i18n(category.titleKey, presentationData.strings.baseLanguageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let entries = ayuControllerEntries(presentationData: presentationData).filter { entry in category.sections.contains { $0.rawValue == entry.section } }
+        let appearance = exteraSettingsAppearance()
+        let entries = ayuControllerEntries(presentationData: presentationData).filter { entry in category.sections.contains { $0.rawValue == entry.section } }.map {
+            SGStyledItemListEntry(entry: $0, appearance: appearance)
+        }
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)
         return (controllerState, (listState, arguments))
     }

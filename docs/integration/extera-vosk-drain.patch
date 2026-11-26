@@ -1,0 +1,436 @@
+diff --git a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h
+--- a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h
++++ b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVCodecContext.h
+@@ -10,6 +10,10 @@
+     FFMpegAVCodecContextReceiveResultNotEnoughData,
+     FFMpegAVCodecContextReceiveResultSuccess,
+ };
++
++// Raw status access for clients that must distinguish drain from errors.
++extern const int32_t FFMpegAVErrorAgain;
++extern const int32_t FFMpegAVErrorEnd;
+ 
+ @class FFMpegAVCodec;
+ @class FFMpegAVFrame;
+@@ -25,6 +29,8 @@
+ 
+ - (bool)open;
+ - (bool)sendEnd;
++- (int32_t)sendEndStatus;
++- (int32_t)receiveStatusIntoFrame:(FFMpegAVFrame *)frame NS_SWIFT_NAME(receiveStatus(into:));
+ - (void)setupHardwareAccelerationIfPossible;
+ // Sets `skip_loop_filter = AVDISCARD_ALL`, disabling H.264/HEVC in-loop deblocking.
+ // Deblocked frames are also prediction references, so this drifts from the encoder's
+diff --git a/submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m b/submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m
+--- a/submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m
++++ b/submodules/FFMpegBinding/Sources/FFMpegAVCodecContext.m
+@@ -5,6 +5,10 @@
+ 
+ #import "libavformat/avformat.h"
+ #import "libavcodec/avcodec.h"
++#include <errno.h>
++
++const int32_t FFMpegAVErrorAgain = AVERROR(EAGAIN);
++const int32_t FFMpegAVErrorEnd = AVERROR_EOF;
+ 
+ static enum AVPixelFormat getPreferredPixelFormat(__unused AVCodecContext *ctx, __unused const enum AVPixelFormat *pix_fmts) {
+     return AV_PIX_FMT_VIDEOTOOLBOX;
+@@ -60,6 +64,14 @@
+     return result >= 0;
+ }
+ 
++- (int32_t)sendEndStatus {
++    return avcodec_send_packet(_impl, NULL);
++}
++
++- (int32_t)receiveStatusIntoFrame:(FFMpegAVFrame *)frame {
++    return avcodec_receive_frame(_impl, (AVFrame *)[frame impl]);
++}
++
+ - (bool)sendEnd {
+     int status = avcodec_send_packet(_impl, nil);
+     return status == 0;
+diff --git a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h
+--- a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h
++++ b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegAVFormatContext.h
+@@ -54,6 +54,7 @@
+ - (void)seekFrameForStreamIndex:(int32_t)streamIndex pts:(int64_t)pts positionOnKeyframe:(bool)positionOnKeyframe;
+ - (void)seekFrameForStreamIndex:(int32_t)streamIndex byteOffset:(int64_t)byteOffset;
+ - (bool)readFrameIntoPacket:(FFMpegPacket *)packet;
++- (int32_t)readFrameStatusIntoPacket:(FFMpegPacket *)packet NS_SWIFT_NAME(readFrameStatus(into:));
+ - (NSArray<NSNumber *> *)streamIndicesForType:(FFMpegAVFormatStreamType)type;
+ - (bool)isAttachedPicAtStreamIndex:(int32_t)streamIndex;
+ - (int)codecIdAtStreamIndex:(int32_t)streamIndex;
+diff --git a/submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m b/submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m
+--- a/submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m
++++ b/submodules/FFMpegBinding/Sources/FFMpegAVFormatContext.m
+@@ -113,6 +113,11 @@
+ - (void)seekFrameForStreamIndex:(int32_t)streamIndex byteOffset:(int64_t)byteOffset {
+     int options = AVSEEK_FLAG_BYTE;
+     av_seek_frame(_impl, streamIndex, byteOffset, options);
++}
++
++- (int32_t)readFrameStatusIntoPacket:(FFMpegPacket *)packet {
++    [packet reuse];
++    return av_read_frame(_impl, (AVPacket *)[packet impl]);
+ }
+ 
+ - (bool)readFrameIntoPacket:(FFMpegPacket *)packet {
+diff --git a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h
+--- a/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h
++++ b/submodules/FFMpegBinding/Public/FFMpegBinding/FFMpegSWResample.h
+@@ -10,6 +10,9 @@
+ 
+ - (instancetype)initWithSourceChannelCount:(NSInteger)sourceChannelCount sourceSampleRate:(NSInteger)sourceSampleRate sourceSampleFormat:(enum FFMpegAVSampleFormat)sourceSampleFormat destinationChannelCount:(NSInteger)destinationChannelCount destinationSampleRate:(NSInteger)destinationSampleRate destinationSampleFormat:(enum FFMpegAVSampleFormat)destinationSampleFormat;
+ - (NSData * _Nullable)resample:(FFMpegAVFrame *)frame;
++// Dedicated fixed-format S16 transcription converter. nil frame flushes it.
++// Empty data is valid buffering/drain completion; nil data is a failure.
++- (NSData * _Nullable)resampleForTranscription:(FFMpegAVFrame * _Nullable)frame NS_SWIFT_NAME(resampleForTranscription(_:));
+ 
+ @end
+ 
+diff --git a/submodules/FFMpegBinding/Sources/FFMpegSWResample.m b/submodules/FFMpegBinding/Sources/FFMpegSWResample.m
+--- a/submodules/FFMpegBinding/Sources/FFMpegSWResample.m
++++ b/submodules/FFMpegBinding/Sources/FFMpegSWResample.m
+@@ -19,6 +19,16 @@
+     NSUInteger _ratio;
+     void *_buffer;
+     int _bufferSize;
++
++    SwrContext *_transcriptionContext;
++    int _transcriptionRate;
++    int _transcriptionFormat;
++#if LIBAVFORMAT_VERSION_MAJOR >= 59
++    AVChannelLayout _transcriptionLayout;
++#else
++    uint64_t _transcriptionLayout;
++#endif
++    bool _transcriptionDraining;
+ }
+ 
+ @end
+@@ -40,6 +50,10 @@
+ }
+ 
+ - (void)dealloc {
++    swr_free(&_transcriptionContext);
++#if LIBAVFORMAT_VERSION_MAJOR >= 59
++    av_channel_layout_uninit(&_transcriptionLayout);
++#endif
+     if (_context) {
+         swr_free(&_context);
+     }
+@@ -151,4 +165,87 @@
+     return [[NSData alloc] initWithBytes:_buffer length:numFrames * _destinationChannelCount * 2];
+ }
+ 
++// This converter is isolated from the playback resampler's legacy nil contract.
++- (NSData * _Nullable)resampleForTranscription:(FFMpegAVFrame * _Nullable)frame {
++    AVFrame *input = frame == nil ? NULL : (AVFrame *)[frame impl];
++    if ((enum AVSampleFormat)_destinationSampleFormat != AV_SAMPLE_FMT_S16 ||
++        _destinationSampleRate <= 0 || _destinationSampleRate > 192000 ||
++        _destinationChannelCount < 1 || _destinationChannelCount > 2) {
++        return nil;
++    }
++    if (input != NULL) {
++        if (_transcriptionDraining || input->sample_rate <= 0 ||
++            input->sample_rate > 192000 || input->nb_samples <= 0 ||
++            (int64_t)input->nb_samples > (int64_t)input->sample_rate * 10 ||
++            input->extended_data == NULL) {
++            return nil;
++        }
++#if LIBAVFORMAT_VERSION_MAJOR >= 59
++        int channels = input->ch_layout.nb_channels;
++#else
++        int channels = input->channels;
++        uint64_t layout = input->channel_layout != 0 ? input->channel_layout : av_get_default_channel_layout(channels);
++#endif
++        if (channels < 1 || channels > 64) { return nil; }
++        if (_transcriptionContext == NULL) {
++#if LIBAVFORMAT_VERSION_MAJOR >= 59
++            if (!av_channel_layout_check(&input->ch_layout) ||
++                av_channel_layout_copy(&_transcriptionLayout, &input->ch_layout) < 0) {
++                return nil;
++            }
++            AVChannelLayout outputLayout;
++            av_channel_layout_default(&outputLayout, _destinationChannelCount);
++            int status = swr_alloc_set_opts2(&_transcriptionContext,
++                &outputLayout, AV_SAMPLE_FMT_S16, _destinationSampleRate,
++                &_transcriptionLayout, (enum AVSampleFormat)input->format,
++                input->sample_rate, 0, NULL);
++            av_channel_layout_uninit(&outputLayout);
++            if (status < 0) { return nil; }
++#else
++            _transcriptionLayout = layout;
++            _transcriptionContext = swr_alloc_set_opts(NULL,
++                av_get_default_channel_layout(_destinationChannelCount),
++                AV_SAMPLE_FMT_S16, _destinationSampleRate,
++                layout, (enum AVSampleFormat)input->format,
++                input->sample_rate, 0, NULL);
++#endif
++            if (_transcriptionContext == NULL || swr_init(_transcriptionContext) < 0) {
++                return nil;
++            }
++            _transcriptionRate = input->sample_rate;
++            _transcriptionFormat = input->format;
++        } else {
++            // A format change requires draining/reconfiguration; fail explicitly
++            // rather than silently discarding the previous converter's tail.
++            if (!swr_is_initialized(_transcriptionContext) ||
++                input->sample_rate != _transcriptionRate ||
++                input->format != _transcriptionFormat) { return nil; }
++#if LIBAVFORMAT_VERSION_MAJOR >= 59
++            if (av_channel_layout_compare(&_transcriptionLayout, &input->ch_layout) != 0) { return nil; }
++#else
++            if (layout != _transcriptionLayout) { return nil; }
++#endif
++        }
++    } else {
++        _transcriptionDraining = true;
++        if (_transcriptionContext == NULL) { return [NSData data]; }
++        if (!swr_is_initialized(_transcriptionContext)) { return nil; }
++    }
++
++    // Flush uses bounded repeated calls, and stops only on zero output.
++    int capacity = input == NULL ? 4096 : swr_get_out_samples(_transcriptionContext, input->nb_samples);
++    if (capacity < 0 || capacity > (int64_t)_destinationSampleRate * 10) { return nil; }
++    capacity = MAX(1, capacity);
++    size_t bytes = (size_t)capacity * (size_t)_destinationChannelCount * 2;
++    uint8_t *output = malloc(bytes);
++    if (output == NULL) { return nil; }
++    int frames = swr_convert(_transcriptionContext, &output, capacity,
++        input == NULL ? NULL : (const uint8_t **)input->extended_data,
++        input == NULL ? 0 : input->nb_samples);
++    if (frames < 0 || frames > capacity) { free(output); return nil; }
++    return [[NSData alloc] initWithBytesNoCopy:output
++        length:(NSUInteger)frames * (NSUInteger)_destinationChannelCount * 2
++        freeWhenDone:YES];
++}
++
+ @end
+diff --git a/submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift b/submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift
+--- a/submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift
++++ b/submodules/MediaPlayer/Sources/FFMpegAudioFrameDecoder.swift
+@@ -10,6 +10,9 @@
+     private let audioFrame: FFMpegAVFrame?
+     private var resetDecoderOnNextFrame = true
+     
++    private var transcriptionDecoderEnded = false
++    private var transcriptionSamples: Int64 = 0
++    private let sampleRate: Int
+     private let channelCount: Int
+     private let formatDescription: CMAudioFormatDescription
+     
+@@ -24,6 +27,7 @@
+         self.codecContext = codecContext
+         self.audioFrame = FFMpegAVFrame()
+         self.channelCount = channelCount
++        self.sampleRate = sampleRate
+         
+         self.swrContext = FFMpegSWResample(sourceChannelCount: Int(codecContext.channels()), sourceSampleRate: Int(codecContext.sampleRate()), sourceSampleFormat: codecContext.sampleFormat(), destinationChannelCount: channelCount, destinationSampleRate: sampleRate, destinationSampleFormat: FFMPEG_AV_SAMPLE_FMT_S16)
+         
+@@ -173,6 +177,75 @@
+         self.resetDecoderOnNextFrame = true
+     }
+     
++    enum TranscriptionRead {
++        case sample(CMSampleBuffer)
++        case needsInput
++        case end
++    }
++
++    func sendPacketForTranscription(_ packet: FFMpegPacket) -> Int32 {
++        return packet.send(toDecoder: self.codecContext)
++    }
++
++    func sendEndForTranscription() -> Int32 {
++        return self.codecContext.sendEndStatus()
++    }
++
++    func readForTranscription(checkCancellation: () throws -> Void) throws -> TranscriptionRead {
++        guard let audioFrame = self.audioFrame else { throw SoftwareAudioTranscriptionError.decodeFailed }
++        while true {
++            try checkCancellation()
++            let data: Data
++            if self.transcriptionDecoderEnded {
++                guard let tail = self.swrContext.resampleForTranscription(nil) else {
++                    throw SoftwareAudioTranscriptionError.decodeFailed
++                }
++                if tail.isEmpty { return .end }
++                data = tail
++            } else {
++                let status = self.codecContext.receiveStatus(into: audioFrame)
++                if status == FFMpegAVErrorAgain { return .needsInput }
++                if status == FFMpegAVErrorEnd {
++                    self.transcriptionDecoderEnded = true
++                    continue
++                }
++                guard status == 0, let converted = self.swrContext.resampleForTranscription(audioFrame) else {
++                    throw SoftwareAudioTranscriptionError.decodeFailed
++                }
++                if converted.isEmpty { continue } // Valid resampler buffering.
++                data = converted
++            }
++            guard data.count % (2 * self.channelCount) == 0 else {
++                throw SoftwareAudioTranscriptionError.decodeFailed
++            }
++            let count = data.count / (2 * self.channelCount)
++            guard count > 0, count <= self.sampleRate * 10,
++                  self.transcriptionSamples <= Int64(self.sampleRate) * 3600 - Int64(count) else {
++                throw SoftwareAudioTranscriptionError.decodeFailed
++            }
++            var block: CMBlockBuffer?
++            guard CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil,
++                blockLength: data.count, blockAllocator: nil, customBlockSource: nil,
++                offsetToData: 0, dataLength: data.count, flags: 0, blockBufferOut: &block) == noErr,
++                let blockBuffer = block else { throw SoftwareAudioTranscriptionError.decodeFailed }
++            let copied = data.withUnsafeBytes { bytes -> OSStatus in
++                guard let base = bytes.baseAddress else { return -1 }
++                return CMBlockBufferReplaceDataBytes(with: base, blockBuffer: blockBuffer,
++                    offsetIntoDestination: 0, dataLength: data.count)
++            }
++            guard copied == noErr else { throw SoftwareAudioTranscriptionError.decodeFailed }
++            var sample: CMSampleBuffer?
++            guard CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: nil,
++                dataBuffer: blockBuffer, formatDescription: self.formatDescription,
++                sampleCount: count, presentationTimeStamp: CMTime(value: self.transcriptionSamples,
++                    timescale: CMTimeScale(self.sampleRate)),
++                packetDescriptions: nil, sampleBufferOut: &sample) == noErr,
++                let sampleBuffer = sample else { throw SoftwareAudioTranscriptionError.decodeFailed }
++            self.transcriptionSamples += Int64(count)
++            return .sample(sampleBuffer)
++        }
++    }
++
+     func sendEndToDecoder() -> Bool {
+         return true
+     }
+diff --git a/submodules/MediaPlayer/Sources/SoftwareVideoSource.swift b/submodules/MediaPlayer/Sources/SoftwareVideoSource.swift
+--- a/submodules/MediaPlayer/Sources/SoftwareVideoSource.swift
++++ b/submodules/MediaPlayer/Sources/SoftwareVideoSource.swift
+@@ -419,6 +419,7 @@
+     let context = Unmanaged<SoftwareAudioSource>.fromOpaque(userData!).takeUnretainedValue()
+     if let fd = context.fd {
+         let result = read(fd, buffer, Int(bufferSize))
++        if result < 0 && context.transcriptionReading { context.transcriptionIOFailed = true }
+         if result == 0 {
+             return FFMPEG_CONSTANT_AVERROR_EOF
+         }
+@@ -433,11 +434,16 @@
+         if (whence & FFMPEG_AVSEEK_SIZE) != 0 {
+             return Int64(context.size)
+         } else {
+-            lseek(fd, off_t(offset), SEEK_SET)
++            let result = lseek(fd, off_t(offset), SEEK_SET)
++            if result < 0 && context.transcriptionReading { context.transcriptionIOFailed = true }
+             return offset
+         }
+     }
+     return 0
++}
++
++public enum SoftwareAudioTranscriptionError: Error {
++    case decodeFailed
+ }
+ 
+ public final class SoftwareAudioSource {
+@@ -448,6 +454,11 @@
+     private let path: String
+     fileprivate let fd: Int32?
+     fileprivate let size: Int32
++    fileprivate var transcriptionIOFailed = false
++    fileprivate var transcriptionReading = false
++    private var transcriptionDrainSent = false
++    private var transcriptionFinished = false
++    private var transcriptionFailed = false
+     
+     private var hasReadToEnd: Bool = false
+     
+@@ -613,6 +624,64 @@
+         }
+     }
+     
++    /// Dedicated sequential reader: use a fresh instance, without seek or mixing
++    /// other read APIs. nil means codec AND resampler drain completed; failures throw.
++    public func readSampleBufferForTranscription(checkCancellation: () throws -> Void) throws -> CMSampleBuffer? {
++        try checkCancellation()
++        guard !self.transcriptionFailed, !self.readingError,
++              let stream = self.audioStream, let format = self.avFormatContext,
++              self.fd != nil else { throw SoftwareAudioTranscriptionError.decodeFailed }
++        if self.transcriptionFinished { return nil }
++        self.transcriptionReading = true
++        defer { self.transcriptionReading = false }
++        do {
++            while true {
++                try checkCancellation()
++                // Receive before reading another packet. Multiple outputs remain
++                // in the codec, not in an unbounded Swift delayedFrames array.
++                switch try stream.decoder.readForTranscription(checkCancellation: checkCancellation) {
++                case let .sample(sample):
++                    return sample
++                case .end:
++                    guard self.transcriptionDrainSent, !self.transcriptionIOFailed else {
++                        throw SoftwareAudioTranscriptionError.decodeFailed
++                    }
++                    self.transcriptionFinished = true
++                    return nil
++                case .needsInput:
++                    // EAGAIN is forbidden after a successful NULL send.
++                    guard !self.transcriptionDrainSent else { throw SoftwareAudioTranscriptionError.decodeFailed }
++                }
++
++                while true {
++                    try checkCancellation()
++                    let packet = FFMpegPacket()
++                    let status = format.readFrameStatus(into: packet)
++                    guard !self.transcriptionIOFailed else { throw SoftwareAudioTranscriptionError.decodeFailed }
++                    if status == FFMpegAVErrorEnd {
++                        guard stream.decoder.sendEndForTranscription() == 0 else {
++                            throw SoftwareAudioTranscriptionError.decodeFailed
++                        }
++                        self.transcriptionDrainSent = true
++                        break
++                    }
++                    guard status == 0 else { throw SoftwareAudioTranscriptionError.decodeFailed }
++                    if Int(packet.streamIndex) != stream.index { continue }
++                    // receive just returned EAGAIN, so send must accept input.
++                    // A simultaneous send EAGAIN is a codec protocol error: fail
++                    // the operation instead of dropping this packet and continuing.
++                    guard stream.decoder.sendPacketForTranscription(packet) == 0 else {
++                        throw SoftwareAudioTranscriptionError.decodeFailed
++                    }
++                    break
++                }
++            }
++        } catch {
++            self.transcriptionFailed = true
++            throw error
++        }
++    }
++
+     public func readEncodedFrame() -> (Data, Int)? {
+         guard let _ = self.audioStream, let _ = self.avFormatContext else {
+             return nil
+diff --git a/submodules/Media/VoskSpeechAudio/Sources/VoskSoftwareAudioSource.swift b/submodules/Media/VoskSpeechAudio/Sources/VoskSoftwareAudioSource.swift
+--- a/submodules/Media/VoskSpeechAudio/Sources/VoskSoftwareAudioSource.swift
++++ b/submodules/Media/VoskSpeechAudio/Sources/VoskSoftwareAudioSource.swift
+@@ -43,7 +43,18 @@
+                 do { try checkCancellation() }
+                 catch { inputError = true; status.pointee = .endOfStream; return nil }
+                 if self.pending == nil {
+-                    guard let sample = self.source.readSampleBuffer() else { status.pointee = .endOfStream; return nil }
++                    let sample: CMSampleBuffer
++                    do {
++                        guard let next = try self.source.readSampleBufferForTranscription(checkCancellation: checkCancellation) else {
++                            status.pointee = .endOfStream
++                            return nil
++                        }
++                        sample = next
++                    } catch {
++                        inputError = true
++                        status.pointee = .endOfStream
++                        return nil
++                    }
+                     let frames = CMSampleBufferGetNumSamples(sample)
+                     guard frames > 0, frames <= 48000 * 10,
+                           let description = CMSampleBufferGetFormatDescription(sample),

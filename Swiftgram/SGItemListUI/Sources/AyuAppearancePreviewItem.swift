@@ -229,7 +229,8 @@ private final class AyuAppearancePreviewItemNode: ListViewItemNode {
                 self.preview.backgroundColor = item.theme.list.itemBlocksBackgroundColor
                 self.preview.layer.borderColor = item.theme.list.itemBlocksSeparatorColor.cgColor
                 self.headerLabel.textColor = item.theme.list.itemPrimaryTextColor
-                self.snowView.color = item.theme.list.itemAccentColor
+                // Use the same white particles as the live chat/list header.
+                self.snowView.color = .white
                 self.snowView.frame = self.preview.bounds
                 self.titleLabel.textColor = item.theme.list.itemAccentColor
                 self.valueLabel.textColor = item.theme.list.itemAccentColor

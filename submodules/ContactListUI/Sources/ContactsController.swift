@@ -70,6 +70,7 @@ public class ContactsController: ViewController {
     
     private var presentationData: PresentationData
     private var presentationDataDisposable: Disposable?
+    private var uiIconObservation: ExteraUIIconObservation?
     private var selectionDisposable: Disposable?
     private var actionDisposable = MetaDisposable()
     private let sortOrderPromise = Promise<ContactsSortOrder>()
@@ -100,6 +101,7 @@ public class ContactsController: ViewController {
         self.title = self.presentationData.strings.Contacts_Title
         // MARK: Swiftgram
         self.sgUpdateTabBarItem()
+        self.uiIconObservation = ExteraUIIconObservation { [weak self] in self?.sgUpdateTabBarItem() }
         if sgIsTabMode {
             self.tabBarItemContextActionType = .always
         }
@@ -161,9 +163,10 @@ public class ContactsController: ViewController {
         }
         self.tabBarItem.title = self.presentationData.strings.Contacts_Title
         let icon = UIImage(bundleImageName: useSpecialTabBarIcons() ? "Chat List/Tabs/Holiday/IconContacts" : "Chat List/Tabs/IconContacts")
-        self.tabBarItem.image = icon
-        self.tabBarItem.selectedImage = icon
-        self.tabBarItem.animationName = self.presentationData.reduceMotion ? nil : "TabContacts"
+        let provider = ExteraUIIconProvider.current
+        self.tabBarItem.image = provider.image(for: .contacts, fallback: icon)
+        self.tabBarItem.selectedImage = self.tabBarItem.image
+        self.tabBarItem.animationName = self.presentationData.reduceMotion || provider.hasImage(for: .contacts) ? nil : "TabContacts"
     }
     //
 

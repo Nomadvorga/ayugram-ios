@@ -91,6 +91,8 @@ private final class ExteraUIIconPacksController: ViewController, UITableViewData
     private let table = UITableView(frame: .zero, style: .insetGrouped)
     private var presentationDisposable: Disposable?
     private var observer: NSObjectProtocol?
+    private lazy var actions = ExteraUIIconPackActions(context: self.context, owner: self)
+    private var custom = ExteraUIIconPackStore.shared.snapshot
     private var data: PresentationData { return self.context.sharedContext.currentPresentationData.with { $0 } }
 
     init(context: AccountContext) {
@@ -99,7 +101,9 @@ private final class ExteraUIIconPacksController: ViewController, UITableViewData
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: NavigationBarTheme(rootControllerTheme: data.theme), strings: NavigationBarStrings(presentationStrings: data.strings)))
         self.title = self.text("Title", "Icon Packs", "Наборы иконок")
         self.observer = NotificationCenter.default.addObserver(forName: ExteraUIIconSettings.didChange, object: nil, queue: .main) { [weak self] _ in
-            self?.table.reloadData()
+            guard let self else { return }
+            self.custom = ExteraUIIconPackStore.shared.snapshot
+            self.table.reloadData()
         }
         self.presentationDisposable = (context.sharedContext.presentationData |> deliverOnMainQueue).start(next: { [weak self] data in
             guard let self else { return }
@@ -150,14 +154,45 @@ private final class ExteraUIIconPacksController: ViewController, UITableViewData
         self.table.scrollIndicatorInsets = self.table.contentInset
     }
 
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { return ExteraUIIconPack.allCases.count }
+    func numberOfSections(in tableView: UITableView) -> Int { return 4 }
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        switch section {
+        case 0: return 3
+        case 1: return ExteraUIIconPack.allCases.count
+        case 2: return custom.enabled.count
+        default: return custom.hidden.count
+        }
+    }
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        return self.text("BasePacks", "Base Packs", "Базовые наборы")
+        switch section {
+        case 0: return nil
+        case 1: return self.text("BasePacks", "Base Packs", "Базовые наборы")
+        case 2: return self.text("ActivePacks", "Active packs · first wins", "Активные наборы · верхний в приоритете")
+        default: return self.text("HiddenPacks", "Hidden packs", "Скрытые наборы")
+        }
     }
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        return self.text("Info", "Used for supported icons throughout the app. Other icons keep their original appearance.", "Используется для поддерживаемых значков в приложении. Остальные значки сохраняют исходный вид.")
+        return section == 1 ? self.text("Info", "Used for supported icons throughout the app. Other icons keep their original appearance.", "Используется для поддерживаемых значков в приложении. Остальные значки сохраняют исходный вид.") : nil
     }
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section != 1 {
+            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            cell.backgroundColor = self.data.theme.list.itemBlocksBackgroundColor
+            cell.textLabel?.textColor = self.data.theme.list.itemPrimaryTextColor
+            cell.detailTextLabel?.textColor = self.data.theme.list.itemSecondaryTextColor
+            if indexPath.section == 0 {
+                cell.textLabel?.text = [self.text("Import", "Import .icons", "Импорт .icons"), self.text("Create", "Create pack", "Создать набор"), self.table.isEditing ? self.text("Done", "Done", "Готово") : self.text("Order", "Change order", "Изменить порядок")][indexPath.row]
+                cell.textLabel?.textColor = self.data.theme.list.itemAccentColor
+            } else {
+                let pack = (indexPath.section == 2 ? custom.enabled : custom.hidden)[indexPath.row]
+                cell.textLabel?.text = pack.name; cell.detailTextLabel?.text = pack.author + " · " + pack.version + " · \(pack.icons.count)"
+                cell.accessoryType = .detailButton
+                cell.imageView?.image = UIImage(systemName: indexPath.section == 2 ? "checkmark.circle.fill" : "circle")
+                cell.tintColor = self.data.theme.list.itemAccentColor
+                cell.accessibilityHint = self.text("PackToggleHint", "Tap to change visibility. Details opens the editor.", "Нажмите, чтобы изменить видимость. Кнопка сведений открывает редактор.")
+            }
+            return cell
+        }
         let cell = tableView.dequeueReusableCell(withIdentifier: "pack", for: indexPath) as! ExteraUIIconPackCell
         let pack = ExteraUIIconPack.allCases[indexPath.row]
         let title: String
@@ -170,7 +205,36 @@ private final class ExteraUIIconPacksController: ViewController, UITableViewData
         return cell
     }
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        ExteraUIIconSettings.shared.select(ExteraUIIconPack.allCases[indexPath.row])
         tableView.deselectRow(at: indexPath, animated: true)
+        if indexPath.section == 0 {
+            switch indexPath.row {
+            case 0: actions.chooseArchive()
+            case 1: actions.details()
+            default: table.setEditing(!table.isEditing, animated: true); table.reloadData()
+            }
+        } else if indexPath.section == 1 {
+            ExteraUIIconSettings.shared.select(ExteraUIIconPack.allCases[indexPath.row])
+        } else {
+            let pack = (indexPath.section == 2 ? custom.enabled : custom.hidden)[indexPath.row]
+            actions.run({ try ExteraUIIconPackStore.shared.setEnabled(pack.id, enabled: indexPath.section != 2) }, done: { _ in })
+        }
+    }
+    func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
+        guard indexPath.section >= 2 else { return }
+        self.push(ExteraUIIconPackEditorController(context: context, pack: (indexPath.section == 2 ? custom.enabled : custom.hidden)[indexPath.row]))
+    }
+    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool { return indexPath.section >= 2 }
+    func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle { return .none }
+    func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool { return false }
+    func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { return indexPath.section >= 2 }
+    func tableView(_ tableView: UITableView, targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath, toProposedIndexPath proposedDestinationIndexPath: IndexPath) -> IndexPath {
+        return proposedDestinationIndexPath.section == sourceIndexPath.section ? proposedDestinationIndexPath : sourceIndexPath
+    }
+    func tableView(_ tableView: UITableView, moveRowAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
+        var ids = (sourceIndexPath.section == 2 ? custom.enabled : custom.hidden).map { $0.id }
+        let id = ids.remove(at: sourceIndexPath.row); ids.insert(id, at: destinationIndexPath.row)
+        // Synchronous small atomic catalog write prevents a second drag racing an old ordering.
+        do { try ExteraUIIconPackStore.shared.reorder(ids, enabled: sourceIndexPath.section == 2) }
+        catch { actions.error(error); custom = ExteraUIIconPackStore.shared.snapshot; table.reloadData() }
     }
 }

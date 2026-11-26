@@ -69,9 +69,14 @@ public enum ExteraSettingsBackup {
         case text(maximumLength: Int, allowedCharacters: CharacterSet?)
         case exactHosts
         case navigationConfiguration
+        case pillConfiguration
 
         func validate(_ object: Any) throws -> Value {
             switch self {
+            case .pillConfiguration:
+                guard let value = object as? String else { throw BackupError.invalidValue }
+                let layout = try ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys)
+                return .string(ExteraPillPortableSettings.configurationJSON(layout))
             case .navigationConfiguration:
                 guard let value = object as? String, let data = value.data(using: .utf8) else { throw BackupError.invalidValue }
                 try ExteraSettingsBackup.rejectDuplicateKeys(data)
@@ -156,12 +161,38 @@ public enum ExteraSettingsBackup {
         })
     }
 
+    private static func pillConfiguration() -> Setting {
+        return Setting(name: ExteraPillPortableSettings.key, rule: .pillConfiguration,
+            defaultValue: .string(ExteraPillPortableSettings.configurationJSON(ExteraPillStackLayout())), read: {
+                .string(ExteraPillPortableSettings.configurationJSON(ExteraPillStackSettings.shared.layout))
+            }, write: {
+                // ValidatedBackup and the encoded default are the only sources. Decode before
+                // entering the setter; no malformed document can cause a partial layout write.
+                guard case let .string(value) = $0,
+                      let layout = try? ExteraPillPortableSettings.decode(value, rejectDuplicateKeys: ExteraSettingsBackup.rejectDuplicateKeys) else {
+                    preconditionFailure("Pill backup value must have passed complete validation")
+                }
+                ExteraPillPortableSettings.applyValidated(layout, settings: ExteraPillStackSettings.shared, custom: ExteraPillSettings.shared.pills)
+            })
+    }
+
     private static func aiTemperature(_ name: String) -> Setting {
         return Setting(name: name, rule: .integer(0 ... 20), defaultValue: .integer(10), read: {
             let value = ExteraAISettings.shared.configuration.temperature
             return .integer(value.isFinite ? Int((max(0.0, min(2.0, value)) * 10.0).rounded()) : 10)
         }, aiWrite: { configuration, value in
             if case let .integer(tenths) = value { configuration.temperature = Double(tenths) / 10.0 }
+        })
+    }
+
+    private static func aiEditorPolicy(_ name: String) -> Setting {
+        return Setting(name: name, rule: .string(["automatic", "enabled", "disabled"]), defaultValue: .string("automatic"), read: {
+            let policy = ExteraAISettings.shared.configuration.useForTextProcessing
+            return .string(policy.map { $0 ? "enabled" : "disabled" } ?? "automatic")
+        }, aiWrite: { configuration, value in
+            if case let .string(policy) = value {
+                configuration.useForTextProcessing = policy == "automatic" ? nil : policy == "enabled"
+            }
         })
     }
 
@@ -250,7 +281,9 @@ public enum ExteraSettingsBackup {
         aiBoolean("extera.ai.insertAsQuote", \.insertAsQuote),
         aiTemperature("extera.ai.temperatureTenths"),
         navigationConfiguration(),
+        pillConfiguration(),
         aiSummaryPolicy("extera.ai.replaceTelegramSummaries"),
+        aiEditorPolicy("extera.ai.replaceTelegramEditor"),
         boolean("extera.browser.automaticFilterUpdates", defaultValue: true, read: { ExteraBrowserFilters.shared.automaticUpdates }, write: { ExteraBrowserFilters.shared.automaticUpdates = $0 }),
         boolean("extera.stickers.unlimitedRecent", read: { ExteraStickerSettings.shared.unlimitedRecentStickers }, write: { ExteraStickerSettings.shared.unlimitedRecentStickers = $0 }),
         integer("extera.stickers.size", allowed: Set(4 ... 20), defaultValue: 12, read: { ExteraStickerSettings.shared.size }, write: { ExteraStickerSettings.shared.size = $0 }),
@@ -360,6 +393,10 @@ public enum ExteraSettingsBackup {
         boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
         boolean("extera.speech.isEnabled", defaultValue: true, read: { ExteraSpeechSettings.shared.isEnabled }, write: { ExteraSpeechSettings.shared.isEnabled = $0 }),
         boolean("extera.speech.useManagedOfflineModel", read: { ExteraSpeechSettings.shared.useManagedOfflineModel }, write: { ExteraSpeechSettings.shared.useManagedOfflineModel = $0 }),
+        boolean("extera.vosk.isSelected", read: { ExteraVoskSettings.shared.isSelected }, write: { ExteraVoskSettings.shared.isSelected = $0 }),
+        Setting(name: "extera.vosk.language", rule: .string(Set(["none", "auto", "en", "es", "zh", "hi", "fa", "fr", "ru", "pt", "de", "ja", "ko", "it", "uk", "gu", "pl", "nl", "tr", "vi", "cs", "uz", "eo", "kk", "tg", "ca"])), defaultValue: .string("none"), read: { .string(ExteraVoskSettings.shared.language) }, write: {
+            if case let .string(language) = $0 { ExteraVoskSettings.shared.language = language }
+        }),
         boolean(ExteraAdminSettings.quickAdminShortcutsKey, defaultValue: true, read: { ExteraAdminSettings.shared.quickAdminShortcuts }, write: { ExteraAdminSettings.shared.quickAdminShortcuts = $0 }),
         boolean(ExteraEnergySettings.followSystemKey, read: { ExteraEnergySettings.shared.followSystem }, write: { ExteraEnergySettings.shared.followSystem = $0 }),
         Setting(name: ExteraUIIconSettings.storageKey, rule: .string(Set(ExteraUIIconPack.allCases.map(\.rawValue))), defaultValue: .string(ExteraUIIconPack.native.rawValue), read: { .string(ExteraUIIconSettings.shared.pack.rawValue) }, write: {
@@ -405,6 +442,7 @@ public enum ExteraSettingsBackup {
         boolean("extera.media.pauseOnMinimizeVideo", defaultValue: true, read: { ExteraMediaSettings.shared.pauseOnMinimizeVideo }, write: { ExteraMediaSettings.shared.pauseOnMinimizeVideo = $0 }),
         boolean("extera.media.pauseOnMinimizeVoice", read: { ExteraMediaSettings.shared.pauseOnMinimizeVoice }, write: { ExteraMediaSettings.shared.pauseOnMinimizeVoice = $0 }),
         boolean("extera.media.pauseOnMinimizeRound", read: { ExteraMediaSettings.shared.pauseOnMinimizeRound }, write: { ExteraMediaSettings.shared.pauseOnMinimizeRound = $0 }),
+        boolean("extera.chatMedia.pauseOtherAudio", defaultValue: true, read: { ExteraChatMediaSettings.shared.pauseOtherAudio }, write: { ExteraChatMediaSettings.shared.pauseOtherAudio = $0 }),
         boolean("extera.media.rememberLastUsedCamera", defaultValue: true, read: { ExteraMediaSettings.shared.rememberLastUsedCamera }, write: { ExteraMediaSettings.shared.rememberLastUsedCamera = $0 }),
         boolean("extera.media.zoomSlider", defaultValue: true, read: { ExteraMediaSettings.shared.zoomSlider }, write: { ExteraMediaSettings.shared.zoomSlider = $0 }),
         boolean("extera.media.staticZoom", read: { ExteraMediaSettings.shared.staticZoom }, write: { ExteraMediaSettings.shared.staticZoom = $0 }),
@@ -449,6 +487,21 @@ public enum ExteraSettingsBackup {
         Setting(name: "extera.inlineAngleUnit", rule: .string(["degrees", "radians"]), defaultValue: .string("degrees"), read: { .string(ExteraMathSettings.shared.inlineAngleUnit.rawValue) }, write: {
             if case let .string(value) = $0, let unit = ExteraMathSettings.AngleUnit(rawValue: value) { ExteraMathSettings.shared.inlineAngleUnit = unit }
         }),
+        integer(ExteraStyleSettings.controlStyleKey, allowed: [0, 1], defaultValue: 1, read: { ExteraStyleSettings.shared.controlStyle.rawValue }, write: {
+            if let style = ExteraStyleSettings.ControlStyle(rawValue: $0) { ExteraStyleSettings.shared.controlStyle = style }
+        }),
+        Setting(name: ExteraStyleSettings.sectionRadiusKey, rule: .integer(0 ... 64), defaultValue: .integer(22), read: { .integer(ExteraStyleSettings.shared.sectionRadius) }, write: {
+            if case let .integer(value) = $0 { ExteraStyleSettings.shared.sectionRadius = value }
+        }),
+        boolean(ExteraStyleSettings.separateHeadersKey, defaultValue: true, read: { ExteraStyleSettings.shared.separateHeaders }, write: { ExteraStyleSettings.shared.separateHeaders = $0 }),
+        Setting(name: ExteraStyleSettings.separatorStyleKey, rule: .string(["line", "fullWidth", "none"]), defaultValue: .string("line"), read: { .string(ExteraStyleSettings.shared.separatorStyle.rawValue) }, write: {
+            if case let .string(value) = $0, let style = ExteraStyleSettings.SeparatorStyle(rawValue: value) { ExteraStyleSettings.shared.separatorStyle = style }
+        }),
+        Setting(name: ExteraStyleSettings.glassBorderKey, rule: .string(["none", "line", "highlights"]), defaultValue: .string("none"), read: { .string(ExteraStyleSettings.shared.glassBorder.rawValue) }, write: {
+            if case let .string(value) = $0, let border = ExteraStyleSettings.GlassBorder(rawValue: value) { ExteraStyleSettings.shared.glassBorder = border }
+        }),
+        boolean(ExteraStyleSettings.glassMessageMenuKey, read: { ExteraStyleSettings.shared.glassMessageMenu }, write: { ExteraStyleSettings.shared.glassMessageMenu = $0 }),
+        boolean(ExteraStyleSettings.forceBlurKey, read: { ExteraStyleSettings.shared.forceBlur }, write: { ExteraStyleSettings.shared.forceBlur = $0 }),
         boolean("extera.browser.adBlockingEnabled", defaultValue: true, read: { ExteraBrowserSettings.shared.adBlockingEnabled }, write: { ExteraBrowserSettings.shared.adBlockingEnabled = $0 }),
         Setting(name: "extera.browser.exceptionHosts", rule: .exactHosts, defaultValue: .strings([]), read: { .strings(ExteraBrowserSettings.shared.exceptionHosts) }, write: {
             if case let .strings(hosts) = $0 { ExteraBrowserSettings.shared.exceptionHosts = hosts }

@@ -208,6 +208,11 @@ control's own frame. Existing double-tap/appearance previews are preserved.
 
 ## Sticker, shape and message settings illustrations
 
+The subsequent style/sections/blur wave is documented in `STYLE_HANDOFF.md`:
+new controls, `SGStyledItemListEntry` for live equality updates, persisted model
+keys/defaults, localization proposals and owner-coordinated shared consumers.
+Its public preview kinds and initializer labels remain unchanged.
+
 References 33–38 and 52–57 use this value-only entry in both visual styles:
 
 ```swift

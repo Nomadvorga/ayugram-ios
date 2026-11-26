@@ -1,0 +1,23 @@
+{
+  "run": 45692107515,
+  "runUrl": "https://github.com/Nomadvorga/ayugram-ios/actions/runs/45692107515",
+  "failedHead": "030f9549d29daedcc94c5b03fbc23b2c2104c8d6",
+  "failedTarget": "//Swiftgram/SGSettingsUI:SGSettingsUI",
+  "appliedSourceFiles": [
+    "Swiftgram/SGSettingsUI/Sources/ExteraAppIconController.swift",
+    "Swiftgram/SGSettingsUI/Sources/ExteraFeedPostItem.swift",
+    "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    "Swiftgram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift"
+  ],
+  "unappliedProposalTargets": [
+    "Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift"
+  ],
+  "supportFiles": [
+    "docs/integration/extera-build-fixes.patch",
+    "docs/integration/extera-build-fixes-manifest.json",
+    "docs/integration/extera-build-fixes.md"
+  ],
+  "scope": "Minimal compiler-error fixes only. No AI, root routing/wrapping, frozen style, strings, backup, BUILD or workflow source changes.",
+  "validation": "Four edited Swift sources and the proposed overview copy parsed; scoped diff --check and git apply --check passed. No local iOS compiler/build run.",
+  "commitOrPush": false
+}

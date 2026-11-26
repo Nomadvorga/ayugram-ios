@@ -72,6 +72,8 @@ public final class ThemeGridController: ViewController {
         case .peer:
             self.title = self.presentationData.strings.Wallpaper_ChannelTitle
         }
+
+        self.updateGenericRightBarButtons()
         
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
@@ -109,19 +111,7 @@ public final class ThemeGridController: ViewController {
     private func updateThemeAndStrings() {
         self.title = self.presentationData.strings.Wallpaper_Title
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
-        
-        if case .generic = self.mode {
-            if let isEmpty = self.isEmpty, isEmpty {
-            } else {
-                if self.editingMode {
-                    let doneItem = UIBarButtonItem(title: "___done", style: .done, target: self, action: #selector(self.donePressed))
-                    doneItem.staysInRow = true
-                    self.navigationItem.rightBarButtonItem = doneItem
-                } else {
-                    self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Edit, style: .plain, target: self, action: #selector(self.editPressed))
-                }
-            }
-        }
+        self.updateGenericRightBarButtons()
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
@@ -253,20 +243,7 @@ public final class ThemeGridController: ViewController {
             if let strongSelf = self {
                 if empty != strongSelf.isEmpty {
                     strongSelf.isEmpty = empty
-                    
-                    if case .generic = strongSelf.mode {
-                        if empty {
-                            strongSelf.navigationItem.setRightBarButton(nil, animated: true)
-                        } else {
-                            if strongSelf.editingMode {
-                                let doneItem = UIBarButtonItem(title: "___done", style: .done, target: strongSelf, action: #selector(strongSelf.donePressed))
-                                doneItem.staysInRow = true
-                                strongSelf.navigationItem.rightBarButtonItem = doneItem
-                            } else {
-                                strongSelf.navigationItem.rightBarButtonItem = UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Edit, style: .plain, target: strongSelf, action: #selector(strongSelf.editPressed))
-                            }
-                        }
-                    }
+                    strongSelf.updateGenericRightBarButtons(animated: true)
                 }
             }
         }, deleteWallpapers: { [weak self] wallpapers, completed in
@@ -441,6 +418,55 @@ public final class ThemeGridController: ViewController {
         
         self.donePressed()
     }
+
+    private func updateGenericRightBarButtons(animated: Bool = false) {
+        guard case .generic = self.mode else {
+            return
+        }
+        let searchItem = UIBarButtonItem(title: self.presentationData.strings.Common_Search, style: .plain, target: self, action: #selector(self.exteraSearchPressed))
+        var items = [searchItem]
+        if self.isEmpty != true {
+            let editItem: UIBarButtonItem
+            if self.editingMode {
+                editItem = UIBarButtonItem(title: "___done", style: .done, target: self, action: #selector(self.donePressed))
+            } else {
+                editItem = UIBarButtonItem(title: self.presentationData.strings.Common_Edit, style: .plain, target: self, action: #selector(self.editPressed))
+            }
+            editItem.staysInRow = true
+            items.append(editItem)
+        }
+        if animated {
+            self.navigationItem.setRightBarButtonItems(items, animated: true)
+        } else {
+            self.navigationItem.rightBarButtonItems = items
+        }
+    }
+
+    @objc private func exteraSearchPressed() {
+        guard case .generic = self.mode else {
+            return
+        }
+        if self.editingMode {
+            self.donePressed()
+        }
+        let search = ExteraWallpaperSearchController(context: self.context, open: { [weak self] result in
+            guard let self else {
+                return
+            }
+            let gallery = WallpaperGalleryController(context: self.context, source: .contextResult(result), mode: .default)
+            gallery.apply = { [weak self, weak gallery] wallpaper, options, editedImage, cropRect, brightness, _ in
+                guard let self else {
+                    return
+                }
+                uploadCustomWallpaper(context: self.context, wallpaper: wallpaper, mode: options, editedImage: editedImage, cropRect: cropRect, brightness: brightness, completion: { [weak self, weak gallery] in
+                    self?.controllerNode.scrollToTop(animated: false)
+                    gallery?.dismiss(animated: true)
+                })
+            }
+            self.push(gallery)
+        })
+        self.push(search)
+    }
     
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
@@ -450,9 +476,7 @@ public final class ThemeGridController: ViewController {
     
     @objc func editPressed() {
         self.editingMode = true
-        let doneItem = UIBarButtonItem(title: "___done", style: .done, target: self, action: #selector(self.donePressed))
-        doneItem.staysInRow = true
-        self.navigationItem.setRightBarButton(doneItem, animated: true)
+        self.updateGenericRightBarButtons(animated: true)
         self.controllerNode.updateState { state in
             var state = state
             state.editing = true
@@ -462,7 +486,7 @@ public final class ThemeGridController: ViewController {
     
     @objc func donePressed() {
         self.editingMode = false
-        self.navigationItem.setRightBarButton(UIBarButtonItem(title: self.presentationData.strings.Common_Edit, style: .plain, target: self, action: #selector(self.editPressed)), animated: true)
+        self.updateGenericRightBarButtons(animated: true)
         self.controllerNode.updateState { state in
             var state = state
             state.editing = false
