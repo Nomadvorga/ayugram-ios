@@ -230,34 +230,13 @@ public final class ExteraSettings {
         return self.value(.filterZalgo)
     }
 
-    // "Filter Zalgo": runs of combining marks beyond what real scripts use are dropped.
+    // "Filter Zalgo": repeated or stacked combining overlays are removed while
+    // ordinary isolated diacritics remain intact.
     public func filteredText(_ text: String, force: Bool = false) -> String {
         guard force || self.filterZalgo else {
             return text
         }
-        var result = String.UnicodeScalarView()
-        var combiningRun = 0
-        var changed = false
-        for scalar in text.unicodeScalars {
-            let isCombining: Bool
-            switch scalar.properties.generalCategory {
-            case .nonspacingMark, .enclosingMark:
-                isCombining = true
-            default:
-                isCombining = false
-            }
-            if isCombining {
-                combiningRun += 1
-                if combiningRun > 2 {
-                    changed = true
-                    continue
-                }
-            } else {
-                combiningRun = 0
-            }
-            result.append(scalar)
-        }
-        return changed ? String(result) : text
+        return ExteraZalgoFilter.clean(text)
     }
 
     // MARK: General

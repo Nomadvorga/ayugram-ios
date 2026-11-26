@@ -72,6 +72,28 @@ animations. Those need a separately authorized, already authenticated simulator
 and real UI interaction, followed by inspection of recorded frames under
 `AGENTS.md`. No automated login is attempted.
 
+## Cold-launch observation: one sample only
+
+In attempt 2 of simulator run [45751420234](https://github.com/Nomadvorga/ayugram-ios/actions/runs/45751420234)
+(iPhone SE 3rd generation, iOS 27.2), the ffprobe-indexed recording has frame #30
+at `t=4.7417s` and the next frame #31 at `t=20.2017s`, a `15.460s` still interval.
+The sheet stays blank through this interval; onboarding text first becomes visible
+around frame #57 at `t=21.135s`. In the matching simulator log, SpringBoard
+requests the app at `04:18:02.505`, the first log emitted by the app process is at
+`04:18:16.132`, `[SG.Launch] didFinishLaunching` is at `04:18:18.038`, and the
+window-creation marker is at `04:18:18.354`. The synchronous initial-account-record
+read completes at `04:18:19.587`.
+
+This single fresh-install CI capture places most of the blank interval before
+`didFinishLaunching`; it does not identify why the process becomes visible/logging
+late, establish a repeatable app defect, or measure a normal device's cold launch.
+Do not attribute it to a specific app initializer or the simulator without a repeat
+capture. A second isolated `debug_sim_arm64` run is in progress to collect another
+sample; it has no login or UI interaction and cannot replace an authorized
+device/runtime check. Original local evidence from the first sample is under
+`%LOCALAPPDATA%/Temp/opencode/sim-c56af00f-evidence-attempt2/` and
+`%LOCALAPPDATA%/Temp/opencode/sim-c56af00f-onboarding-sheet/`.
+
 Download `AyuGram-simulator-evidence-<configuration>-<run-number>` for:
 
 - `result.json`: passed/failed, actual runtime/type/UUID, bundle ID, launched PID,

@@ -79,6 +79,13 @@ jobs:
           python3 docs/validation/run_extera_backup_validation.py
           python3 docs/validation/run_extera_ai_backup_validation.py
           python3 docs/validation/run_ayu_settings_store_validation.py
+      - name: Zalgo filter
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 tools/run_extera_xctests.py --warnings-as-errors \
+            Swiftgram/SGSimpleSettings/Sources/ExteraZalgoFilter.swift \
+            Tests/ExteraZalgo/ExteraZalgoFilterTests.swift
       - name: Durable explicit read queue
         if: ${{ !cancelled() }}
         run: |

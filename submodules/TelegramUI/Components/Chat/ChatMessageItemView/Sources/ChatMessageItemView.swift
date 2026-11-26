@@ -712,21 +712,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     private var zalgoCleanedText: String?
 
     public static func cleanedZalgoText(_ source: String) -> String {
-        var scalars: [Unicode.Scalar] = []
-        var consecutiveMarks = 0
-        for scalar in source.unicodeScalars {
-            let category = scalar.properties.generalCategory
-            if category == .nonspacingMark || category == .enclosingMark {
-                consecutiveMarks += 1
-                if consecutiveMarks <= 1 {
-                    scalars.append(scalar)
-                }
-            } else {
-                consecutiveMarks = 0
-                scalars.append(scalar)
-            }
-        }
-        return String(String.UnicodeScalarView(scalars))
+        return ExteraSettings.shared.filteredText(source, force: true)
     }
 
     open func setupItem(_ item: ChatMessageItem, synchronousLoad: Bool) {
