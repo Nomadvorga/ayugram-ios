@@ -14,7 +14,7 @@ Reference versions:
 
 ## Implemented source changes
 
-### Additional integrated source work (2026-11-25)
+### Additional integrated source work (2026-11-25–26)
 
 These additions supersede the corresponding omissions in the earlier table below.
 They are reachable in the application source, but have not passed an Apple build or
@@ -32,6 +32,7 @@ recorded-frame acceptance. Plugins remain excluded.
 | Cloud-chat takeout | Reachable setup/progress/share; takeout authorization, split ranges, server dialog/history pagination, chat/date selection, JSON/HTML, bounded photos/files and ZIP, cancellation/cleanup, confirmed session finish | Cloud-chat subset: no profile/contacts/sessions/stories, resume/background persistence, topic/migration merging, CDN or file-reference refresh. Content cap 2 GiB; no live account run. See [scope](extera-takeout.md) |
 | Photo tools | Cached preview, explicit metadata-stripped JPEG upload to Yandex then Google Lens/Yandex/Bing/TinEye results, metadata/SHA-256/copy; protected/secret/view-once/paid/ad exclusions | No live provider upload test; endpoints may change or require verification; cached photos only. See [scope](extera-image-search.md) |
 | Gestures/camera/title | Repeat double-tap with native permissions, Ask camera mode with locked recording after choice, username chat-list title preserving existing enum IDs | Other swipe/camera/navigation gaps remain |
+| Folder tabs | Opt-in `folderTabBackgrounds` preference is exposed and backed up; selected top and bottom tabs tint from the assigned folder color, while folder-title custom emoji entities continue through the native animated-text renderer | Light/dark contrast, selection transitions, custom-emoji animation and preference persistence still need simulator acceptance and labelled frames |
 | Poll preview | Optional preview of complete Telegram-supplied ordinary-poll counts, return to voting; preserves public voter list after vote/closure | Cannot reveal withheld results or quiz solutions; voting/layout paths need runtime checks |
 
 The portable backup includes new sticker/player/conversion/poll/camera preferences and
