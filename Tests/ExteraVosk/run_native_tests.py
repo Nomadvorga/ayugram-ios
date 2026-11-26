@@ -103,6 +103,23 @@ def main():
         subprocess.run([compiler, '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsyntax-only',
                         '-I', str(native / 'include'), str(ROOT / 'Tests/ExteraVosk/NativeSmoke.c'),
                         str(ROOT / 'Tests/ExteraVosk/NativeHostStub.c')], check=True)
+        smoke_host = Path(temporary) / 'native-smoke-host'
+        subprocess.run([compiler, '-std=c11', '-Wall', '-Wextra', '-Werror',
+                        '-I', str(native / 'include'),
+                        str(ROOT / 'Tests/ExteraVosk/NativeSmoke.c'),
+                        str(ROOT / 'Tests/ExteraVosk/NativeHostStub.c'),
+                        str(ROOT / 'Tests/ExteraVosk/NativeSmokeHostRunner.c'),
+                        '-o', str(smoke_host)], check=True)
+        pcm_path = Path(temporary) / 'host-stub-fixture.pcm'
+        pcm_path.write_bytes(b'\0\0' * 4096)
+        report_path = Path(temporary) / 'host-stub-results.jsonl'
+        subprocess.run([str(smoke_host), 'host-stub-model', str(pcm_path), str(report_path)], check=True)
+        events = [json.loads(line) for line in report_path.read_text(encoding='utf-8').splitlines()]
+        assert [event['event'] for event in events] == [
+            'model_loaded', 'recognizer_created', 'segment', 'final', 'complete'
+        ], events
+        assert events[2]['value']['text'] == 'hello' and events[3]['value']['text'] == 'world', events
+        print('PASS: NativeSmoke.c callable flow with explicit host-only Vosk stub; this is not real SDK evidence', flush=True)
         inflater = Inflater(library)
         rng = random.Random(20261125)
         cases = 0
