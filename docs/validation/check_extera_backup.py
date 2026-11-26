@@ -51,14 +51,16 @@ class BackupSourceChecks(unittest.TestCase):
 
     def test_partial_import_does_not_update_download_transport(self):
         self.assertIn('self.values["simple.downloadSpeedBoost"] != nil', BACKUP)
-        self.assertIn("updateDownloadSpeedBoost: backup.includesDownloadSpeedBoost", UI)
+        self.assertIn("updateDownloadSpeedBoost: bundle.settings.includesDownloadSpeedBoost", UI)
         self.assertIn("if updateDownloadSpeedBoost {", UI)
         self.assertIn("if updates.isEmpty {", UI)
 
     def test_icon_pack_envelope_is_root_owned_and_atomic(self):
-        self.assertIn('"uiIconPacks"', BACKUP)
+        self.assertIn('public static let bundleFormat', BACKUP)
+        self.assertIn('public static func exportBundle', BACKUP)
+        self.assertIn('public static func validateBundle', BACKUP)
         self.assertIn("iconPackBackupData", BACKUP)
-        for expected in ["exportBackup()", "prepareBackupRestore", "restoreBackup", "ExteraUIIconRendering.validate"]:
+        for expected in ["exportBackup()", "prepareBackupRestore", "restoreBackup", "ExteraUIIconRendering.validate", "previousSettings"]:
             self.assertIn(expected, UI)
 
     def test_confirmed_transactions_outlive_controller(self):
@@ -94,8 +96,8 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertLess(write.index("try ExteraAISettings.shared.update"), write.index("setting.write?(value)"))
         self.assertIn("public static func apply(_ backup: ValidatedBackup) throws", BACKUP)
         self.assertIn("public static func reset() throws", BACKUP)
-        for action in ["apply(backup)", "reset()"]:
-            self.assertIn("try ExteraSettingsBackup." + action, UI)
+        self.assertIn("try ExteraSettingsBackup.apply(bundle.settings)", UI)
+        self.assertIn("try ExteraSettingsBackup.reset()", UI)
 
     def test_ai_cache_publishes_only_valid_configuration(self):
         ai = (SOURCES / "ExteraAISettings.swift").read_text(encoding="utf-8")
@@ -107,7 +109,7 @@ class BackupSourceChecks(unittest.TestCase):
         self.assertLess(update.index("self.cachedConfiguration = value"), update.index("self.store.setString"))
 
     def test_native_file_flow_and_confirmation(self):
-        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumFileSize + 1", "confirmReset()", "confirmImport(backup, iconPlan:", "ExteraSettingsBackup.apply(backup)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
+        for expected in ["public func exteraBackupController(context: AccountContext)", "UIActivityViewController", "UIDocumentPickerViewController", "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource", "NSFileCoordinator", "maximumBundleFileSize + 1", "confirmReset()", "confirmImport(bundle, iconPlan:", "ExteraSettingsBackup.apply(bundle.settings)", "ExteraSettingsBackup.reset()", "withUpdatedShowContactsTab", "foldersTabAtBottom", "useExperimentalDownload"]:
             self.assertIn(expected, UI)
         reset = UI.split("private func confirmReset()", 1)[1].split("private func applyShared", 1)[0]
         self.assertLess(reset.index("self.confirm("), reset.index("ExteraSettingsBackup.reset()"))

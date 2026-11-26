@@ -125,7 +125,7 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
                 } else {
                     iconBackup = try ExteraUIIconPackStore.shared.exportBackup()
                 }
-                let data = try ExteraSettingsBackup.exportData(sharedPreferences: .init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: experimental.foldersTabAtBottom), iconPackBackup: iconBackup)
+                let data = try ExteraSettingsBackup.exportBundle(sharedPreferences: .init(showContactsTab: calls.showContactsTab, showCallsTab: calls.showTab, foldersAtBottom: experimental.foldersTabAtBottom), iconPackBackup: iconBackup)
                 try FileManager.default.createDirectory(at: temporaryFile.directory, withIntermediateDirectories: true)
                 let url = temporaryFile.directory.appendingPathComponent("exteragram-settings.json")
                 try data.write(to: url, options: [.atomic, .completeFileProtection])
@@ -176,15 +176,15 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
         // Close Files before presenting validation feedback or the confirmation dialog.
         controller.dismiss(animated: true, completion: { [weak self] in
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = Result { try ExteraSettingsBackup.validate(data: Self.readDocument(url)) }
+                let result = Result { try ExteraSettingsBackup.validateBundle(data: Self.readDocument(url)) }
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.busy = false
                     switch result {
-                    case let .success(backup):
+                    case let .success(bundle):
                         do {
-                            let iconPlan = try self.iconPlan(backup)
-                            self.confirmImport(backup, iconPlan: iconPlan)
+                            let iconPlan = try self.iconPlan(bundle)
+                            self.confirmImport(bundle, iconPlan: iconPlan)
                         } catch {
                             self.showError(importing: true)
                         }
@@ -205,7 +205,7 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
                 guard coordinatedURL.isFileURL else { throw ExteraSettingsBackup.BackupError.malformed }
                 let resource = try coordinatedURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
                 guard resource.isRegularFile == true else { throw ExteraSettingsBackup.BackupError.malformed }
-                if let size = resource.fileSize, size > ExteraSettingsBackup.maximumFileSize {
+                if let size = resource.fileSize, size > ExteraSettingsBackup.maximumBundleFileSize {
                     throw ExteraSettingsBackup.BackupError.fileTooLarge
                 }
                 // Bound the read even if a file provider changes its reported size during coordination.
@@ -214,14 +214,14 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
                 defer { stream.close() }
                 var data = Data()
                 var buffer = [UInt8](repeating: 0, count: 16 * 1024)
-                while data.count <= ExteraSettingsBackup.maximumFileSize {
-                    let maximumRead = min(buffer.count, ExteraSettingsBackup.maximumFileSize + 1 - data.count)
+                while data.count <= ExteraSettingsBackup.maximumBundleFileSize {
+                    let maximumRead = min(buffer.count, ExteraSettingsBackup.maximumBundleFileSize + 1 - data.count)
                     let count = stream.read(&buffer, maxLength: maximumRead)
                     guard count >= 0 else { throw stream.streamError ?? ExteraSettingsBackup.BackupError.malformed }
                     if count == 0 { break }
                     data.append(contentsOf: buffer.prefix(count))
                 }
-                guard data.count <= ExteraSettingsBackup.maximumFileSize else { throw ExteraSettingsBackup.BackupError.fileTooLarge }
+                guard data.count <= ExteraSettingsBackup.maximumBundleFileSize else { throw ExteraSettingsBackup.BackupError.fileTooLarge }
                 return data
             }
         })
@@ -229,8 +229,8 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
         return try result.get()
     }
 
-    private func iconPlan(_ backup: ExteraSettingsBackup.ValidatedBackup) throws -> ExteraUIIconPackBackupPlan? {
-        guard let data = backup.iconPackBackupData else { return nil }
+    private func iconPlan(_ bundle: ExteraSettingsBackup.ValidatedBundle) throws -> ExteraUIIconPackBackupPlan? {
+        guard let data = bundle.iconPackBackupData ?? bundle.settings.iconPackBackupData else { return nil }
         let plan = try ExteraUIIconPackStore.prepareBackupRestore(data)
         for preview in plan.packs {
             try ExteraUIIconRendering.validate(preview)
@@ -238,15 +238,27 @@ private final class ExteraBackupActions: NSObject, UIDocumentPickerDelegate {
         return plan
     }
 
-    private func confirmImport(_ backup: ExteraSettingsBackup.ValidatedBackup, iconPlan: ExteraUIIconPackBackupPlan?) {
+    private func confirmImport(_ bundle: ExteraSettingsBackup.ValidatedBundle, iconPlan: ExteraUIIconPackBackupPlan?) {
         self.confirm(title: self.text("Extera.ImportSettings", "Import Settings"), message: self.text("Extera.ImportSettingsConfirm", "Replace the preferences included in this backup? Accounts, messages, and plugin preferences are kept."), destructive: false, actionTitle: self.text("Extera.ImportSettings", "Import Settings"), action: { [weak self] in
             guard let self else { return }
             do {
-                try ExteraSettingsBackup.apply(backup)
-                if let iconPlan {
-                    try ExteraUIIconPackStore.shared.restoreBackup(iconPlan, validate: ExteraUIIconRendering.validate)
+                let previousSettings = try ExteraSettingsBackup.exportData()
+                try ExteraSettingsBackup.apply(bundle.settings)
+                do {
+                    if let iconPlan {
+                        try ExteraUIIconPackStore.shared.restoreBackup(iconPlan, validate: ExteraUIIconRendering.validate)
+                    }
+                } catch {
+                    // Settings and the icon catalog are separate stores. If the
+                    // icon commit fails, compensate the settings write before
+                    // surfacing the import error; no fallible work follows a
+                    // successful icon publication.
+                    if let rollback = try? ExteraSettingsBackup.validate(data: previousSettings) {
+                        try? ExteraSettingsBackup.apply(rollback)
+                    }
+                    throw error
                 }
-                self.applyShared(backup.sharedPreferences, reset: false, updateDownloadSpeedBoost: backup.includesDownloadSpeedBoost)
+                self.applyShared(bundle.settings.sharedPreferences, reset: false, updateDownloadSpeedBoost: bundle.settings.includesDownloadSpeedBoost)
             } catch {
                 self.showError(importing: true)
             }

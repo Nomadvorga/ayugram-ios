@@ -7,6 +7,8 @@ public enum ExteraSettingsBackup {
     public static let format = "exteragram-ios-settings"
     public static let version = 1
     public static let maximumFileSize = 256 * 1024
+    public static let bundleFormat = "exteragram-ios-backup"
+    public static let maximumBundleFileSize = 192 * 1024 * 1024
 
     public enum BackupError: Error {
         case fileTooLarge
@@ -34,9 +36,8 @@ public enum ExteraSettingsBackup {
     public struct ValidatedBackup {
         fileprivate let values: [String: Value]
         public let sharedPreferences: SharedPreferences?
-        /// The icon-pack envelope is kept as canonical JSON data. The settings
-        /// module validates its JSON shape here; the UI layer performs the
-        /// platform image validation before committing it to the icon store.
+        /// Preserved for import compatibility with version-1 settings files
+        /// exported before icon packs moved into the outer bundle.
         public let iconPackBackupData: Data?
 
         public var settingCount: Int {
@@ -47,6 +48,13 @@ public enum ExteraSettingsBackup {
         public var includesDownloadSpeedBoost: Bool {
             return self.values["simple.downloadSpeedBoost"] != nil
         }
+    }
+
+    /// A validated outer backup. The settings document retains its independent
+    /// 256 KiB bound; icon-pack archives are carried separately in this bundle.
+    public struct ValidatedBundle {
+        public let settings: ValidatedBackup
+        public let iconPackBackupData: Data?
     }
 
     fileprivate enum Value {
@@ -522,7 +530,7 @@ public enum ExteraSettingsBackup {
     private static let settingsByName: [String: Setting] = Dictionary(uniqueKeysWithValues: ExteraSettingsBackup.settings.map { ($0.name, $0) })
 
     /// Call on the main queue, as with the settings screen's property-wrapper setters.
-    public static func exportData(sharedPreferences: SharedPreferences? = nil, iconPackBackup: Data? = nil) throws -> Data {
+    public static func exportData(sharedPreferences: SharedPreferences? = nil) throws -> Data {
         precondition(Thread.isMainThread)
         var values: [String: Any] = [:]
         for setting in self.settings {
@@ -538,14 +546,31 @@ public enum ExteraSettingsBackup {
                 "foldersAtBottom": sharedPreferences.foldersAtBottom,
             ]
         }
-        if let iconPackBackup {
-            guard let iconObject = try JSONSerialization.jsonObject(with: iconPackBackup) as? [String: Any] else {
-                throw BackupError.invalidValue
-            }
-            document["uiIconPacks"] = iconObject
-        }
         let data = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
         guard data.count <= self.maximumFileSize else { throw BackupError.fileTooLarge }
+        return data
+    }
+
+    /// Creates a bounded outer bundle without weakening the settings-document
+    /// limit. The payloads are base64 strings so the outer schema cannot merge
+    /// or reinterpret keys from either independently validated document.
+    public static func exportBundle(sharedPreferences: SharedPreferences? = nil, iconPackBackup: Data? = nil) throws -> Data {
+        precondition(Thread.isMainThread)
+        let settings = try self.exportData(sharedPreferences: sharedPreferences)
+        var document: [String: Any] = [
+            "format": self.bundleFormat,
+            "version": self.version,
+            "settings": settings.base64EncodedString(),
+        ]
+        if let iconPackBackup {
+            guard iconPackBackup.count <= self.maximumBundleFileSize,
+                  (try JSONSerialization.jsonObject(with: iconPackBackup) as? [String: Any]) != nil else {
+                throw BackupError.invalidValue
+            }
+            document["uiIconPacks"] = iconPackBackup.base64EncodedString()
+        }
+        let data = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
+        guard data.count <= self.maximumBundleFileSize else { throw BackupError.fileTooLarge }
         return data
     }
 
@@ -561,7 +586,7 @@ public enum ExteraSettingsBackup {
             throw BackupError.malformed
         }
         guard let document = object as? [String: Any],
-            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared", "uiIconPacks"]),
+            Set(document.keys).isSubset(of: ["format", "version", "settings", "shared"]),
             document["format"] as? String == self.format,
             let rawVersion = document["version"],
             let values = document["settings"] as? [String: Any], !values.isEmpty else {
@@ -596,6 +621,49 @@ public enum ExteraSettingsBackup {
             iconPackBackupData = nil
         }
         return ValidatedBackup(values: validated, sharedPreferences: sharedPreferences, iconPackBackupData: iconPackBackupData)
+    }
+
+    /// Validates the outer envelope and then delegates the nested settings
+    /// document to the ordinary no-write validator.
+    public static func validateBundle(data: Data) throws -> ValidatedBundle {
+        guard data.count <= self.maximumBundleFileSize else { throw BackupError.fileTooLarge }
+        try self.rejectDuplicateKeys(data)
+        let object: Any
+        do {
+            object = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw BackupError.malformed
+        }
+        guard let document = object as? [String: Any] else { throw BackupError.malformed }
+
+        // Version-1 settings files predate the outer bundle. They remain
+        // importable, including their old root-owned icon envelope.
+        if document["format"] as? String == self.format {
+            let settings = try self.validate(data: data)
+            return ValidatedBundle(settings: settings, iconPackBackupData: settings.iconPackBackupData)
+        }
+
+        guard Set(document.keys).isSubset(of: ["format", "version", "settings", "uiIconPacks"]),
+              document["format"] as? String == self.bundleFormat,
+              let rawVersion = document["version"],
+              case let .integer(version) = try Rule.integer(1 ... Int(Int32.max)).validate(rawVersion),
+              version == self.version,
+              let encodedSettings = document["settings"] as? String,
+              let settingsData = Data(base64Encoded: encodedSettings) else {
+            throw BackupError.malformed
+        }
+        let iconPackBackupData: Data?
+        if let rawIconBackup = document["uiIconPacks"] {
+            guard let encodedIconBackup = rawIconBackup as? String,
+                  let iconData = Data(base64Encoded: encodedIconBackup),
+                  (try JSONSerialization.jsonObject(with: iconData) as? [String: Any]) != nil else {
+                throw BackupError.invalidValue
+            }
+            iconPackBackupData = iconData
+        } else {
+            iconPackBackupData = nil
+        }
+        return ValidatedBundle(settings: try self.validate(data: settingsData), iconPackBackupData: iconPackBackupData)
     }
 
     /// Apply only a previously validated document. Missing allowlisted settings retain their current values.
