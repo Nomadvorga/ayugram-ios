@@ -306,23 +306,51 @@ import UIKit
         }
     }
 
-    /// Copy only a bounded regular UTF-8 attachment, never execute it or trust its path extension.
+    /// Copy only a bounded regular file, a UTF-8 `.plugin` source or a package archive, and never
+    /// execute it. The document's name decides the kind: a media-cache path has no extension.
     nonisolated private static func stage(_ url: URL, fileName: String) throws -> URL {
-        guard (fileName as NSString).pathExtension.lowercased() == "plugin" else { throw AyuPluginService.Failure.source }
+        let fileExtension = (fileName as NSString).pathExtension.lowercased()
+        let isPackage = AyuPluginService.packageExtensions.contains(fileExtension)
+        guard isPackage || fileExtension == "plugin" else { throw AyuPluginService.Failure.source }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         let flags = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard flags.isRegularFile == true, flags.isSymbolicLink != true else { throw AyuPluginService.Failure.source }
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
-        let data = try handle.read(upToCount: AyuPluginService.maximumSourceBytes + 1) ?? Data()
-        guard !data.isEmpty, data.count <= AyuPluginService.maximumSourceBytes, String(data: data, encoding: .utf8) != nil else { throw AyuPluginService.Failure.source }
+        var source = Data()
+        if !isPackage {
+            source = try handle.read(upToCount: AyuPluginService.maximumSourceBytes + 1) ?? Data()
+            guard !source.isEmpty, source.count <= AyuPluginService.maximumSourceBytes, String(data: source, encoding: .utf8) != nil else { throw AyuPluginService.Failure.source }
+        }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AyuPluginPreview-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let destination = directory.appendingPathComponent("preview.plugin")
-        do { try data.write(to: destination, options: .atomic) }
-        catch { try? FileManager.default.removeItem(at: directory); throw AyuPluginService.Failure.storage }
+        let destination = directory.appendingPathComponent("preview." + fileExtension)
+        do {
+            if isPackage { try Self.copyPackage(from: handle, to: destination) }
+            else { try source.write(to: destination, options: .atomic) }
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw (error as? AyuPluginService.Failure) ?? AyuPluginService.Failure.storage
+        }
         return destination
+    }
+
+    /// Streams an archive of at most 64 MiB; the service hashes and inspects the copy.
+    nonisolated private static func copyPackage(from handle: FileHandle, to destination: URL) throws {
+        guard FileManager.default.createFile(atPath: destination.path, contents: nil) else { throw AyuPluginService.Failure.storage }
+        let output = try FileHandle(forWritingTo: destination)
+        defer { try? output.close() }
+        var total = 0
+        while true {
+            let chunk: Data
+            do { chunk = try handle.read(upToCount: 1_048_576) ?? Data() } catch { throw AyuPluginService.Failure.source }
+            if chunk.isEmpty { break }
+            total += chunk.count
+            guard total <= AyuPluginService.maximumPackageBytes else { throw AyuPluginService.Failure.source }
+            try output.write(contentsOf: chunk)
+        }
+        guard total > 0 else { throw AyuPluginService.Failure.source }
     }
 
     public override func numberOfSections(in tableView: UITableView) -> Int { self.sections.count }

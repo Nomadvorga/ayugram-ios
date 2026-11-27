@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from functools import wraps
 
+import _ayu_hooks
+import _ayu_xposed
 from ayu_bridge import BridgeError, Registration, UnsupportedAPI, runtime
 
 
@@ -44,12 +46,17 @@ class _SendMessageParams(dict):
     """Supported send fields accept both Android attributes and mapping access.
 
     Native validates replacements and owns account/destination. Undeclared Java
-    fields are not fabricated on this DTO.
+    fields are not fabricated on this DTO: reading another Android field raises
+    ``UnsupportedAPI`` (not ``AttributeError``, which a ``getattr`` default would
+    turn into "the message has none"), and preflight requires the typed hook for it.
     """
     _fields = frozenset({"peer", "message", "caption"})
 
     def __getattr__(self, name):
         if name not in self._fields:
+            from client_utils import SEND_MESSAGE_DEFAULTS
+            if name in SEND_MESSAGE_DEFAULTS:
+                raise UnsupportedAPI(f"Send parameter {name} needs host operation telegram.hooks.send_message")
             raise AttributeError(name)
         return self.get(name)
 
@@ -128,6 +135,120 @@ class PluginMetadata:
     icon: str
     min_version: str
     requirements: list[str]
+
+
+class PluginsConstants:
+    """Constant values of Android's ``com.exteragram.messenger.plugins.PluginsConstants``.
+
+    The Python-local Java class of that name holds the same values; it lives in
+    a class provider, which must not be imported while the SDK itself loads.
+    """
+    PYTHON = "python"
+    SEND_MESSAGE_HOOK = "send_message_hook"
+    STRATEGY = "strategy"
+    PARAMS = "params"
+    UPDATE = "update"
+    UPDATES = "updates"
+    REQUEST = "request"
+    RESPONSE = "response"
+    ERROR = "error"
+    PLUGINS = "plugins"
+    PLUGINS_EXT = ".plugin"
+    PLUGINS_SDK = "plugins-sdk"
+    CREATE_SETTINGS = "create_settings"
+    APP_START = "app_start"
+    APP_STOP = "app_stop"
+    APP_PAUSE = "app_pause"
+    APP_RESUME = "app_resume"
+    ON_APP_EVENT = "on_app_event"
+    ON_PLUGIN_LOAD = "on_plugin_load"
+    ON_PLUGIN_UNLOAD = "on_plugin_unload"
+
+    class Settings:
+        TYPE = "type"
+        KEY = "key"
+        TEXT = "text"
+        SUBTEXT = "subtext"
+        ICON = "icon"
+        ACCENT = "accent"
+        RED = "red"
+        ON_CLICK = "on_click"
+        DEFAULT = "default"
+        ITEMS = "items"
+        HINT = "hint"
+        MULTILINE = "multiline"
+        MAX_LENGTH = "max_length"
+        MASK = "mask"
+        ON_CHANGE = "on_change"
+        TYPE_SWITCH = "switch"
+        TYPE_INPUT = "input"
+        TYPE_SELECTOR = "selector"
+        TYPE_HEADER = "header"
+        TYPE_DIVIDER = "divider"
+        TYPE_TEXT = "text"
+        TYPE_EDIT_TEXT = "edit_text"
+        TYPE_CUSTOM = "custom"
+        VIEW = "view"
+        ITEM = "item"
+        FACTORY = "factory"
+        FACTORY_ARGS = "factory_args"
+        CREATE_SUB_FRAGMENT = "create_sub_fragment"
+        ON_LONG_CLICK = "on_long_click"
+        LINK_ALIAS = "link_alias"
+
+    class Strategy:
+        MODIFY = "MODIFY"
+        CANCEL = "CANCEL"
+        DEFAULT = "DEFAULT"
+        MODIFY_FINAL = "MODIFY_FINAL"
+
+    class Xposed:
+        REPLACE_HOOKED_METHOD = "replace_hooked_method"
+        BEFORE_HOOKED_METHOD = "before_hooked_method"
+        AFTER_HOOKED_METHOD = "after_hooked_method"
+        HOOK_FILTERS = "__hook_filters__"
+
+    class DevServer:
+        MODULE = "dev_server"
+        CLASS = "DevServer"
+        START_SERVER = "start_server"
+        STOP_SERVER = "stop_server"
+
+    class MenuItemTypes:
+        MESSAGE_CONTEXT_MENU = "message_context_menu"
+        DRAWER_MENU = "drawer_menu"
+        MAIN_MENU = "main_menu"
+        CHAT_ACTION_MENU = "chat_action_menu"
+        PROFILE_ACTION_MENU = "profile_action_menu"
+
+    class MenuItemProperties:
+        MENU_TYPE = "menu_type"
+        ITEM_ID = "item_id"
+        TEXT = "text"
+        SUBTEXT = "subtext"
+        ICON = "icon"
+        ON_CLICK = "on_click"
+        ON_LONG_CLICK = "on_long_click"
+        CONDITION = "condition"
+        PRIORITY = "priority"
+
+    class HookFilterTypes:
+        RESULT_IS_NULL = "result_is_null"
+        RESULT_IS_TRUE = "result_is_true"
+        RESULT_IS_FALSE = "result_is_false"
+        RESULT_NOT_NULL = "result_not_null"
+        RESULT_IS_INSTANCE_OF = "result_is_instance_of"
+        RESULT_EQUAL = "result_equal"
+        RESULT_NOT_EQUAL = "result_not_equal"
+        ARGUMENT_IS_NULL = "argument_is_null"
+        ARGUMENT_IS_TRUE = "argument_is_true"
+        ARGUMENT_IS_FALSE = "argument_is_false"
+        ARGUMENT_NOT_NULL = "argument_not_null"
+        ARGUMENT_IS_INSTANCE_OF = "argument_is_instance_of"
+        ARGUMENT_EQUAL = "argument_equal"
+        ARGUMENT_NOT_EQUAL = "argument_not_equal"
+        CONDITION = "condition"
+        OR = "or"
 
 
 class PluginError(Exception):
@@ -302,6 +423,12 @@ class _Logger:
     exception = error
 
 
+def _lifecycle():
+    # extera_utils imports this module, so the lifecycle helpers are bound lazily.
+    from extera_utils import lifecycle
+    return lifecycle
+
+
 class BasePlugin:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -310,34 +437,67 @@ class BasePlugin:
         unload = cls.__dict__.get("on_plugin_unload")
         if unload is not None:
             @wraps(unload)
-            def unload_and_cleanup(self, *args, **kw):
-                try:
+            def cleanup_and_unload(self, *args, **kw):
+                # Android stops the lifecycle scope, which runs the registered
+                # cleanups, before it calls on_plugin_unload.
+                self._run_cleanups()
+                with _lifecycle().cleanup_context(self._lifecycle):
                     return unload(self, *args, **kw)
-                finally:
-                    self._run_cleanups()
-            cls.on_plugin_unload = unload_and_cleanup
+            cls.on_plugin_unload = cleanup_and_unload
+
+    def __new__(cls, *args, **kwargs):
+        # Android's host fills a plugin in after construction, so an __init__
+        # override that never calls super() must still yield a usable plugin.
+        self = super().__new__(cls)
+        BasePlugin.__init__(self)
+        return self
 
     def __init__(self):
         self._ayu_scope = runtime.require()
-        self.logger = _Logger(self._ayu_scope)
-        self._ayu_cleanup = []
+        self._lifecycle = _lifecycle().capture_scope(type(self))
         self._ayu_request_hooks = {}
+        self._ayu_overrides = {}
         self.error_message = None
 
     def _scope(self):
         return runtime.require(self._ayu_scope)
 
+    def _metadata(self, name, key, default):
+        if name in self._ayu_overrides:
+            return self._ayu_overrides[name]
+        return self._scope().metadata.get(key, default)
+
+    @property
+    def stop_event(self):
+        """Set when this generation starts unloading; plugin threads should watch it."""
+        import _ayu_threads
+        return _ayu_threads.stop_event(self._ayu_scope)
+
     @property
     def id(self):
         return self._scope().plugin_id
 
+    @id.setter
+    def id(self, value):
+        # Settings, hooks and callbacks are owned by the native-established id.
+        if value != self._scope().plugin_id:
+            raise BridgeError("OWNERSHIP", "A plugin cannot take another plugin id")
+
     @property
     def name(self):
-        return self._scope().metadata.get("__name__", self.id)
+        return self._metadata("name", "__name__", self.id)
+
+    @name.setter
+    def name(self, value):
+        self._ayu_overrides["name"] = value
 
     @property
     def version(self):
-        return self._scope().metadata.get("__version__", "1.0")
+        return self._metadata("version", "__version__", "1.0")
+
+    @version.setter
+    def version(self, value):
+        self._ayu_overrides["version"] = value
 
     def client(self, account=None):
         self._scope()
@@ -346,49 +506,79 @@ class BasePlugin:
 
     @property
     def description(self):
-        return self._scope().metadata.get("__description__", "")
+        return self._metadata("description", "__description__", "")
+
+    @description.setter
+    def description(self, value):
+        self._ayu_overrides["description"] = value
 
     @property
     def author(self):
-        return self._scope().metadata.get("__author__", "")
+        return self._metadata("author", "__author__", "")
+
+    @author.setter
+    def author(self, value):
+        self._ayu_overrides["author"] = value
 
     @property
     def icon(self):
-        return self._scope().metadata.get("__icon__")
+        return self._metadata("icon", "__icon__", None)
+
+    @icon.setter
+    def icon(self, value):
+        self._ayu_overrides["icon"] = value
 
     @property
     def min_version(self):
-        return self._scope().metadata.get("__min_version__", "")
+        return self._metadata("min_version", "__min_version__", "")
+
+    @min_version.setter
+    def min_version(self, value):
+        self._ayu_overrides["min_version"] = value
 
     @property
     def requirements(self):
-        return list(self._scope().metadata.get("__requirements__", []))
+        if "requirements" in self._ayu_overrides:
+            return self._ayu_overrides["requirements"]
+        import _ayu_policy
+        return _ayu_policy.requirement_list(self._scope().metadata.get("__requirements__", [])) or []
+
+    @requirements.setter
+    def requirements(self, value):
+        self._ayu_overrides["requirements"] = value
 
     @property
     def enabled(self):
+        if "enabled" in self._ayu_overrides:
+            return self._ayu_overrides["enabled"]
         return self._scope().state == "active"
+
+    @enabled.setter
+    def enabled(self, value):
+        # Android keeps this as a plain attribute; the host alone enables a plugin.
+        self._ayu_overrides["enabled"] = value
 
     @property
     def initialized(self):
+        if "initialized" in self._ayu_overrides:
+            return self._ayu_overrides["initialized"]
         return self._scope().state == "active"
+
+    @initialized.setter
+    def initialized(self, value):
+        self._ayu_overrides["initialized"] = value
 
     def on_plugin_load(self):
         pass
+
+    def _invoke_plugin_unload(self):
+        return self.on_plugin_unload()
 
     def on_plugin_unload(self):
         self._run_cleanups()
 
     def _run_cleanups(self):
-        pending, self._ayu_cleanup = self._ayu_cleanup, []
-        first_error = None
-        for cleanup in reversed(pending):
-            try:
-                cleanup()
-            except Exception as error:
-                if first_error is None:
-                    first_error = error
-        if first_error is not None:
-            raise first_error
+        self._lifecycle.close()
 
     def on_app_event(self, event_type):
         pass
@@ -404,11 +594,15 @@ class BasePlugin:
 
     def get_setting(self, key, default=None):
         self._scope()
+        if not key or self.error_message:
+            return default
         from plugin_settings import get_setting
         return get_setting(key, default)
 
     def set_setting(self, key, value, reload_settings=False):
         self._scope()
+        if not key or self.error_message:
+            return None
         from plugin_settings import set_setting
         return set_setting(key, value, reload_settings=reload_settings)
 
@@ -426,35 +620,87 @@ class BasePlugin:
         return runtime.call("state.set", {"key": self._key(key), "value": value})
 
     def export_settings(self):
+        if self.error_message:
+            return {}
         return self.get_all_settings()
 
     def import_settings(self, settings, reload_settings=True):
         self._scope()
+        if self.error_message:
+            return None
         from plugin_settings import set_all_settings
         return set_all_settings(self.id, settings, reload_settings=reload_settings)
 
-    def register_cleanup(self, callback):
-        scope = self._scope()
-        if scope.state == "unloading":
-            raise BridgeError("PLUGIN_UNLOADING", "Cannot register cleanup during unload")
-        if not callable(callback):
-            raise TypeError("Cleanup must be callable")
-        if len(self._ayu_cleanup) >= 1024:
-            raise BridgeError("RESOURCE_LIMIT", "Plugin cleanup limit reached")
-        self._ayu_cleanup.append(callback)
-        return callback
+    def register_cleanup(self, cleanup):
+        self._scope()
+        return self._lifecycle.register_cleanup(cleanup)
+
+    @property
+    def logger(self):
+        custom = self.__dict__.get("_custom_logger")
+        if custom is not None:
+            return custom
+        self._scope()
+        from log_utils import get_logger
+        return get_logger()
+
+    @logger.setter
+    def logger(self, value):
+        self.__dict__["_custom_logger"] = value
 
     def log(self, message):
-        return self.logger.info(message)
+        from android_utils import log
+        return log(f"[{self.id}] {message}")
+
+    def add_file_hook(self, file_info):
+        self._scope()
+        from file_utils import FilesController
+        if not file_info or not isinstance(file_info, FilesController.FileInfo):
+            raise ValueError("You must provide a file info (instance of FilesController.FileInfo)")
+        return FilesController.register(file_info)
+
+    def remove_file_hook(self, ext, secret):
+        self._scope()
+        if not ext or not secret:
+            raise ValueError("You must provide a file extension and secret for unregister")
+        from file_utils import FilesController
+        return FilesController.unregister(ext, secret)
+
+    def add_intent_hook(self, info, type):
+        self._scope()
+        from intents import IntentsManager
+        if not info or not isinstance(info, IntentsManager.HandlerInfo):
+            raise ValueError("You must provide a handler info (instance of IntentsManager.HandlerInfo)")
+        if not isinstance(type, IntentHookType):
+            raise ValueError("You must provide a handler type (instance of IntentsManager.HandlerType)")
+        if type == IntentHookType.BEFORE:
+            return IntentsManager.new_global_before_handler(info)
+        return IntentsManager.new_global_after_handler(info)
+
+    def remove_intent_hook(self, handler_id):
+        self._scope()
+        from intents import IntentsManager
+        if not handler_id or not isinstance(handler_id, (IntentsManager.HandlerHandle, str)):
+            raise ValueError("You must provide a handler info (instance of IntentsManager.HandlerHandle)")
+        if isinstance(handler_id, str):
+            return IntentsManager.unhandle(handler_id)
+        return handler_id.unhandle()
 
     def add_on_send_message_hook(self, priority=0):
         self._scope()
+        if _ayu_hooks.typed_send_hook():
+            return _ayu_hooks.add_send_hook(self, int(priority))
         def callback(account, params):
             if isinstance(params, dict):
                 params = _SendMessageParams(params)
             return self.on_send_message_hook(account, params)
-        return runtime.register("hook", {"kind": "send_message", "priority": int(priority),
-                                          "callback": self._account_hook(callback, 0)})
+        # Android keeps a plugin's hooks in a set: adding the send-message hook again changes nothing.
+        registered = self.__dict__.get("_ayu_send_registration")
+        if registered is None or registered.closed:
+            registered = runtime.register("hook", {"kind": "send_message", "priority": int(priority),
+                                                    "callback": self._account_hook(callback, 0)})
+            self.__dict__["_ayu_send_registration"] = registered
+        return registered
 
     def _account_hook(self, function, account_index):
         @wraps(function)
@@ -472,6 +718,11 @@ class BasePlugin:
             raise ValueError("Request hook name is required")
         if type(match_substring) is not bool:
             raise TypeError("match_substring must be bool")
+        if name == _ayu_hooks.SEND_MESSAGE_HOOK and not match_substring:
+            # Android registers the send-message hook under this event name.
+            return self.add_on_send_message_hook(priority)
+        if _ayu_hooks.typed_hooks():
+            return _ayu_hooks.add_hook(self, name, match_substring, int(priority))
         registration = runtime.register("hook", {"kind": "request", "name": name,
                                           "match_substring": match_substring, "priority": int(priority),
                                           "pre": self._account_hook(self.pre_request_hook, 1),
@@ -483,7 +734,11 @@ class BasePlugin:
 
     def remove_hook(self, registration):
         self._scope()
+        if isinstance(registration, _ayu_hooks.EventHook):
+            return registration.cancel()
         if isinstance(registration, str):
+            if "_ayu_hook_state" in self.__dict__:
+                _ayu_hooks.remove_hook(self, registration)
             registrations = self._ayu_request_hooks.get(registration, [])
             for owned in list(registrations):
                 owned.cancel()
@@ -517,10 +772,15 @@ class BasePlugin:
             raise TypeError("Pass MenuItemData or keyword config, not both")
         if not isinstance(item, MenuItemData):
             raise TypeError("Expected MenuItemData")
+        if _ayu_hooks.typed_menus():
+            return _ayu_hooks.add_menu_item(self, item)
         return runtime.register("menu", item.to_bridge())
 
     def remove_menu_item(self, registration):
         self._scope()
+        if isinstance(registration, str) and "_ayu_hook_state" in self.__dict__:
+            if _ayu_hooks.remove_menu_item(self, registration):
+                return True
         if isinstance(registration, str):
             registration = self._scope().registrations.get(("menu", registration))
             if registration is None:
@@ -560,12 +820,21 @@ class BasePlugin:
         return runtime.register("hook", config)
 
     def hook_method(self, method_or_constructor, xposed_hook=None, priority=None, **callbacks):
+        self._scope()
+        # A method a hook point serves is kept by the SDK; every other member needs ``hooks.java_method``.
+        mapped = _ayu_xposed.hook_method(self, method_or_constructor, xposed_hook, priority, **callbacks)
+        if mapped is not NotImplemented:
+            return mapped
         return self._method_hook("java_method", xposed_hook, priority,
                                  method=method_or_constructor, **callbacks)
 
     def hook_all_methods(self, hook_class, method_name, xposed_hook=None, priority=None, **callbacks):
         if not isinstance(method_name, str) or not method_name:
             raise ValueError("Method name is required")
+        self._scope()
+        mapped = _ayu_xposed.hook_all_methods(self, hook_class, method_name, xposed_hook, priority, **callbacks)
+        if mapped is not NotImplemented:
+            return mapped
         return self._method_hook("java_all_methods", xposed_hook, priority,
                                  java_class=hook_class, name=method_name, **callbacks)
 
@@ -574,4 +843,14 @@ class BasePlugin:
                                  java_class=hook_class, **callbacks)
 
     def unhook_method(self, registration):
+        if isinstance(registration, _ayu_xposed.Unhook):
+            self._scope()
+            return registration.unhook()
         return self.remove_hook(registration)
+
+    def _partial_hook(self, *args, **kwargs):
+        self._scope()
+        raise UnsupportedAPI("Partial hooks patch Android bytecode and are unavailable on iOS")
+
+    hook_call_site = hook_field_read = hook_field_write = _partial_hook
+    hook_string_constant = hook_return_value = unhook_partial = _partial_hook

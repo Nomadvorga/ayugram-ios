@@ -1011,7 +1011,10 @@ public final class Network: NSObject {
         self.rustEngineDisabled = Atomic(value: rustEngineDisabled)
         self.rustEngineWaitsForWebProxy = Atomic(value: rustEngineWaitsForWebProxy)
         self.mainSession = mainSession
-        self.requestService = mainSession.requestService
+        // MARK: AyuGram
+        let ayuPluginRequestService = AyuPluginHookedRequestService(mainSession.requestService)
+        self.requestService = ayuPluginRequestService
+        //
         self.mainSessionDelegate = mainSessionDelegate
         self.telemetry = telemetry
         self._connectionStatus = _connectionStatus
@@ -1027,6 +1030,9 @@ public final class Network: NSObject {
         super.init()
         
         mainSessionDelegate.network = self
+        // MARK: AyuGram
+        ayuPluginRequestService.network = self
+        //
         
         let _contextProxyId = self._contextProxyId
         let networkHelper = NetworkHelper(requestPublicKeys: { [weak self] id in

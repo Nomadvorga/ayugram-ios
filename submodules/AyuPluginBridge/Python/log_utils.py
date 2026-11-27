@@ -263,20 +263,20 @@ class Logger:
             for logger in chain:
                 logger._dispatching = False
 
-    def verbose(self, msg, *args, **kwargs):
-        return self.log(LogLevel.VERBOSE, msg, *args, **kwargs)
+    def verbose(self, msg, *args, exc_info=None, stacklevel=1):
+        return self.log(LogLevel.VERBOSE, msg, *args, exc_info=exc_info, stacklevel=stacklevel)
 
-    def debug(self, msg, *args, **kwargs):
-        return self.log(LogLevel.DEBUG, msg, *args, **kwargs)
+    def debug(self, msg, *args, exc_info=None, stacklevel=1):
+        return self.log(LogLevel.DEBUG, msg, *args, exc_info=exc_info, stacklevel=stacklevel)
 
-    def info(self, msg, *args, **kwargs):
-        return self.log(LogLevel.INFO, msg, *args, **kwargs)
+    def info(self, msg, *args, exc_info=None, stacklevel=1):
+        return self.log(LogLevel.INFO, msg, *args, exc_info=exc_info, stacklevel=stacklevel)
 
-    def warning(self, msg, *args, **kwargs):
-        return self.log(LogLevel.WARNING, msg, *args, **kwargs)
+    def warning(self, msg, *args, exc_info=None, stacklevel=1):
+        return self.log(LogLevel.WARNING, msg, *args, exc_info=exc_info, stacklevel=stacklevel)
 
-    def error(self, msg, *args, **kwargs):
-        return self.log(LogLevel.ERROR, msg, *args, **kwargs)
+    def error(self, msg, *args, exc_info=None, stacklevel=1):
+        return self.log(LogLevel.ERROR, msg, *args, exc_info=exc_info, stacklevel=stacklevel)
 
     def exception(self, msg, *args, stacklevel=1):
         return self.log(LogLevel.ERROR, msg, *args, exc_info=True, stacklevel=stacklevel)

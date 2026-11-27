@@ -79,5 +79,11 @@ func finalStateWithDifference(accountPeerId: PeerId, postbox: Postbox, network: 
         updatedState.addSecretMessages(encryptedMessages)
     }
     
-    return finalStateWithUpdates(accountPeerId: accountPeerId, postbox: postbox, network: network, state: updatedState, updates: updates, shouldPoll: false, missingUpdates: false, shouldResetChannels: true, updatesDate: nil, asyncResetChannels: asyncResetChannels)
+    // MARK: AyuGram
+    let ayuPluginState = updatedState
+    return ayuPluginHookedDifferenceUpdates(accountPeerId: accountPeerId, updates: updates)
+    |> mapToSignal { updates -> Signal<AccountFinalState, NoError> in
+        return finalStateWithUpdates(accountPeerId: accountPeerId, postbox: postbox, network: network, state: ayuPluginState, updates: updates, shouldPoll: false, missingUpdates: false, shouldResetChannels: true, updatesDate: nil, asyncResetChannels: asyncResetChannels)
+    }
+    //
 }

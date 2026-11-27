@@ -196,13 +196,84 @@ class RequestsCompatibilityTests(unittest.TestCase):
                 with self.assertRaises(compat.InvalidURL) as caught:
                     compat.get(url)
                 self.assertNotIn("secret", str(caught.exception))
-            for options in ({"stream": True}, {"verify": False}, {"timeout": None},
+            for options in ({"stream": 1}, {"verify": False}, {"timeout": None},
                             {"timeout": (1, 2)}, {"files": {"x": "unsupported"}},
                             {"headers": {"Authorization": "Bearer secret\r\nX-Evil:1"}},
                             {"headers": {"Host": "another.example"}}):
                 with self.assertRaises(compat.UnsupportedOption):
                     compat.get("https://example.test/", **options)
             factory.assert_not_called()
+
+    def test_streamed_response_reads_its_body_from_the_connection(self):
+        raw = FakeResponse(b"abcdefghij", headers={"Content-Type": "application/octet-stream"})
+        response, _ = self.run_request(raw, stream=True)
+        self.assertFalse(raw.closed)
+        self.assertIs(response.raw, raw)
+        chunks = response.iter_content(chunk_size=4)
+        self.assertEqual(next(chunks), b"abcd")
+        # The rest of a partly read body is still its content, and reading it releases the connection.
+        self.assertEqual(response.content, b"efghij")
+        self.assertTrue(raw.closed)
+        self.assertEqual(list(response.iter_content(4)), [b"efgh", b"ij"])
+        self.assertEqual(response.raw.read(), b"")
+
+        raw = FakeResponse(b"abcdefghij")
+        response, _ = self.run_request(raw, stream=True)
+        self.assertEqual(list(response.iter_content(chunk_size=None)), [b"abcdefghij"])
+        self.assertTrue(raw.closed)
+        with self.assertRaises(compat.StreamConsumedError):
+            response.iter_content(4)
+        with self.assertRaises(RuntimeError):
+            response.content
+        self.assertTrue(issubclass(compat.exceptions.StreamConsumedError, (compat.RequestException, TypeError)))
+
+        raw = FakeResponse(gzip.compress(b"x" * 5000), headers={"Content-Encoding": "gzip"})
+        with self.run_request(raw, stream=True)[0] as response:
+            self.assertEqual(b"".join(response.iter_content(512)), b"x" * 5000)
+        raw = FakeResponse(b"not gzip at all", headers={"Content-Encoding": "gzip"})
+        with self.assertRaises(compat.ContentDecodingError):
+            list(self.run_request(raw, stream=True)[0].iter_content(8))
+        raw = FakeResponse(b"body", headers={"Content-Encoding": "br"})
+        with self.assertRaises(compat.ContentDecodingError):
+            self.run_request(raw, stream=True)
+        self.assertTrue(raw.closed)
+
+        # Closing gives the connection back before the body is read; a context manager does the same.
+        raw = FakeResponse(b"unread")
+        with self.run_request(raw, stream=True)[0] as response:
+            self.assertFalse(raw.closed)
+        self.assertTrue(raw.closed)
+        with self.assertRaises(TypeError):
+            response.iter_content("4")
+        with self.assertRaises(compat.UnsupportedOption):
+            response.iter_content(4, decode_unicode=True)
+
+        # A buffered response answers the same calls from its content; HEAD has no body to stream.
+        response, _ = self.run_request(FakeResponse(b"abcdef"))
+        self.assertEqual((list(response.iter_content(4)), list(response.iter_content(None))), ([b"abcd", b"ef"], [b"abcdef"]))
+        raw = FakeResponse(b"")
+        response, _ = self.run_request(raw, method="HEAD", stream=True)
+        self.assertEqual((response.content, raw.closed), (b"", True))
+
+    def test_streamed_content_is_bounded_and_read_errors_are_connection_errors(self):
+        class Broken(FakeResponse):
+            def read(self, size=-1):
+                raise socket.timeout("slow")
+
+        with self.assertRaises(compat.ConnectionError):
+            list(self.run_request(Broken(b"x"), stream=True)[0].iter_content(4))
+        raw = FakeResponse(b"x" * 100)
+        response, _ = self.run_request(raw, stream=True)
+        with patch.object(compat, "MAX_RESPONSE_BYTES", 64), self.assertRaises(compat.ContentTooLarge):
+            response.content
+        self.assertTrue(raw.closed)
+
+    def test_utils_are_the_standard_library_functions(self):
+        from urllib import parse
+        self.assertIs(sys.modules[compat.__name__ + ".utils"], compat.utils)
+        self.assertEqual((compat.utils.quote, compat.utils.unquote, compat.utils.urlparse, compat.utils.urlunparse),
+                         (parse.quote, parse.unquote, parse.urlparse, parse.urlunparse))
+        self.assertEqual((compat.utils.quote("a b/ю"), compat.utils.quote("a b/c", safe="")), ("a%20b/%D1%8E", "a%20b%2Fc"))
 
     def test_elapsed_deadline_checks_without_live_network(self):
         raw = FakeResponse(b"hello")

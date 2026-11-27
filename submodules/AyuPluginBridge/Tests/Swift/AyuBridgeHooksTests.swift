@@ -59,10 +59,9 @@ final class AyuBridgeHooksTests: XCTestCase {
 
     func testPublishRunsInPriorityOrderAndReplacementChains() throws {
         let registry = AyuBridgeHookRegistry()
-        let order: @Sendable (NSMutableString) -> Void = { $0.append("x") }
-        let log = NSMutableString()
+        let log = AyuTestBox("")
         _ = try registry.subscribe(pluginID: "late", point: .messageSendPre, priority: 10, capabilities: self.capabilities([AyuBridgeCapability("messages.send")])) { payload in
-            order(log)
+            log.update { $0.append("x") }
             var updated = payload
             updated["text"] = .string("late saw \(payload["text"]?.string ?? "")")
             return .replace(updated)
@@ -73,7 +72,7 @@ final class AyuBridgeHooksTests: XCTestCase {
             return .replace(updated)
         }
         let result = try registry.publish(.messageSendPre, payload: ["text": .string("original")])
-        XCTAssertEqual(log as String, "xx")
+        XCTAssertEqual(log.value, "x")
         XCTAssertEqual(result.payload["text"], .string("late saw first"))
         XCTAssertNil(result.cancelled)
         XCTAssertTrue(result.failures.isEmpty)
@@ -82,11 +81,11 @@ final class AyuBridgeHooksTests: XCTestCase {
     func testCancelStopsChainOnlyForMutatingPoints() throws {
         let registry = AyuBridgeHookRegistry()
         _ = try registry.subscribe(pluginID: "canceller", point: .messageSendPre, capabilities: self.capabilities([AyuBridgeCapability("messages.send")])) { _ in .cancel("blocked") }
-        var reached = false
-        _ = try registry.subscribe(pluginID: "after", point: .messageSendPre, capabilities: self.capabilities([AyuBridgeCapability("messages.send")])) { _ in reached = true; return .proceed }
+        let reached = AyuTestBox(false)
+        _ = try registry.subscribe(pluginID: "after", point: .messageSendPre, capabilities: self.capabilities([AyuBridgeCapability("messages.send")])) { _ in reached.value = true; return .proceed }
         let mutating = try registry.publish(.messageSendPre, payload: [:])
         XCTAssertEqual(mutating.cancelled, "blocked")
-        XCTAssertFalse(reached)
+        XCTAssertFalse(reached.value)
 
         _ = try registry.subscribe(pluginID: "observer", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in .cancel("blocked") }
         let observe = try registry.publish(.messageReceived, payload: [:])
@@ -105,10 +104,10 @@ final class AyuBridgeHooksTests: XCTestCase {
     func testSinkFailureIsIsolatedPerPlugin() throws {
         let registry = AyuBridgeHookRegistry()
         _ = try registry.subscribe(pluginID: "broken", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in throw AyuBridgeFailure.unsupported("boom") }
-        var ran = false
-        _ = try registry.subscribe(pluginID: "healthy", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in ran = true; return .proceed }
+        let ran = AyuTestBox(false)
+        _ = try registry.subscribe(pluginID: "healthy", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in ran.value = true; return .proceed }
         let result = try registry.publish(.messageReceived, payload: [:])
-        XCTAssertTrue(ran)
+        XCTAssertTrue(ran.value)
         XCTAssertEqual(result.failures["broken"], "Unsupported API: boom")
         XCTAssertTrue(result.failures.keys.contains("broken"))
         XCTAssertNil(result.failures["healthy"])
@@ -127,12 +126,12 @@ final class AyuBridgeHooksTests: XCTestCase {
 
     func testOversizedPayloadThrowsBeforeSinksRun() throws {
         let registry = AyuBridgeHookRegistry(maxPayloadBytes: 64)
-        var ran = false
-        _ = try registry.subscribe(pluginID: "p", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in ran = true; return .proceed }
+        let ran = AyuTestBox(false)
+        _ = try registry.subscribe(pluginID: "p", point: .messageReceived, capabilities: self.capabilities([AyuBridgeCapability("messages.read")])) { _ in ran.value = true; return .proceed }
         XCTAssertThrowsError(try registry.publish(.messageReceived, payload: ["text": .string(String(repeating: "a", count: 1024))])) { error in
             guard case let AyuBridgeHookError.payloadTooLarge(size) = error as! AyuBridgeHookError else { return XCTFail("wrong error") }
             XCTAssertGreaterThan(size, 64)
         }
-        XCTAssertFalse(ran)
+        XCTAssertFalse(ran.value)
     }
 }

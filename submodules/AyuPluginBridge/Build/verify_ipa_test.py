@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import io
+import json
 import plistlib
 import struct
 import tempfile
@@ -25,6 +26,26 @@ MARKER = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/lib-dynload/_bi
 SDK_PREFIX = f"{APP}/AyuPluginSDK.bundle/Python/"
 ENCODINGS = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/encodings/__init__.py"
 SMOKE = f"{APP}/AyuPluginSDK.bundle/Resources/bridge_smoke.plugin"
+PACKAGE_MANIFEST = f"{APP}/AyuPythonResources.bundle/PYTHON_PACKAGES.json"
+LIBRARY = f"{APP}/AyuPythonResources.bundle/python/lib/python3.15/"
+
+
+def package_entries(lock=verify.PACKAGES_LOCK, *, extra_files=None):
+    """Synthetic sources for every pinned distribution and the manifest prepare.py would write."""
+    entries, packages = {}, []
+    for package in json.loads(lock.read_text())["packages"]:
+        dist_info = f"{package['name'].replace('-', '_')}-{package['version']}.dist-info"
+        files = {f"{module}/__init__.py": f"# synthetic {module}\n".encode() for module in package["modules"]}
+        files[f"{dist_info}/METADATA"] = f"Name: {package['name']}\nVersion: {package['version']}\n".encode()
+        if package["name"] == "certifi":
+            files["certifi/cacert.pem"] = b"synthetic roots\n"
+        files.update((extra_files or {}).get(package["name"], {}))
+        entries.update({LIBRARY + name: data for name, data in files.items()})
+        packages.append({"name": package["name"], "version": package["version"], "sha256": package["sha256"],
+                         "license": package["license"], "modules": sorted(package["modules"]),
+                         "files": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}})
+    entries[PACKAGE_MANIFEST] = json.dumps({"schema": 1, "library": "python/lib/python3.15", "packages": packages}).encode()
+    return entries
 
 
 def macho(*, install_id=None, loads=(), rpaths=(), platform=2, subtype=0, load_kind=0xC):
@@ -72,6 +93,7 @@ def fixture():
         SMOKE: b"# synthetic smoke source\n",
     }
     entries.update({SDK_PREFIX + name: b"# synthetic SDK source\n" for name in verify.SDK_FILES})
+    entries.update(package_entries())
     for framework, install_id in (("Python", PYTHON_ID), (EXT, EXT_ID)):
         base = f"{APP}/Frameworks/{framework}.framework"
         entries[base + "/Info.plist"] = plistlib.dumps({"CFBundleExecutable": framework})
@@ -357,6 +379,111 @@ class VerifyIPAHelperTests(unittest.TestCase):
         del entries[MARKER]
         with self.assertRaisesRegex(verify.VerificationError, "inventory"):
             self.verify_entries(entries)
+
+    def test_bundled_packages_are_exactly_the_pinned_lock(self):
+        result = self.verify_entries(fixture())
+        pinned = json.loads(verify.PACKAGES_LOCK.read_text())["packages"]
+        self.assertEqual(result["python_packages"], len(pinned))
+        self.assertGreater(result["python_package_files"], len(pinned))
+
+        def manifest_with(change):
+            entries = fixture()
+            manifest = json.loads(entries[PACKAGE_MANIFEST])
+            change(manifest)
+            entries[PACKAGE_MANIFEST] = json.dumps(manifest).encode()
+            return entries
+
+        cases = {
+            "version": lambda manifest: manifest["packages"][0].update(version="0.0.1"),
+            "checksum": lambda manifest: manifest["packages"][0].update(sha256="0" * 64),
+            "modules": lambda manifest: manifest["packages"][0].update(modules=["other"]),
+            "dropped": lambda manifest: manifest["packages"].pop(),
+            "added": lambda manifest: manifest["packages"].append(dict(manifest["packages"][0], name="unpinned")),
+            "repeated": lambda manifest: manifest["packages"].append(manifest["packages"][0]),
+            "library": lambda manifest: manifest.update(library="python/lib/python3.14"),
+        }
+        for label, change in cases.items():
+            with self.subTest(label=label), self.assertRaisesRegex(verify.VerificationError, "differ from the pinned lock"):
+                self.verify_entries(manifest_with(change))
+        for label, change in {"no packages": lambda manifest: manifest.pop("packages"),
+                              "no files": lambda manifest: manifest["packages"][0].pop("files"),
+                              "list": lambda manifest: manifest.update(packages="x")}.items():
+            with self.subTest(label=label), self.assertRaisesRegex(verify.VerificationError, "malformed Python package manifest"):
+                self.verify_entries(manifest_with(change))
+        entries = fixture()
+        del entries[PACKAGE_MANIFEST]
+        with self.assertRaisesRegex(verify.VerificationError, "missing or malformed Python package manifest"):
+            self.verify_entries(entries)
+        entries[PACKAGE_MANIFEST] = b"not json"
+        with self.assertRaisesRegex(verify.VerificationError, "missing or malformed Python package manifest"):
+            self.verify_entries(entries)
+
+    def test_bundled_package_files_must_match_their_manifest_hashes(self):
+        first = json.loads(verify.PACKAGES_LOCK.read_text())["packages"][0]
+        source = LIBRARY + first["modules"][0] + "/__init__.py"
+        entries = fixture()
+        entries[source] = b"# modified after packaging\n"
+        with self.assertRaisesRegex(verify.VerificationError, "differs from its manifest"):
+            self.verify_entries(entries)
+        entries = fixture()
+        del entries[source]
+        with self.assertRaisesRegex(verify.VerificationError, "missing Python package file"):
+            self.verify_entries(entries)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fixture.ipa"
+            with zipfile.ZipFile(path, "w") as archive:
+                for name, data in fixture().items():
+                    info = zipfile.ZipInfo(name)
+                    info.external_attr = ((0o120777 if name == source else 0o100644) << 16)
+                    archive.writestr(info, data)
+            with self.assertRaisesRegex(verify.VerificationError, "differs from its manifest"):
+                verify.verify_ipa(path)
+
+    def test_manifest_cannot_omit_a_pinned_module_or_the_certificate_roots(self):
+        def without(suffix):
+            entries = fixture()
+            manifest = json.loads(entries[PACKAGE_MANIFEST])
+            for package in manifest["packages"]:
+                package["files"] = {name: digest for name, digest in package["files"].items() if not name.endswith(suffix)}
+            entries[PACKAGE_MANIFEST] = json.dumps(manifest).encode()
+            return entries
+
+        with self.assertRaisesRegex(verify.VerificationError, "pinned module is not bundled"):
+            self.verify_entries(without("/__init__.py"))
+        with self.assertRaisesRegex(verify.VerificationError, "certifi roots are not bundled"):
+            self.verify_entries(without("cacert.pem"))
+        entries = fixture()
+        manifest = json.loads(entries[PACKAGE_MANIFEST])
+        manifest["packages"][0]["files"]["../../../Info.plist"] = "0" * 64
+        entries[PACKAGE_MANIFEST] = json.dumps(manifest).encode()
+        with self.assertRaisesRegex(verify.VerificationError, "unsafe path in Python package manifest"):
+            self.verify_entries(entries)
+
+    def test_distribution_outside_the_manifest_is_rejected(self):
+        entries = fixture()
+        entries[LIBRARY + "stowaway-1.0.dist-info/METADATA"] = b"Name: stowaway\nVersion: 1.0\n"
+        with self.assertRaisesRegex(verify.VerificationError, "unpinned Python distribution"):
+            self.verify_entries(entries)
+
+    def test_package_lock_can_be_replaced_and_must_be_readable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            lock = Path(temporary) / "packages.lock.json"
+            pinned = json.loads(verify.PACKAGES_LOCK.read_text())
+            pinned["packages"] = [package for package in pinned["packages"] if package["name"] == "certifi"]
+            lock.write_text(json.dumps(pinned))
+            entries = {name: data for name, data in fixture().items()
+                       if not name.startswith(LIBRARY) or name == ENCODINGS or name == MARKER}
+            entries.update(package_entries(lock))
+            ipa = Path(temporary) / "fixture.ipa"
+            with zipfile.ZipFile(ipa, "w") as archive:
+                for name, data in entries.items():
+                    archive.writestr(name, data)
+            self.assertEqual(verify.verify_ipa(ipa, packages_lock=lock)["python_packages"], 1)
+            with self.assertRaisesRegex(verify.VerificationError, "differ from the pinned lock"):
+                verify.verify_ipa(ipa)
+            lock.write_text("{}")
+            with self.assertRaisesRegex(verify.VerificationError, "unreadable Python package lock"):
+                verify.verify_ipa(ipa, packages_lock=lock)
 
     def test_loose_native_resources_are_rejected(self):
         entries = fixture()

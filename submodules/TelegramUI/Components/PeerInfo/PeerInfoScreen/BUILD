@@ -27,6 +27,7 @@ swift_library(
     deps = sgdeps + [ # MARK: Swiftgram
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
+        "//submodules/AyuPluginBridge:AyuPluginBridge",
         "//submodules/UrlWhitelist",
         "//submodules/TelegramUI/Components/NavigationBarNode",
         "//submodules/TelegramUI/Components/NavigationBarComponent",

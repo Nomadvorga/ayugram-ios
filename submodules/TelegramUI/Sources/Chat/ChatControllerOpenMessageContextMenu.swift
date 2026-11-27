@@ -223,8 +223,8 @@ extension ChatControllerImpl {
                 if let peerID = self.chatLocation.peerId,
                    peerID == message.id.peerId,
                    let dialogID = AyuPluginMessageMenuInvocation.dialogID(for: peerID) {
-                    let messageID = message.id.id._internalGetInt64Value()
-                    if messageID > 0,
+                    let messageID = Int64(message.id.id)
+                    if messageID > 0, message.id.namespace == Namespaces.Message.Cloud,
                        let pluginContext = AyuTelegramPluginApplicationBinding.current?.pluginMenuContext(accountID: self.context.account.id, peerID: peerID, messageID: messageID),
                        pluginContext.dialogID == dialogID {
                         let invocation = AyuPluginMessageMenuInvocation(chatController: self, context: pluginContext, peerID: peerID, accountID: self.context.account.id)

@@ -19,7 +19,7 @@ enum AyuBridgeJavaValues {
             AyuBridgeClassAdapter(name: adapter.name, constants: adapter.constants, constructor: adapter.constructor,
                 staticMethods: adapter.staticMethods, staticFields: adapter.staticFields, methods: adapter.methods,
                 readableFields: adapter.readableFields, writableFields: adapter.writableFields,
-                receiverMethods: adapter.receiverMethods, validateState: { state in
+                receiverMethods: adapter.receiverMethods, results: adapter.results, validateState: { state in
                     switch adapter.name {
                     case "java.lang.String":
                         guard Set(state.keys) == ["value"], let text = state["value"]?.string,
@@ -175,7 +175,7 @@ enum AyuBridgeJavaValues {
                     return .value(.integer(Int64(Int16(truncatingIfNeeded: try self.number(state["value"] ?? .null)))))
                 }, "toString": { state, args, _ in
                     try self.arity(args, 0); return .value(.string(String(try self.number(state["value"] ?? .null))))
-                }])
+                }], results: ["valueOf": name])
     }
 
     static func boolValue(_ value: AyuBridgeValue) throws -> Bool {
@@ -188,7 +188,8 @@ enum AyuBridgeJavaValues {
             constructor: { args, _ in try self.arity(args, 1); return ["value": .bool(try self.boolValue(args[0]))] },
             staticMethods: ["parseBoolean": { args, _ in try self.arity(args, 1); return .value(.bool(try self.boolValue(args[0]))) },
                 "valueOf": { args, _ in try self.arity(args, 1); return .instance(className: "java.lang.Boolean", state: ["value": .bool(try self.boolValue(args[0]))]) }],
-            methods: ["booleanValue": { state, args, _ in try self.arity(args, 0); return .value(state["value"] ?? .null) }])
+            methods: ["booleanValue": { state, args, _ in try self.arity(args, 0); return .value(state["value"] ?? .null) }],
+            results: ["valueOf": "java.lang.Boolean"])
     }
 
     private static func finiteFloat(_ value: AyuBridgeValue) throws -> Double {
@@ -225,7 +226,7 @@ enum AyuBridgeJavaValues {
             "valueOf": valueOf,
         ], methods: [
             "floatValue": { state, args, _ in try Self.arity(args, 0); return .value(state["value"] ?? .null) },
-        ])
+        ], results: ["valueOf": "java.lang.Float"])
     }
 
     static var object: AyuBridgeClassAdapter {
@@ -517,9 +518,10 @@ enum AyuBridgeJavaValues {
                 guard text.utf8.count <= Self.stringByteLimit - value.text.utf8.count else { throw AyuBridgeFailure("resource_limit", "Spannable text exceeds quota") }
                 let records = try Self.spanRecords(state)
                 guard records.count <= 1_024 - value.spans.count else { throw AyuBridgeFailure("resource_limit", "Too many Spannable spans") }
+                let additions = try Self.spanRecords(["text": .string(value.text), "spans": .array(value.spans)])
                 let offset = (text as NSString).length
                 text.append(value.text); state["text"] = .string(text)
-                state["spans"] = .array((records + Self.offsetSpans(value.spans, by: offset)).map(AyuBridgeValue.object))
+                state["spans"] = .array((records + Self.offsetSpans(additions, by: offset)).map(AyuBridgeValue.object))
                 return .instance(className: name, state: state)
             }
             methods["replace"] = { state, args, context in
@@ -531,8 +533,9 @@ enum AyuBridgeJavaValues {
                 let records = try Self.spanRecords(state)
                 let retained = Self.updatingSpansForReplacement(records, start: start, end: end, replacementLength: (value.text as NSString).length)
                 guard retained.count <= 1_024 - value.spans.count else { throw AyuBridgeFailure("resource_limit", "Too many Spannable spans") }
+                let additions = try Self.spanRecords(["text": .string(value.text), "spans": .array(value.spans)])
                 state["text"] = .string(replacement)
-                state["spans"] = .array((retained + Self.offsetSpans(value.spans, by: start)).map(AyuBridgeValue.object))
+                state["spans"] = .array((retained + Self.offsetSpans(additions, by: start)).map(AyuBridgeValue.object))
                 return .instance(className: name, state: state)
             }
             methods["delete"] = { state, args, _ in
@@ -544,7 +547,8 @@ enum AyuBridgeJavaValues {
             }
             receiverMethods.formUnion(["append", "replace", "delete"])
         }
-        return AyuBridgeClassAdapter(name: name, constructor: constructor, methods: methods, receiverMethods: receiverMethods)
+        return AyuBridgeClassAdapter(name: name, constructor: constructor, methods: methods, receiverMethods: receiverMethods,
+                                     results: Dictionary(uniqueKeysWithValues: receiverMethods.map { ($0, name) }))
     }
 
     static var spannableString: AyuBridgeClassAdapter { self.spannable("android.text.SpannableString", mutableText: false, requiresText: true) }
@@ -615,7 +619,7 @@ enum AyuBridgeJavaValues {
                 }
                 return .value(state["color"] ?? .null)
             },
-        ])
+        ], results: ["valueOf": "android.content.res.ColorStateList"])
     }
 
     private static let stringByteLimit = 65_536
@@ -1032,7 +1036,7 @@ enum AyuBridgeJavaValues {
         AyuBridgeClassAdapter(name: "java.io.ByteArrayOutputStream", constructor: { args, _ in
             guard args.isEmpty || args.count == 1 else { throw AyuBridgeFailure.unsupported("ByteArrayOutputStream constructor overload") }
             if let capacity = args.first?.integer {
-                guard (0...Self.byteOutputLimit).contains(capacity) else { throw AyuBridgeFailure("resource_limit", "Byte output capacity exceeds quota") }
+                guard (0...Int64(Self.byteOutputLimit)).contains(capacity) else { throw AyuBridgeFailure("resource_limit", "Byte output capacity exceeds quota") }
             } else if !args.isEmpty {
                 throw AyuBridgeFailure("invalid_arguments", "Expected byte output capacity")
             }
@@ -1119,7 +1123,7 @@ enum AyuBridgeJavaValues {
                 try Self.arity(args, 1)
                 return .instance(className: "java.util.Collections$SingletonList", state: ["value": args[0]])
             },
-        ])
+        ], results: ["singletonList": "java.util.Collections$SingletonList"])
     }
 
     static func list(_ value: AyuBridgeValue, _ context: AyuBridgeAdapterContext) throws -> [AyuBridgeValue] {

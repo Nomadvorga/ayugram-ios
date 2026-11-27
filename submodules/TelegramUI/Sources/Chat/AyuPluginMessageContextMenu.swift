@@ -2,22 +2,23 @@ import AyuPluginBridge
 import AccountContext
 import ContextUI
 import Foundation
+import PeerInfoScreen
 import SwiftSignalKit
 import TelegramCore
 import UIKit
 
 /// One invocation owns exactly one visible context menu. The weak controller
-/// identity prevents a delayed Python callback from acting on a replacement menu.
+/// identity keeps plugin rows out of a replacement menu; a click is revalidated
+/// by the bridge against the visible screen and account.
 @MainActor
 final class AyuPluginMessageMenuInvocation {
     weak var chatController: ChatControllerImpl?
     weak var contextController: ContextController?
     let context: AyuPluginMenuContext
-    let peerID: PeerId
+    let peerID: EnginePeer.Id
     let accountID: AccountRecordId
-    private var actionStarted = false
 
-    init(chatController: ChatControllerImpl, contextController: ContextController? = nil, context: AyuPluginMenuContext, peerID: PeerId, accountID: AccountRecordId) {
+    init(chatController: ChatControllerImpl, contextController: ContextController? = nil, context: AyuPluginMenuContext, peerID: EnginePeer.Id, accountID: AccountRecordId) {
         self.chatController = chatController; self.contextController = contextController
         self.context = context; self.peerID = peerID; self.accountID = accountID
     }
@@ -34,20 +35,7 @@ final class AyuPluginMessageMenuInvocation {
         return true
     }
 
-    func beginAction() -> Bool {
-        guard self.isCurrentMenu() else { return false }
-        self.actionStarted = true
-        return true
-    }
-
-    /// Own dismissal may clear the current pointer. Nil is accepted only after
-    /// this action began; any different menu controller means replacement.
-    func isCurrentAction() -> Bool {
-        guard self.isScreenCurrent(), self.actionStarted, let chat = self.chatController else { return false }
-        return chat.currentContextController == nil || chat.currentContextController === self.contextController
-    }
-
-    static func dialogID(for peerID: PeerId) -> Int64? {
+    static func dialogID(for peerID: EnginePeer.Id) -> Int64? {
         let value = peerID.id._internalGetInt64Value()
         guard value > 0 else { return nil }
         switch peerID.namespace {
@@ -63,52 +51,13 @@ final class AyuPluginMessageMenuInvocation {
 
 @MainActor
 enum AyuPluginMessageContextMenu {
+    /// `menus.add` and `menus.register` rows of the pressed message, through the
+    /// helper every plugin menu uses.
     static func appending(to signal: Signal<ContextController.Items, NoError>, invocation: AyuPluginMessageMenuInvocation) -> Signal<ContextController.Items, NoError> {
-        return signal |> mapToSignal { items in
-            return Signal<ContextController.Items, NoError> { subscriber in
-                let task = Task { @MainActor in
-                    guard invocation.isScreenCurrent() else {
-                        subscriber.putCompletion()
-                        return
-                    }
-                    // Do not hold native Telegram actions behind serialized Python
-                    // condition callbacks. Publish the original menu immediately;
-                    // if conditions later allow plugin rows, ContextController
-                    // accepts the updated item list as a subsequent signal value.
-                    subscriber.putNext(items)
-                    let pluginItems = await AyuPluginMenuBridge.shared.items(context: invocation.context, isCurrent: {
-                        invocation.isCurrentMenu()
-                    })
-                    guard !Task.isCancelled, invocation.isCurrentMenu() else {
-                        subscriber.putCompletion()
-                        return
-                    }
-                    var updated = items
-                    if case var .list(existing) = updated.content, !pluginItems.isEmpty {
-                        if !existing.isEmpty { existing.append(.separator) }
-                        existing.append(contentsOf: pluginItems.map { item in
-                            let identifier = item.itemID ?? item.token
-                            let iconName = item.symbolName
-                            return .action(ContextMenuActionItem(id: identifier, text: item.text, icon: { theme in
-                                guard let iconName, let image = UIImage(systemName: iconName) else { return nil }
-                                return image.withTintColor(theme.actionSheet.primaryTextColor, renderingMode: .alwaysOriginal)
-                            }, action: { _, dismiss in
-                                guard invocation.beginAction() else { return }
-                                dismiss(.dismissWithoutContent)
-                                Task { @MainActor in
-                                    await AyuPluginMenuBridge.shared.perform(token: item.token, context: invocation.context, isCurrent: {
-                                        invocation.isCurrentAction()
-                                    })
-                                }
-                            }))
-                        })
-                        updated.content = .list(existing)
-                        subscriber.putNext(updated)
-                    }
-                    subscriber.putCompletion()
-                }
-                return ActionDisposable { task.cancel() }
-            }
-        }
+        guard let messageID = Int32(exactly: invocation.context.messageID) else { return signal }
+        let request = AyuPluginMenuRequest(kind: .messageContextMenu, accountKey: invocation.accountID.int64,
+            peer: AyuPluginMenuRequest.Peer(namespace: invocation.peerID.namespace._internalGetInt32Value(), id: invocation.peerID.id._internalGetInt64Value()),
+            messageID: messageID)
+        return AyuPluginContextMenu.appending(to: signal, request: request, isPresented: { invocation.isCurrentMenu() })
     }
 }

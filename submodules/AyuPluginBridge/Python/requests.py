@@ -16,6 +16,7 @@ import ssl
 import sys
 import time
 import types
+import zlib
 from collections.abc import Mapping, MutableMapping
 from email.message import Message
 from http.cookiejar import CookieJar
@@ -78,12 +79,21 @@ class JSONDecodeError(_json.JSONDecodeError, RequestException):
     pass
 
 
+class StreamConsumedError(RequestException, TypeError):
+    pass
+
+
 exceptions = types.ModuleType(__name__ + ".exceptions")
 for _type in (RequestException, ConnectionError, Timeout, SSLError, HTTPError,
               InvalidURL, TooManyRedirects, ContentTooLarge, ContentDecodingError,
-              UnsupportedOption, JSONDecodeError):
+              UnsupportedOption, JSONDecodeError, StreamConsumedError):
     setattr(exceptions, _type.__name__, _type)
 sys.modules[exceptions.__name__] = exceptions
+
+# ``requests.utils`` re-exports these from the standard library; nothing else of it is provided.
+utils = types.ModuleType(__name__ + ".utils")
+utils.quote, utils.unquote, utils.urlparse, utils.urlunparse = _parse.quote, _parse.unquote, _parse.urlparse, _parse.urlunparse
+sys.modules[utils.__name__] = utils
 
 
 class CaseInsensitiveDict(MutableMapping):
@@ -114,14 +124,70 @@ class CaseInsensitiveDict(MutableMapping):
 
 
 class Response:
-    def __init__(self, status_code, content, headers, url):
+    def __init__(self, status_code, content, headers, url, stream=None):
         self.status_code = int(status_code)
-        self.content = bytes(content)
+        # ``content`` is None while the body of a ``stream=True`` response is still on its connection.
+        self._content = None if content is None else bytes(content)
+        self._stream, self._consumed = stream, content is not None
         self.headers = CaseInsensitiveDict(headers)
         self.url = url
         message = Message()
         message["Content-Type"] = self.headers.get("Content-Type", "")
         self.encoding = message.get_content_charset() or "utf-8"
+
+    @property
+    def content(self):
+        if self._content is None:
+            if self._consumed:
+                raise RuntimeError("The content for this response was already consumed")
+            chunks, total = [], 0
+            for chunk in self.iter_content(65536):
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    self.close()
+                    raise ContentTooLarge("HTTPS response exceeds buffering limit")
+                chunks.append(chunk)
+            self._content = b"".join(chunks)
+        return self._content
+
+    @property
+    def raw(self):
+        """The connection's stream of a ``stream=True`` response (undecoded bytes); empty once the body is buffered."""
+        return self._stream if self._stream is not None else io.BytesIO()
+
+    def iter_content(self, chunk_size=1, decode_unicode=False):
+        if decode_unicode:
+            raise UnsupportedOption("iter_content(decode_unicode=True) is not implemented")
+        if chunk_size is not None and type(chunk_size) is not int:
+            raise TypeError(f"chunk_size must be an int, it is instead a {type(chunk_size)}.")
+        if self._content is not None:
+            size = len(self._content) if chunk_size is None or chunk_size <= 0 else chunk_size
+            return (self._content[start:start + size] for start in range(0, len(self._content), size))
+        if self._consumed:
+            raise StreamConsumedError()
+        return self._read_stream(chunk_size if chunk_size is not None and chunk_size > 0 else 65536)
+
+    def _read_stream(self, size):
+        encoding = (self.headers.get("Content-Encoding") or "identity").lower().strip()
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS) if encoding == "gzip" else None
+        try:
+            while self._stream is not None:
+                chunk = self._stream.read(size)
+                if not chunk:
+                    break
+                if decoder is not None:
+                    chunk = decoder.decompress(chunk)
+                if chunk:
+                    yield chunk
+        except zlib.error:
+            raise ContentDecodingError("Invalid gzip HTTPS response") from None
+        except ssl.SSLError:
+            raise SSLError("HTTPS TLS verification or negotiation failed") from None
+        except (OSError, ValueError):
+            # requests reports a read that times out or breaks mid-body as a connection error.
+            raise ConnectionError("HTTPS connection or response failed") from None
+        self._consumed = True
+        self.close()
 
     @property
     def text(self):
@@ -149,8 +215,10 @@ class Response:
             raise HTTPError(f"HTTP request failed with status {self.status_code}", response=self)
 
     def close(self):
-        # Responses are fully buffered and their native stream is already closed.
-        return None
+        # A buffered response's stream is closed already; a streamed one owns its connection until here.
+        stream, self._stream = self._stream, None
+        if stream is not None:
+            stream.close()
 
     def __enter__(self):
         return self
@@ -352,8 +420,8 @@ class Session:
             raise RequestException("HTTPS session is closed")
         if kwargs:
             raise UnsupportedOption("Unsupported requests options: " + ", ".join(sorted(kwargs)))
-        if stream is not False:
-            raise UnsupportedOption("Streaming responses are not implemented")
+        if type(stream) is not bool:
+            raise UnsupportedOption("stream must be bool")
         if verify is not True:
             raise UnsupportedOption("TLS verification cannot be disabled or overridden")
         if type(allow_redirects) is not bool:
@@ -405,9 +473,16 @@ class Session:
                 # requests returns responses for HTTP status errors; only
                 # raise_for_status() converts 4xx/5xx into HTTPError.
                 response = error
-            body = b"" if request.get_method() == "HEAD" else _read_response(response, deadline)
             final_url = _normalize_url(response.geturl())
             status = response.status if getattr(response, "status", None) is not None else response.code
+            if stream and request.get_method() != "HEAD":
+                encoding = (response.headers.get("Content-Encoding") or "identity").lower().strip()
+                if encoding not in ("", "identity", "gzip"):
+                    raise ContentDecodingError("Unsupported HTTPS content encoding")
+                # The body stays on the connection, which the response owns from here on.
+                streamed, response = Response(status, None, response.headers, final_url, stream=response), None
+                return streamed
+            body = b"" if request.get_method() == "HEAD" else _read_response(response, deadline)
             return Response(status, body, response.headers, final_url)
         except RequestException:
             raise

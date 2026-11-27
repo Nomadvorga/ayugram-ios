@@ -178,8 +178,8 @@ final class AyuBridgeUI: @unchecked Sendable {
         }
         view.layoutBridgeHierarchy()
         switch method {
-        case "getWidth", "getMeasuredWidth": return .number(Double(view.bounds.width))
-        case "getHeight", "getMeasuredHeight": return .number(Double(view.bounds.height))
+        case "getWidth", "getMeasuredWidth": return .integer(Int64(view.bounds.width.rounded()))
+        case "getHeight", "getMeasuredHeight": return .integer(Int64(view.bounds.height.rounded()))
         case "getX": return .number(Double(view.frame.minX))
         case "getY": return .number(Double(view.frame.minY))
         case "getId": return .integer(Int64(view.bridgeID))
@@ -197,7 +197,7 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "getScaleY": return .number(Double(view.scaleY))
         case "getTranslationX": return .number(Double(view.translationX))
         case "getTranslationY": return .number(Double(view.translationY))
-        case "getVisibility": return .number(Double(view.visibility))
+        case "getVisibility": return .integer(Int64(view.visibility))
         case "getOrientation": return .integer(Int64(view.orientation))
         case "getGravity": return .integer(view.gravity.rawValue)
         case "getClipChildren": return .bool(view.bridgeClipChildren)
@@ -221,11 +221,11 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "isAttachedToWindow": return .bool(view.window != nil)
         case "getText": return .string(view.label?.text ?? "")
         case "getContentDescription": return view.contentDescription.map(AyuBridgeValue.string) ?? .null
-        case "getPaddingLeft": return .number(Double(view.padding.left))
-        case "getPaddingTop": return .number(Double(view.padding.top))
-        case "getPaddingRight": return .number(Double(view.padding.right))
-        case "getPaddingBottom": return .number(Double(view.padding.bottom))
-        case "getChildCount": return .number(Double(view.bridgeChildren.count))
+        case "getPaddingLeft": return .integer(Int64(view.padding.left.rounded()))
+        case "getPaddingTop": return .integer(Int64(view.padding.top.rounded()))
+        case "getPaddingRight": return .integer(Int64(view.padding.right.rounded()))
+        case "getPaddingBottom": return .integer(Int64(view.padding.bottom.rounded()))
+        case "getChildCount": return .integer(Int64(view.bridgeChildren.count))
         default: throw AyuBridgeFailure.unsupported(method)
         }
     }
@@ -391,6 +391,8 @@ final class AyuBridgeUI: @unchecked Sendable {
     @MainActor private func apply(_ command: Command, to view: AyuBridgeView) {
         let args = command.arguments
         @MainActor func number(_ index: Int) -> CGFloat { return CGFloat(args[index].number ?? 0) }
+        if AyuBridgeViewMembers.apply(command, to: view) { return }
+        defer { AyuBridgeViewMembers.didApply(command, to: view) }
         switch command.method {
         case "setAlpha": view.alpha = number(0)
         case "setTranslationX": view.translationX = number(0); view.updateTransform()
@@ -577,7 +579,7 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "setTypefaceStyle":
             let style = args[0].integer ?? 0
             view.textTypefaceStyle = style
-            let size = view.label?.font.pointSize ?? view.textField?.font.pointSize ?? 14
+            let size = view.label?.font.pointSize ?? view.textField?.font?.pointSize ?? 14
             view.label?.font = AyuBridgeUI.textFont(size: size, style: style)
             view.textField?.font = AyuBridgeUI.textFont(size: size, style: style)
             view.checkBoxButton?.titleLabel?.font = AyuBridgeUI.textFont(size: size, style: style)
@@ -683,7 +685,14 @@ final class AyuBridgeUI: @unchecked Sendable {
             if let handle = args.first?["listener_handle"].string { view.removeTextWatcher(handle: handle) }
         case "setImageBase64":
             if let text = args[0].string, let data = Data(base64Encoded: text) { view.setBridgeImage(UIImage(data: data)) }
+        case "setImageBitmap":
+            if let token = args.first?.string, let image = AyuBridgeImageSnapshots.shared.take(token) { view.setBridgeImage(UIImage(cgImage: image)) }
         case "clearImage": view.setBridgeImage(nil)
+        case "setImageIcon":
+            if args.count == 2, let kind = args[0].string, let name = args[1].string {
+                let icon: AyuPluginIcon = kind == "asset" ? .asset(name) : .symbol(name)
+                view.setBridgeImage(icon.image()?.withRenderingMode(.alwaysTemplate))
+            }
         case "setColorFilter": view.setBridgeColorFilter(args.first?.integer)
         case "unmount": self.mountedRoots[command.owner]?.remove(command.handle); view.removeFromSuperview()
         case "animate":
@@ -812,6 +821,7 @@ final class AyuBridgeUI: @unchecked Sendable {
     }
 
     @MainActor private static func textFont(size: CGFloat, style: Int64) -> UIFont {
+        if let typeface = AyuBridgeTypefaceValue(packed: style) { return typeface.font(size: size) }
         guard style != 0 else { return .systemFont(ofSize: size) }
         if style == 1 { return .boldSystemFont(ofSize: size) }
         if style == 2 { return .italicSystemFont(ofSize: size) }
@@ -975,16 +985,30 @@ struct AyuBridgeViewGravity: Equatable {
 }
 
 struct AyuBridgeLinearLayoutWeights {
-    static func distribute(remaining: CGFloat, weights: [Double]) -> [CGFloat] {
+    /// `weightSum` above zero is `LinearLayout.setWeightSum`: the divisor instead of the children's total.
+    static func distribute(remaining: CGFloat, weights: [Double], weightSum: Double = 0) -> [CGFloat] {
         guard remaining.isFinite, remaining > 0 else { return Array(repeating: 0, count: weights.count) }
         let validWeights = weights.map { $0.isFinite && $0 > 0 ? $0 : 0 }
-        let total = validWeights.reduce(0, +)
+        let total = weightSum.isFinite && weightSum > 0 ? weightSum : validWeights.reduce(0, +)
         guard total.isFinite, total > 0 else { return Array(repeating: 0, count: weights.count) }
         return validWeights.map { CGFloat(Double(remaining) * $0 / total) }
     }
 }
 
-private final class AyuBridgeTextLabel: UILabel {
+// Legacy (non-configuration) buttons have no non-deprecated image inset API;
+// the protocol witness keeps the deprecated call out of warning-checked code.
+private protocol AyuBridgeLegacyButtonInsets {
+    func setLegacyImageInsets(_ insets: UIEdgeInsets)
+}
+
+extension UIButton: AyuBridgeLegacyButtonInsets {
+    @available(iOS, deprecated: 15.0)
+    fileprivate func setLegacyImageInsets(_ insets: UIEdgeInsets) {
+        self.imageEdgeInsets = insets
+    }
+}
+
+final class AyuBridgeTextLabel: UILabel {
     var bridgeGravity = AyuBridgeViewGravity.defaultValue {
         didSet { self.setNeedsDisplay() }
     }
@@ -1008,7 +1032,7 @@ private final class AyuBridgeTextLabel: UILabel {
     }
 }
 
-private final class AyuBridgeView: UIView, UITextFieldDelegate {
+final class AyuBridgeView: UIView, UITextFieldDelegate {
     private struct TextWatcherRegistration {
         let handle: String
         let callbacks: [String: String]
@@ -1038,6 +1062,7 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
     var bridgeFocusable = false
     var bridgeSelected = false
     var textTypefaceStyle: Int64 = 0
+    let members = AyuBridgeViewMemberState()
     var translationX: CGFloat = 0
     var translationY: CGFloat = 0
     var bridgeRotation: CGFloat = 0
@@ -1102,7 +1127,7 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
             checkBoxButton.setTitleColor(.label, for: .normal)
             checkBoxButton.setImage(UIImage(systemName: "square"), for: .normal)
             checkBoxButton.setImage(UIImage(systemName: "checkmark.square.fill"), for: .selected)
-            checkBoxButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 8)
+            (checkBoxButton as AyuBridgeLegacyButtonInsets).setLegacyImageInsets(UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 8))
             checkBoxButton.addTarget(self, action: #selector(self.checkBoxTapped), for: .touchUpInside)
             self.addSubview(checkBoxButton)
         }
@@ -1393,8 +1418,6 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
         // explicit transform mutation rebuilds it from the reconciled fields;
         // an alpha-only update or a layout pass keeps this exact matrix.
         self.presentationTransformOverride = transform
-        let center = CGPoint(x: self.bounds.width / 2, y: self.bounds.height / 2)
-        let pivot = self.effectivePivot
         self.presentationTransformPivotOffset = CGPoint(x: pivot.x - center.x, y: pivot.y - center.y)
         self.layer.transform = transform
     }
@@ -1520,7 +1543,7 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
     private func touch(_ touches: Set<UITouch>, action: Int) {
         guard self.bridgeEnabled, let id = self.touchCallback, let touch = touches.first else { return }
         let point = touch.location(in: self)
-        self.callback?(id, [.object(["action": .number(Double(action)), "x": .number(Double(point.x)), "y": .number(Double(point.y)), "timestamp": .number(touch.timestamp)])])
+        self.callback?(id, [.object(["action": .integer(Int64(action)), "x": .number(Double(point.x)), "y": .number(Double(point.y)), "timestamp": .number(touch.timestamp)])])
     }
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { super.touchesBegan(touches, with: event); self.touch(touches, action: 0) }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) { super.touchesMoved(touches, with: event); self.touch(touches, action: 2) }
@@ -1530,13 +1553,13 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         if let label = self.label {
             let fit = label.sizeThatFits(size)
-            let minimumHeight = CGFloat(self.textLayoutOptions.minimumHeight(lineHeight: Double(label.font.lineHeight)))
-            return CGSize(width: max(fit.width, self.bridgeMinimumWidth), height: max(max(fit.height, minimumHeight), self.bridgeMinimumHeight))
+            let minimumHeight = self.members.textMinimumHeight ?? CGFloat(self.textLayoutOptions.minimumHeight(lineHeight: Double(label.font.lineHeight)))
+            return CGSize(width: max(fit.width, self.bridgeMinimumWidth, self.members.textMinimumWidth), height: max(max(fit.height, minimumHeight), self.bridgeMinimumHeight))
         }
         if let textField = self.textField {
-            let height = max(self.className == "android.widget.EditText" ? max(36, textField.sizeThatFits(size).height) : 0, self.bridgeMinimumHeight)
+            let height = max(self.className == "android.widget.EditText" ? max(36, textField.sizeThatFits(size).height) : 0, self.bridgeMinimumHeight, self.members.textMinimumHeight ?? 0)
             let width = size.width.isFinite && size.width > 0 ? size.width : textField.sizeThatFits(size).width
-            return CGSize(width: max(width, self.bridgeMinimumWidth), height: height)
+            return CGSize(width: max(width, self.bridgeMinimumWidth, self.members.textMinimumWidth), height: height)
         }
         if let image = self.image {
             let size = image.image?.size ?? .zero
@@ -1665,8 +1688,10 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
                 let width = plan.view.parameters["width"]?.number == -1 ? availableWidth : plan.width
                 let availableHeight = max(0, content.height - plan.top - plan.bottom)
                 let height = self.scrollFillViewport ? max(plan.height, availableHeight) : plan.height
-                let x = plan.left
-                let y = cursor + plan.top
+                let origin = AyuBridgeLayoutParams.scrollOrigin(gravity: AyuBridgeLayoutParams.childGravity(plan.view.parameters), vertical: true,
+                    container: content.size, size: CGSize(width: width, height: height), margins: (plan.left, plan.top, plan.right, plan.bottom))
+                let x = origin.x
+                let y = cursor + origin.y
                 plan.view.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
                 plan.view.center = CGPoint(x: x + width / 2, y: y + height / 2)
                 cursor += plan.top + height + plan.bottom
@@ -1684,8 +1709,10 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
                 let width = self.scrollFillViewport ? max(plan.width, availableWidth) : plan.width
                 let availableHeight = max(0, content.height - plan.top - plan.bottom)
                 let height = plan.view.parameters["height"]?.number == -1 ? availableHeight : plan.height
-                let x = cursor + plan.left
-                let y = plan.top
+                let origin = AyuBridgeLayoutParams.scrollOrigin(gravity: AyuBridgeLayoutParams.childGravity(plan.view.parameters), vertical: false,
+                    container: content.size, size: CGSize(width: width, height: height), margins: (plan.left, plan.top, plan.right, plan.bottom))
+                let x = cursor + origin.x
+                let y = origin.y
                 plan.view.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
                 plan.view.center = CGPoint(x: x + width / 2, y: y + height / 2)
                 cursor += plan.left + width + plan.right
@@ -1704,7 +1731,7 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
             }
             let remaining = max(0, availableMainExtent - initialMainExtent)
             let extra = AyuBridgeLinearLayoutWeights.distribute(remaining: remaining,
-                weights: plans.map { $0.view.parameters["weight"]?.number ?? 0 })
+                weights: plans.map { $0.view.parameters["weight"]?.number ?? 0 }, weightSum: Double(self.members.weightSum))
             for index in plans.indices {
                 if isVertical { plans[index].height += extra[index] }
                 else { plans[index].width += extra[index] }
@@ -1721,13 +1748,18 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
                 let y: CGFloat
                 if isVertical {
                     let availableWidth = max(0, content.width - plan.left - plan.right)
-                    x = plan.left + self.gravity.horizontalOffset(available: availableWidth, extent: plan.width, direction: self.effectiveUserInterfaceLayoutDirection)
+                    // A child's own LayoutParams gravity replaces the container's on the cross axis.
+                    x = AyuBridgeLayoutParams.childGravity(plan.view.parameters).map {
+                        AyuBridgeLayoutParams.horizontalOrigin(gravity: $0, container: content.width, extent: plan.width, left: plan.left, right: plan.right)
+                    } ?? plan.left + self.gravity.horizontalOffset(available: availableWidth, extent: plan.width, direction: self.effectiveUserInterfaceLayoutDirection)
                     y = cursor + plan.top
                     cursor += plan.top + plan.height + plan.bottom
                 } else {
                     let availableHeight = max(0, content.height - plan.top - plan.bottom)
                     x = cursor + plan.left
-                    y = plan.top + self.gravity.verticalOffset(available: availableHeight, extent: plan.height)
+                    y = AyuBridgeLayoutParams.childGravity(plan.view.parameters).map {
+                        AyuBridgeLayoutParams.verticalOrigin(gravity: $0, container: content.height, extent: plan.height, top: plan.top, bottom: plan.bottom, linear: true)
+                    } ?? plan.top + self.gravity.verticalOffset(available: availableHeight, extent: plan.height)
                     cursor += plan.left + plan.width + plan.right
                 }
                 plan.view.bounds = CGRect(origin: .zero, size: CGSize(width: plan.width, height: plan.height))
@@ -1737,8 +1769,10 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
             for plan in plans {
                 let originX = self.scrollingView == nil ? content.minX : 0
                 let originY = self.scrollingView == nil ? content.minY : 0
-                let x = CGFloat(plan.view.parameters["x"]?.number ?? 0) + plan.left
-                let y = CGFloat(plan.view.parameters["y"]?.number ?? 0) + plan.top
+                let origin = AyuBridgeLayoutParams.frameOrigin(gravity: AyuBridgeLayoutParams.childGravity(plan.view.parameters), container: content.size,
+                    size: CGSize(width: plan.width, height: plan.height), margins: (plan.left, plan.top, plan.right, plan.bottom))
+                let x = CGFloat(plan.view.parameters["x"]?.number ?? 0) + origin.x
+                let y = CGFloat(plan.view.parameters["y"]?.number ?? 0) + origin.y
                 plan.view.bounds = CGRect(origin: .zero, size: CGSize(width: plan.width, height: plan.height))
                 plan.view.center = CGPoint(x: originX + x + plan.width / 2, y: originY + y + plan.height / 2)
                 if self.scrollingView != nil {
@@ -1753,6 +1787,7 @@ private final class AyuBridgeView: UIView, UITextFieldDelegate {
         // The default pivot is derived from bounds. Rebuild after the parent
         // has assigned the new layout size; explicit pivots remain untouched.
         self.updateTransformPreservingOverride()
+        AyuBridgeViewMembers.didLayout(self)
     }
 }
 

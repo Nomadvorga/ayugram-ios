@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
     private var selectedPluginIDs: [String] = []
     private var latestBatchLogURL: URL?
     private var latestBatchLogRefreshGeneration = 0
+    private let pluginMenu = AyuPluginMainMenuSection(section: 3)
     public init(service: AyuPluginService? = nil) {
         // Resolve the actor-isolated singleton here, not in a nonisolated default argument.
         self.service = service ?? .shared
@@ -25,6 +26,7 @@ import UniformTypeIdentifiers
         self.tableView.estimatedRowHeight = 64
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(self.importPressed))
         NotificationCenter.default.addObserver(self, selector: #selector(self.serviceChanged(_:)), name: AyuPluginService.didChange, object: self.service)
+        self.pluginMenu.attach(to: self.tableView)
         AyuNativePluginRuntime.shared.feedbackPresenter = { [weak self] in
             guard let self else { return nil }
             var top: UIViewController = self.navigationController?.topViewController ?? self
@@ -39,12 +41,14 @@ import UniformTypeIdentifiers
             do { try await self.service.prepare(); self.refreshLatestBatchLog() }
             catch { self.show(error) }
             self.tableView.reloadData()
+            self.pluginMenu.refresh()
         }
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func serviceChanged(_ notification: Notification) {
         self.tableView.reloadData()
         self.refreshLatestBatchLog()
+        self.pluginMenu.refresh()
     }
     private func refreshLatestBatchLog() {
         self.latestBatchLogRefreshGeneration += 1
@@ -56,7 +60,7 @@ import UniformTypeIdentifiers
             self.tableView.reloadRows(at: [IndexPath(row: 3, section: 0)], with: .none)
         }
     }
-    public override func numberOfSections(in tableView: UITableView) -> Int { return 3 }
+    public override func numberOfSections(in tableView: UITableView) -> Int { return 4 }
     private var nativePlugins: [AyuInstalledPlugin] { self.service.plugins.filter { $0.nativeAdapter != nil } }
     private var pythonPlugins: [AyuInstalledPlugin] { self.service.plugins.filter { $0.nativeAdapter == nil } }
     private func plugin(at indexPath: IndexPath) -> AyuInstalledPlugin? {
@@ -66,11 +70,12 @@ import UniformTypeIdentifiers
         default: return nil
         }
     }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 4 : (section == 1 ? self.nativePlugins.count : self.pythonPlugins.count) }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 3 ? self.pluginMenu.rowCount : (section == 0 ? 4 : (section == 1 ? self.nativePlugins.count : self.pythonPlugins.count)) }
     public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch section {
         case 1: return "Нативные адаптеры"
         case 2: return "Python-плагины"
+        case 3: return self.pluginMenu.title
         default: return nil
         }
     }
@@ -80,16 +85,18 @@ import UniformTypeIdentifiers
             if self.batchSelecting { return "Выберите установленные плагины в нужном порядке, затем подтвердите последовательное включение. Импорт не запускает плагины." }
             return "Установка не включает плагины автоматически. Выберите несколько установленных плагинов для последовательного включения или откройте последний отчёт."
         case 1: return "Функции этих плагинов обслуживают нативные адаптеры iOS. Python-код и Android-хуки не запускаются."
-        case 2: return self.service.startupError ?? (self.service.plugins.isEmpty ? "Плагинов пока нет. Откройте файл .plugin в чате или импортируйте его здесь." : "Python-плагины включаются только с вашего согласия и не запускаются автоматически.")
+        case 3: return self.pluginMenu.footer
+        case 2: return self.service.startupError ?? (self.service.plugins.isEmpty ? "Плагинов пока нет. Откройте файл .plugin, .elyx или .eaf в чате или импортируйте его здесь." : "Python-плагины включаются только с вашего согласия и не запускаются автоматически.")
         default: return nil
         }
     }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section == 3 { return self.pluginMenu.cell(at: indexPath.row) }
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         if indexPath.section == 0 {
             switch indexPath.row {
             case 0:
-                cell.textLabel?.text = "Импортировать .plugin"; cell.imageView?.image = UIImage(systemName: "square.and.arrow.down")
+                cell.textLabel?.text = "Импортировать .plugin, .elyx, .eaf"; cell.imageView?.image = UIImage(systemName: "square.and.arrow.down")
             case 1:
                 if self.batchSelecting {
                     let available = self.service.plugins.filter { !$0.isBusy }.count
@@ -160,6 +167,7 @@ import UniformTypeIdentifiers
     }
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        if indexPath.section == 3 { self.pluginMenu.select(indexPath.row); return }
         if indexPath.section == 0 {
             switch indexPath.row {
             case 0:
@@ -214,7 +222,8 @@ import UniformTypeIdentifiers
     }
     @objc private func importPressed() {
         guard !self.batchRunning, !self.batchSelecting else { return }
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType(filenameExtension: "plugin") ?? .data], asCopy: true)
+        let types = (["plugin"] + AyuPluginService.packageExtensions).map { UTType(filenameExtension: $0) ?? .data }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.allowsMultipleSelection = true; picker.delegate = self; self.present(picker, animated: true)
     }
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -258,7 +267,7 @@ import UniformTypeIdentifiers
         guard !self.batchRunning, !urls.isEmpty else { return }
         self.batchRunning = true; self.batchOperation = .importDisabled; self.batchCancellationRequested = false; self.batchProgress = (0, urls.count)
         self.tableView.reloadData()
-        Task { @MainActor in
+        Task { @MainActor [self] in
             do {
                 let summary = try await self.service.importBatch(from: urls,
                     isCancelled: { [weak self] in self?.batchCancellationRequested ?? true },
@@ -292,7 +301,7 @@ import UniformTypeIdentifiers
         self.batchRunning = true; self.batchOperation = .enable; self.batchCancellationRequested = false; self.batchProgress = (0, ids.count)
         self.tableView.allowsMultipleSelection = false
         self.tableView.reloadData()
-        Task { @MainActor in
+        Task { @MainActor [self] in
             do {
                 let summary = try await self.service.enableBatch(ids,
                     isCancelled: { [weak self] in self?.batchCancellationRequested ?? true },
@@ -326,7 +335,7 @@ import UniformTypeIdentifiers
     }
 
     private func showLatestReport() {
-        Task { @MainActor in
+        Task { @MainActor [self] in
             let url: URL?
             if let cachedURL = self.latestBatchLogURL {
                 url = cachedURL
@@ -421,8 +430,12 @@ import UniformTypeIdentifiers
     private var loading = false
     private var reloadRequested = false
     private var pendingReloadGeneration: String?
-    init(service: AyuPluginService, plugin: AyuInstalledPlugin, subpageCallback: String? = nil, title: String = "Настройки плагина") {
-        self.service = service; self.plugin = plugin; self.subpageCallback = subpageCallback
+    /// Android's `targetSettingName`, resolved once after the first rows arrive: the row carrying the
+    /// last alias is scrolled to and highlighted; each alias before it opens that row's sub-page.
+    private var pendingLinkAlias: [String]
+    private var highlightedRow: Int?
+    init(service: AyuPluginService, plugin: AyuInstalledPlugin, subpageCallback: String? = nil, title: String = "Настройки плагина", linkAlias: [String] = []) {
+        self.service = service; self.plugin = plugin; self.subpageCallback = subpageCallback; self.pendingLinkAlias = linkAlias
         super.init(style: .insetGrouped); self.title = title
     }
     required init?(coder: NSCoder) { return nil }
@@ -432,7 +445,12 @@ import UniformTypeIdentifiers
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.estimatedRowHeight = 64
         NotificationCenter.default.addObserver(self, selector: #selector(self.settingsChanged(_:)), name: AyuPluginNativeHost.settingsDidChange, object: self.service.host)
+        // A plugin can open this screen on its own, without the manager below it.
+        if self.navigationController?.viewControllers.first === self {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .close, target: self, action: #selector(self.closePressed))
+        }
     }
+    @objc private func closePressed() { self.dismiss(animated: true) }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.reload()
@@ -459,15 +477,48 @@ import UniformTypeIdentifiers
         self.loading = true
         self.tableView.isUserInteractionEnabled = false
         Task {
+            var loaded = false
             do {
                 if let callback = self.subpageCallback {
                     self.rows = try await self.service.subpage(pluginID: self.plugin.id, callbackID: callback)
                 } else {
                     self.rows = try await self.service.settings(self.plugin.id)
                 }
-            } catch { self.present(AyuPluginAlerts.error(error), animated: true) }
+                loaded = true
+            } catch { self.pendingLinkAlias = []; self.present(AyuPluginAlerts.error(error), animated: true) }
             self.finishRowOperation()
+            if loaded { self.resolveLinkAlias() }
         }
+    }
+    static func linkAliasRow(_ alias: String, in rows: [AyuPluginSetting]) -> Int? {
+        rows.firstIndex { $0.descriptor["link_alias"].string == alias }
+    }
+    private func resolveLinkAlias() {
+        guard let alias = self.pendingLinkAlias.first else { return }
+        let rest = Array(self.pendingLinkAlias.dropFirst())
+        self.pendingLinkAlias = []
+        guard let index = Self.linkAliasRow(alias, in: self.rows) else { self.linkAliasNotFound(); return }
+        guard rest.isEmpty else {
+            guard let callback = self.rows[index].descriptor["create_sub_fragment"]["$callback"].string else { self.linkAliasNotFound(); return }
+            let page = AyuPluginSettingsViewController(service: self.service, plugin: self.plugin, subpageCallback: callback, title: self.rows[index].text, linkAlias: rest)
+            self.navigationController?.pushViewController(page, animated: true)
+            return
+        }
+        let indexPath = IndexPath(row: index, section: 0)
+        self.highlightedRow = index
+        self.tableView.reloadRows(at: [indexPath], with: .none)
+        self.tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self, self.highlightedRow == index else { return }
+            self.highlightedRow = nil
+            self.tableView.reloadData()
+        }
+    }
+    private func linkAliasNotFound() {
+        let alert = UIAlertController(title: "Настройка не найдена", message: "У плагина «\(self.plugin.name)» нет настройки, на которую ведёт ссылка.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Понятно", style: .default))
+        self.present(alert, animated: true)
     }
     private func finishRowOperation() {
         self.loading = false
@@ -487,6 +538,7 @@ import UniformTypeIdentifiers
         cell.textLabel?.font = .preferredFont(forTextStyle: .body); cell.detailTextLabel?.font = .preferredFont(forTextStyle: .subheadline)
         cell.textLabel?.adjustsFontForContentSizeCategory = true; cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.isEnabled = row.descriptor["enabled"] != .bool(false)
+        if indexPath.row == self.highlightedRow { cell.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.25) }
         if row.descriptor["destructive"] == .bool(true) { cell.textLabel?.textColor = .systemRed }
         else if row.descriptor["accent"] == .bool(true) { cell.textLabel?.textColor = .systemBlue }
         cell.selectionStyle = ["Header", "Divider", "Switch"].contains(row.type) ? .none : .default

@@ -11,6 +11,10 @@
 // point when one supplementary character forces 4-byte storage), its UTF-8
 // cache, the NSString UTF-16 backing, and object overhead.
 #define APB_QUEUE_MAXIMUM_RESULT_RETAINED_BYTES (7 * APB_QUEUE_MAXIMUM_RESULT_UTF8_BYTES + 512)
+// Coalesced worker-thread wake jobs: one per plugin, at most this many plugins.
+#define APB_QUEUE_MAXIMUM_WAKES ((size_t)32)
+// `_ayu_host.dispatch` request bytes: one 1 MiB TL value as base64 and its envelope.
+#define APB_DISPATCH_MAXIMUM_REQUEST_UTF8_BYTES ((size_t)1572864)
 
 typedef struct {
     size_t maximum_jobs;
@@ -18,6 +22,9 @@ typedef struct {
     size_t result_retained_bytes;
     size_t outstanding_jobs;
     size_t outstanding_bytes;
+    // Input share of outstanding_bytes: what admitted jobs retain before and
+    // while they execute.
+    size_t payload_bytes;
 } APBQueueBudget;
 
 // Payload estimates are calculated from NSString UTF-16 code units by the
@@ -56,42 +63,65 @@ static inline void apb_queue_budget_init(APBQueueBudget *budget,
     budget->result_retained_bytes = result_retained_bytes;
     budget->outstanding_jobs = 0;
     budget->outstanding_bytes = 0;
+    budget->payload_bytes = 0;
 }
 
-// The reservation includes the maximum retained result, not just queued
-// input. It remains charged while executing and until its main-queue completion
-// returns, so delayed delivery cannot create an unaccounted completion backlog.
+// Admission charges the input a job retains. Jobs execute one at a time, so
+// only the executing job needs the maximum result reservation: all admitted
+// inputs together leave room for exactly one, which keeps every admitted job
+// executable once earlier completions have been delivered. The job slot and
+// input stay charged until the main-queue completion returns, so delayed
+// delivery cannot create an unaccounted completion backlog.
 static inline int apb_queue_budget_admit(APBQueueBudget *budget,
                                          size_t payload_bytes,
                                          size_t *outstanding_cost) {
-    if (!budget || !outstanding_cost || payload_bytes > SIZE_MAX - budget->result_retained_bytes) {
+    if (!budget || !outstanding_cost || budget->result_retained_bytes > budget->maximum_bytes) {
         return 0;
     }
-    size_t cost = payload_bytes + budget->result_retained_bytes;
+    size_t payload_ceiling = budget->maximum_bytes - budget->result_retained_bytes;
     if (budget->outstanding_jobs >= budget->maximum_jobs ||
-        cost > budget->maximum_bytes ||
-        budget->outstanding_bytes > budget->maximum_bytes - cost) {
+        payload_bytes > payload_ceiling ||
+        budget->payload_bytes > payload_ceiling - payload_bytes ||
+        budget->outstanding_bytes > budget->maximum_bytes - payload_bytes) {
         return 0;
     }
     budget->outstanding_jobs += 1;
-    budget->outstanding_bytes += cost;
-    *outstanding_cost = cost;
+    budget->outstanding_bytes += payload_bytes;
+    budget->payload_bytes += payload_bytes;
+    *outstanding_cost = payload_bytes;
     return 1;
 }
 
-// Call only after the completion has returned to its caller.
-static inline int apb_queue_budget_complete(APBQueueBudget *budget, size_t outstanding_cost) {
-    if (!budget || budget->outstanding_jobs == 0 || budget->outstanding_bytes < outstanding_cost) {
+// The worker calls this before it executes an admitted job and, while it
+// fails, waits for a delivered completion to return its retained result.
+static inline int apb_queue_budget_begin_result(APBQueueBudget *budget, size_t *outstanding_cost) {
+    if (!budget || !outstanding_cost || budget->result_retained_bytes > budget->maximum_bytes ||
+        budget->outstanding_bytes > budget->maximum_bytes - budget->result_retained_bytes ||
+        budget->outstanding_bytes < *outstanding_cost) {
+        return 0;
+    }
+    budget->outstanding_bytes += budget->result_retained_bytes;
+    *outstanding_cost += budget->result_retained_bytes;
+    return 1;
+}
+
+// Call only after the completion has returned to its caller. `payload_bytes`
+// is the input charge of the same job.
+static inline int apb_queue_budget_complete(APBQueueBudget *budget, size_t outstanding_cost, size_t payload_bytes) {
+    if (!budget || budget->outstanding_jobs == 0 || budget->outstanding_bytes < outstanding_cost ||
+        payload_bytes > outstanding_cost || budget->payload_bytes < payload_bytes) {
         return 0;
     }
     budget->outstanding_jobs -= 1;
     budget->outstanding_bytes -= outstanding_cost;
+    budget->payload_bytes -= payload_bytes;
     return 1;
 }
 
 // Once execution has produced and released its temporary result, reduce the
-// reservation to the actual bounded completion payload while retaining the
-// job slot and input charge through main-thread delivery.
+// result reservation taken by apb_queue_budget_begin_result to the actual
+// bounded completion payload while retaining the job slot and input charge
+// through main-thread delivery.
 static inline int apb_queue_budget_adjust_result(APBQueueBudget *budget,
                                                  size_t *outstanding_cost,
                                                  size_t actual_result_bytes) {

@@ -22,8 +22,21 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         binding = (ROOT / "submodules/TelegramUI/Sources/Chat/ChatControllerOpenMessageContextMenu.swift").read_text()
         self.assertIn("AyuPluginMessageContextMenu.appending(to: actionsSignal", binding)
         menu_ui = (ROOT / "submodules/TelegramUI/Sources/Chat/AyuPluginMessageContextMenu.swift").read_text()
-        self.assertLess(menu_ui.index("subscriber.putNext(items)"), menu_ui.index("AyuPluginMenuBridge.shared.items"))
-        self.assertIn("invocation.isCurrentMenu()", menu_ui)
+        self.assertIn("AyuPluginContextMenu.appending(to: signal, request: request, isPresented: { invocation.isCurrentMenu() })", menu_ui)
+        # Every plugin menu shares one helper: native rows first, plugin rows when the bridge answers.
+        helper = (ROOT / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuPluginContextMenu.swift").read_text()
+        self.assertLess(helper.index("subscriber.putNext(items)"), helper.index("AyuPluginMenuBridge.shared.open(request"))
+        self.assertIn('"//submodules/AyuPluginBridge:AyuPluginBridge"',
+                      (ROOT / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/BUILD").read_text())
+        for path, kind in (("submodules/TelegramUI/Sources/ChatController.swift", ".chatActionMenu"),
+                           ("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenPerformButtonAction.swift",
+                            ".profileActionMenu")):
+            source = (ROOT / path).read_text()
+            self.assertIn("AyuPluginContextMenu.appending(to:", source)
+            self.assertIn("AyuPluginMenuRequest(kind: " + kind, source)
+            self.assertIn("ayuPluginMenu.controller = contextController", source)
+        self.assertIn("AyuPluginMenuBridge.shared.bindLocations(resolve:",
+                      (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text())
 
     def test_app_binding_uses_real_signals_and_explicit_authorized_root(self):
         binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()
@@ -143,7 +156,8 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
 
     def test_event_transport_has_generation_and_never_starts_python_on_lifecycle(self):
         service = (BRIDGE / "Integration/AyuPluginService.swift").read_text()
-        self.assertIn('let generation: String; let name = "app"', service)
+        relay = (BRIDGE / "Integration/AyuPluginDeliveryQueue.swift").read_text()
+        self.assertIn('let generation: String; let name = "app"', relay)
         self.assertIn("self.pythonGenerations[owner] == generation", service)
         lifecycle = service[service.index("public func applicationDidChange"):service.index("private func inspect(")]
         self.assertNotIn("prepareRuntime", lifecycle)

@@ -1,23 +1,81 @@
-"""Real Python file helpers; application storage and file UI need native adapters.
+"""Python file helpers and bridge-owned storage directories.
 
-Python plugins are trusted application code. Paths are ordinary Python paths,
-not a sandbox or a fabricated Android application directory.
+Python plugins are trusted application code and paths are ordinary Python
+paths, not a sandbox. Android returns Telegram's media directories; iOS keeps
+Telegram media in its own store, so the directory helpers return real writable
+directories of the application container that only the plugin bridge uses.
+Files Telegram downloaded are not found there. File-open handlers still need a
+native adapter.
 """
 import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
 
-from ayu_bridge import UnsupportedAPI
+from ayu_bridge import UnsupportedAPI, runtime
 from android_utils import log
 
-
-def _unsupported(*args, **kwargs):
-    raise UnsupportedAPI("Application storage locations and file handlers need an unavailable native adapter")
+_STORAGE_NAME = "AyuPluginFiles"
 
 
-get_plugins_dir = get_cache_dir = get_files_dir = get_images_dir = _unsupported
-get_videos_dir = get_audios_dir = get_documents_dir = _unsupported
+def _container():
+    home = os.environ.get("HOME") or ""
+    if not os.path.isabs(home) or not os.path.isdir(home):
+        raise UnsupportedAPI("The application container is unavailable to the plugin bridge")
+    return home
+
+
+def _location(*parts):
+    """The path of a storage directory. Nothing is created and the host is not asked."""
+    return os.path.join(_container(), *parts)
+
+
+def _plugin_file(filename):
+    """Where a plugin file lies on Android: directly inside the directory ``get_plugins_dir()`` returns."""
+    return os.path.join(_location("Library", "Application Support", _STORAGE_NAME, "plugins"),
+                        os.path.basename(filename))
+
+
+def _directory(*parts):
+    runtime.require()
+    path = _location(*parts)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as error:
+        raise UnsupportedAPI("A plugin storage directory cannot be created") from error
+    return path
+
+
+def _files(name):
+    return _directory("Library", "Application Support", _STORAGE_NAME, name)
+
+
+def get_plugins_dir():
+    return _files("plugins")
+
+
+def get_cache_dir():
+    return _directory("Library", "Caches", _STORAGE_NAME)
+
+
+def get_files_dir():
+    return _files("files")
+
+
+def get_images_dir():
+    return _files("images")
+
+
+def get_videos_dir():
+    return _files("videos")
+
+
+def get_audios_dir():
+    return _files("audios")
+
+
+def get_documents_dir():
+    return _files("documents")
 
 
 def _read(file_path, mode):
@@ -94,10 +152,24 @@ def list_dir(path, recursive=False, include_files=True, include_dirs=False, exte
     return results
 
 
+class staticproperty:
+    def __init__(self, fget):
+        self.fget = fget
+
+    def __get__(self, obj, owner):
+        return self.fget()
+
+
 class FilesController:
     """Android file-handler descriptors; registration requires native support."""
-    DIRECT_FILE_ICONS = False
-    SUPPORT_ICONS = False
+
+    @staticproperty
+    def DIRECT_FILE_ICONS():
+        return False
+
+    @staticproperty
+    def SUPPORT_ICONS():
+        return False
 
     class Place(Enum):
         UNKNOWN = 1
@@ -143,10 +215,10 @@ class FilesController:
         def __init__(self, ext, secret):
             super().__init__(f"Provided secret for extension '{ext}' is invalid.")
 
-    @staticmethod
-    def register(file_info):
+    @classmethod
+    def register(cls, file_info):
         raise UnsupportedAPI("Application file-handler registration is unavailable on iOS")
 
-    @staticmethod
-    def unregister(ext, secret):
+    @classmethod
+    def unregister(cls, ext, secret):
         raise UnsupportedAPI("Application file-handler registration is unavailable on iOS")

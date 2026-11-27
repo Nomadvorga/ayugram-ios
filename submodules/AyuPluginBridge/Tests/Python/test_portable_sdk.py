@@ -122,10 +122,11 @@ class PortableHostTests(unittest.TestCase):
     tearDown = fixtures.BridgeTests.tearDown
     load = fixtures.BridgeTests.load
 
-    def test_native_entity_conversion_fails_without_declared_adapter(self):
+    def test_native_entity_conversion_uses_python_local_tl_class_without_host_adapter(self):
         scope = self.load()
-        with bridge.runtime.context(scope), self.assertRaises(bridge.UnsupportedAPI):
-            parse_text("<b>text</b>")
+        with bridge.runtime.context(scope):
+            entity = parse_text("<b>text</b>")["entities"][0]
+        self.assertEqual((type(entity).__name__, entity.offset, entity.length), ("TL_messageEntityBold", 0, 4))
 
     def test_native_entity_conversion_uses_only_requested_class(self):
         class_name = "org.telegram.tgnet.TLRPC$TL_messageEntityBold"
@@ -311,8 +312,7 @@ class PortableHostTests(unittest.TestCase):
     def test_unavailable_native_helpers_fail_explicitly(self):
         scope = self.load()
         with bridge.runtime.context(scope):
-            for call in (file_utils.get_cache_dir,
-                         lambda: file_utils.FilesController.register(file_utils.FilesController.FileInfo("txt", lambda value: None)),
+            for call in (lambda: file_utils.FilesController.register(file_utils.FilesController.FileInfo("txt", lambda value: None)),
                          lambda: android_utils.OnLongClickListener(lambda view: True),
                          lambda: classes.joverride(), lambda: classes.joverload("x", []),
                          lambda: lifecycle.on_plugin_load(lambda: None),

@@ -21,10 +21,12 @@ class PresentationHost(fixtures.FakeHost):
             handle = "dialog-" + str(len(self.requests))
             self.handles[handle] = (request["plugin_id"], [])
             return {"$handle": handle, "$class": "org.telegram.ui.ActionBar.AlertDialog"}
-        if request["operation"] == "java.member" and request["arguments"]["name"] == "dismiss":
+        if request["operation"] == "java.member" and request["arguments"]["name"] in ("dismiss", "isShowing"):
             return {"kind": "method"}
         if request["operation"] == "java.invoke" and request["arguments"]["name"] == "dismiss":
             return None
+        if request["operation"] == "java.invoke" and request["arguments"]["name"] == "isShowing":
+            return True
         return super().perform(request)
 
 
@@ -47,8 +49,11 @@ class UICompatibilityTests(unittest.TestCase):
             self.assertIsNone(builder.get_context())
             self.assertEqual(sum(r["operation"] == "ui.present" for r in self.host.requests), 1)
             builder.dismiss()
-            with self.assertRaises(bridge.UnsupportedAPI):
-                builder.show()
+            self.assertFalse(builder.get_dialog().isShowing())
+            # A dismissed dialog is presented again; it is never silently left off screen.
+            self.assertIs(builder.show(), builder)
+            self.assertTrue(builder.get_dialog().isShowing())
+            self.assertEqual(sum(r["operation"] == "ui.present" for r in self.host.requests), 2)
 
     def test_button_callback_receives_builder_and_android_button_tag(self):
         scope = self.load("uiclick")
@@ -59,8 +64,11 @@ class UICompatibilityTests(unittest.TestCase):
             callback = next(r for r in self.host.requests if r["operation"] == "ui.present")["arguments"]["config"]["positive_button"]["on_click"]["$callback"]
         bridge.invoke_callback_json(json.dumps({"version": 1, "plugin_id": "uiclick", "callback_id": callback, "arguments": [None, -1]}))
         self.assertEqual(calls, [(builder, AlertDialogBuilder.BUTTON_POSITIVE)])
-        with bridge.runtime.context(scope), self.assertRaises(bridge.UnsupportedAPI):
-            builder.show()
+        with bridge.runtime.context(scope):
+            # The click closed the dialog and released its callbacks.
+            self.assertFalse(builder.get_dialog().isShowing())
+            self.assertEqual(scope.callbacks, {})
+            self.assertEqual(sum(r["operation"] == "ui.present" for r in self.host.requests), 1)
 
     def test_items_optional_listener_and_unsupported_native_options(self):
         scope = self.load("uiitems")
@@ -68,10 +76,11 @@ class UICompatibilityTests(unittest.TestCase):
             builder = AlertDialogBuilder(None).set_items(["One", "Two"])
             builder.show()
             request = next(r for r in self.host.requests if r["operation"] == "ui.present")
-            self.assertIsNone(request["arguments"]["config"]["items"]["on_click"])
+            # A click is always reported so the builder knows the dialog closed.
+            self.assertIn("$callback", request["arguments"]["config"]["items"]["on_click"])
             for call in (lambda: AlertDialogBuilder(None, 2),
                          lambda: AlertDialogBuilder(None).set_items(["One"], icons=[1]),
-                         lambda: AlertDialogBuilder(None).set_view(None)):
+                         lambda: AlertDialogBuilder(None).set_view(object())):
                 with self.assertRaises(bridge.UnsupportedAPI):
                     call()
 

@@ -35,7 +35,7 @@ final class AyuPluginBatchTests: XCTestCase {
                 diagnostic: { _ in .runtime }, progress: { progress.append(($0, $1)) },
                 enable: { id, report in
                     called.append(id)
-                    await report(.readSource, self.context(id == "plugin2" ? "b" : "a"))
+                    try await report(.readSource, self.context(id == "plugin2" ? "b" : "a"))
                     if id == "plugin2" { throw AyuPluginService.Failure.runtime }
                     return AyuPluginBatchLoadResult(generation: String(repeating: "0", count: 32), context: self.context())
                 })
@@ -79,7 +79,6 @@ final class AyuPluginBatchTests: XCTestCase {
 
     func testBlockerGrammarAndJournalRedaction() async throws {
         XCTAssertNotNil(AyuPluginBatchBlocker.sanitized(code: "SDK_MEMBER", identifier: "android.view.View.setAlpha"))
-        XCTAssertNil(AyuPluginBatchBlocker.sanitized(code: "SDK_MEMBER", identifier: "android.View;secret"))
         XCTAssertNil(AyuPluginBatchBlocker.sanitized(code: "PLUGIN_ERROR", identifier: "safe.Token"))
         let safeCodeWithoutUnsafeIdentifier = AyuPluginBatchBlocker.sanitized(code: "SDK_MEMBER", identifier: "android.View;secret")
         XCTAssertEqual(safeCodeWithoutUnsafeIdentifier?.code, "SDK_MEMBER")

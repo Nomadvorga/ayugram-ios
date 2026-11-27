@@ -14,13 +14,13 @@ final class AyuPluginNativeHostTests: XCTestCase {
 
     private func call(_ host: AyuPluginNativeHost, _ operation: String, owner: String = "alpha", claimedOwner: String? = nil, arguments: [String: AyuBridgeValue] = [:]) async throws -> AyuBridgeValue {
         let request: AyuBridgeValue = .object(["version": .integer(1), "id": .string("17"), "plugin_id": .string(claimedOwner ?? owner), "operation": .string(operation), "arguments": .object(arguments)])
-        let text = String(data: try JSONEncoder().encode(request), encoding: .utf8)!
+        let text = String(data: try AyuBridgeJSON.encode(request), encoding: .utf8)!
         let response: String = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(returning: host.dispatch(text, owner: owner))
             }
         }
-        return try JSONDecoder().decode(AyuBridgeValue.self, from: Data(response.utf8))
+        return try AyuBridgeJSON.decode(Data(response.utf8))
     }
 
     private func authorize(_ host: AyuPluginNativeHost, owner: String = "alpha") async throws {
@@ -35,6 +35,54 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(String(data: encoded, encoding: .utf8), "9223372036854775800")
     }
 
+    func testWireTextKeepsEachNumbersType() throws {
+        let decoded = try AyuBridgeJSON.decode(Data(#"[2.0, 2, 1e2, 2.5, 9007199254740993, -9223372036854775808, 9223372036854775807, -0.0, true, null, "a\/b\u00e9", {"k": 1.0}]"#.utf8))
+        XCTAssertEqual(decoded, .array([.number(2), .integer(2), .number(100), .number(2.5), .integer(9_007_199_254_740_993), .integer(Int64.min),
+                                        .integer(Int64.max), .number(-0.0), .bool(true), .null, .string("a/bé"), .object(["k": .number(1)])]))
+        XCTAssertEqual(decoded.array?[7].double?.sign, .minus)
+        let encoded = try AyuBridgeJSON.encode(.array([.number(2), .integer(2), .number(2.5), .number(1e300), .number(-0.0), .number(1e-7), .integer(Int64.min),
+                                                       .bool(false), .null, .string("a/b\n\"\\\u{1}é😀"), .array([]), .object([:])]))
+        XCTAssertEqual(String(decoding: encoded, as: UTF8.self), #"[2.0,2,2.5,1e+300,-0.0,1e-07,-9223372036854775808,false,null,"a/b\n\"\\\u0001é😀",[],{}]"#)
+        let nested: AyuBridgeValue = .object(["a": .array([.number(3), .integer(3), .object(["b": .number(0.1), "c": .string("\u{7f}\t")])]), "d": .integer(Int64.max)])
+        XCTAssertEqual(try AyuBridgeJSON.decode(AyuBridgeJSON.encode(nested)), nested)
+        XCTAssertThrowsError(try AyuBridgeJSON.encode(.number(.infinity)))
+        XCTAssertThrowsError(try AyuBridgeJSON.encode(.array([.number(.nan)])))
+        XCTAssertThrowsError(try AyuBridgeJSON.decode(Data("[1 2]".utf8)))
+        XCTAssertEqual(try AyuBridgeJSON.decode(Data("[18446744073709551616]".utf8)), .array([.number(18_446_744_073_709_551_616)]), "Beyond Int64 a number is a float")
+        // An integer never passes through a double; a float without a fraction still satisfies an integer parameter.
+        XCTAssertEqual(AyuBridgeValue.integer(Int64.max).integer, Int64.max)
+        XCTAssertEqual(AyuBridgeValue.number(4).integer, 4)
+        XCTAssertNil(AyuBridgeValue.number(4.5).integer)
+        XCTAssertNil(AyuBridgeValue.number(1e300).integer)
+        XCTAssertNil(AyuBridgeValue.integer(4).double)
+        XCTAssertEqual(AyuBridgeValue.integer(4).number, 4)
+    }
+
+    func testFloatsKeepTheirTypeThroughSettingsStateAndArrays() async throws {
+        let host = self.host()
+        try await self.authorize(host)
+        for (key, value) in [("whole", AyuBridgeValue.number(2)), ("int", .integer(2)), ("big", .integer(9_007_199_254_740_993))] {
+            let saved = try await self.call(host, "settings.set", arguments: ["key": .string(key), "value": value])
+            XCTAssertEqual(saved["error"], .null)
+            let read = try await self.call(host, "settings.get", arguments: ["key": .string(key)])
+            XCTAssertEqual(read["result"], value)
+            let state = try await self.call(host, "state.set", arguments: ["key": .string(key), "value": value])
+            XCTAssertEqual(state["error"], .null)
+            let stateRead = try await self.call(host, "state.get", arguments: ["key": .string(key)])
+            XCTAssertEqual(stateRead["result"], value)
+        }
+        let floats = try await self.call(host, "java.array", arguments: ["component": .string("float"), "values": .array([.integer(1), .number(2.5)])])
+        let first = try await self.call(host, "java.get_item", arguments: ["target": floats["result"], "index": .integer(0)])
+        XCTAssertEqual(first["result"], .number(1), "A float array answers floats")
+        let ints = try await self.call(host, "java.array", arguments: ["component": .string("int"), "values": .array([.integer(1)])])
+        let whole = try await self.call(host, "java.get_item", arguments: ["target": ints["result"], "index": .integer(0)])
+        XCTAssertEqual(whole["result"], .integer(1))
+        let visible = try await self.call(host, "java.get_field", arguments: ["target": .object(["class_name": .string("android.view.View")]), "name": .string("GONE")])
+        XCTAssertEqual(visible["result"], .integer(8), "Android int constants are integers")
+        let metrics = try await self.call(host, "host.metrics")
+        XCTAssertNotNil(metrics["result"]["commands"].integer)
+    }
+
     private func construct(_ host: AyuPluginNativeHost, _ name: String, _ args: [AyuBridgeValue] = [], owner: String = "alpha") async throws -> AyuBridgeValue {
         try await self.call(host, "java.construct", owner: owner, arguments: ["class_name": .string(name), "args": .array(args)])
     }
@@ -42,6 +90,8 @@ final class AyuPluginNativeHostTests: XCTestCase {
         try await self.call(host, "java.invoke", owner: owner, arguments: ["target": target, "name": .string(name), "args": .array(args)])
     }
     private func classTarget(_ name: String) -> AyuBridgeValue { .object(["class_name": .string(name)]) }
+    /// A Java class passed as an argument, which is not the static call target form.
+    private func classArgument(_ name: String) -> AyuBridgeValue { .object(["$java_class": .string(name)]) }
 
     func testRegistryRejectsCollisionsReservedClassesAndUnsafeConstants() throws {
         let adapter = AyuBridgeClassAdapter(name: "example.Value")
@@ -241,6 +291,76 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertNil(mismatch.object?["result"])
     }
 
+    func testCapabilitiesPublishTheMembersThatMemberLookupAnswers() async throws {
+        let adapter = AyuBridgeClassAdapter(name: "example.Factory", constants: ["LIMIT": .integer(3)],
+            constructor: { _, _ in [:] },
+            staticMethods: [
+                "make": { _, _ in .instance(className: "example.Factory", state: [:]) },
+                "wrong": { _, _ in .instance(className: "java.util.HashMap", state: ["entries": .array([])]) },
+            ],
+            methods: ["size": { _, _, _ in .value(.integer(0)) }],
+            results: ["make": "example.Factory", "wrong": "example.Factory"])
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "example.Bad", results: ["absent": "example.Bad"])]))
+        XCTAssertThrowsError(try AyuBridgeClassRegistry([AyuBridgeClassAdapter(name: "example.Bad",
+            staticMethods: ["make": { _, _ in .value(.null) }], results: ["make": "example.Unknown"])]))
+        let host = self.host(registry: try .standard.adding([adapter]))
+        try await self.authorize(host)
+        let capabilities = try await self.call(host, "runtime.capabilities")
+        let members = capabilities["result"]["members"]
+        XCTAssertEqual(members["version"], .integer(1))
+        let classes = members["classes"]
+        XCTAssertEqual(Set(classes.object?.keys.map { $0 } ?? []), Set(capabilities["result"]["classes"].array?.compactMap(\.string) ?? []))
+        func names(_ className: String, _ key: String) -> Set<String> { Set(classes[className][key].array?.compactMap(\.string) ?? []) }
+        XCTAssertEqual(classes["example.Factory"]["constructor"], .bool(true))
+        XCTAssertEqual(names("example.Factory", "methods"), ["size", "getClass"])
+        XCTAssertTrue(names("example.Factory", "static_methods").isSuperset(of: ["make", "wrong", "getName"]))
+        XCTAssertEqual(names("example.Factory", "static_fields"), ["LIMIT"])
+        XCTAssertEqual(classes["example.Factory"]["results"], .object(["make": .string("example.Factory"), "wrong": .string("example.Factory")]))
+        XCTAssertEqual(classes["android.view.Gravity"]["constructor"], .bool(false))
+        XCTAssertTrue(names("android.view.Gravity", "static_fields").contains("CENTER"))
+        XCTAssertTrue(names("android.widget.TextView", "methods").contains("setText"))
+        XCTAssertFalse(names("android.widget.TextView", "methods").contains("setChecked"))
+        let layoutFields: Set<String> = ["width", "height", "x", "y", "gravity", "leftMargin", "topMargin", "rightMargin", "bottomMargin"]
+        XCTAssertEqual(names("android.widget.LinearLayout$LayoutParams", "writable_fields"), layoutFields.union(["weight"]))
+        XCTAssertEqual(names("android.widget.FrameLayout$LayoutParams", "fields"), layoutFields)
+        // java.invoke implements setMargins; the SDK reaches it only through java.member.
+        for className in ["android.view.ViewGroup$LayoutParams", "android.widget.FrameLayout$LayoutParams", "android.widget.LinearLayout$LayoutParams"] {
+            XCTAssertEqual(names(className, "methods"), ["getClass", "setMargins"])
+            let params = try await self.construct(host, className, [.integer(-1), .integer(-2)])
+            let found = try await self.call(host, "java.member", arguments: ["target": params["result"], "name": .string("setMargins")])
+            XCTAssertEqual(found["result"], .object(["kind": .string("method")]), className)
+        }
+
+        // The table is what java.member answers: every listed name resolves, another does not.
+        for className in ["example.Factory", "android.view.Gravity", "android.content.Intent"] {
+            for name in names(className, "static_methods").union(names(className, "static_fields")) {
+                let found = try await self.call(host, "java.member", arguments: ["target": self.classTarget(className), "name": .string(name)])
+                XCTAssertNotNil(found["result"]["kind"].string, className + "." + name)
+            }
+            let absent = try await self.call(host, "java.member", arguments: ["target": self.classTarget(className), "name": .string("notAMember")])
+            XCTAssertEqual(absent["error"]["code"], .string("UNSUPPORTED_API"))
+        }
+        let intent = try await self.construct(host, "android.content.Intent")
+        for name in names("android.content.Intent", "methods").union(names("android.content.Intent", "fields")) {
+            let found = try await self.call(host, "java.member", arguments: ["target": intent["result"], "name": .string(name)])
+            XCTAssertNotNil(found["result"]["kind"].string, name)
+        }
+        let absent = try await self.call(host, "java.member", arguments: ["target": intent["result"], "name": .string("startActivity")])
+        XCTAssertEqual(absent["error"]["code"], .string("UNSUPPORTED_API"))
+
+        // A declared result class is enforced, so the published map can be relied on.
+        let made = try await self.invoke(host, self.classTarget("example.Factory"), "make")
+        XCTAssertEqual(made["result"]["$class"], .string("example.Factory"))
+        let wrong = try await self.invoke(host, self.classTarget("example.Factory"), "wrong")
+        XCTAssertEqual(wrong["error"]["code"], .string("INVALID_ADAPTER"))
+
+        // A table that would take more than half of the response quota is left out as a whole.
+        var limits = AyuPluginBridgeLimits(); limits.responseBytes = 32_768
+        let bounded = try await self.call(self.host(limits: limits), "runtime.capabilities", claimedOwner: "$runtime")
+        XCTAssertNotNil(bounded["result"]["classes"].array)
+        XCTAssertNil(bounded["result"].object?["members"])
+    }
+
     func testSettingsIsolationAndPersistenceAcrossDetach() async throws {
         let host = self.host()
         try await self.authorize(host)
@@ -314,11 +434,11 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let params = try await self.construct(host, "android.widget.LinearLayout$LayoutParams", [.integer(-1), .integer(0), .number(2)])
         XCTAssertNotNil(params["result"]["$handle"].string)
         let weight = try await self.call(host, "java.get_field", arguments: ["target": params["result"], "name": .string("weight")])
-        XCTAssertEqual(weight["result"], .integer(2))
+        XCTAssertEqual(weight["result"], .number(2))
         let updatedWeight = try await self.call(host, "java.set_field", arguments: ["target": params["result"], "name": .string("weight"), "value": .number(4)])
         XCTAssertEqual(updatedWeight["result"], .null)
         let readUpdatedWeight = try await self.call(host, "java.get_private_field", arguments: ["target": params["result"], "name": .string("weight")])
-        XCTAssertEqual(readUpdatedWeight["result"], .integer(4))
+        XCTAssertEqual(readUpdatedWeight["result"], .number(4))
         let negativeWeight = try await self.call(host, "java.set_field", arguments: ["target": params["result"], "name": .string("weight"), "value": .number(-1)])
         XCTAssertEqual(negativeWeight["error"]["code"], .string("INVALID_ARGUMENTS"))
 
@@ -697,7 +817,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let tint = try await self.invoke(host, self.classTarget("android.content.res.ColorStateList"), "valueOf", [.integer(-65_536)])
         _ = try await self.invoke(host, horizontal["result"], "setProgressTintList", [tint["result"]])
         let wrongTint = try await self.invoke(host, horizontal["result"], "setProgressTintList", [.integer(-65_536)])
-        XCTAssertEqual(wrongTint["error"]["code"], .string("UNSUPPORTED_API"))
+        XCTAssertEqual(wrongTint["error"]["code"], .string("INVALID_ARGUMENTS"))
         let negativeProgress = try await self.invoke(host, horizontal["result"], "setProgress", [.integer(-1)])
         XCTAssertEqual(negativeProgress["error"]["code"], .string("INVALID_ARGUMENTS"))
 
@@ -749,7 +869,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let tint = try await self.invoke(host, self.classTarget("android.content.res.ColorStateList"), "valueOf", [.integer(-65_536)])
         _ = try await self.invoke(host, checkBox["result"], "setButtonTintList", [tint["result"]])
         let wrongTint = try await self.invoke(host, checkBox["result"], "setButtonTintList", [.integer(-65_536)])
-        XCTAssertEqual(wrongTint["error"]["code"], .string("UNSUPPORTED_API"))
+        XCTAssertEqual(wrongTint["error"]["code"], .string("INVALID_ARGUMENTS"))
 
         let listener = try await self.call(host, "java.proxy", arguments: [
             "interfaces": .array([.string("android.widget.CompoundButton$OnCheckedChangeListener")]),
@@ -774,6 +894,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(nativeButton.tintColor?.cgColor.components?.first ?? 0, 1, accuracy: 0.001)
         XCTAssertTrue(nativeButton.isSelected)
 
+        try ayuTestRequireControlActions()
         nativeButton.sendActions(for: .touchUpInside)
         let unchecked = try await self.invoke(host, checkBox["result"], "isChecked")
         XCTAssertEqual(unchecked["result"], .bool(false))
@@ -1097,6 +1218,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         _ = try await self.call(host, "ui.mount", arguments: ["target": editText["result"]])
         _ = try await self.invoke(host, editText["result"], "getText")
         let field = try XCTUnwrap(container.subviews.first?.subviews.compactMap { $0 as? UITextField }.first)
+        try ayuTestRequireControlActions()
         field.text = "A😺B"
         field.sendActions(for: .editingChanged)
 
@@ -1349,10 +1471,10 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let top = try await self.invoke(host, view["result"], "getPaddingTop")
         let right = try await self.invoke(host, view["result"], "getPaddingRight")
         let bottom = try await self.invoke(host, view["result"], "getPaddingBottom")
-        XCTAssertEqual(left["result"], .number(3))
-        XCTAssertEqual(top["result"], .number(5))
-        XCTAssertEqual(right["result"], .number(7))
-        XCTAssertEqual(bottom["result"], .number(11))
+        XCTAssertEqual(left["result"], .integer(3))
+        XCTAssertEqual(top["result"], .integer(5))
+        XCTAssertEqual(right["result"], .integer(7))
+        XCTAssertEqual(bottom["result"], .integer(11))
         let attached = try await self.invoke(host, view["result"], "isAttachedToWindow")
         XCTAssertEqual(attached["result"], .bool(false))
         let wrongArity = try await self.invoke(host, view["result"], "isAttachedToWindow", [.bool(true)])
@@ -1374,7 +1496,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         XCTAssertEqual(readback["result"]["$class"], .string("android.widget.FrameLayout$LayoutParams"))
         XCTAssertEqual(readback["result"]["$handle"], params["result"]["$handle"], "A live assigned layout object preserves its owned identity")
         let width = try await self.call(host, "java.get_field", arguments: ["target": readback["result"], "name": .string("width")])
-        XCTAssertEqual(width["result"], .number(-1))
+        XCTAssertEqual(width["result"], .integer(-1))
 
         _ = try await self.invoke(host, parent["result"], "addView", [child["result"], params["result"]])
         let insertedParams = try await self.invoke(host, child["result"], "getLayoutParams")
@@ -1425,18 +1547,18 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let shown = try await self.invoke(host, child["result"], "isShown")
         XCTAssertEqual(shown["result"], .bool(true))
         let height = try await self.invoke(host, child["result"], "getHeight")
-        XCTAssertEqual(height["result"], .number(52))
+        XCTAssertEqual(height["result"], .integer(52))
 
         _ = try await self.call(host, "java.set_field", arguments: [
             "target": params["result"], "name": .string("height"), "value": .integer(70),
         ])
         let changedHeight = try await self.invoke(host, child["result"], "getHeight")
-        XCTAssertEqual(changedHeight["result"], .number(70))
+        XCTAssertEqual(changedHeight["result"], .integer(70))
         _ = try await self.call(host, "java.set_field", arguments: [
             "target": params["result"], "name": .string("height"), "value": .integer(-2),
         ])
         let restoredHeight = try await self.invoke(host, child["result"], "getHeight")
-        XCTAssertEqual(restoredHeight["result"], .number(52))
+        XCTAssertEqual(restoredHeight["result"], .integer(52))
         let nativeParent = try XCTUnwrap(container.subviews.first)
         let nativeChild = try XCTUnwrap(nativeParent.subviews.first)
         XCTAssertEqual(nativeChild.layer.zPosition, 8)
@@ -1471,7 +1593,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let noLongerClickable = try await self.invoke(host, child["result"], "isClickable")
         XCTAssertEqual(noLongerClickable["result"], .bool(false))
         let clickedState = try await self.invoke(host, child["result"], "getHeight")
-        XCTAssertEqual(clickedState["result"], .number(52))
+        XCTAssertEqual(clickedState["result"], .integer(52))
         XCTAssertFalse(clickRecognizer.isEnabled)
 
         let badClickable = try await self.invoke(host, child["result"], "setClickable", [.integer(1)])
@@ -1489,7 +1611,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         _ = try await self.invoke(host, child["result"], "setRotation", [.number(45)])
         let rotation = try await self.invoke(host, child["result"], "getRotation")
         XCTAssertEqual(rotation["result"], .number(45))
-        XCTAssertEqual(atan2(nativeChild.transform.b, nativeChild.transform.a), .pi / 4, accuracy: 0.001)
+        XCTAssertEqual(atan2(nativeChild.layer.transform.m12, nativeChild.layer.transform.m11), .pi / 4, accuracy: 0.001)
         let invalidRotation = try await self.invoke(host, child["result"], "setRotation", [.number(360_001)])
         XCTAssertEqual(invalidRotation["error"]["code"], .string("INVALID_ARGUMENTS"))
     }
@@ -1839,7 +1961,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let staleMutation = try await self.invoke(host, alphaDrawable["result"], "setColor", [.integer(-65_536)])
         XCTAssertEqual(staleMutation["error"]["code"], .string("INVALID_HANDLE"))
         _ = try await self.invoke(host, freshView["result"], "getWidth")
-        XCTAssertTrue(freshContainer.subviews.first?.backgroundColor?.isEqual(UIColor.black) == true)
+        XCTAssertTrue(freshContainer.subviews.first?.backgroundColor?.isEqual(UIColor(red: 0, green: 0, blue: 0, alpha: 1)) == true)
     }
 
     func testOvalGradientBackgroundUsesEllipsePathOnRectangularView() async throws {
@@ -2097,8 +2219,10 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let absoluteByte = try await self.invoke(host, wrapped["result"], "get", [.integer(2)])
         XCTAssertEqual(absoluteByte["result"], .integer(127))
 
+        let secondByte = try await self.invoke(host, wrapped["result"], "get")
+        XCTAssertEqual(secondByte["result"], .integer(2))
         let exhausted = try await self.invoke(host, wrapped["result"], "get")
-        XCTAssertEqual(exhausted["result"], .integer(2))
+        XCTAssertEqual(exhausted["result"], .integer(127))
         let overflow = try await self.invoke(host, wrapped["result"], "get")
         XCTAssertEqual(overflow["error"]["code"], .string("INVALID_STATE"))
         let wrongOverload = try await self.invoke(host, byteBuffer, "wrap", [arrayResult["result"], .integer(0), .integer(1)])
@@ -2224,7 +2348,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let readByte = try await self.invoke(host, arrayClass, "get", [bytes["result"], .integer(1)])
         XCTAssertEqual(readByte["result"], .integer(-128))
 
-        let charSequenceClass = self.classTarget("java.lang.CharSequence")
+        let charSequenceClass = self.classArgument("java.lang.CharSequence")
         let strings = try await self.invoke(host, arrayClass, "newInstance", [charSequenceClass, .integer(2)])
         XCTAssertEqual(strings["result"]["$class"], .string("[Ljava.lang.CharSequence;"))
         let writeString = try await self.invoke(host, arrayClass, "set", [strings["result"], .integer(0), .string("portable")])
@@ -2283,7 +2407,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let host = self.host(limits: limits)
         try await self.authorize(host)
         let arrayClass = self.classTarget("java.lang.reflect.Array")
-        let intClass = self.classTarget("int")
+        let intClass = self.classArgument("int")
         let first = try await self.invoke(host, arrayClass, "newInstance", [intClass, .integer(3)])
         XCTAssertNil(first["error"]["code"].string)
         let elementOverflow = try await self.invoke(host, arrayClass, "newInstance", [intClass, .integer(2)])
@@ -2294,7 +2418,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         byteLimits.arrayBytesPerPlugin = 8
         let byteHost = self.host(limits: byteLimits)
         try await self.authorize(byteHost)
-        let boolClass = self.classTarget("boolean")
+        let boolClass = self.classArgument("boolean")
         let byteOverflow = try await self.invoke(byteHost, arrayClass, "newInstance", [boolClass, .integer(4)])
         XCTAssertEqual(byteOverflow["error"]["code"], .string("RESOURCE_LIMIT"))
 
@@ -2302,7 +2426,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         mutationLimits.arrayBytesPerPlugin = 64
         let mutationHost = self.host(limits: mutationLimits)
         try await self.authorize(mutationHost)
-        let objectArray = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classTarget("java.lang.String"), .integer(1)])
+        let objectArray = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classArgument("java.lang.String"), .integer(1)])
         XCTAssertNil(objectArray["error"]["code"].string)
         let oversizedWrite = try await self.invoke(mutationHost, arrayClass, "set", [objectArray["result"], .integer(0), .string(String(repeating: "x", count: 100))])
         XCTAssertEqual(oversizedWrite["error"]["code"], .string("RESOURCE_LIMIT"))
@@ -2311,10 +2435,10 @@ final class AyuPluginNativeHostTests: XCTestCase {
 
         let smallWrite = try await self.invoke(mutationHost, arrayClass, "set", [objectArray["result"], .integer(0), .string("tiny")])
         XCTAssertNil(smallWrite["error"]["code"].string)
-        let aggregateOverflow = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classTarget("int"), .integer(0)])
+        let aggregateOverflow = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classArgument("int"), .integer(0)])
         XCTAssertEqual(aggregateOverflow["error"]["code"], .string("RESOURCE_LIMIT"))
         _ = try await self.call(mutationHost, "java.release", arguments: ["target": objectArray["result"]])
-        let releasedCapacity = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classTarget("int"), .integer(0)])
+        let releasedCapacity = try await self.invoke(mutationHost, arrayClass, "newInstance", [self.classArgument("int"), .integer(0)])
         XCTAssertNil(releasedCapacity["error"]["code"].string)
     }
 
@@ -2711,7 +2835,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
             constructor: { _, _ in [:] }, methods: methods)
         var limits = AyuPluginBridgeLimits()
         limits.objectsPerPlugin = methods.count
-        limits.responseBytes = 4096
+        limits.responseBytes = 2048
         let host = self.host(limits: limits, registry: try .standard.adding([adapter]))
         try await self.authorize(host)
 
@@ -2912,6 +3036,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         let secondEndResult = await XCTWaiter.fulfillment(of: [secondEnd], timeout: 1)
         XCTAssertEqual(secondEndResult, .completed)
 
+        try await ayuTestRequireTimedAnimations()
         let canceledRunnable = try await self.call(host, "java.proxy", arguments: [
             "interfaces": .array([.string("java.lang.Runnable")]),
             "callbacks": .object(["run": .object(["$callback": .string("animator-end-canceled")])]),

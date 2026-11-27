@@ -110,15 +110,16 @@ class NativePluginRouteTests(unittest.TestCase):
         for text in ["android.widget.EditText", "setHint", "setHintTextColor", "setSingleLine", "setMinLines",
                      "presentCustomDialog", "org.telegram.ui.ActionBar.AlertDialog"]:
             self.assertIn(text, host)
-        app = (INTEGRATION / "AyuPluginApplicationBridge.swift").read_text()
+        # The Theme adapter lives in its own file of the application bridge.
+        app = (INTEGRATION / "AyuPluginApplicationBridge.swift").read_text() + (INTEGRATION / "AyuPluginTheme.swift").read_text()
         for text in ['"get_messages_controller":', "org.telegram.messenger.MessagesController",
                      "org.telegram.tgnet.TLRPC$Chat", "org.telegram.ui.ActionBar.Theme",
                      "android.util.TypedValue", "org.telegram.ui.Components.BulletinFactory"]:
             self.assertIn(text, app)
         # Original send hook is dispatched; the native Group Mentions rewrite is not.
         controller = (ROOT / "submodules/TelegramUI/Sources/ChatController.swift").read_text()
-        self.assertIn("AyuPluginService.shared.hasSendHooks", controller)
-        self.assertIn("AyuPluginService.shared.applySendHooks(", controller)
+        self.assertIn("AyuPluginTelegramAdapter.shared.hasSendMessageHooks", controller)
+        self.assertIn("AyuPluginTelegramAdapter.shared.applySendHooks(", controller)
         self.assertNotIn("self.ayuExpandGroupMentions(in: messages)", controller)
         # Sub-fragment navigation is driven by the plugin callback tag.
         manager = (INTEGRATION / "AyuPluginManagerViewController.swift").read_text()
@@ -234,18 +235,57 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("AyuDialogCardsState.didChange", controller)
         self.assertIn("refreshAyuDialogCards()", controller)
 
+    def test_request_and_update_hook_points_player_and_actions_are_wired(self):
+        """Wiring only: `telegram.hooks.set`, `telegram.player` and `telegram.action.*` are listed by the
+        app's backend because these call sites exist; none of it has run in the app."""
+        core = ROOT / "submodules/TelegramCore/Sources"
+        network = (core / "Network/Network.swift").read_text()
+        self.assertIn("let ayuPluginRequestService = AyuPluginHookedRequestService(mainSession.requestService)", network)
+        self.assertIn("self.requestService = ayuPluginRequestService", network)
+        self.assertIn("ayuPluginRequestService.network = self", network)
+        service = (core / "State/UpdateMessageService.swift").read_text()
+        self.assertIn("if !ayuPluginHooksApplied, ayuPluginDefersUpdates(updates, peerId: self.peerId, gate: self.ayuPluginGate", service)
+        for name in ("State/Sync/SyncDifference.swift", "State/Sync/ChannelPolling.swift"):
+            self.assertIn("ayuPluginHookedDifferenceUpdates(accountPeerId: accountPeerId, updates: ", (core / name).read_text())
+        hooks = (core / "AyuPlugins/AyuPluginHooks.swift").read_text()
+        self.assertIn("public let ayuPluginInterceptsAllHookStreams = true", hooks)
+        raw = (core / "AyuPlugins/AyuPluginRawRequest.swift").read_text()
+        self.assertIn("disposable = service.add(request, plugin: events)", raw)
+        adapter = (ROOT / "submodules/AyuPluginTelegramAdapter/Sources/AyuPluginTelegramAdapter.swift").read_text()
+        self.assertIn('if ayuPluginInterceptsAllHookStreams { result.insert("telegram.hooks.set") }', adapter)
+        self.assertIn('if state.player != nil { result.insert("telegram.player") }', adapter)
+        self.assertIn("var result = Self.coreOperations.union(Self.actionOperations)", adapter)
+        actions = (core / "AyuPlugins/AyuPluginActions.swift").read_text()
+        for call in ("ayuPluginDeleteMessages(account:", "ayuPluginReadDialog(account:", "ayuPluginProcessUpdates(account:",
+                     "ayuPluginStorePeers(account:", "ayuPluginLoadFullPeer(account:"):
+            self.assertIn("public func " + call, actions)
+            self.assertIn(call + " target, ", adapter)
+        bridge = (INTEGRATION / "AyuPluginTelegramActions.swift").read_text()
+        for operation in ("delete_messages", "read_dialog", "process_updates", "store_peers", "load_full_peer"):
+            self.assertIn('"telegram.action.' + operation + '"', bridge)
+        binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()
+        self.assertIn("self.installPluginPlayer()", binding)
+        self.assertIn("AyuPluginTelegramAdapter.shared.setPlayer { [weak self] action, completion in", binding)
+        self.assertIn("ayuPluginMessageTL(item.message)", binding)
+
     def test_plugin_send_hooks_run_before_entity_generation(self):
         controller = (ROOT / "submodules/TelegramUI/Sources/ChatController.swift").read_text()
         self.assertIn("handleSandCommand(text, from: strongSelf)", controller)
-        self.assertIn("AyuPluginService.shared.hasSendHooks", controller)
-        self.assertIn("AyuPluginService.shared.applySendHooks(", controller)
+        self.assertIn("AyuPluginTelegramAdapter.shared.hasSendMessageHooks", controller)
+        self.assertIn("AyuPluginTelegramAdapter.shared.applySendHooks(", controller)
         self.assertIn("self.sendMessagesResolved(resolved", controller)
         self.assertIn("enqueueMessages(messages: ayuMessages)", controller)
-        self.assertIn("private func ayuBridgeReplacements(old: String, new: String)", controller)
-        self.assertIn("return [AyuNativeTextReplacement(range: NSRange(location: prefix, length: oldLength), length: newLength)]", controller)
-        self.assertIn("case let .message(text, attributes, inlineStickers, mediaReference", controller)
-        self.assertIn("self.ayuMapTextOffset(entity.range.lowerBound", controller)
-        self.assertIn("TextEntitiesMessageAttribute(entities: entities)", controller)
+        # The chat screen hands the batch to the adapter; the typed and the three-field hooks run as
+        # one chain in the bridge, and TelegramCore writes the result back into the queued message.
+        adapter = (ROOT / "submodules/AyuPluginTelegramAdapter/Sources/AyuPluginTelegramAdapter.swift").read_text()
+        self.assertIn("ayuPluginDescribeOutgoingMessages(account: account, peerId: peerId, messages: messages)", adapter)
+        self.assertIn("self.bridge.interceptSendMessage(account: self.accountIndex", adapter)
+        self.assertIn("ayuPluginApplySendHook(peerId: peerId, original: original, described: described, result: result, "
+                      "remapEntities: remapEntities)", adapter)
+        core = (ROOT / "submodules/TelegramCore/Sources/AyuPlugins/AyuPluginSendHook.swift").read_text()
+        self.assertIn("private func ayuPluginRemappedEntities(_ entities: [MessageTextEntity], from old: String, to new: String)", core)
+        self.assertIn("case let .message(text, originalAttributes, inlineStickers, mediaReference", core)
+        self.assertIn("TextEntitiesMessageAttribute(entities: entities)", core)
         service = (INTEGRATION / "AyuPluginService.swift").read_text()
         self.assertIn("public func applySendHooks(message: String?, caption: String?", service)
         self.assertIn("AyuBridgeSendHookChain(message: message, caption: caption, peerID: peerID, accountIndex: accountIndex)", service)

@@ -5,18 +5,27 @@ This runs only on a macOS build host from the Bazel repository rule.  It does
 not download anything itself.  Native extension modules are moved into signed
 framework-shaped XCFrameworks; the app-bundled Python resource tree contains
 only text/data/bytecode-safe standard-library files and .fwork markers.
+
+Third-party distributions come only from the checksum-pinned artifacts listed
+in packages.lock.json.  They must be pure Python; their archives are read as
+data and nothing in them is executed.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import plistlib
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import tarfile
+import zipfile
+import zlib
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
@@ -29,6 +38,26 @@ SIMULATOR_ARCHES = ("arm64", "x86_64")
 MINIMUM_IOS = "13.0"
 RESOURCE_BUNDLE_NAME = "AyuPythonResources"
 RESOURCE_BUNDLE_ID = "org.ayugram.python.resources"
+
+PACKAGES_LOCK = Path(__file__).with_name("packages.lock.json")
+PACKAGES_MANIFEST = "PYTHON_PACKAGES.json"
+_ARTIFACT_URL = re.compile(
+    r"https://files\.pythonhosted\.org/packages/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{60}/([A-Za-z0-9_.+-]+)\Z")
+MAX_PACKAGES = 64
+MAX_PACKAGE_FILES = 4096
+MAX_PACKAGE_BYTES = 16 * 1024 * 1024
+# The SDK's requests module verifies TLS against these roots.
+REQUIRED_PACKAGE_FILES = ("certifi/cacert.pem",)
+_DISTRIBUTION = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_PACKAGE_VERSION = re.compile(r"[0-9][0-9A-Za-z.]*\Z")
+_MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+# Stricter than a safe relative path: these names become Bazel resource labels.
+_PACKAGE_COMPONENT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]*\Z")
+_LOCK_KEYS = frozenset({
+    "name", "version", "kind", "filename", "url", "sha256", "modules", "license", "license_files", "requires",
+})
+_SDIST_KEYS = frozenset({"source_root", "metadata"})
 
 NATIVE_SUFFIXES = (
     ".so", ".dylib", ".a", ".o", ".pyc", ".pyo", ".fwork",
@@ -515,27 +544,266 @@ def _copy_sysconfig(archive_root: Path, resource_stdlib: Path) -> None:
         raise PrepareError("no _sysconfigdata_*.py files found in BeeWare slices")
 
 
-def _copy_certifi(certifi_root: Path, resources_root: Path) -> None:
-    """Bundle certifi's Mozilla roots and the upstream license for HTTPS clients."""
-    certifi_root = certifi_root.resolve(strict=True)
-    package = certifi_root / "certifi"
-    package = contained_path(certifi_root, package)
-    if not package.is_dir() or not (package / "cacert.pem").is_file():
-        raise PrepareError("certifi archive must contain certifi/cacert.pem")
-    destination = resources_root / "python" / "lib" / f"python{PYTHON_VERSION}" / "certifi"
-    copy_resource_tree(package, destination, certifi_root)
+def normalize_distribution(name: str) -> str:
+    """The PyPI normal form of a distribution name."""
+    return re.sub(r"[-_.]+", "-", name).lower()
 
-    licenses = []
-    for candidate in certifi_root.rglob("LICENSE"):
-        try:
-            licenses.append(contained_path(certifi_root, candidate))
-        except (OSError, RuntimeError) as error:
-            raise PrepareError(f"unsafe certifi license path: {candidate}: {error}") from error
-    if not licenses:
-        raise PrepareError("certifi archive has no LICENSE file")
-    license_source = sorted(licenses, key=lambda item: len(item.parts))[0]
-    license_target = resources_root / "licenses" / "certifi-LICENSE"
-    _safe_copy_file(license_source, license_target, certifi_root)
+
+def _package_path(name: str) -> PurePosixPath:
+    rel = validate_relative_path(name)
+    if not all(_PACKAGE_COMPONENT.match(part) for part in rel.parts):
+        raise PrepareError(f"unsupported package file name: {name}")
+    return rel
+
+
+def _validate_lock_entry(package: object) -> None:
+    kind = package.get("kind") if isinstance(package, dict) else None
+    label = package.get("name") if isinstance(package, dict) else package
+    if kind not in ("wheel", "sdist") or set(package) != _LOCK_KEYS | (_SDIST_KEYS if kind == "sdist" else frozenset()):
+        raise PrepareError(f"package lock entry has unexpected fields: {label!r}")
+    texts = ["name", "version", "filename", "url", "sha256", "license"] + (sorted(_SDIST_KEYS) if kind == "sdist" else [])
+    lists = ["modules", "license_files", "requires"]
+    if not all(isinstance(package[key], str) and package[key] for key in texts) or not all(
+            isinstance(package[key], list) and all(isinstance(item, str) and item for item in package[key])
+            and len(set(package[key])) == len(package[key]) for key in lists):
+        raise PrepareError(f"package lock entry has invalid values: {label!r}")
+    name, version, filename = package["name"], package["version"], package["filename"]
+    if not _DISTRIBUTION.match(name) or not _PACKAGE_VERSION.match(version) or not _SHA256.match(package["sha256"]):
+        raise PrepareError(f"package lock entry has an invalid name, version or checksum: {label!r}")
+    url = _ARTIFACT_URL.match(package["url"])
+    if url is None or url.group(1) != filename:
+        raise PrepareError(f"{name} must be fetched from files.pythonhosted.org under its pinned file name")
+    if kind == "wheel":
+        # name-version[-build]-python-abi-platform.whl; only universal pure-Python wheels are accepted.
+        fields = filename[:-len(".whl")].split("-") if filename.endswith(".whl") else []
+        if len(fields) not in (5, 6) or normalize_distribution(fields[0]) != name or fields[1] != version \
+                or "py3" not in fields[-3].split(".") or fields[-2:] != ["none", "any"]:
+            raise PrepareError(f"{name} is not pinned to a py3-none-any wheel of {version}: {filename}")
+    else:
+        if not filename.endswith(".tar.gz"):
+            raise PrepareError(f"{name} source distribution must be a .tar.gz: {filename}")
+        _package_path(package["source_root"])
+        _package_path(package["metadata"])
+    if not package["modules"] or not all(_MODULE.match(module) for module in package["modules"]):
+        raise PrepareError(f"{name} must list the top-level modules it installs")
+    if not package["license_files"]:
+        raise PrepareError(f"{name} must pin its license files")
+    for item in package["license_files"]:
+        _package_path(item)
+
+
+def load_packages_lock(path: Path) -> list[dict]:
+    """Read and strictly validate the pinned third-party distribution list."""
+    try:
+        lock = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise PrepareError(f"cannot read package lock {path}: {error}") from error
+    if not isinstance(lock, dict) or set(lock) != {"schema", "packages"} or lock["schema"] != 1 \
+            or not isinstance(lock["packages"], list) or len(lock["packages"]) > MAX_PACKAGES:
+        raise PrepareError("package lock must be {\"schema\": 1, \"packages\": [...]} within its entry limit")
+    packages = lock["packages"]
+    names: set[str] = set()
+    modules: set[str] = set()
+    for package in packages:
+        _validate_lock_entry(package)
+        if package["name"] in names or modules.intersection(package["modules"]):
+            raise PrepareError(f"package lock pins {package['name']} or one of its modules twice")
+        names.add(package["name"])
+        modules.update(package["modules"])
+    for package in packages:
+        missing = sorted(set(package["requires"]) - names)
+        if missing:
+            raise PrepareError(f"{package['name']} requires distributions the lock does not pin: {missing}")
+    return packages
+
+
+def _read_artifact(packages_root: Path, package: dict) -> bytes:
+    """The downloaded artifact, only if it is byte-for-byte the pinned one."""
+    try:
+        path = contained_path(packages_root, packages_root / package["filename"])
+        if not path.is_file() or path.stat().st_size > MAX_PACKAGE_BYTES:
+            raise PrepareError(f"pinned artifact is not a regular file within the size limit: {package['filename']}")
+        data = path.read_bytes()
+    except OSError as error:
+        raise PrepareError(f"pinned artifact is unavailable: {package['filename']}: {error}") from error
+    if hashlib.sha256(data).hexdigest() != package["sha256"]:
+        raise PrepareError(f"checksum mismatch for {package['filename']}")
+    return data
+
+
+def _check_metadata(package: dict, text: str) -> None:
+    """The artifact must be the pinned distribution and need nothing unpinned."""
+    fields: dict[str, str] = {}
+    requirements = []
+    for line in text.splitlines():
+        if not line.strip():
+            break  # the long description follows the header block
+        key, separator, value = line.partition(":")
+        if separator and key == "Requires-Dist":
+            requirements.append(value.strip())
+        elif separator and key in ("Name", "Version"):
+            fields.setdefault(key, value.strip())
+    if normalize_distribution(fields.get("Name", "")) != package["name"] or fields.get("Version") != package["version"]:
+        raise PrepareError(f"{package['filename']} is not {package['name']} {package['version']}")
+    for requirement in requirements:
+        specifier, _, marker = requirement.partition(";")
+        if "extra" in marker:
+            continue  # optional features are not installed
+        match = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", specifier.strip())
+        if match is None or normalize_distribution(match.group(0)) not in package["requires"]:
+            raise PrepareError(f"{package['name']} depends on a distribution its lock entry does not list: {requirement}")
+
+
+def _pure_python(package: dict, rel: PurePosixPath, content: bytes) -> None:
+    if looks_like_native_binary(Path(rel.name), content[:8]):
+        raise PrepareError(f"{package['name']} is not pure Python: {rel}")
+
+
+def _wheel_files(data: bytes, package: dict) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """Installable files and license texts of a pure-Python wheel."""
+    fields = package["filename"][:-len(".whl")].split("-")
+    dist_info = f"{fields[0]}-{fields[1]}.dist-info"
+    files: dict[str, bytes] = {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            infos = archive.infolist()
+            if len(infos) > MAX_PACKAGE_FILES or sum(info.file_size for info in infos) > MAX_PACKAGE_BYTES:
+                raise PrepareError(f"{package['name']} exceeds the package size limits")
+            for info in infos:
+                if info.is_dir():
+                    continue
+                rel = _package_path(info.filename)
+                if (info.external_attr >> 16) & 0o170000 not in (0, stat.S_IFREG):
+                    raise PrepareError(f"{package['name']} contains an entry that is not a regular file: {rel}")
+                top = rel.parts[0]
+                if top.endswith(".data"):
+                    # Scripts, headers and shared data are not importable; relocated code is not supported.
+                    if len(rel.parts) > 1 and rel.parts[1] in ("purelib", "platlib"):
+                        raise PrepareError(f"{package['name']} uses an unsupported wheel layout: {rel}")
+                    continue
+                if top.endswith(".dist-info") and top != dist_info:
+                    raise PrepareError(f"{package['name']} carries metadata of another distribution: {rel}")
+                if rel.as_posix() in files:
+                    raise PrepareError(f"{package['name']} lists a file twice: {rel}")
+                content = archive.read(info)
+                _pure_python(package, rel, content)
+                files[rel.as_posix()] = content
+    except PrepareError:
+        raise
+    except (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, RuntimeError) as error:
+        raise PrepareError(f"{package['filename']} is not a readable wheel: {error}") from error
+    # RECORD describes the complete wheel; nothing here consumes it.
+    for name in [name for name in files if name.startswith(dist_info + "/RECORD")]:
+        del files[name]
+    wheel = files.get(f"{dist_info}/WHEEL", b"").decode("utf-8", "replace").splitlines()
+    tags = [line[len("Tag:"):].strip() for line in wheel if line.startswith("Tag:")]
+    if "Root-Is-Purelib: true" not in wheel or not tags or not all(tag.endswith("-none-any") for tag in tags):
+        raise PrepareError(f"{package['filename']} does not declare a pure-Python wheel")
+    if f"{dist_info}/METADATA" not in files:
+        raise PrepareError(f"{package['filename']} has no {dist_info}/METADATA")
+    _check_metadata(package, files[f"{dist_info}/METADATA"].decode("utf-8", "replace"))
+    licenses: dict[str, bytes] = {}
+    for item in package["license_files"]:
+        if item not in files or PurePosixPath(item).name in licenses:
+            raise PrepareError(f"{package['name']} license file is missing or ambiguous: {item}")
+        licenses[PurePosixPath(item).name] = files[item]
+    return files, licenses
+
+
+def _sdist_files(data: bytes, package: dict) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """Listed module sources, metadata and license texts of a source distribution.
+
+    Only the pinned paths are read; setup.py and every other member stay unread.
+    """
+    root = package["source_root"]
+    dist_info = f"{package['name'].replace('-', '_')}-{package['version']}.dist-info"
+    files: dict[str, bytes] = {}
+    licenses: dict[str, bytes] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+            for index, member in enumerate(archive):
+                if index >= MAX_PACKAGE_FILES:
+                    raise PrepareError(f"{package['name']} exceeds the package size limits")
+                name = member.name
+                if name == package["metadata"]:
+                    target = f"{dist_info}/METADATA"
+                elif name in package["license_files"]:
+                    target = f"{dist_info}/licenses/{PurePosixPath(name).name}"
+                elif any(name == f"{root}/{module}.py" or name.startswith(f"{root}/{module}/") for module in package["modules"]):
+                    target = name[len(root) + 1:]
+                else:
+                    continue
+                if member.isdir():
+                    continue
+                rel = _package_path(target)
+                total += member.size
+                if not member.isfile() or total > MAX_PACKAGE_BYTES or rel.as_posix() in files:
+                    raise PrepareError(f"{package['name']} has an unusable source member: {name}")
+                stream = archive.extractfile(member)
+                content = stream.read() if stream is not None else b""
+                _pure_python(package, rel, content)
+                files[rel.as_posix()] = content
+                if name in package["license_files"]:
+                    licenses[rel.name] = content
+    except (tarfile.TarError, zlib.error, EOFError, OSError) as error:
+        raise PrepareError(f"{package['filename']} is not a readable source distribution: {error}") from error
+    if f"{dist_info}/METADATA" not in files or len(licenses) != len(package["license_files"]):
+        raise PrepareError(f"{package['filename']} lacks its pinned metadata or license files")
+    _check_metadata(package, files[f"{dist_info}/METADATA"].decode("utf-8", "replace"))
+    return files, licenses
+
+
+def install_packages(packages_root: Path, lock_path: Path, resources_root: Path) -> list[dict]:
+    """Unpack the pinned pure-Python distributions beside the standard library.
+
+    The embedded interpreter searches only its library directory and the plugin
+    SDK, so a distribution is importable exactly when its modules are in that
+    directory. Nothing may replace a standard-library or earlier package file.
+    """
+    packages = load_packages_lock(lock_path)
+    try:
+        packages_root = packages_root.resolve(strict=True)
+    except OSError as error:
+        raise PrepareError(f"pinned package directory is unavailable: {error}") from error
+    library = resources_root / "python" / "lib" / f"python{PYTHON_VERSION}"
+    library.mkdir(parents=True, exist_ok=True)
+    # Compared case-insensitively: the build host's file system may fold case.
+    occupied = {entry.name.casefold() for entry in library.iterdir()}
+    manifest = []
+    for package in packages:
+        data = _read_artifact(packages_root, package)
+        files, licenses = (_wheel_files if package["kind"] == "wheel" else _sdist_files)(data, package)
+        tops = {name.split("/", 1)[0] for name in files}
+        modules = set()
+        for module in package["modules"]:
+            top = module if f"{module}/__init__.py" in files else f"{module}.py"
+            if top not in tops or {module.casefold(), f"{module}.py".casefold()} & occupied:
+                raise PrepareError(f"{package['name']} does not provide module {module} or it is already present")
+            modules.add(top)
+        if {top for top in tops if not top.endswith(".dist-info")} != modules:
+            raise PrepareError(f"{package['name']} installs other top-level names than its pinned modules: {sorted(tops)}")
+        if len({name.casefold() for name in files}) != len(files) or occupied.intersection(top.casefold() for top in tops):
+            raise PrepareError(f"{package['name']} would overwrite files in the Python library")
+        occupied.update(top.casefold() for top in tops)
+        for name, content in sorted(files.items()):
+            target = library.joinpath(*PurePosixPath(name).parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        for name, content in sorted(licenses.items()):
+            target = resources_root / "licenses" / f"{package['name']}-{name}"
+            if target.exists():
+                raise PrepareError(f"refusing to overwrite license file: {target.name}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        manifest.append({
+            "name": package["name"], "version": package["version"], "sha256": package["sha256"],
+            "license": package["license"], "modules": sorted(package["modules"]),
+            "files": {name: hashlib.sha256(content).hexdigest() for name, content in sorted(files.items())},
+        })
+    document = {"schema": 1, "library": f"python/lib/python{PYTHON_VERSION}", "packages": manifest}
+    (resources_root / PACKAGES_MANIFEST).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+    return manifest
 
 
 def _write_build_file(modules: Iterable[str]) -> tuple[str, str]:
@@ -600,7 +868,7 @@ def _write_build_file(modules: Iterable[str]) -> tuple[str, str]:
     return "\n".join(lines), deps_bzl
 
 
-def prepare(archive_root: Path, repository_root: Path, certifi_root: Path) -> dict:
+def prepare(archive_root: Path, repository_root: Path, packages_root: Path, lock_path: Path = PACKAGES_LOCK) -> dict:
     """Validate and prepare the archives; outputs are created without deleting."""
     archive_root = archive_root.resolve(strict=True)
     repository_root = repository_root.resolve(strict=True)
@@ -675,7 +943,11 @@ def prepare(archive_root: Path, repository_root: Path, certifi_root: Path) -> di
         repository_root, extension_targets, (device_modules, sim_arm_modules, sim_x86_modules),
     )
     _copy_sysconfig(archive_root, resource_stdlib)
-    _copy_certifi(certifi_root, repository_root / "PythonResources")
+    packages = install_packages(packages_root, lock_path, repository_root / "PythonResources")
+    shipped = {name for package in packages for name in package["files"]}
+    for required in REQUIRED_PACKAGE_FILES:
+        if required not in shipped:
+            raise PrepareError(f"pinned packages must provide {required}")
     (repository_root / "PythonResources" / "PYTHON_VERSION.txt").write_text(PYTHON_RELEASE + "\n")
     metadata = {
         "python_release": PYTHON_RELEASE,
@@ -683,6 +955,7 @@ def prepare(archive_root: Path, repository_root: Path, certifi_root: Path) -> di
         "device_slice": DEVICE_SLICE,
         "simulator_slice": SIMULATOR_SLICE,
         "extension_modules": extension_targets,
+        "python_packages": {package["name"]: package["version"] for package in packages},
         "python_home_relative_to_main_bundle": f"{RESOURCE_BUNDLE_NAME}.bundle/python",
         "frameworks_relative_to_main_bundle": "Frameworks",
     }
@@ -695,18 +968,20 @@ def prepare(archive_root: Path, repository_root: Path, certifi_root: Path) -> di
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 3:
-        print("usage: prepare.py <extracted-archive-root> <generated-repository-root> <certifi-root>", file=sys.stderr)
+    if len(args) != 4:
+        print("usage: prepare.py <extracted-archive-root> <generated-repository-root> <pinned-packages-dir> <packages.lock.json>",
+              file=sys.stderr)
         return 2
     if sys.platform != "darwin":
         print("error: this prepare step must run on macOS (xcrun/lipo is required)", file=sys.stderr)
         return 2
     try:
-        result = prepare(Path(args[0]), Path(args[1]), Path(args[2]))
+        result = prepare(Path(args[0]), Path(args[1]), Path(args[2]), Path(args[3]))
     except (PrepareError, OSError, subprocess.SubprocessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print(f"Prepared BeeWare Python {result['python_release']} with {len(result['extension_modules'])} extension frameworks")
+    print(f"Prepared BeeWare Python {result['python_release']} with {len(result['extension_modules'])} extension frameworks "
+          f"and {len(result['python_packages'])} pinned packages")
     return 0
 
 

@@ -68,27 +68,35 @@ class SDKCompatTests(unittest.TestCase):
             self.assertEqual(row.type, "switch")
             self.assertEqual(row.to_bridge()["type"], "Switch")
 
-    def test_invalid_row_callbacks_defaults_and_duplicate_arguments(self):
+    def test_rows_are_android_dataclasses_read_leniently_within_bridge_bounds(self):
         scope = self.load()
         with bridge.runtime.context(scope):
-            for make in (
-                lambda: Text("A", text="B"),
-                lambda: Switch("enabled", "Enabled", 1),
-                lambda: Input("name", "Name", None),
-                lambda: Selector("mode", "Mode", 2, ["A"]),
-                lambda: Text("Text", on_long_click=True),
-                lambda: Switch("é" * 129, "Too long", False),
-            ):
-                with self.subTest(make=make), self.assertRaises((TypeError, ValueError)):
-                    make()
+            with self.assertRaises(TypeError):
+                Text("A", text="B")
+            # Android validates nothing at construction and coerces when it reads a row.
+            self.assertIs(Switch("enabled", "Enabled", 1).to_bridge()["default"], True)
+            self.assertEqual(Input("name", "Name", None).to_bridge()["default"], "")
+            self.assertEqual(Input("name", "Name", 7).to_bridge()["default"], "7")
+            self.assertEqual(Selector("mode", "Mode", 2, ["A"]).to_bridge()["default"], 2)
+            for row in (Text("Text", on_long_click=True), Switch("é" * 129, "Too long", False)):
+                with self.subTest(row=row), self.assertRaises((TypeError, ValueError)):
+                    row.to_bridge()
 
     def test_unsupported_android_custom_rows_fail_explicitly(self):
         scope = self.load()
         with bridge.runtime.context(scope):
             row = EditText("key", "Hint")
             self.assertEqual(row.type, "edit_text")
-            with self.assertRaises(bridge.UnsupportedAPI):
-                bridge.runtime.encode(row)
+            self.assertEqual(bridge.runtime.encode(row), {
+                "type": "Input", "key": "key", "text": "Hint", "hint": "Hint", "default": "",
+                "multiline": False, "max_length": 256})
+            # The native input row applies neither, so they are refused instead of dropped.
+            for row in (EditText("key", "Hint", mask="[0-9]+"), EditText("key", "Hint", max_length=32),
+                        EditText("key", "Hint", "", False, 256.0), EditText("key", "Hint", mask="")):
+                with self.subTest(row=row), self.assertRaises(bridge.UnsupportedAPI):
+                    bridge.runtime.encode(row)
+            with self.assertRaises(ValueError):
+                Custom()
             for make in (lambda: Custom(view=object()),
                          lambda: SimpleSettingFactory(lambda: None, lambda: None)):
                 with self.assertRaises(bridge.UnsupportedAPI):
@@ -432,7 +440,7 @@ class SDKCompatTests(unittest.TestCase):
                 scope.instance.hook_method("synthetic", before=lambda param: None)
             self.assertEqual(scope.callbacks, {})
 
-    def test_registered_cleanup_runs_after_unload_override_without_super(self):
+    def test_registered_cleanup_runs_before_unload_override_without_super(self):
         scope = self.load(body='''    def on_plugin_load(self):
         self.order = []
         self.register_cleanup(lambda: self.order.append("first"))
@@ -442,8 +450,9 @@ class SDKCompatTests(unittest.TestCase):
 ''')
         plugin = scope.instance
         bridge.unload_plugin("sample")
-        self.assertEqual(plugin.order, ["unload", "second", "first"])
-        self.assertEqual(plugin._ayu_cleanup, [])
+        # Android closes the lifecycle scope, running its cleanups, before on_plugin_unload.
+        self.assertEqual(plugin.order, ["second", "first", "unload"])
+        self.assertEqual(plugin._lifecycle._cleanups, [])
 
     def test_cleanup_finishes_when_unload_and_one_cleanup_raise(self):
         scope = self.load(body='''    def on_plugin_load(self):
@@ -463,12 +472,14 @@ class SDKCompatTests(unittest.TestCase):
         self.assertNotIn("sample", bridge.runtime.scopes)
         self.assertNotIn("sample", self.host.active)
 
-    def test_cleanup_cannot_register_new_work_during_unload(self):
+    def test_cleanup_registered_during_unload_runs_immediately(self):
         scope = self.load(body='''    def on_plugin_load(self):
-        self.register_cleanup(lambda: self.register_cleanup(lambda: None))
+        self.order = []
+        self.register_cleanup(lambda: self.register_cleanup(lambda: self.order.append("nested")))
 ''')
-        with self.assertRaisesRegex(bridge.BridgeError, "PLUGIN_UNLOADING"):
-            bridge.unload_plugin("sample")
+        plugin = scope.instance
+        bridge.unload_plugin("sample")
+        self.assertEqual(plugin.order, ["nested"])
         self.assertEqual(scope.callbacks, {})
 
     def test_menu_sdk_positional_arguments_and_mutable_attributes(self):

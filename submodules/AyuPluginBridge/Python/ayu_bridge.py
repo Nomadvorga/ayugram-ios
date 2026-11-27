@@ -15,29 +15,43 @@ import importlib.machinery
 import itertools
 import json
 import math
+import os
 import re
 import sys
 import threading
 import time
 import types
 import uuid
+import weakref
 from dataclasses import dataclass, field
 from typing import Any
 
-from _ayu_inspection import import_inventory
+import _ayu_javalib
+import _ayu_members
+import _ayu_operations
+import _ayu_policy
+import _ayu_threads
+from _ayu_inspection import NATIVE_PREFIXES, NATIVE_ROOTS, import_inventory, member_inventory
 
 VERSION = 1
+# Transport bounds shared with the native side (protocol.md, "Limits and validation").
+MAX_JSON_CHARS = 6_000_000
+MAX_REQUEST_BYTES = 262_144
+MAX_TL_REQUEST_BYTES = 1_572_864
+MAX_RESULT_BYTES = 1_048_576
 SDK_MODULES = frozenset({
     "ayu_bridge", "base_plugin", "client_utils", "android_utils", "hook_utils",
-    "plugin_settings", "zwylib", "java", "jarray", "tlrpc", "ui", "ui.settings",
+    "plugin_settings", "zwylib", "java", "java.chaquopy", "jarray", "tlrpc", "ui", "ui.settings",
     "ui.alert", "ui.bulletin", "log_utils", "markdown_utils", "file_utils", "intents",
     "extera_utils", "extera_utils.classes", "extera_utils.lifecycle",
     "extera_utils.text_formatting", "extera_utils.get_caller", "extera_utils.metadata_parser",
+    "_sdk_version", "elyx", "elyxcore", "elyxcore.assets", "elyxcore.localization", "elyxcore.settings",
+    "elyxcore.utils", "audioop",
+    "PIL", "PIL.Image", "PIL.ImageChops", "PIL.ImageColor", "PIL.ImageDraw", "PIL.ImageEnhance", "PIL.ImageFilter",
+    "PIL.ImageFont", "PIL.ImageOps",
 })
 UNSUPPORTED_IMPORTS = {
-    "threading": "Plugin-created Python threads are unsupported",
-    "_thread": "Plugin-created Python threads are unsupported",
-    "concurrent": "Plugin thread/process pools are unsupported",
+    "_thread": "Low-level thread creation is unsupported; use threading",
     "multiprocessing": "Launching Python processes is unsupported",
     "subprocess": "Launching native processes is unsupported",
     "ctypes": "Dynamic native symbol access is unsupported; use explicit host adapters",
@@ -63,9 +77,22 @@ class ProtocolError(BridgeError):
         super().__init__("PROTOCOL_ERROR", message)
 
 
+class DeliveryExpired(BridgeError):
+    """A delivery for a callback or generation that was released while it waited.
+
+    Raised by the embedding entry points only, before any plugin code runs. The runtime
+    answers it with its own error code, and the embedding drops the delivery without
+    flagging the plugin: a cancelled timer or a removed listener never runs.
+    """
+
+
 class UnsupportedAPI(BridgeError):
     def __init__(self, message: str):
         super().__init__("UNSUPPORTED_API", message)
+
+
+class MissingMember(UnsupportedAPI, AttributeError):
+    """A member the host class does not provide; ``hasattr`` and ``getattr`` defaults see it as absent."""
 
 
 def _inventory(tree):
@@ -85,7 +112,7 @@ def _object(pairs):
 
 
 def parse_json(text):
-    if not isinstance(text, str) or len(text) > 4_000_000:
+    if not isinstance(text, str) or len(text) > MAX_JSON_CHARS:
         raise ProtocolError("Expected bounded JSON text")
     try:
         return json.loads(text, object_pairs_hook=_object,
@@ -107,6 +134,7 @@ class Scope:
     metadata: dict = field(default_factory=dict)
     settings_callbacks: set = field(default_factory=set)
     instance: Any = None
+    remotes: Any = field(default_factory=weakref.WeakValueDictionary, repr=False, compare=False)
 
 
 class RemoteObject:
@@ -119,6 +147,23 @@ class RemoteObject:
 
     def __repr__(self):
         return f"<native {self._class_name}>"
+
+    def __str__(self):
+        # Chaquopy's str() of a Java object is its toString(); a class without one keeps the repr.
+        try:
+            text = self._runtime.member(self._target(), "toString")()
+        except BridgeError:
+            return repr(self)
+        return text if isinstance(text, str) else repr(self)
+
+    def __eq__(self, other):
+        # Two references to one host object are that object, as `==` is on Java references.
+        if not isinstance(other, RemoteObject):
+            return NotImplemented
+        return self._scope is other._scope and self._handle == other._handle
+
+    def __hash__(self):
+        return hash(self._handle)
 
     def __bool__(self):
         self._runtime.require(self._scope)
@@ -276,10 +321,13 @@ class Runtime:
         deadline = time.thread_time() + self.execution_limits[phase]
         previous = sys.gettrace()
         count = 0
+        # A package's modules live below one directory; a .plugin has no source root.
+        root = scope.__dict__.get("source_root")
 
         def trace(frame, event, arg):
             nonlocal count
-            if frame.f_code.co_filename != scope.source_filename:
+            name = frame.f_code.co_filename
+            if name != scope.source_filename and not (root and name.startswith(root)):
                 return None
             if event == "line":
                 count += 1
@@ -295,15 +343,22 @@ class Runtime:
         finally:
             sys.settrace(previous)
 
-    def check_queue(self):
+    def check_queue(self, worker=False):
+        """Pin the runtime to the native queue thread.
+
+        ``worker`` also admits a thread the calling plugin generation started
+        through ``threading``; such a thread reaches the host only by
+        ``_ayu_threads.marshal``.
+        """
         ident = threading.get_ident()
-        if self.thread_id is None:
+        if self.thread_id is None and not _ayu_threads.is_worker():
             self.thread_id = ident
-        if self.thread_id != ident:
+            _ayu_threads.install()
+        if self.thread_id != ident and not (worker and _ayu_threads.admit(_current.get())):
             raise BridgeError("WRONG_QUEUE", "Use the native Python serial queue")
 
     def require(self, expected=None):
-        self.check_queue()
+        self.check_queue(True)
         scope = _current.get()
         if scope is None or self.scopes.get(scope.plugin_id) is not scope:
             raise BridgeError("NO_PLUGIN_CONTEXT", "No active plugin scope")
@@ -318,6 +373,7 @@ class Runtime:
         self.check_queue()
         token = _current.set(scope)
         try:
+            _ayu_threads.service(self, scope)
             yield scope
         finally:
             _current.reset(token)
@@ -352,6 +408,14 @@ class Runtime:
             return {"$java_class": value._name}
         if isinstance(value, DynamicProxy):
             return self.encode(value._reference(), depth + 1)
+        if isinstance(value, type) and _ayu_javalib.local_name(value) is not None:
+            name = _ayu_javalib.local_name(value)
+            # A local class that overrides a host adapter still names a class the host declares.
+            if name in self.capabilities["classes"] and _ayu_javalib.local_class(name) is value:
+                return {"$java_class": name}
+            # A class object is callable; it must not be mistaken for a plugin callback.
+            raise UnsupportedAPI("Python-local Java class cannot be passed to the host: "
+                                 + _ayu_javalib.local_name(value))
         if callable(value):
             return self.encode(self.callback(value), depth + 1)
         if hasattr(type(value), "to_bridge"):
@@ -364,6 +428,9 @@ class Runtime:
             if any(key.startswith("$") for key in value):
                 raise ProtocolError("Reserved wire keys cannot be supplied by plugins")
             return {key: self.encode(item, depth + 1) for key, item in value.items()}
+        local = _ayu_javalib.local_name(value)
+        if local is not None:
+            raise UnsupportedAPI(f"Python-local Java object cannot be passed to the host: {local}")
         raise ProtocolError(f"Unsupported bridge value type: {type(value).__name__}")
 
     def decode(self, value, depth=0):
@@ -378,7 +445,12 @@ class Runtime:
                     raise ProtocolError("Malformed native reference")
                 if value["$class"] not in self.capabilities["classes"]:
                     raise ProtocolError("Host returned an undeclared native class")
-                return RemoteObject(self, scope, value["$handle"], value["$class"])
+                # One wrapper per host reference, so `is` and identity-keyed containers hold as on Android.
+                key = (value["$handle"], value["$class"])
+                remote = scope.remotes.get(key)
+                if remote is None:
+                    remote = scope.remotes[key] = RemoteObject(self, scope, value["$handle"], value["$class"])
+                return remote
             if "$java_class" in value:
                 if set(value) != {"$java_class"}:
                     raise ProtocolError("Malformed Java class reference")
@@ -400,8 +472,12 @@ class Runtime:
         request_id = str(next(self.request_ids))
         request = {"version": VERSION, "id": request_id, "plugin_id": plugin_id,
                    "operation": operation, "arguments": arguments}
+        text = json.dumps(request, allow_nan=False, separators=(",", ":"))
+        # ASCII, so characters are bytes. Only the operations that carry TL values get the larger envelope.
+        if len(text) > (MAX_TL_REQUEST_BYTES if operation.startswith("telegram.") else MAX_REQUEST_BYTES):
+            raise BridgeError("RESOURCE_LIMIT", "Request is too large")
         try:
-            response = parse_json(_ayu_host.dispatch(json.dumps(request, allow_nan=False, separators=(",", ":"))))
+            response = parse_json(_ayu_host.dispatch(text))
         except BridgeError:
             raise
         except Exception as error:
@@ -418,6 +494,8 @@ class Runtime:
         return response["result"]
 
     def call(self, operation, arguments=None):
+        if _ayu_threads.off_queue(self):
+            return _ayu_threads.marshal(self, self.call, operation, arguments)
         scope = self.require()
         if operation not in self.capabilities["operations"]:
             raise UnsupportedAPI(f"Host does not declare operation {operation}")
@@ -432,6 +510,8 @@ class Runtime:
             raise
 
     def callback(self, function, once=False):
+        if _ayu_threads.off_queue(self):
+            return _ayu_threads.marshal(self, self.callback, function, once)
         scope = self.require()
         if not callable(function):
             raise TypeError("Expected a callable")
@@ -444,7 +524,16 @@ class Runtime:
     def member(self, target, name):
         if not isinstance(name, str) or not name or name.startswith("_"):
             raise UnsupportedAPI("Invalid native member name")
-        result = self.call("java.member", {"target": WireTarget(target), "name": name})
+        served = _ayu_javalib.serve(self, target, name)
+        if served is not None:
+            return served[0]
+        try:
+            result = self.call("java.member", {"target": WireTarget(target), "name": name})
+        except BridgeError as error:
+            # Android code probes for members; the host's refusal has to read as a missing attribute.
+            if error.code != "UNSUPPORTED_API" or isinstance(error, AttributeError):
+                raise
+            raise MissingMember(error.message) from None
         if not isinstance(result, dict) or result.get("kind") not in ("method", "field", "class"):
             raise ProtocolError("Malformed native member descriptor")
         if result["kind"] == "method" and set(result) == {"kind"}:
@@ -456,12 +545,69 @@ class Runtime:
         raise ProtocolError("Invalid native member descriptor fields")
 
     def jclass(self, name):
+        """The Python-local class when it is usable, else the host facade for a declared class."""
         scope = self.require()
-        if not isinstance(name, str) or name not in self.capabilities["classes"]:
-            raise UnsupportedAPI(f"Java class is not declared by host: {name}")
-        return JavaClass(self, scope, name)
+        if isinstance(name, str):
+            # local_classes holds a host-declared name only when the local class overrides it.
+            if name in self.capabilities.get("local_classes", ()):
+                return _ayu_javalib.local_class(name)
+            if name in self.capabilities["classes"]:
+                return JavaClass(self, scope, name)
+            needed = _ayu_javalib.missing_operations(name, self.capabilities["operations"])
+            if needed:
+                raise UnsupportedAPI(f"Java class {name} needs undeclared host operation {needed[0]}")
+        raise UnsupportedAPI(f"Java class is not declared by host: {name}")
+
+    @staticmethod
+    def _declared_classes(capabilities):
+        """Host classes plus the Python-local classes this host makes usable."""
+        return set(capabilities["classes"]) | set(capabilities.get("local_classes", ()))
+
+    @staticmethod
+    def _undeclared_imports(imports, from_imports, declared, modules):
+        allowed = SDK_MODULES | set(modules) | set(getattr(sys, "stdlib_module_names", ()))
+        for name in imports:
+            native = name.startswith(NATIVE_PREFIXES)
+            # Names imported from a Java package are checked class by class.
+            if native and name in from_imports and name not in allowed:
+                continue
+            if any(c.startswith(name + ".") for c in declared):
+                continue
+            if name in allowed or not native and name.split(".")[0] in allowed:
+                continue
+            yield name
+
+    @staticmethod
+    def _class_path_imports(imports, from_imports, declared):
+        """Imports whose module path names a Java class, which Chaquopy cannot resolve.
+
+        Its import hook serves ``from <package> import <Class>`` only: ``import pkg.Class`` and
+        ``from pkg.Outer import Nested`` raise ImportError on Android. Returns those modules and
+        the class names static inspection derived from their imported symbols.
+        """
+        modules = {name for name in imports if name.startswith(NATIVE_PREFIXES) and name in declared
+                   and not any(item.startswith(name + ".") for item in declared)}
+        return modules, {module + "." + symbol for module in modules for symbol in from_imports.get(module, ())}
+
+    @staticmethod
+    def _requirements(metadata):
+        """``__requirements__`` entries as Android reads them: one string or a list of constants."""
+        requirements = _ayu_policy.requirement_list(metadata.get("__requirements__", []))
+        if requirements is None:
+            raise BridgeError("LOAD_REJECTED", "__requirements__ must be a string or a list of constants")
+        if len(requirements) > _ayu_policy.MAX_REQUIREMENTS:
+            raise BridgeError("LOAD_REJECTED", "__requirements__ exceeds its entry limit")
+        return requirements
+
+    @staticmethod
+    def _unbundled_requirements(requirements, capabilities):
+        """Requirements no bundled module satisfies; nothing is ever installed."""
+        modules = SDK_MODULES | set(capabilities["modules"]) | set(getattr(sys, "stdlib_module_names", ()))
+        return _ayu_policy.requirement_findings(requirements, modules)
 
     def schedule(self, function, queue="pluginsQueue", delay=0):
+        if _ayu_threads.off_queue(self):
+            return _ayu_threads.marshal(self, self.schedule, function, queue, delay)
         scope = self.require()
         if scope.state == "unloading":
             raise BridgeError("PLUGIN_UNLOADING", "Cannot schedule during unload")
@@ -480,6 +626,8 @@ class Runtime:
             raise
 
     def register(self, kind, config):
+        if _ayu_threads.off_queue(self):
+            return _ayu_threads.marshal(self, self.register, kind, config)
         scope = self.require()
         if scope.state == "unloading":
             raise BridgeError("PLUGIN_UNLOADING", "Cannot register during unload")
@@ -498,7 +646,7 @@ class Runtime:
 
     def _capabilities(self):
         caps = self._dispatch("$runtime", "runtime.capabilities", {})
-        if not isinstance(caps, dict) or set(caps) != {"operations", "classes", "modules", "proxy_interfaces"}:
+        if not isinstance(caps, dict) or set(caps) - {"members"} != {"operations", "classes", "modules", "proxy_interfaces"}:
             raise ProtocolError("Malformed host capabilities")
         for key in ("operations", "classes", "modules"):
             if not isinstance(caps[key], list) or not all(isinstance(v, str) and v for v in caps[key]):
@@ -508,6 +656,17 @@ class Runtime:
         for name, methods in caps["proxy_interfaces"].items():
             if name not in caps["classes"] or not isinstance(methods, list) or not all(isinstance(m, str) and m and not m.startswith("_") for m in methods):
                 raise ProtocolError("Invalid proxy interface declaration")
+        if "members" in caps:
+            # A host that publishes no table, or one of a newer version, has unknown members.
+            try:
+                caps["members"] = _ayu_members.validate(caps["members"], caps["classes"])
+            except ValueError as error:
+                raise ProtocolError("Invalid class member table") from error
+            if caps["members"] is None:
+                del caps["members"]
+        # A class the host declares wins unless the local class explicitly overrides it.
+        shadowed = set(caps["classes"]) - _ayu_javalib.host_override_names(caps["operations"])
+        caps["local_classes"] = _ayu_javalib.local_class_names(caps["operations"]) - shadowed
         return caps
 
     def inspect(self, source, filename="plugin.plugin"):
@@ -544,11 +703,9 @@ class Runtime:
                     raise BridgeError("LOAD_REJECTED", "Relative plugin imports are not supported")
                 if node.module:
                     imports.add(node.module)
-                    if node.module.startswith(("android.", "androidx.", "org.telegram.", "java.", "javax.", "com.")):
-                        for alias in node.names:
-                            if alias.name == "*":
-                                raise BridgeError("LOAD_REJECTED", "Wildcard native imports are unsupported")
-                            classes.add(node.module + "." + alias.name)
+                    if node.module.startswith(NATIVE_PREFIXES) and node.module not in SDK_MODULES:
+                        if any(alias.name == "*" for alias in node.names):
+                            raise BridgeError("LOAD_REJECTED", "Wildcard native imports are unsupported")
         try:
             json.dumps(metadata, allow_nan=False)
         except (TypeError, ValueError, RecursionError) as error:
@@ -559,11 +716,9 @@ class Runtime:
     def inspect_plugin_json(self, source, filename="plugin.plugin"):
         tree, metadata, imports, classes = self.inspect(source, filename)
         inventory = _inventory(tree)
-        requirements = metadata.get("__requirements__", [])
-        if not isinstance(requirements, list) or not all(isinstance(v, str) for v in requirements):
-            raise BridgeError("LOAD_REJECTED", "__requirements__ must be a literal string list")
+        requirements = self._requirements(metadata)
         warnings = []
-        if any(name.split(".")[0] in ("threading", "_thread") for name in imports):
+        if any(name.split(".")[0] == "_thread" for name in imports):
             warnings.append("UNSUPPORTED_THREADING: plugin-created Python threads cannot enter the native bridge")
         unsupported = {name: UNSUPPORTED_IMPORTS[name.split(".")[0]] for name in imports
                        if name.split(".")[0] in UNSUPPORTED_IMPORTS}
@@ -575,6 +730,11 @@ class Runtime:
                             "imported_symbols": inventory["imported_symbols"],
                              "unsupported_sdk_symbols": inventory["unsupported_sdk_symbols"],
                              "optional_imports": inventory.get("optional_imports", []),
+                             "sdk_requirements": _ayu_operations.requirements(
+                                 inventory["sdk_references"], inventory["method_calls"],
+                                 inventory["send_hook_fields"], inventory.get("hook_targets"),
+                                 inventory.get("intent_actions", ())),
+                            "unguarded_native_imports": inventory["unguarded_native_imports"],
                             "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
     def preflight_plugin_json(self, source, filename="plugin.plugin"):
@@ -590,26 +750,84 @@ class Runtime:
                 block("SDK_MEMBER", module + "." + symbol)
         for name in report["unsupported_imports"]:
             block("IMPORT", name)
+        # Worker threads reach the host through its scheduler; without it they stay unsupported.
+        for name in _ayu_threads.unavailable_imports(report["imports"], capabilities["operations"]):
+            block("IMPORT", name)
+        declared = self._declared_classes(capabilities)
+        class_modules, class_symbols = self._class_path_imports(report["imports"], report["imported_symbols"], declared)
         for name in report["classes"]:
-            if name not in capabilities["classes"]:
+            if name not in declared and name not in class_symbols:
                 block("CLASS", name)
-        allowed = SDK_MODULES | set(capabilities["modules"]) | set(getattr(sys, "stdlib_module_names", ()))
-        for name in report["imports"]:
-            native_package = any(c.startswith(name + ".") for c in capabilities["classes"])
-            if name not in allowed and name.split(".")[0] not in allowed and not native_package:
-                block("DEPENDENCY", name)
-        for name in report["requirements"]:
-            block("REQUIREMENT", name)
+        # A class-path import fails on Android too; it blocks only where no handler absorbs the ImportError.
+        unguarded = report["unguarded_native_imports"]
+        for name in sorted(class_modules.intersection(unguarded["modules"]) | class_symbols.intersection(unguarded["symbols"])):
+            block("IMPORT", name + " (a Java class is not an importable module)")
+        for name in self._undeclared_imports([name for name in report["imports"] if name not in class_modules],
+                                             report["imported_symbols"], declared, capabilities["modules"]):
+            block("DEPENDENCY", name)
+        for finding in self._unbundled_requirements(report["requirements"], capabilities):
+            block("REQUIREMENT", finding)
+        for finding in _ayu_policy.version_findings(report["metadata"]):
+            block("VERSION_POLICY", finding)
         required = report["metadata"].get("__bridge_operations__", [])
         if not isinstance(required, list) or not all(isinstance(name, str) and name for name in required):
             raise BridgeError("LOAD_REJECTED", "__bridge_operations__ must be a literal string list")
         for name in required:
             if name not in capabilities["operations"]:
                 block("OPERATION", name)
+        report["member_accesses"] = self._member_accesses(ast.parse(source, filename=filename), capabilities)
+        # The curated list of unprovided members is the net under receivers inspection cannot
+        # resolve; where every use of a name was resolved, the MEMBER check has spoken for it.
+        unresolved = set(report["member_accesses"].pop("unresolved"))
+        required = {name: groups for name, groups in report["sdk_requirements"].items()
+                    if name[:-2] not in _ayu_operations.UNPROVIDED_MEMBERS or not name.endswith("()")
+                    or name[:-2] in unresolved}
+        # SDK entry points the source references whose host operations are not declared.
+        for finding in _ayu_operations.missing(required, capabilities["operations"]):
+            block("OPERATION", finding)
+        for finding in report["member_accesses"].pop("gated"):
+            block("OPERATION", finding)
+        for finding in report["member_accesses"].pop("missing"):
+            block("MEMBER", finding)
         if report["dynamic_class_lookup_lines"]:
             report["warnings"].append("DYNAMIC_CLASSES: computed native classes are checked only at runtime")
         report["blockers"] = blockers
         return json.dumps(report, allow_nan=False)
+
+    @staticmethod
+    def _member_accesses(tree, capabilities):
+        """Java member accesses on receivers whose class static inspection is certain of.
+
+        ``missing`` lists, once each, the members neither the host class nor the Python-local class
+        provides (``Class.member``, ``Class.member (write)``, ``Class.<init>``); the counts say how
+        many accesses were verified, were missing behind a probe, or have an unknown receiver.
+        """
+        try:
+            tables = _ayu_members.Tables(capabilities)
+            found = member_inventory(tree, SDK_MODULES, tables, frozenset(_ayu_operations.UNPROVIDED_MEMBERS))
+        except (ValueError, RecursionError, OSError, UnicodeError, SyntaxError) as error:
+            raise BridgeError("LOAD_REJECTED", "Static SDK inventory is invalid or exceeds its limits") from error
+        suffix = {"read": "", "write": " (write)", "construct": ""}
+        # A member only the gated Python-local class of that name provides is its operation's blocker.
+        gates = [(tables.gate(item["class"], item["member"], item["use"]), item) for item in found["missing"]]
+        found["gated"] = sorted({f'{gate} ({item["class"]}.{item["member"]})' for gate, item in gates if gate})
+        found["missing"] = sorted({item["class"] + "." + item["member"] + suffix[item["use"]] for gate, item in gates if not gate})
+        return found
+
+    @staticmethod
+    def _source_path(filename):
+        """A plugin file's path below the SDK's plugins directory, computed without creating anything.
+
+        The plugin's storage is real, so directories it makes next to ``__file__`` are writable; the
+        source itself is not stored there. Without an application container the name stays as given.
+        """
+        if os.path.isabs(filename):
+            return filename
+        import file_utils
+        try:
+            return file_utils._plugin_file(filename)
+        except UnsupportedAPI:
+            return filename
 
     def load_plugin(self, source, filename="plugin.plugin", expected_id=None):
         self.check_queue()
@@ -634,23 +852,37 @@ class Runtime:
         if self.scopes and self.capabilities != capabilities:
             raise ProtocolError("Host capabilities changed while plugins are active")
         self.capabilities = capabilities
+        for name in _ayu_threads.unavailable_imports(imports, capabilities["operations"]):
+            raise BridgeError("LOAD_REJECTED", f"Plugin threads need the host scheduler: {name}")
+        declared = self._declared_classes(self.capabilities)
+        class_modules, class_symbols = self._class_path_imports(imports, inventory["imported_symbols"], declared)
         for name in classes:
-            if name not in self.capabilities["classes"]:
+            if name not in declared and name not in class_symbols:
                 raise BridgeError("LOAD_REJECTED", f"Undeclared Java class: {name}")
-        allowed = SDK_MODULES | set(self.capabilities["modules"]) | set(getattr(sys, "stdlib_module_names", ()))
-        for name in imports:
-            native_package = any(c.startswith(name + ".") for c in self.capabilities["classes"])
-            if name not in allowed and name.split(".")[0] not in allowed and not native_package:
-                raise BridgeError("LOAD_REJECTED", f"Undeclared dependency: {name}")
-        requirements = metadata.get("__requirements__", [])
-        if not isinstance(requirements, list) or not all(isinstance(v, str) for v in requirements):
-            raise BridgeError("LOAD_REJECTED", "__requirements__ must be a literal string list")
-        # The host must reject unavailable pip dependencies/versions and unsupported
-        # statically identified APIs here, before even the first top-level statement.
-        approval = self._dispatch(plugin_id, "plugin.authorize", {"metadata": metadata, "imports": imports,
-                                                                  "classes": classes, "requirements": requirements})
+        unguarded = inventory["unguarded_native_imports"]
+        for name in sorted(class_modules.intersection(unguarded["modules"]) | class_symbols.intersection(unguarded["symbols"])):
+            raise BridgeError("LOAD_REJECTED", f"A Java class is not an importable module: {name}")
+        for name in self._undeclared_imports([name for name in imports if name not in class_modules],
+                                             inventory["imported_symbols"], declared, self.capabilities["modules"]):
+            raise BridgeError("LOAD_REJECTED", f"Undeclared dependency: {name}")
+        for finding in self._unbundled_requirements(self._requirements(metadata), self.capabilities):
+            raise BridgeError("LOAD_REJECTED", f"Requirement is not bundled: {finding}")
+        for finding in _ayu_policy.version_findings(metadata):
+            raise BridgeError("LOAD_REJECTED", f"Version constraint is not satisfied: {finding}")
+        # The host must reject unsupported statically identified APIs here, before
+        # even the first top-level statement. Requirements and version constraints
+        # are settled above, so the host is sent no requirement left to install and
+        # the versions the constraints were evaluated against.
+        # Python-local classes never reach the host, so only its own are submitted.
+        host_classes = [name for name in classes if name in self.capabilities["classes"]
+                        and name not in self.capabilities["local_classes"]]
+        approval = self._dispatch(plugin_id, "plugin.authorize", {
+            "metadata": metadata, "imports": imports, "classes": host_classes, "requirements": [],
+            "version_policy": {"app_version": _ayu_policy.APP_VERSION, "sdk_version": _ayu_policy.SDK_VERSION}})
         if approval is not True:
             raise BridgeError("LOAD_REJECTED", "Host did not explicitly authorize execution")
+        # Plugin code sees the path its file has on Android, as ``__file__`` and in its frames.
+        filename = self._source_path(filename)
         scope = Scope(plugin_id, metadata=metadata, source_filename=filename)
         self.scopes[plugin_id] = scope
         module_name = "_ayu_plugin_" + scope.generation
@@ -677,7 +909,8 @@ class Runtime:
             with self.context(scope), self.budget(scope, "load"):
                 self.call("plugin.activate", {"metadata": metadata, "generation": scope.generation})
                 install_native_importer()
-                exec(compile(tree, filename, "exec"), module.__dict__)
+                # The SDK's own __future__ imports must not change how plugin code compiles.
+                exec(compile(tree, filename, "exec", dont_inherit=True), module.__dict__)
                 from base_plugin import BasePlugin
                 if module.__dict__.get("__name__") != module_name:
                     raise BridgeError("LOAD_REJECTED", "Plugin modified its runtime module identity")
@@ -703,6 +936,7 @@ class Runtime:
             self._dispatch(scope.plugin_id, "plugin.deactivate", {"generation": scope.generation})
         finally:
             scope.state = "unloaded"
+            _ayu_threads.close(scope)
             if scope.module is not None:
                 sys.modules.pop(scope.module_key, None)
             scope.instance = None
@@ -716,6 +950,7 @@ class Runtime:
             raise BridgeError("NOT_LOADED", "Plugin is not loaded")
         with self.context(scope):
             scope.state = "unloading"
+            _ayu_threads.signal_stop(scope)
             # Revocation precedes user unload code so already enqueued callbacks
             # cannot enter it. Native host calls remain valid until deactivate.
             scope.callbacks.clear()
@@ -735,10 +970,10 @@ class Runtime:
             raise ProtocolError("Invalid callback identity")
         scope = self.scopes.get(event["plugin_id"])
         if scope is None or scope.state != "active":
-            raise BridgeError("CALLBACK_EXPIRED", "Plugin callback generation is inactive")
+            raise DeliveryExpired("CALLBACK_EXPIRED", "Plugin callback generation is inactive")
         entry = scope.callbacks.get(event["callback_id"])
         if entry is None:
-            raise BridgeError("CALLBACK_EXPIRED", "Unknown or released callback")
+            raise DeliveryExpired("CALLBACK_EXPIRED", "Unknown or released callback")
         if not isinstance(event["arguments"], list):
             raise ProtocolError("Callback arguments must be an array")
         function, once = entry
@@ -749,7 +984,19 @@ class Runtime:
                     registration._forget()
         with self.context(scope), self.budget(scope, "callback"):
             result = function(*self.decode(event["arguments"]))
-            return json.dumps(self.encode(result), allow_nan=False, separators=(",", ":"))
+            text = json.dumps(self.encode(result), allow_nan=False, separators=(",", ":"))
+            if len(text) > MAX_RESULT_BYTES:
+                raise BridgeError("RESOURCE_LIMIT", "Callback result is too large")
+            return text
+
+    def service_workers(self, plugin_id):
+        """Native wake (``_ayu_host.wake``): serve the calls this plugin's worker threads have queued."""
+        self.check_queue()
+        scope = self.scopes.get(plugin_id)
+        if scope is None or scope.state != "active":
+            return False
+        with self.context(scope):
+            return _ayu_threads.serve(scope)
 
     def emit_event_json(self, text):
         self.check_queue()
@@ -762,7 +1009,7 @@ class Runtime:
             raise UnsupportedAPI("Only explicit app lifecycle events are supported")
         scope = self.scopes.get(event["plugin_id"])
         if scope is None or scope.state != "active" or event["generation"] != scope.generation:
-            raise BridgeError("NOT_LOADED", "Plugin event generation is not active")
+            raise DeliveryExpired("NOT_LOADED", "Plugin event generation is not active")
         from base_plugin import AppEvent
         with self.context(scope), self.budget(scope, "event"):
             scope.instance.on_app_event(AppEvent(event["arguments"][0]))
@@ -774,9 +1021,8 @@ class Runtime:
         if scope is None or scope.state != "active":
             raise BridgeError("NOT_LOADED", "Plugin is not active")
         with self.context(scope), self.budget(scope, "settings"):
-            settings = scope.instance.create_settings()
-            if not isinstance(settings, list):
-                raise ProtocolError("create_settings must return a list")
+            from ui.settings import android_rows
+            settings = android_rows(scope.instance.create_settings())
             previous = scope.settings_callbacks
             before = set(scope.callbacks)
             try:
@@ -819,10 +1065,17 @@ class NativePackage(types.ModuleType):
 
 class NativeImporter(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def find_spec(self, fullname, path=None, target=None):
-        if not (fullname == "android" or fullname.startswith("android.") or fullname == "org" or fullname.startswith("org.telegram") or fullname.startswith("java.")):
+        # ``java`` itself is the SDK facade module; only its subpackages are Java packages.
+        if not (fullname.startswith(NATIVE_PREFIXES) or fullname in NATIVE_ROOTS and fullname != "java"):
             return None
-        scope = runtime.require()
-        if not any(name.startswith(fullname + ".") for name in runtime.capabilities["classes"]):
+        if fullname in SDK_MODULES:
+            return None
+        runtime.require()
+        declared = runtime._declared_classes(runtime.capabilities)
+        if not any(name.startswith(fullname + ".") for name in declared):
+            if fullname in declared:
+                # As with Chaquopy's import hook, a class is imported from its package, never as a module.
+                raise ModuleNotFoundError(f"No module named {fullname!r}: it is a Java class", name=fullname)
             raise UnsupportedAPI(f"Native package not declared: {fullname}")
         return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
 
@@ -855,6 +1108,21 @@ def load_plugin(source, filename="plugin.plugin", expected_id=None):
     return runtime.load_plugin(source, filename, expected_id=expected_id)
 
 
+def inspect_package_json(path, filename="plugin.elyx"):
+    import _ayu_packages
+    return _ayu_packages.inspect_package_json(runtime, path, filename)
+
+
+def preflight_package_json(path, filename="plugin.elyx"):
+    import _ayu_packages
+    return _ayu_packages.preflight_package_json(runtime, path, filename)
+
+
+def load_package(path, filename="plugin.elyx", expected_id=None):
+    import _ayu_packages
+    return _ayu_packages.load_package(runtime, path, filename, expected_id=expected_id)
+
+
 def unload_plugin(plugin_id):
     return runtime.unload_plugin(plugin_id)
 
@@ -865,6 +1133,10 @@ def invoke_callback_json(text):
 
 def emit_event_json(text):
     return runtime.emit_event_json(text)
+
+
+def service_workers(plugin_id):
+    return runtime.service_workers(plugin_id)
 
 
 def serialize_settings(plugin_id):

@@ -43,7 +43,7 @@ class InstallationWiringTests(unittest.TestCase):
 
     def test_chat_attachment_opens_preview_without_installing_or_enabling(self):
         route = section(self.chat, 'if !immediateShare, let fileName', '\n                let presentationData =')
-        self.contains(route, 'pathExtension.lowercased() == "plugin"')
+        self.contains(route, '["plugin", "elyx", "eaf"].contains((fileName as NSString).pathExtension.lowercased())')
         self.contains(route, "AyuPluginDetailViewController(fileName: fileName)")
         self.contains(route, "presenter.present(navigationController, animated: true)")
         for forbidden in ("importPlugin(", "service.enable(", "runtime.load(", "UndoOverlayController("):
@@ -106,12 +106,22 @@ class InstallationWiringTests(unittest.TestCase):
 
     def test_staging_is_bounded_regular_utf8_with_real_plugin_extension(self):
         stage = section(self.detail, "nonisolated private static func stage(", "public override func numberOfSections(")
-        for required in ('pathExtension.lowercased() == "plugin"', "flags.isRegularFile == true",
+        for required in ('let fileExtension = (fileName as NSString).pathExtension.lowercased()',
+                         'guard isPackage || fileExtension == "plugin" else { throw AyuPluginService.Failure.source }',
+                         "flags.isRegularFile == true",
                          "flags.isSymbolicLink != true", "read(upToCount: AyuPluginService.maximumSourceBytes + 1)",
-                         "data.count <= AyuPluginService.maximumSourceBytes", "String(data: data, encoding: .utf8) != nil",
-                         'appendingPathComponent("preview.plugin")'):
+                         "source.count <= AyuPluginService.maximumSourceBytes", "String(data: source, encoding: .utf8) != nil",
+                         'appendingPathComponent("preview." + fileExtension)'):
+            self.contains(stage, required)
+        # A package archive is copied in pieces under its own bound and never decoded as text.
+        for required in ("let isPackage = AyuPluginService.packageExtensions.contains(fileExtension)",
+                         "if isPackage { try Self.copyPackage(from: handle, to: destination) }",
+                         "guard total <= AyuPluginService.maximumPackageBytes else { throw AyuPluginService.Failure.source }",
+                         "guard total > 0 else { throw AyuPluginService.Failure.source }"):
             self.contains(stage, required)
         self.contains(self.service, "nonisolated public static let maximumSourceBytes = 4_194_304")
+        self.contains(self.service, "nonisolated public static let maximumPackageBytes = 67_108_864")
+        self.contains(self.service, 'nonisolated public static let packageExtensions = ["elyx", "eaf"]')
         self.excludes(stage, "1_048_577")
         self.excludes(stage, "data.count <= 1_048_576")
 
@@ -121,10 +131,20 @@ class InstallationWiringTests(unittest.TestCase):
         self.contains(install, "replacingExisting: replacingExisting")
         self.excludes(install, ".enable(")
         service_import = section(self.service, "public func importPlugin(", "nonisolated private static func importSource(")
-        self.contains(service_import, "Self.digest(source) != expectedSHA256")
+        self.contains(service_import, "source.sha256 != expectedSHA256")
         self.contains(service_import, "throw Failure.sourceChanged")
         self.assertLess(service_import.index("throw Failure.sourceChanged"),
-                        service_import.index(".write(to:"), "Hash must be checked before storage writes")
+                        service_import.index("try Self.store(source, record: record, root: root, replacingExisting: replacingExisting)"),
+                        "Hash must be checked before storage writes")
+        self.excludes(service_import, ".write(to:")
+        # The hash of a package is the hash of the staged copy that is inspected and then moved into place.
+        stage = section(self.service, "nonisolated private static func stagePackage(", "nonisolated private static func packageDigest(")
+        for required in ("try Self.requireRegularFile(url)", "guard total <= Self.maximumPackageBytes else { throw Failure.source }",
+                         "hasher.update(data: chunk)", "try output.write(contentsOf: chunk)"):
+            self.contains(stage, required)
+        store = section(self.service, "nonisolated private static func store(", "nonisolated private static func removeUnpackedPackage(")
+        self.contains(store, "case let .package(archive, _, _): try manager.moveItem(at: archive, to: target)")
+        self.contains(store, "try manager.moveItem(at: previous.parked, to: previous.url)")
 
     def test_replacement_requires_disabled_idle_plugin_and_preserves_preferences(self):
         install = section(self.detail, "private func confirmInstall(", "private func confirmEnable(")

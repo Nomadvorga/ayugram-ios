@@ -47,14 +47,14 @@ class IntentsManager:
             result["query"] = rest.split("?", 1)[1]
         return result
 
-    @staticmethod
-    def new_global_before_handler(info):
+    @classmethod
+    def new_global_before_handler(cls, info):
         raise UnsupportedAPI("Android intent interception is unavailable on iOS")
 
-    @staticmethod
-    def new_global_after_handler(info):
+    @classmethod
+    def new_global_after_handler(cls, info):
         raise UnsupportedAPI("Android intent interception is unavailable on iOS")
 
-    @staticmethod
-    def unhandle(handler_id):
+    @classmethod
+    def unhandle(cls, handler_id):
         raise UnsupportedAPI("Android intent interception is unavailable on iOS")

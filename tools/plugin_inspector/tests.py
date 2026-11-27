@@ -307,6 +307,7 @@ Target.createView()
 
 from .corpus_tests import CorpusTests  # Include corpus contracts in the documented suite.
 from .audit_tests import PinnedAuditTests
+from .preflight_tests import PreflightCorpusTests
 
 
 if __name__ == "__main__":

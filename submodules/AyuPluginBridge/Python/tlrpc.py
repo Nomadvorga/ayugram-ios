@@ -1,7 +1,7 @@
-"""TL access resolves only explicitly registered, host-owned native classes.
+"""``TLRPC`` by class registry lookup: the Python-local TL model, or a class the host declares.
 
-No fabricated Python TL objects or unimplemented request callbacks are accepted.
-The iOS application must supply each constructor and the actual request service.
+A name outside the TL class table raises ``UnsupportedAPI``. Sending a request needs the
+host's request service; see ``client_utils.send_request``.
 """
 from ayu_bridge import runtime
 from client_utils import get_connections_manager, send_request

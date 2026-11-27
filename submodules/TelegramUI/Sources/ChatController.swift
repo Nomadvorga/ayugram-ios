@@ -17,6 +17,7 @@ import TextFormat
 import TelegramBaseController
 import AccountContext
 import AyuPluginBridge
+import AyuPluginTelegramAdapter
 import WalletContext
 import TelegramStringFormatting
 import OverlayStatusController
@@ -6583,7 +6584,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     source = .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: .zero))
                 }
                 
-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                // MARK: AyuGram
+                // Android's chat header menu: plugin rows registered for CHAT_ACTION_MENU.
+                let ayuPluginMenu = AyuPluginContextMenuHandle()
+                var ayuItems = items |> map { ContextController.Items(content: .list($0)) }
+                if let ayuPeerId = strongSelf.chatLocation.peerId {
+                    ayuItems = AyuPluginContextMenu.appending(to: ayuItems, request: AyuPluginMenuRequest(kind: .chatActionMenu, accountKey: strongSelf.context.account.id.int64, peer: AyuPluginMenuRequest.Peer(namespace: ayuPeerId.namespace._internalGetInt32Value(), id: ayuPeerId.id._internalGetInt64Value())), menu: ayuPluginMenu)
+                }
+                //
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: ayuItems, gesture: gesture)
+                ayuPluginMenu.controller = contextController
                 contextController.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -9447,7 +9457,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, presentSchedulePickerInOverlay: Bool = false) {
         // MARK: AyuGram — original plugin send hook runs before enqueueing.
-        if AyuPluginService.shared.hasSendHooks {
+        if AyuPluginTelegramAdapter.shared.hasSendMessageHooks {
             self.ayuApplyPluginSendHooks(to: messages) { [weak self] resolved, cancelled in
                 guard let self, !cancelled else { return }
                 self.sendMessagesResolved(resolved, media: media, postpone: postpone, commit: commit, presentSchedulePickerInOverlay: presentSchedulePickerInOverlay)
@@ -11128,97 +11138,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         return (false, false, false, false)
     }
 
-    /// Sends the original plugin hook the same mutable `message`/`caption` and
-    /// `peer` fields used by AyuGram, then rebuilds the outgoing message. Android
-    /// dialog ids stay negative for groups/channels, exactly as the plugin expects.
+    /// Shows the outgoing messages to the plugins' send hooks (the typed `telegram.hooks.send_message`
+    /// hooks and the three-field ones, one priority order) before they are queued. The adapter
+    /// builds the hook values, waits for the plugins and writes their changes back; forwards pass
+    /// unchanged, and a cancelling hook drops the whole send.
     private func ayuApplyPluginSendHooks(to messages: [EnqueueMessage], completion: @escaping ([EnqueueMessage], Bool) -> Void) {
         guard let peerId = self.chatLocation.peerId else { completion(messages, false); return }
-        let accountIndex = ayuPluginBridgeAccountIndex(for: self.context.account.id) ?? 0
-        let raw = peerId.id._internalGetInt64Value()
-        let dialogID: Int64
-        switch peerId.namespace {
-        case Namespaces.Peer.CloudUser: dialogID = raw
-        case Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel: dialogID = -raw
-        default: dialogID = raw
-        }
-        var resolved = messages
-        var cancelled = false
-        func process(_ index: Int) {
-            guard !cancelled else { completion(resolved, true); return }
-            guard index < messages.count else { completion(resolved, false); return }
-            guard case let .message(text, attributes, inlineStickers, mediaReference, threadId, replyToMessageId, replyToStoryId, localGroupingKey, correlationId, bubbleUpEmojiOrStickersets) = messages[index] else {
-                process(index + 1); return
-            }
-            let isMedia = mediaReference != nil
-            AyuPluginService.shared.applySendHooks(
-                message: isMedia ? nil : text, caption: isMedia ? text : nil,
-                peerID: dialogID, accountIndex: accountIndex
-            ) { [weak self] message, caption, stop in
-                guard let self else { return }
-                if stop {
-                    cancelled = true
-                    completion(resolved, true)
-                    return
-                }
-                let replacement = isMedia ? caption : message
-                if let replacement, replacement != text {
-                    let replacements = self.ayuBridgeReplacements(old: text, new: replacement)
-                    let updatedAttributes = self.ayuRemapTextAttributes(attributes, replacements: replacements)
-                    resolved[index] = .message(text: replacement, attributes: updatedAttributes, inlineStickers: inlineStickers,
-                                               mediaReference: mediaReference, threadId: threadId, replyToMessageId: replyToMessageId,
-                                               replyToStoryId: replyToStoryId, localGroupingKey: localGroupingKey,
-                                               correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)
-                }
-                process(index + 1)
-            }
-        }
-        process(0)
-    }
-
-    /// The plugin returns text, not Android entity ranges. A single UTF-16 diff
-    /// preserves links/formatting for the usual one-command rewrite.
-    private func ayuBridgeReplacements(old: String, new: String) -> [AyuNativeTextReplacement] {
-        let a = old as NSString, b = new as NSString
-        let maximum = min(a.length, b.length)
-        var prefix = 0
-        while prefix < maximum && a.character(at: prefix) == b.character(at: prefix) { prefix += 1 }
-        var suffix = 0
-        while suffix < maximum - prefix && a.character(at: a.length - 1 - suffix) == b.character(at: b.length - 1 - suffix) { suffix += 1 }
-        let oldLength = a.length - prefix - suffix
-        let newLength = b.length - prefix - suffix
-        guard oldLength != newLength || oldLength > 0 else { return [] }
-        return [AyuNativeTextReplacement(range: NSRange(location: prefix, length: oldLength), length: newLength)]
-    }
-
-    private func ayuRemapTextAttributes(_ attributes: [MessageAttribute], replacements: [AyuNativeTextReplacement]) -> [MessageAttribute] {
-        return attributes.map { attribute -> MessageAttribute in
-            guard let textEntities = attribute as? TextEntitiesMessageAttribute else { return attribute }
-            let entities = textEntities.entities.map { entity -> MessageTextEntity in
-                let lower = self.ayuMapTextOffset(entity.range.lowerBound, replacements: replacements)
-                let upper = self.ayuMapTextOffset(entity.range.upperBound, replacements: replacements)
-                return MessageTextEntity(range: lower ..< max(lower, upper), type: entity.type)
-            }
-            return TextEntitiesMessageAttribute(entities: entities)
-        }
-    }
-
-    private func ayuMapTextOffset(_ offset: Int, replacements: [AyuNativeTextReplacement]) -> Int {
-        var result = offset
-        for replacement in replacements {
-            let start = replacement.range.location
-            let end = start + replacement.range.length
-            if offset >= end {
-                result += replacement.length - replacement.range.length
-            } else if offset > start {
-                result -= offset - start
-                break
+        AyuPluginTelegramAdapter.shared.applySendHooks(account: self.context.account, peerId: peerId, messages: messages) { resolved in
+            if let resolved {
+                completion(resolved, false)
             } else {
-                break
+                completion(messages, true)
             }
         }
-        return max(0, result)
     }
-    
+
     func updateSlowmodeStatus() {
         if let slowmodeState = self.presentationInterfaceState.slowmodeState, case let .timestamp(slowmodeActiveUntilTimestamp) = slowmodeState.variant {
             let timestamp = Int32(Date().timeIntervalSince1970)

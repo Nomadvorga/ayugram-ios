@@ -208,7 +208,7 @@ import UIKit
                 return nil
             } catch let caught { return caught as? AyuBridgeFailure }
         }.value
-        XCTAssertEqual(error?.code, "screen_unavailable")
+        XCTAssertEqual(error?.code, "SCREEN_UNAVAILABLE")
         XCTAssertEqual(error?.message, "Telegram URL route is not bound")
         XCTAssertEqual(probe.count, 0, "Missing-route detection must not synchronously query the main-thread screen source")
     }
@@ -241,7 +241,7 @@ import UIKit
             _ = try await self.preparedBrowserURL(provider, url: "https://example.org/unbound", screen: screen)
             XCTFail("Rebinding without a route must revoke route availability")
         } catch let failure as AyuBridgeFailure {
-            XCTAssertEqual(failure.code, "screen_unavailable")
+            XCTAssertEqual(failure.code, "SCREEN_UNAVAILABLE")
         }
     }
 
@@ -858,21 +858,17 @@ import UIKit
         XCTAssertEqual(scoped["error"]["code"], .string("UNSUPPORTED_API"))
     }
 
-    func testThemeKeysAreOneBasedAndUnboundAppearanceFailsClosed() async throws {
+    func testThemeColorsFailClosedWithoutABoundPresentationTheme() async throws {
         let provider = AyuPluginApplicationBridge()
         let host = self.host(provider, registry: try provider.classRegistry())
         try await self.authorize(host)
         let theme: AyuBridgeValue = .object(["class_name": .string("org.telegram.ui.ActionBar.Theme")])
-        for key in [Int64(0), -1, 17, Int64.max] {
-            let invalid = try await self.invoke(host, theme, "getColor", args: [.integer(key)])
-            XCTAssertEqual(invalid["error"]["code"], .string("INVALID_ARGUMENTS"))
-        }
-        for key in [Int64(1), 16] {
+        for key in [Int64(0), -1, 1, 49, Int64.max] {
             let unavailable = try await self.invoke(host, theme, "getColor", args: [.integer(key)])
-            XCTAssertEqual(unavailable["error"]["code"], .string("SCREEN_UNAVAILABLE"))
+            XCTAssertEqual(unavailable["error"]["code"], .string("UNSUPPORTED_API"))
         }
-        let unavailable = try await self.invoke(host, theme, "isDarkThemeEnabled")
-        XCTAssertEqual(unavailable["error"]["code"], .string("SCREEN_UNAVAILABLE"))
+        let unavailable = try await self.invoke(host, theme, "isCurrentThemeDark")
+        XCTAssertEqual(unavailable["error"]["code"], .string("UNSUPPORTED_API"))
     }
 
     func testDisplayMetricsAndThemeUseTheExplicitPresentationWindow() async throws {
@@ -921,10 +917,12 @@ import UIKit
         XCTAssertEqual(unsupportedUnit["error"]["code"], .string("UNSUPPORTED_API"))
         let invalidMetrics = try await self.invoke(host, typedValue, "applyDimension", args: [.integer(1), .number(12), .null])
         XCTAssertNotNil(invalidMetrics["error"]["code"].string)
+        // Theme colours come from the bound presentation theme, not from the window's traits.
+        provider.presentation.bind(palette: { AyuPluginThemePalette(isDark: true, isNight: false, colors: [.listItemBackground: 0xFFFF_FFFF]) }, language: nil)
         let theme: AyuBridgeValue = .object(["class_name": .string("org.telegram.ui.ActionBar.Theme")])
-        let dark = try await self.invoke(host, theme, "isDarkThemeEnabled")
+        let dark = try await self.invoke(host, theme, "isCurrentThemeDark")
         XCTAssertEqual(dark["result"], .bool(true))
-        let white = try await self.invoke(host, theme, "getColor", args: [.integer(14)])
+        let white = try await self.invoke(host, theme, "getColor", args: [.integer(49)])
         XCTAssertEqual(white["result"], .integer(-1))
         provider.bindScreen(screen: { nil }, presenter: { nil })
         let staleConfiguration = try await self.invoke(host, resources["result"], "getConfiguration")

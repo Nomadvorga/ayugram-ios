@@ -42,8 +42,10 @@ public indirect enum AyuBridgeValue: Codable, Equatable, Hashable, Sendable {
     }
     /// Strictly a floating-point payload, not an integer coercion.
     public var double: Double? { if case let .number(value) = self { return value }; return nil }
+    /// A float without a fraction is accepted where an integer is expected, as Python's `4.0`
+    /// always was by this host; an integer never passes through a double.
     public var integer: Int64? {
-        if case let .integer(value) = self { return value }; return nil
+        switch self { case let .integer(value): return value; case let .number(value): return Int64(exactly: value); default: return nil }
     }
     public var array: [AyuBridgeValue]? { if case let .array(value) = self { return value }; return nil }
     public var object: [String: AyuBridgeValue]? { if case let .object(value) = self { return value }; return nil }
@@ -55,6 +57,95 @@ public indirect enum AyuBridgeValue: Codable, Equatable, Hashable, Sendable {
         guard let data = try? JSONEncoder().encode(value),
               let decoded = try? JSONDecoder().decode(AyuBridgeValue.self, from: data) else { return .null }
         return decoded
+    }
+}
+
+/// Wire text. A number's spelling carries its type: `2` is an integer and `2.0` a float, as
+/// Python reads and writes them. Foundation's coders read `2.0` as an integer and write the
+/// double 2 as `2`, so text exchanged with Python and stored plugin values use this codec.
+public enum AyuBridgeJSON {
+    public static func decode(_ data: Data) throws -> AyuBridgeValue {
+        try self.value(JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]))
+    }
+
+    /// Compact, `/` unescaped; throws for a nonfinite number.
+    public static func encode(_ value: AyuBridgeValue) throws -> Data {
+        var bytes: [UInt8] = []
+        try self.write(value, into: &bytes)
+        return Data(bytes)
+    }
+
+    private static func value(_ object: Any) throws -> AyuBridgeValue {
+        switch object {
+        case is NSNull: return .null
+        case let text as String: return .string(text)
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return .bool(number.boolValue) }
+            // The parser gives a token with a fraction or exponent a floating type.
+            switch String(cString: number.objCType) {
+            case "c", "s", "i", "l", "q", "C", "S", "I", "L": return .integer(number.int64Value)
+            case "Q":
+                if let exact = Int64(exactly: number.uint64Value) { return .integer(exact) }
+                return .number(number.doubleValue)
+            default:
+                guard number.doubleValue.isFinite else { throw AyuBridgeFailure("invalid_request", "Nonfinite JSON number") }
+                return .number(number.doubleValue)
+            }
+        case let items as [Any]: return .array(try items.map(self.value))
+        case let fields as [String: Any]: return .object(try fields.mapValues(self.value))
+        default: throw AyuBridgeFailure("invalid_request", "Unsupported JSON value")
+        }
+    }
+
+    private static func write(_ value: AyuBridgeValue, into bytes: inout [UInt8]) throws {
+        switch value {
+        case .null: bytes.append(contentsOf: "null".utf8)
+        case let .bool(item): bytes.append(contentsOf: (item ? "true" : "false").utf8)
+        case let .integer(item): bytes.append(contentsOf: String(item).utf8)
+        case let .number(item):
+            guard item.isFinite else { throw AyuBridgeFailure("invalid_arguments", "Nonfinite number") }
+            // Swift's shortest round-trip spelling always has a fraction or an exponent.
+            bytes.append(contentsOf: item.description.utf8)
+        case let .string(item): self.write(item, into: &bytes)
+        case let .array(items):
+            bytes.append(0x5B)
+            for (index, item) in items.enumerated() {
+                if index > 0 { bytes.append(0x2C) }
+                try self.write(item, into: &bytes)
+            }
+            bytes.append(0x5D)
+        case let .object(fields):
+            bytes.append(0x7B)
+            var first = true
+            for (key, item) in fields {
+                if !first { bytes.append(0x2C) }
+                first = false
+                self.write(key, into: &bytes)
+                bytes.append(0x3A)
+                try self.write(item, into: &bytes)
+            }
+            bytes.append(0x7D)
+        }
+    }
+
+    private static let hex = Array("0123456789abcdef".utf8)
+
+    private static func write(_ text: String, into bytes: inout [UInt8]) {
+        bytes.append(0x22)
+        for byte in text.utf8 {
+            switch byte {
+            case 0x22: bytes.append(contentsOf: [0x5C, 0x22])
+            case 0x5C: bytes.append(contentsOf: [0x5C, 0x5C])
+            case 0x08: bytes.append(contentsOf: [0x5C, 0x62])
+            case 0x09: bytes.append(contentsOf: [0x5C, 0x74])
+            case 0x0A: bytes.append(contentsOf: [0x5C, 0x6E])
+            case 0x0C: bytes.append(contentsOf: [0x5C, 0x66])
+            case 0x0D: bytes.append(contentsOf: [0x5C, 0x72])
+            case 0x00...0x1F: bytes.append(contentsOf: [0x5C, 0x75, 0x30, 0x30, self.hex[Int(byte >> 4)], self.hex[Int(byte & 15)]])
+            default: bytes.append(byte)
+            }
+        }
+        bytes.append(0x22)
     }
 }
 
@@ -114,6 +205,13 @@ public final class AyuUnsupportedPluginHostProvider: AyuPluginHostProvider, Send
 public struct AyuPluginBridgeLimits: Sendable {
     public var requestBytes = 262_144
     public var responseBytes = 262_144
+    /// `telegram.*` operations carry TL values: a request holds one 1 MiB value as base64 with its
+    /// envelope (the C entry point's bound), a result fills the entry point's 1 MiB response.
+    public var telegramRequestBytes = 1_572_864
+    public var telegramResponseBytes = 1_048_576
+    /// Arguments of a callback sent with an overflow substitute (a request response): a 4 MiB TL
+    /// value as base64. With its envelope it stays inside the 6,000,000 characters the SDK reads.
+    public var guaranteedCallbackBytes = 5_900_000
     public var objectsPerPlugin = 256
     public var adapterStateBytesPerPlugin = 1_048_576
     public var commandsPerTransaction = 256
@@ -140,9 +238,26 @@ struct AyuBridgeRequest: Decodable {
     }
 }
 
+extension AyuBridgeRequest {
+    init(_ fields: [String: AyuBridgeValue]) throws {
+        guard let version = fields["version"]?.integer, let id = fields["id"], let pluginID = fields["plugin_id"]?.string,
+              let operation = fields["operation"]?.string, let arguments = fields["arguments"]?.object else {
+            throw AyuBridgeFailure("invalid_request", "Malformed request or arguments")
+        }
+        self.version = Int(clamping: version); self.id = id; self.pluginID = pluginID; self.operation = operation; self.arguments = arguments
+    }
+}
+
 struct AyuBridgeResponse: Encodable {
     let version = 1
     let id: AyuBridgeValue
     let result: AyuBridgeValue?
     let error: AyuBridgeFailure?
+
+    var value: AyuBridgeValue {
+        var fields: [String: AyuBridgeValue] = ["version": .integer(Int64(self.version)), "id": self.id]
+        if let result = self.result { fields["result"] = result }
+        if let error = self.error { fields["error"] = .object(["code": .string(error.code), "message": .string(error.message)]) }
+        return .object(fields)
+    }
 }

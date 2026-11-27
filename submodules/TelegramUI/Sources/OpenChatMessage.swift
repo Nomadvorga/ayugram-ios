@@ -236,7 +236,7 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 return true
             case let .document(file, immediateShare):
                 params.dismissInput()
-                if !immediateShare, let fileName = file.fileName, (fileName as NSString).pathExtension.lowercased() == "plugin" {
+                if !immediateShare, let fileName = file.fileName, ["plugin", "elyx", "eaf"].contains((fileName as NSString).pathExtension.lowercased()) {
                     let _ = Task { @MainActor in
                         guard var presenter = params.navigationController?.view.window?.rootViewController else { return }
                         var depth = 0

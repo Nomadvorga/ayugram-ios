@@ -92,6 +92,7 @@ swift_library(
     }),
     deps = sgdeps + [ # MARK: Swiftgram
         "//submodules/AyuPluginBridge:AyuPluginBridge",
+        "//submodules/AyuPluginTelegramAdapter:AyuPluginTelegramAdapter",
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/CrashReporting:CrashReporting",

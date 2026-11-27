@@ -20,9 +20,14 @@ adapter remain documented subsets; all other menu types still require host work.
 The [corpus report](plugins-corpus-compatibility.md) supersedes the former
 19-file inventory as the scope assessment: 493 `.plugin` attachments and 21
 archives, 737 source units. Archive inspection is not archive installation.
-Version policy, native method interception, complete controllers/requests, menu
-types beyond `MESSAGE_CONTEXT_MENU`, worker threads and Android graphics/media
-remain independent missing work.
+Native method interception, complete controllers/requests, menu types beyond
+`MESSAGE_CONTEXT_MENU` and Android graphics/media remain independent missing
+work on the Swift host. Since 2026-11-26 version policy, worker threads and
+package loading are implemented on the Python side only (portable tests against
+a synthetic host; nothing compiled or run on a device, and the Swift importer
+does not accept packages). See [`plugins-ios-api.md`](plugins-ios-api.md) and
+the bridge preflight numbers in the corpus report; a static preflight pass is
+not proof that a plugin works.
 
 Validation available here is portable Python contracts, static source wiring,
 offline packaging fixtures and corpus analysis. Native compilation, native tests,

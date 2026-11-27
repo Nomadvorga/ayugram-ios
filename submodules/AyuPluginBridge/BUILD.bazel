@@ -46,6 +46,7 @@ swift_library(
     srcs = glob(["Tests/Swift/*.swift"]),
     deps = [
         ":AyuPluginBridge",
+        ":AyuPluginPython",
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericSnow:AyuAtmosphericSnow",
         "//submodules/AyuDialogCards:AyuDialogCards",

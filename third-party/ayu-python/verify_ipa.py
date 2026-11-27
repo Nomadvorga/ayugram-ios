@@ -21,12 +21,20 @@ class VerificationError(RuntimeError):
 LOAD_COMMANDS = {0xC, 0x80000018, 0x8000001F, 0x80000023, 0x20}
 
 SDK_FILES = (
-    "_ayu_inspection.py", "android_utils.py", "ayu_bridge.py", "base_plugin.py",
+    "_ayu_inspection.py", "_ayu_policy.py", "_ayu_javalib/__init__.py", "_ayu_javalib/concurrency.py", "_ayu_threads.py", "android_utils.py", "ayu_bridge.py", "base_plugin.py",
     "client_utils.py", "hook_utils.py", "java.py", "plugin_settings.py",
     "requests.py", "ui/__init__.py", "ui/alert.py", "ui/bulletin.py", "ui/settings.py",
     "jarray.py", "tlrpc.py", "zwylib.py", "log_utils.py", "markdown_utils.py", "file_utils.py", "intents.py",
     "extera_utils/__init__.py", "extera_utils/classes.py", "extera_utils/lifecycle.py",
     "extera_utils/text_formatting.py", "extera_utils/get_caller.py", "extera_utils/metadata_parser.py",
+    "_ayu_javalib/java_lang.py", "_ayu_javalib/java_util.py", "_ayu_javalib/java_io.py", "_ayu_javalib/java_nio.py",
+    "_ayu_javalib/java_net.py", "_ayu_javalib/java_text.py", "_ayu_javalib/java_time.py", "_ayu_javalib/org_json.py",
+    "_ayu_javalib/android_os.py", "_ayu_javalib/android_text.py", "_ayu_javalib/android_util.py",
+    "_ayu_javalib/android_content.py", "_ayu_javalib/android_graphics.py", "_ayu_javalib/android_compose.py",
+    "_ayu_operations.py", "_ayu_hooks.py", "_ayu_members.py", "_ayu_javalib/telegram_tl.py", "_ayu_javalib/_telegram_tl_schema.py",
+    "_ayu_javalib/telegram_messenger.py", "_ayu_javalib/telegram_ui.py", "_ayu_javalib/exteragram.py",
+    "_sdk_version.py", "_ayu_yaml.py", "_ayu_packages.py", "elyx.py", "elyxcore/__init__.py", "elyxcore/assets.py",
+    "elyxcore/localization.py", "elyxcore/settings.py", "elyxcore/utils.py", "audioop.py",
 )
 
 
@@ -58,6 +66,65 @@ def verify_resources(ipa: zipfile.ZipFile, app: str, sdk_sources: Path | None) -
                 raise VerificationError(f"packaged SDK source hash differs from checkout: {name}")
     return {"plugin_sdk_files": len(SDK_FILES), "plugin_runtime_resources": "verified",
             "plugin_sdk_source_hashes": "verified" if sdk_sources is not None else "not checked"}
+
+
+PACKAGES_LOCK = Path(__file__).with_name("packages.lock.json")
+PACKAGE_MANIFEST_BYTES = 4 * 1024 * 1024
+
+
+def verify_packages(ipa: zipfile.ZipFile, app: str, lock_path: Path) -> dict:
+    """The bundled third-party distributions are exactly the pinned ones, file for file.
+
+    prepare.py writes the manifest only after matching each artifact's SHA-256,
+    so equal pins plus equal file hashes tie the IPA contents to the lock.
+    """
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        pinned = {package["name"]: (package["version"], package["sha256"], sorted(package["modules"]))
+                  for package in lock["packages"]}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise VerificationError(f"unreadable Python package lock: {lock_path.name}") from error
+    bundle = f"{app}/AyuPythonResources.bundle/"
+    try:
+        info = ipa.getinfo(bundle + "PYTHON_PACKAGES.json")
+        if info.is_dir() or not 0 < info.file_size <= PACKAGE_MANIFEST_BYTES:
+            raise ValueError("manifest size")
+        manifest = json.loads(ipa.read(info).decode("utf-8"))
+        library = manifest["library"]
+        packaged = {package["name"]: (package["version"], package["sha256"], sorted(package["modules"]))
+                    for package in manifest["packages"]}
+        files = {name: digest for package in manifest["packages"] for name, digest in package["files"].items()}
+        counted = sum(len(package["files"]) for package in manifest["packages"])
+    except (KeyError, ValueError, TypeError, AttributeError) as error:
+        raise VerificationError("missing or malformed Python package manifest") from error
+    if library != "python/lib/python3.15" or packaged != pinned or len(packaged) != len(manifest["packages"]):
+        raise VerificationError("bundled Python packages differ from the pinned lock")
+    if counted != len(files):
+        raise VerificationError("Python package manifest lists a file twice")
+    prefix = f"{bundle}{library}/"
+    for name, digest in files.items():
+        parts = PurePosixPath(name).parts if isinstance(name, str) else ()
+        if not parts or name != "/".join(parts) or any(part in (".", "..") for part in parts) or name.startswith("/"):
+            raise VerificationError("unsafe path in Python package manifest")
+        try:
+            info = ipa.getinfo(prefix + name)
+        except KeyError as error:
+            raise VerificationError(f"missing Python package file: {name}") from error
+        if info.is_dir() or (info.external_attr >> 16) & 0o170000 not in (0, 0o100000) \
+                or hashlib.sha256(ipa.read(info)).hexdigest() != digest:
+            raise VerificationError(f"Python package file differs from its manifest: {name}")
+    for name, (_, _, modules) in pinned.items():
+        for module in modules:
+            if f"{module}/__init__.py" not in files and f"{module}.py" not in files:
+                raise VerificationError(f"pinned module is not bundled: {module} ({name})")
+    if "certifi/cacert.pem" not in files:
+        raise VerificationError("certifi roots are not bundled")
+    # Every distribution leaves a .dist-info directory; one outside the manifest is unpinned code.
+    for name in ipa.namelist():
+        relative = name[len(prefix):] if name.startswith(prefix) else ""
+        if relative.split("/", 1)[0].endswith(".dist-info") and not name.endswith("/") and relative not in files:
+            raise VerificationError(f"unpinned Python distribution in resources: {relative}")
+    return {"python_packages": len(pinned), "python_package_files": len(files)}
 
 
 def _read_thin_macho(stream: BinaryIO, start: int, slice_size: int | None) -> dict:
@@ -193,7 +260,7 @@ def _expand_rpath(path: str, loader: str, executable: str) -> str | None:
     return None
 
 
-def verify_ipa(path: Path, *, sdk_sources: Path | None = None) -> dict:
+def verify_ipa(path: Path, *, sdk_sources: Path | None = None, packages_lock: Path = PACKAGES_LOCK) -> dict:
     with zipfile.ZipFile(path) as ipa:
         entries = ipa.namelist()
         names = set(entries)
@@ -303,9 +370,10 @@ def verify_ipa(path: Path, *, sdk_sources: Path | None = None) -> dict:
         if marker_targets != extensions:
             raise VerificationError("Python .fwork inventory does not match embedded extension frameworks")
         resources = verify_resources(ipa, app, sdk_sources)
+        packages = verify_packages(ipa, app, packages_lock)
         return {"python_frameworks": len(python_frameworks), "extension_markers": marker_count,
                  "python_dyld_edges": "verified", "python_extensions": "embedded, not startup-linked",
-                 "device_launch": "not tested", **resources}
+                 "device_launch": "not tested", **resources, **packages}
 
 
 def main() -> int:

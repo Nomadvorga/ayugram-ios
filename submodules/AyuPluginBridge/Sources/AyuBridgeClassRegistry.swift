@@ -19,16 +19,27 @@ public struct AyuBridgeClassAdapter: Sendable {
     /// updated state rather than a request to allocate a new object. Other
     /// `.instance` results remain distinct owned objects.
     public let receiverMethods: Set<String>
+    /// Members (static or instance methods and static fields) whose result is always an
+    /// instance of the named adapter class, or null. The host rejects any other result, and
+    /// publishes the map so static preflight can follow `Class.member(...).member` chains.
+    public let results: [String: String]
+    /// Members that exist only while the app supplies what they answer from (a presentation
+    /// snapshot): the names this closure returns are neither advertised nor resolved.
+    public let hiddenMembers: @Sendable () -> Set<String>
     public let validateState: @Sendable ([String: AyuBridgeValue]) throws -> Void
 
     public init(name: String, constants: [String: AyuBridgeValue] = [:], constructor: Constructor? = nil,
                 staticMethods: [String: StaticMethod] = [:], staticFields: [String: StaticField] = [:], methods: [String: InstanceMethod] = [:],
                  readableFields: Set<String> = [], writableFields: Set<String> = [], receiverMethods: Set<String> = [],
+                 results: [String: String] = [:],
+                 hiddenMembers: @escaping @Sendable () -> Set<String> = { [] },
                  validateState: @escaping @Sendable ([String: AyuBridgeValue]) throws -> Void = { _ in }) {
         self.name = name; self.constants = constants; self.constructor = constructor
         self.staticMethods = staticMethods; self.methods = methods
         self.staticFields = staticFields
         self.readableFields = readableFields; self.writableFields = writableFields; self.receiverMethods = receiverMethods
+        self.results = results
+        self.hiddenMembers = hiddenMembers
         self.validateState = validateState
     }
 }
@@ -74,12 +85,29 @@ public struct AyuBridgeAdapterContext: Sendable {
 
 public struct AyuBridgeNativeCallback: Sendable {
     private let sink: @Sendable ([AyuBridgeValue]) -> Void
+    private let guaranteedSink: (@Sendable ([AyuBridgeValue], [AyuBridgeValue]) -> Void)?
+    private let releaseSink: @Sendable () -> Void
     public let id: String
-    init(id: String, sink: @escaping @Sendable ([AyuBridgeValue]) -> Void) {
+    init(id: String, sink: @escaping @Sendable ([AyuBridgeValue]) -> Void,
+         guaranteed: (@Sendable ([AyuBridgeValue], [AyuBridgeValue]) -> Void)? = nil, release: @escaping @Sendable () -> Void = {}) {
         self.id = id
         self.sink = sink
+        self.guaranteedSink = guaranteed
+        self.releaseSink = release
     }
+    /// For a listener or a subscribed event stream: delivered in the order sent. May be dropped,
+    /// with the plugin flagged, when too many callbacks of the plugin are pending ("Delivery
+    /// queue" in `Python/protocol.md`); a burst of more than 128 goes as one batched event.
     public func send(_ arguments: [AyuBridgeValue]) { self.sink(arguments) }
+    /// For a callback that must arrive and whose sender bounds how many are outstanding (a
+    /// request in flight, the one result of an activity or picker): it is never refused for the number of pending callbacks, and the small
+    /// `substitute` is delivered in its place when `arguments` are too large to send or to queue.
+    public func send(_ arguments: [AyuBridgeValue], orOnOverflow substitute: [AyuBridgeValue]) {
+        if let guaranteedSink = self.guaranteedSink { guaranteedSink(arguments, substitute) } else { self.sink(arguments) }
+    }
+    /// Forget a one-shot callback after its last `send` (or without one), so its
+    /// id leaves the per-plugin callback registry. Proxy and timer callbacks stay.
+    public func release() { self.releaseSink() }
 }
 
 public struct AyuBridgeAdapterSnapshot: Sendable {
@@ -115,6 +143,13 @@ public struct AyuBridgeClassRegistry: Sendable {
             guard try JSONEncoder().encode(adapter.constants).count <= 131_072 else {
                 throw AyuBridgeFailure("invalid_adapter", "Adapter constants exceed quota")
             }
+            let callable = Set(adapter.staticMethods.keys).union(adapter.staticFields.keys).union(adapter.methods.keys)
+            guard adapter.results.allSatisfy({ member, className in
+                callable.contains(member) && result[className] != nil
+                    && (!adapter.receiverMethods.contains(member) || className == adapter.name)
+            }) else {
+                throw AyuBridgeFailure("invalid_adapter", "Adapter result declaration names an unknown member or class")
+            }
         }
         self.adapters = result
     }
@@ -143,7 +178,7 @@ public struct AyuBridgeClassRegistry: Sendable {
         // Curated immutable definitions and the non-visual utility adapters
         // that can coexist with the native-host view registry.
         do {
-            return try AyuBridgeClassRegistry(AyuBridgeJavaValues.adapters).adding(AyuBridgeJavaRuntime.integratedAdapters)
+            return try AyuBridgeClassRegistry(AyuBridgeJavaValues.adapters).adding(AyuBridgeJavaRuntime.integratedAdapters + AyuBridgeJavaRuntime.memberAdapters)
         }
         catch { preconditionFailure("Invalid built-in Java value registry") }
     }()

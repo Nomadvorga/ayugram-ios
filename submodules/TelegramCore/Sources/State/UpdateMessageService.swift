@@ -8,6 +8,9 @@ class UpdateMessageService: NSObject, NetworkEngineUpdateSink {
     var peerId: PeerId!
     private var ignoresShortSentMessages = false
     let pipe: ValuePipe<[UpdateGroup]> = ValuePipe()
+    // MARK: AyuGram
+    private let ayuPluginGate = ayuPluginMakeHookGate()
+    //
     
     override init() {
         super.init()
@@ -33,7 +36,14 @@ class UpdateMessageService: NSObject, NetworkEngineUpdateSink {
         }
     }
     
-    func addUpdates(_ updates: Api.Updates) {
+    func addUpdates(_ updates: Api.Updates, ayuPluginHooksApplied: Bool = false) {
+        // MARK: AyuGram
+        if !ayuPluginHooksApplied, ayuPluginDefersUpdates(updates, peerId: self.peerId, gate: self.ayuPluginGate, process: { [weak self] updates in
+            self?.addUpdates(updates, ayuPluginHooksApplied: true)
+        }) {
+            return
+        }
+        //
         switch updates {
             case let .updates(updatesData):
                 let (updates, users, chats, date, seq) = (updatesData.updates, updatesData.users, updatesData.chats, updatesData.date, updatesData.seq)

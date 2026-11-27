@@ -33,7 +33,11 @@ public struct AyuPluginMenuItem: Sendable {
 /// on main and await the service's authenticated, generation-checked Python relay.
 public final class AyuPluginMenuBridge: AyuPluginHostProvider, @unchecked Sendable {
     public static let shared = AyuPluginMenuBridge()
-    public let capabilities = ["menus.register", "menus.unregister"]
+    /// Served without Telegram. `menus.add` joins them only while a bound
+    /// Telegram backend can fill its `context`, so it is not part of this literal.
+    private let operations = ["menus.register", "menus.unregister", "resources.resolve"]
+    public var capabilities: [String] { self.typed.isAvailable ? self.operations + [AyuPluginTypedMenus.operation] : self.operations }
+    let typed: AyuPluginTypedMenus
     public typealias CallbackInvoker = @MainActor (String, String, [AyuBridgeValue]) async -> AyuBridgeValue?
     @MainActor public var invokeCallback: CallbackInvoker?
     private let lock = NSLock()
@@ -53,7 +57,9 @@ public final class AyuPluginMenuBridge: AyuPluginHostProvider, @unchecked Sendab
     private var nextOrder: UInt64 = 0
     @MainActor private var pendingEvaluations = 0
 
-    public init() {}
+    public init() { self.typed = AyuPluginTypedMenus() }
+
+    init(typed: AyuPluginTypedMenus) { self.typed = typed }
 
     public func call(pluginID: String, operation: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue {
         throw AyuBridgeFailure.unsupported(operation)
@@ -69,9 +75,11 @@ public final class AyuPluginMenuBridge: AyuPluginHostProvider, @unchecked Sendab
             self.lock.lock()
             let owner = self.registered[token]?.owner ?? self.pending[token]?.owner
             self.lock.unlock()
-            guard owner == nil || owner == pluginID else { throw AyuBridgeFailure("invalid_handle", "Menu token belongs to another plugin") }
-            return AyuBridgeProviderResult(.value(.null), commit: { _ in self.remove(token, owner: pluginID) })
+            guard (owner ?? self.typed.owner(of: token)) ?? pluginID == pluginID else { throw AyuBridgeFailure("invalid_handle", "Menu token belongs to another plugin") }
+            return AyuBridgeProviderResult(.value(.null), commit: { _ in self.remove(token, owner: pluginID); self.typed.remove(token, owner: pluginID) })
         }
+        if operation == AyuPluginTypedMenus.operation { return try self.typed.prepareAdd(pluginID: pluginID, arguments: arguments, context: context) }
+        if operation == AyuPluginResources.operation { return AyuBridgeProviderResult(.value(try AyuPluginResources.resolve(arguments))) }
         guard operation == "menus.register" else { throw AyuBridgeFailure.unsupported(operation) }
         guard arguments["type"] == nil || arguments["menu_type"] == nil else { throw Self.invalid() }
         guard let menuType = (arguments["type"] ?? arguments["menu_type"])?.string else { throw Self.invalid() }
@@ -150,6 +158,7 @@ public final class AyuPluginMenuBridge: AyuPluginHostProvider, @unchecked Sendab
         self.lock.lock(); defer { self.lock.unlock() }
         self.pending = self.pending.filter { $0.value.owner != pluginID }
         self.registered = self.registered.filter { $0.value.owner != pluginID }
+        self.typed.detach(pluginID: pluginID)
     }
 
     private func remove(_ token: String, owner: String) {
@@ -230,16 +239,24 @@ public final class AyuPluginMenuBridge: AyuPluginHostProvider, @unchecked Sendab
 public final class AyuPluginMenuHostProvider: AyuPluginHostProvider, AyuPluginSendHookSource, AyuPluginDialogHost, @unchecked Sendable {
     private let application: AyuPluginApplicationBridge
     private let menus: AyuPluginMenuBridge
-    public init(application: AyuPluginApplicationBridge, menus: AyuPluginMenuBridge = .shared) { self.application = application; self.menus = menus }
-    public var capabilities: [String] { self.application.capabilities + self.menus.capabilities }
+    private let telegram: AyuPluginTelegramBridge
+    public init(application: AyuPluginApplicationBridge, menus: AyuPluginMenuBridge = .shared, telegram: AyuPluginTelegramBridge = .shared) {
+        self.application = application; self.menus = menus; self.telegram = telegram
+        menus.typed.setTLSource { [weak telegram] in telegram?.menuContextSource() }
+        telegram.setEnvironment(application.telegramEnvironment())
+    }
+    public var capabilities: [String] { self.application.capabilities + self.menus.capabilities + self.telegram.capabilities }
     public func call(pluginID: String, operation: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue {
         try self.application.call(pluginID: pluginID, operation: operation, arguments: arguments)
     }
     public func prepareCall(pluginID: String, operation: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
         if self.menus.capabilities.contains(operation) { return try self.menus.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context) }
+        if operation.hasPrefix("telegram.") { return try self.telegram.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context) }
+        // A token of `telegram.hooks.send_message` is removed here; any other goes to the three-field hook's owner.
+        if operation == "hooks.unregister", let result = try self.telegram.prepareUnregister(pluginID: pluginID, arguments: arguments) { return result }
         return try self.application.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context)
     }
-    public func detach(pluginID: String) { self.menus.detach(pluginID: pluginID); self.application.detach(pluginID: pluginID) }
+    public func detach(pluginID: String) { self.menus.detach(pluginID: pluginID); self.application.detach(pluginID: pluginID); self.telegram.detach(pluginID: pluginID) }
     public func sendHooks() -> [AyuPluginSendHook] { self.application.sendHooks() }
     public func reserveDialogToken(_ token: String, pluginID: String) throws { try self.application.reserveDialogToken(token, pluginID: pluginID) }
     @MainActor public func presentBridgeDialog(_ controller: UIViewController, token: String, pluginID: String) throws { try self.application.presentBridgeDialog(controller, token: token, pluginID: pluginID) }

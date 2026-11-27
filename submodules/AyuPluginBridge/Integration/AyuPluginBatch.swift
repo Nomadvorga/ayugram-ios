@@ -230,7 +230,13 @@ actor AyuPluginBatchJournal {
             pluginID: safeID, pluginName: safeName, fileName: fileName.map(Self.sanitizedName), phase: phase, result: result,
             errorCode: diagnostic?.code, detail: diagnostic?.detail, generation: safeGeneration,
             durationMilliseconds: max(0, durationMilliseconds ?? Int((ProcessInfo.processInfo.systemUptime - self.startedAt) * 1000)),
-            sourcePath: safeID.map { $0 + ".plugin" },
+            sourcePath: safeID.map { id in
+                // A stored package archive is named by its own extension.
+                let stored = AyuPluginService.packageExtensions.first {
+                    FileManager.default.fileExists(atPath: self.sourceRoot.appendingPathComponent(id + "." + $0).path)
+                }
+                return id + "." + (stored ?? "plugin")
+            },
             sourceSHA256: safeHash, pluginVersion: safeVersion,
             blockers: safeBlockers, blockersOmitted: rawBlockers.count - safeBlockers.count,
             phaseEntriesOmitted: self.phaseEntriesOmitted, fileIndex: fileIndex,
@@ -403,11 +409,12 @@ actor AyuPluginBatchJournal {
                 var failurePhase = AyuPluginBatchPhase.queued
                 do {
                     try await journal.append(pluginID: id, pluginName: pluginName(id), phase: .queued, result: "started", fileIndex: index + 1)
+                    let phaseName = pluginName(id)
                     let loadResult = try await enable(id, { phase, context in
                         if phase != .cleanup { failurePhase = phase }
                         if let context { latestContext = context }
                         do {
-                            try await journal.append(pluginID: id, pluginName: pluginName(id), phase: phase, result: "started", context: context, fileIndex: index + 1)
+                            try await journal.append(pluginID: id, pluginName: phaseName, phase: phase, result: "started", context: context, fileIndex: index + 1)
                         } catch {
                             logFailed = true
                             throw AyuPluginBatchFailure(diagnostic: .storage, phase: phase, context: context ?? latestContext)

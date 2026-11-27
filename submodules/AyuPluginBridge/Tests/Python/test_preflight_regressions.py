@@ -55,8 +55,7 @@ class PreflightRegressionTests(unittest.TestCase):
         from tlrpc import TLRPC
         scope = self.load("tlcheck")
         with bridge.runtime.context(scope):
-            with self.assertRaises(bridge.UnsupportedAPI):
-                TLRPC.TL_messages_deleteHistory()
+            self.assertEqual(TLRPC.TL_messages_deleteHistory().constructor & 0xFFFFFFFF, 0xB08F922A)
             with self.assertRaises(bridge.UnsupportedAPI):
                 TLRPC.TL["TL_not_a_registered_type"]()
 

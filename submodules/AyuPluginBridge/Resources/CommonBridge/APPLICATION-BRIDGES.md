@@ -5,6 +5,50 @@ Premium Dialog Cards 2.1.1 is a separately supplied source with its own SHA-256 
 The audit covers 42,600 lines using AST only. No supplied plugin was imported or executed.
 Neither successful imports nor an IPA build establish functional compatibility.
 
+## Python side versus Swift side (2026-11-26)
+
+The bullets in the next section describe the Swift host adapters. Since
+2026-11-26 the Python SDK also implements, against a synthetic host only:
+Python-local Java classes, plugin threads, a version/requirements policy, a
+Telegram TL/facade layer and `.elyx`/`.eaf` package loading. See
+`Python/protocol.md` and `Python/protocol-telegram.md`. None of it was compiled
+into the app or run on a device, and a clean static preflight is not proof that
+a plugin works.
+
+- A host-declared class still wins over a Python-local one, except where the
+  local class overrides a weaker adapter. Overridden today: `Integer`, `Long`,
+  `Short`, `Byte`, `Boolean`, `Float`, `System`, `WeakReference`, `ArrayList`,
+  `HashMap`, `Collections`, `AtomicLong`, `AtomicBoolean`, `URL`, `URLEncoder`,
+  `Color`, `Rect`, `RectF`, `Matrix`, `Bundle`, `SystemClock`, `InputType`,
+  `Handler`, `TLRPC$User` and `TLRPC$Chat`. For these names the adapter text
+  below describes only what a host-returned reference still gets; plugin-created
+  values use the Python class. `MessagesController`, `AccountInstance` and
+  `BaseFragment` have overriding local classes that need `telegram.peer` or
+  `telegram.screen`, which the host does not declare, so their adapters below
+  still apply. `String`, `TextUtils`, `ByteBuffer`, `ByteArrayOutputStream`,
+  spans, enums and proxy interfaces stay host-first.
+- Exists in Python only, behind host operations that Swift does not implement
+  (19 in `Python/protocol-telegram.md`): TL requests and their cancellation,
+  request/update hooks, typed send-message hooks, sending and editing, cached
+  peers and messages, the visible screen and navigation, file paths and loading,
+  the audio player, `CHAT_ACTION_MENU`/`DRAWER_MENU`/`PROFILE_ACTION_MENU` and
+  the other `menus.add` types, the plugin list and settings, layout params, and
+  `R` resource ids (`resources.resolve`). `ChatObject`/`UserObject` need
+  `telegram.peer`, and a send hook that touches fields beyond
+  peer/message/caption needs `telegram.hooks.send_message`. Preflight reports
+  each use as an `OPERATION` blocker.
+- Preflight does not check individual Java members. A curated list of 21 host
+  members that nothing provides (`getWindow`, `getDecorView`,
+  `getDeclaredField`, `addDialogToFolder`, ...) is blocked under the reserved
+  `sdk.unprovided_member`. A review found 12 of 20 passing corpus plugins to be
+  false passes before this gating; false passes may remain.
+- UI degradations are explicit: alert cancel/back listeners raise
+  `UNSUPPORTED_API`; `make_button_red` only logs, the button keeps its default
+  colour; an `EditText` settings row with `mask` or `max_length` other than 256
+  raises.
+- Exists on neither side: Xposed `hook_method*` target mapping, `Bitmap`/
+  `BitmapFactory` and most drawables, MVEL menu conditions, DEX class loading.
+
 ## Implemented source paths (device/native-test execution unverified)
 
 - `UserConfig`: live read-only `selectedAccount`; `getInstance(index)`,
@@ -179,9 +223,13 @@ Neither successful imports nor an IPA build establish functional compatibility.
 - `Bundle` and `Intent` provide bounded owner-scoped Java value objects only;
   no Android activity launch or system intent interception is performed.
   `MotionEvent` constructors provide bounded synthetic snapshots, not live UIKit
-  touch objects. `Handler.post`/`postDelayed` dispatch declared callbacks through
-  the generation-revocable host callback path; Android Loopers, queue selection
-  and callback cancellation are not implemented.
+  touch objects. The Swift `Handler.post`/`postDelayed` adapter dispatches
+  declared callbacks through the generation-revocable host callback path and
+  implements no Android Loopers, queue selection or callback cancellation. The
+  Python-local `android.os.Handler` now replaces it for plugin code: it posts
+  with `scheduler.schedule`, cancels with `scheduler.cancel` and models
+  `Looper`/`HandlerThread` in Python (see "Worker threads" in
+  `Python/protocol.md`; device behaviour unverified).
 - `java.lang.Class.forName` resolves only exact names already present in the
   registry. Class metadata exposes name/simple name/package, primitive/array/
   interface/enum flags and registered array component types. Declared-method
@@ -280,8 +328,9 @@ Neither successful imports nor an IPA build establish functional compatibility.
 - `BulletinHelper`: simple/success/error text, copy feedback, and a bounded
   text-button bulletin with one-shot callback and 1–10,000 ms lifetime; explicit
   screen-owned, accessible native overlays. `show_copied_to_clipboard` displays
-  feedback only and does not access the clipboard. Android icons and undo
-  semantics remain unsupported.
+  feedback only and does not access the clipboard. Android icons remain
+  unsupported. The host has no undo bulletin; the Python SDK composes
+  `show_undo` from the button bulletin plus one scheduled job.
 - `android_utils.copy_to_clipboard(text)`: writes a bounded UTF-8 string to the
   iOS pasteboard only while the captured account/screen is still visible, then
   presents native copied-to-clipboard feedback. Values over 65,536 bytes and
@@ -324,8 +373,11 @@ Neither successful imports nor an IPA build establish functional compatibility.
   presentations per plugin, sixteen globally. Unload revokes queued native senders.
 
 `NotificationCenter` beyond the global `activeAccountChanged` observer, theme control,
-message/request interception, other menu types, arbitrary Android view subclasses,
-graphics and background plugin threads are **not implemented**. The supported view subset is
+message/request interception, other menu types, arbitrary Android view subclasses
+and graphics are **not implemented** by the host. Background plugin threads need no
+host adapter: the Python SDK runs them and marshals their bridge calls onto the
+serial queue when the host declares `scheduler.schedule`/`scheduler.cancel`
+(Python tests only, unverified on device). The supported view subset is
 `View`, `FrameLayout`, `LinearLayout`, `TextView`, `EditText` and `ImageView`.
 START is per Python activation, not a fabricated replay of process launch. STOP is
 not guaranteed at OS termination. Basic UIKit dialogs/bulletins are iOS equivalents,
@@ -415,8 +467,11 @@ Python preflight:
 
 Other sources are inspected on the Python worker without executing their code.
 Valid records can be imported disabled with explicit blockers for unavailable
-imports, SDK members, native classes, requirements, declared operations or
-unimplemented version policy. A clean preflight is not proof of compatibility:
+imports, SDK members, native classes, requirements, undeclared host operations
+(`OPERATION`) or Android version constraints that the emulated plugin SDK
+1.4.6.5 / exteraGram 13.2.2 does not meet (`VERSION_POLICY`, evaluated in
+Python; the Swift change that defers to it is not compiled). `.elyx`/`.eaf`
+packages are not accepted by the importer yet. A clean preflight is not proof of compatibility:
 dynamic API usage is checked at runtime. A mismatched source claiming a native
 adapter's ID remains blocked. Enabling Python requires explicit trust because
 it runs with application privileges, not in a security sandbox.

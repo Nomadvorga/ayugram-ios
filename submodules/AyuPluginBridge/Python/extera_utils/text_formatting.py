@@ -235,6 +235,10 @@ BLOCKQUOTE_DELIM, BLOCKQUOTE_EXPANDABLE_DELIM, BLOCKQUOTE_EXPANDABLE_END_DELIM =
 MARKDOWN_ESCAPABLE_CHARS = "\\_*[]()~`|>!"
 ESCAPED_MARKDOWN_RE = re.compile(r"\\([" + re.escape(MARKDOWN_ESCAPABLE_CHARS) + r"])")
 MARKDOWN_RE = re.compile(r"(```|`|__|\|\||\*|_|~)|(!?)\[(.+?)]\((.+?)\)")
+OPENING_TAG = "<{}>"
+CLOSING_TAG = "</{}>"
+URL_MARKUP = '<a href="{}">{}</a>'
+EMOJI_MARKUP = "<emoji id={}>{}</emoji>"
 FIXED_WIDTH_DELIMS = [CODE_DELIM, PRE_DELIM]
 
 

@@ -339,7 +339,7 @@ enum AyuBridgeJavaRuntime {
                 return .value(.integer(Int64(buffer.bytes.count)))
             },
             "position": { state, args, _ in
-                var buffer = try Self.byteBufferParts(state)
+                let buffer = try Self.byteBufferParts(state)
                 switch args.count {
                 case 0: return .value(.integer(Int64(buffer.position)))
                 case 1:
@@ -435,29 +435,8 @@ enum AyuBridgeJavaRuntime {
                 state["position"] = .integer(Int64(mark)); return Self.byteBufferReceiver(state)
             },
         ], receiverMethods: ["position", "limit", "put", "flip", "rewind", "clear", "mark", "reset"],
+           results: ["wrap": "java.nio.ByteBuffer"],
            validateState: { state in _ = try Self.byteBufferParts(state) })
-    }
-
-    private static func typefacePreset(_ style: Int64) -> AyuBridgeClassAdapter.StaticField {
-        { _ in
-            .instance(className: "android.graphics.Typeface", state: ["style": .integer(style)])
-        }
-    }
-
-    static var typeface: AyuBridgeClassAdapter {
-        AyuBridgeClassAdapter(name: "android.graphics.Typeface",
-            constants: ["NORMAL": .integer(0), "BOLD": .integer(1), "ITALIC": .integer(2), "BOLD_ITALIC": .integer(3)],
-            staticFields: [
-                "DEFAULT": Self.typefacePreset(0),
-                "DEFAULT_BOLD": Self.typefacePreset(1),
-                "DEFAULT_ITALIC": Self.typefacePreset(2),
-                "DEFAULT_BOLD_ITALIC": Self.typefacePreset(3),
-            ],
-            validateState: { state in
-                guard state.count == 1, let style = state["style"]?.integer, (0...3).contains(style) else {
-                    throw Self.unsupported("Typeface preset")
-                }
-            })
     }
 
     static var truncateAt: AyuBridgeClassAdapter {
@@ -466,6 +445,7 @@ enum AyuBridgeJavaRuntime {
             staticFields: Dictionary(uniqueKeysWithValues: modes.map { mode in
                 (mode, { _ in AyuBridgeAdapterResult.instance(className: "android.text.TextUtils$TruncateAt", state: ["mode": .string(mode)]) } as AyuBridgeClassAdapter.StaticField)
             }),
+            results: Dictionary(uniqueKeysWithValues: modes.map { ($0, "android.text.TextUtils$TruncateAt") }),
             validateState: { state in
                 guard state.count == 1, let mode = state["mode"]?.string, modes.contains(mode) else {
                     throw Self.unsupported("TextUtils.TruncateAt")
@@ -474,7 +454,7 @@ enum AyuBridgeJavaRuntime {
     }
 
     static var locale: AyuBridgeClassAdapter {
-        func snapshot(_ locale: Locale, identifier: String? = nil) -> [String: AyuBridgeValue] {
+        @Sendable func snapshot(_ locale: Locale, identifier: String? = nil) -> [String: AyuBridgeValue] {
             let nativeLocale = locale as NSLocale
             return [
                 "identifier": .string(identifier ?? locale.identifier),
@@ -543,6 +523,7 @@ enum AyuBridgeJavaRuntime {
                 },
                 "toString": { state, args, _ in try Self.arity(args, 0); return .value(state["identifier"] ?? .string("")) },
             ],
+            results: Dictionary(uniqueKeysWithValues: (Array(presets.keys) + ["getDefault"]).map { ($0, "java.util.Locale") }),
             validateState: { state in
                 let allowed: Set<String> = ["identifier", "language", "country", "variant"]
                 guard Set(state.keys) == allowed,
@@ -560,6 +541,7 @@ enum AyuBridgeJavaRuntime {
                     .instance(className: "android.widget.ImageView$ScaleType", state: ["mode": .string(mode)])
                 } as AyuBridgeClassAdapter.StaticField)
             }),
+            results: Dictionary(uniqueKeysWithValues: modes.map { ($0, "android.widget.ImageView$ScaleType") }),
             validateState: { state in
                 guard Set(state.keys) == ["mode"], let mode = state["mode"]?.string, modes.contains(mode) else {
                     throw Self.unsupported("ImageView.ScaleType")
@@ -921,7 +903,7 @@ enum AyuBridgeJavaRuntime {
                     try Self.arity(args, 0)
                     return .value(.bool((state["entries"]?.object ?? [:]).isEmpty))
                 },
-            ], validateState: { state in try Self.rejectState(["entries"], state: state, className: "android.os.Bundle") })
+            ], results: ["keySet": "java.util.ArrayList"], validateState: { state in try Self.rejectState(["entries"], state: state, className: "android.os.Bundle") })
     }
 
     private static func matches(_ value: AyuBridgeValue, _ keyType: String) -> Bool {
@@ -1004,6 +986,7 @@ enum AyuBridgeJavaRuntime {
                 },
                 "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(0)) },
             ], readableFields: ["action"], writableFields: ["action"], receiverMethods: ["setAction", "addCategory", "addFlags"],
+            results: ["setAction": "android.content.Intent", "addCategory": "android.content.Intent", "addFlags": "android.content.Intent"],
             validateState: { state in try Self.rejectState(["action", "entries", "categories", "flags"], state: state, className: "android.content.Intent") })
     }
 
@@ -1061,7 +1044,7 @@ enum AyuBridgeJavaRuntime {
                     let fragment = try Self.uriComponents(state).fragment
                     return .value(fragment.map { .string($0) } ?? .null)
                 },
-            ], validateState: { state in
+            ], results: ["parse": "android.net.Uri"], validateState: { state in
                 guard Set(state.keys) == ["value"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid URI state") }
                 _ = try Self.uriString(state)
                 _ = try Self.uriComponents(state)
@@ -1247,7 +1230,7 @@ enum AyuBridgeJavaRuntime {
         let fields = Dictionary(uniqueKeysWithValues: values.map { value in
             (value, { _ in AyuBridgeAdapterResult.instance(className: name, state: ["value": .string(value)]) } as AyuBridgeClassAdapter.StaticField)
         })
-        return AyuBridgeClassAdapter(name: name, staticFields: fields, validateState: { state in
+        return AyuBridgeClassAdapter(name: name, staticFields: fields, results: Dictionary(uniqueKeysWithValues: values.map { ($0, name) }), validateState: { state in
             guard Set(state.keys) == ["value"], let value = state["value"]?.string, values.contains(value) else {
                 throw Self.unsupported(name)
             }
@@ -1264,7 +1247,8 @@ enum AyuBridgeJavaRuntime {
     }
 
     private static func paintState(_ state: [String: AyuBridgeValue]) throws -> [String: AyuBridgeValue] {
-        guard Set(state.keys) == ["flags", "color", "stroke_width", "text_size", "style", "cap", "join", "anti_alias", "filter_bitmap", "dither"],
+        if let typeface = state["typeface"]?.object { _ = try AyuBridgeTypefaceValue(state: typeface) }
+        guard Set(state.keys).subtracting(state["typeface"]?.object == nil ? [] : ["typeface"]) == ["flags", "color", "stroke_width", "text_size", "style", "cap", "join", "anti_alias", "filter_bitmap", "dither"],
               let flags = state["flags"]?.integer, flags >= 0, flags & ~Self.paintFlags == 0,
               let color = state["color"]?.integer, (Int64(Int32.min)...Int64(Int32.max)).contains(color),
               let strokeWidth = state["stroke_width"]?.number, strokeWidth.isFinite, (0...10_000).contains(strokeWidth),
@@ -1391,7 +1375,21 @@ enum AyuBridgeJavaRuntime {
                 "setDither": Self.paintToggle(4, field: "dither"),
                 "isDither": { state, args, _ in try Self.arity(args, 0); return .value(state["dither"] ?? .bool(false)) },
                 "getFlags": { state, args, _ in try Self.arity(args, 0); return .value(state["flags"] ?? .integer(1)) },
-            ], validateState: { _ = try Self.paintState($0) })
+                "setTypeface": { state, args, context in
+                    try Self.arity(args, 1)
+                    // Android returns its argument; the result here is an equal Typeface, not the same object.
+                    let typeface = try AyuBridgeTypefaceValue.argument(args[0], context: context)
+                    state["typeface"] = typeface.map { .object($0.state) }
+                    return typeface.map { .instance(className: AyuBridgeTypefaceValue.className, state: $0.state) } ?? .value(.null)
+                },
+                "getTypeface": { state, args, _ in
+                    try Self.arity(args, 0)
+                    guard let typeface = state["typeface"]?.object else { return .value(.null) }
+                    return .instance(className: AyuBridgeTypefaceValue.className, state: typeface)
+                },
+            ], results: ["setTypeface": "android.graphics.Typeface", "getTypeface": "android.graphics.Typeface",
+                         "getStyle": Self.paintStyleName, "getStrokeCap": Self.paintCapName, "getStrokeJoin": Self.paintJoinName],
+               validateState: { _ = try Self.paintState($0) })
     }
 
     static var paintStyle: AyuBridgeClassAdapter { Self.paintEnum(Self.paintStyleName, values: Self.paintStyles) }
@@ -1432,7 +1430,7 @@ enum AyuBridgeJavaRuntime {
                     }
                     return .instance(className: Self.porterDuffModeName, state: ["value": .string("SRC_IN")])
                 },
-            ], validateState: { state in
+            ], results: ["getMode": Self.porterDuffModeName], validateState: { state in
                 try Self.rejectState(["color", "mode"], state: state, className: Self.porterDuffColorFilterName)
                 _ = try Self.colorInteger(state["color"] ?? .null, "ARGB color")
                 guard state["mode"]?.string == "SRC_IN" else {
@@ -1858,53 +1856,6 @@ enum AyuBridgeJavaRuntime {
              ], receiverMethods: ["setColor"], validateState: { state in try Self.rejectState(["color"], state: state, className: "android.graphics.drawable.ColorDrawable") })
     }
 
-    static var gradientDrawable: AyuBridgeClassAdapter {
-        AyuBridgeClassAdapter(name: "android.graphics.drawable.GradientDrawable",
-            constants: ["RECTANGLE": .integer(0), "OVAL": .integer(1)],
-            constructor: { args, _ in
-                try Self.arity(args, 0)
-                return ["color": .integer(0), "shape": .integer(0), "corner_radius": .number(0), "stroke_width": .number(0), "stroke_color": .integer(0)]
-            },
-            methods: [
-                "setColor": { state, args, _ in
-                    try Self.arity(args, 1)
-                    var updated = state; updated["color"] = .integer(try Self.colorInteger(args[0], "ARGB color")); state = updated
-                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
-                },
-                "setCornerRadius": { state, args, _ in
-                    try Self.arity(args, 1)
-                    let radius = try Self.doubleArgument(args[0])
-                    guard radius >= 0, radius <= 100_000 else { throw Self.unsupported("GradientDrawable.setCornerRadius") }
-                    var updated = state; updated["corner_radius"] = .number(radius); state = updated
-                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
-                },
-                "setShape": { state, args, _ in
-                    try Self.arity(args, 1)
-                    guard let shape = args[0].integer, [0, 1].contains(shape) else { throw Self.unsupported("GradientDrawable.setShape") }
-                    var updated = state; updated["shape"] = .integer(shape); state = updated
-                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
-                },
-                "setStroke": { state, args, _ in
-                    try Self.arity(args, 2)
-                    let width = try Self.doubleArgument(args[0])
-                    guard width >= 0, width <= 100_000 else { throw Self.unsupported("GradientDrawable.setStroke") }
-                    var updated = state
-                    updated["stroke_width"] = .number(width)
-                    updated["stroke_color"] = .integer(try Self.colorInteger(args[1], "stroke ARGB color"))
-                    state = updated
-                    return Self.instance("android.graphics.drawable.GradientDrawable", updated)
-                },
-            ], receiverMethods: ["setColor", "setCornerRadius", "setShape", "setStroke"], validateState: { state in
-                try Self.rejectState(["color", "shape", "corner_radius", "stroke_width", "stroke_color"], state: state, className: "android.graphics.drawable.GradientDrawable")
-                guard let color = state["color"], let shape = state["shape"]?.integer,
-                      let radius = state["corner_radius"]?.number, let width = state["stroke_width"]?.number,
-                      let stroke = state["stroke_color"] else { throw AyuBridgeFailure("invalid_arguments", "Invalid GradientDrawable state") }
-                _ = try Self.colorInteger(color, "ARGB color")
-                guard [0, 1].contains(shape), radius >= 0, radius <= 100_000, width >= 0, width <= 100_000 else { throw AyuBridgeFailure("invalid_arguments", "Invalid GradientDrawable state") }
-                _ = try Self.colorInteger(stroke, "stroke ARGB color")
-            })
-    }
-
     // MARK: Runnable / Handler
 
     static var runnable: AyuBridgeClassAdapter {
@@ -1979,6 +1930,7 @@ enum AyuBridgeJavaRuntime {
                     return .value(.integer(8))
                 },
             ],
+            results: ["get": "android.view.ViewConfiguration"],
             validateState: { current in
                 guard current == state else { throw AyuBridgeFailure("invalid_state", "Invalid ViewConfiguration state") }
             })

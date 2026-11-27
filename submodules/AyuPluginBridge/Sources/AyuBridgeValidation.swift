@@ -38,6 +38,12 @@ final class AyuBridgeCallbackGate: @unchecked Sendable {
         }
         return true
     }
+    /// `enter` without consuming the token: asked again while the callback waits in a queue.
+    func isLive(owner: String, generation: UUID, token: String?) -> Bool {
+        self.lock.lock(); defer { self.lock.unlock() }
+        guard self.generations[owner] == generation else { return false }
+        return token.map { self.tokens[$0] == owner } ?? true
+    }
     func finish(owner: String) {
         self.lock.lock(); defer { self.lock.unlock() }
         self.pending[owner] = max(0, self.pending[owner, default: 0] - 1)

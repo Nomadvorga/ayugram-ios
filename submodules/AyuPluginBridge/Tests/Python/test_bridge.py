@@ -423,14 +423,23 @@ class BridgeTests(unittest.TestCase):
             bridge.load_plugin(text)
         self.assertEqual(bridge.runtime.scopes, {})
 
-    def test_threading_is_inspected_and_rejected(self):
+    def test_threading_is_inspected_and_gated_on_the_host_scheduler(self):
         text = source(imports="import threading\n")
         report = json.loads(bridge.inspect_plugin_json(text))
         self.assertIn("threading", report["imports"])
-        self.assertTrue(report["warnings"])
+        self.assertEqual(report["warnings"], [])
+        self.assertNotIn("threading", report["unsupported_imports"])
         self.assertEqual(self.host.requests, [])
-        with self.assertRaisesRegex(bridge.BridgeError, "threads are unsupported"):
+        self.assertEqual(json.loads(bridge.preflight_plugin_json(text))["blockers"], [])
+        self.host.capabilities["operations"].remove("scheduler.schedule")
+        self.assertIn({"code": "IMPORT", "detail": "threading"},
+                      json.loads(bridge.preflight_plugin_json(text))["blockers"])
+        with self.assertRaisesRegex(bridge.BridgeError, "threads need the host scheduler"):
             bridge.load_plugin(text)
+        low_level = source(imports="import _thread\n")
+        self.assertTrue(json.loads(bridge.inspect_plugin_json(low_level))["warnings"])
+        with self.assertRaisesRegex(bridge.BridgeError, "thread creation is unsupported"):
+            bridge.load_plugin(low_level)
 
     def test_inspector_inventory_is_not_support_proof(self):
         report = json.loads(bridge.inspect_plugin_json(source(imports="import subprocess\nimport requests\n")))
