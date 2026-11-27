@@ -154,7 +154,7 @@ UNPROVIDED_MEMBERS = (
     "prepareSendingPhoto", "prepareSendingDocument", "generatePhotoSizes",  # SendMessagesHelper, ImageLoader
     "findMessageCell", "finishFragment",                                    # ChatActivity, BaseFragment
     "getWindow", "getDecorView",                                            # Activity
-    "setIncludeFontPadding", "setTextIsSelectable", "smoothScrollBy",  # views
+    "smoothScrollBy",  # views
     "getDeclaredField", "queryFinalized",                                   # reflection, SQLiteDatabase
     "quantize", "getpalette", "putpalette", "getexif", "getmask", "set_variation_by_name",  # Pillow outside the PIL subset
 )

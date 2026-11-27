@@ -2,6 +2,10 @@
 
 ## Extensible class adapters (common bridge, first stage)
 
+The Pillow-compatible image service and its quotas are specified in
+[`protocol-images.md`](protocol-images.md); Telegram-facing operations are in
+[`protocol-telegram.md`](protocol-telegram.md).
+
 `AyuBridgeClassRegistry.standard.adding(...)` supplies explicit compiled native
 classes to `AyuPluginService`/`AyuPluginNativeHost`. It cannot replace built-in
 view, layout, array or proxy classes. Duplicate names, ambiguous members, reserved

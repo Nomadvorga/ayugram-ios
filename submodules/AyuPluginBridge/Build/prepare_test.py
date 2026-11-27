@@ -479,6 +479,12 @@ class PinnedPackageTests(unittest.TestCase):
     def test_unsafe_or_unusual_member_names_are_rejected(self) -> None:
         for name in ("../escape.py", "/absolute.py", "demo/../../escape.py", "demo\\evil.py"):
             with self.subTest(name=name):
+                self.assertRaisesRegex(prepare.PrepareError, "^(unsafe relative path|backslash is not valid)",
+                                       prepare._package_path, name)
+                # ZipInfo rewrites backslashes into separators on Windows, so that
+                # spelling cannot be represented in this archive fixture there.
+                if zipfile.ZipInfo(name).filename != name:
+                    continue
                 self.rejected("^(unsafe relative path|backslash is not valid)", wheel_fixture(extra={name: "x"}))
         for name in ("demo/has space.py", "demo/.hidden", "demo/semi;colon.py"):
             with self.subTest(name=name):

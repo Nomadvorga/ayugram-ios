@@ -20,6 +20,7 @@ from base_plugin import HookResult, HookStrategy, MenuItemData, MenuItemType
 
 R = tl.TLRPC
 PROTOCOL = Path(__file__).resolve().parents[2] / "Python" / "protocol-telegram.md"
+IMAGE_PROTOCOL = Path(__file__).resolve().parents[2] / "Python" / "protocol-images.md"
 OPERATIONS = [
     "telegram.request", "telegram.request.cancel", "telegram.connection", "telegram.hooks.set",
     "telegram.hooks.send_message", "telegram.send_message", "telegram.edit_message", "menus.add", "telegram.peer",
@@ -793,7 +794,7 @@ class PreflightTests(TelegramCase):
         self.assertEqual(len(set(_ayu_operations.UNPROVIDED_MEMBERS)), len(_ayu_operations.UNPROVIDED_MEMBERS))
 
     def test_every_gated_operation_is_specified(self):
-        document = PROTOCOL.read_text("utf-8")
+        documents = {"telegram": PROTOCOL.read_text("utf-8"), "image": IMAGE_PROTOCOL.read_text("utf-8")}
         named = {operation for groups in list(_ayu_operations.SYMBOLS.values()) + list(_ayu_operations.METHODS.values())
                  for group in groups for operation in group}
         for cls in _ayu_javalib.local_classes().values():
@@ -801,7 +802,8 @@ class PreflightTests(TelegramCase):
                 named.update(_ayu_javalib.requirements(cls))
         for operation in sorted(named | set(OPERATIONS)):
             with self.subTest(operation=operation):
-                self.assertIn("`" + operation + "`", document)
+                contract = documents["image"] if operation.startswith("image.") else documents["telegram"]
+                self.assertIn("`" + operation + "`", contract)
 
 
 if __name__ == "__main__":

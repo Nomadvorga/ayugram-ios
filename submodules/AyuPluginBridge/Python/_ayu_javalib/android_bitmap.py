@@ -447,6 +447,9 @@ class Canvas(Object):
     """
     __ayu_requires__ = _REQUIRES
 
+    # Keep the nested Java name identical to the constants provider's class.
+    EdgeType = _g.CLASSES["android.graphics.Canvas$EdgeType"]
+
     def __init__(self, bitmap=None):
         self._bitmap = None
         self._matrix = _IDENTITY
