@@ -78,7 +78,9 @@ final class ChatListContainerItemNode: ASDisplayNode {
         self.listNode = ChatListNode(context: context, location: location, chatListFilter: filter, previewing: previewing, fillPreloadItems: controlsHistoryPreload, mode: chatListMode, theme: presentationData.theme, fontSize: presentationData.listsFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameSortOrder: presentationData.nameSortOrder, nameDisplayOrder: presentationData.nameDisplayOrder, animationCache: animationCache, animationRenderer: animationRenderer, /* MARK: AyuGram */ getNavigationController: { [weak controller] in return controller?.navigationController as? NavigationController }, /* MARK: AyuGram */ disableAnimations: true, isInlineMode: isInlineMode, isSideList: isInlineMode && (controller?.isSideList ?? false), autoSetReady: autoSetReady, isMainTab: isMainTab)
         
         if let controller, case .chatList(groupId: .root) = controller.location {
-            self.listNode.scrollHeightTopInset = ChatListNavigationBar.searchScrollHeight + ChatListNavigationBar.storiesScrollHeight
+            self.listNode.scrollHeightTopInset = AyuChatListSearchBar.scrollHeight + ChatListNavigationBar.storiesScrollHeight // MARK: AyuGram
+        } else if controller != nil, AyuChatListSearchBar.isHidden { // MARK: AyuGram
+            self.listNode.scrollHeightTopInset = 0.0
         }
         if isInlineMode && (controller?.isSideList ?? false) {
             // The chat side list scrolls only as far as its rows reach: a short list does not pad itself out so its
@@ -289,9 +291,9 @@ final class ChatListContainerItemNode: ASDisplayNode {
             if !self.isUnderChatListNavigationBar {
                 navigationCollapse = 0.0
             } else if case let .known(value) = self.listNode.visibleContentOffset() {
-                navigationCollapse = min(value, ChatListNavigationBar.searchScrollHeight)
+                navigationCollapse = min(value, AyuChatListSearchBar.scrollHeight) // MARK: AyuGram
             } else {
-                navigationCollapse = ChatListNavigationBar.searchScrollHeight
+                navigationCollapse = AyuChatListSearchBar.scrollHeight // MARK: AyuGram
             }
             let minY: CGFloat = visualNavigationHeight - navigationCollapse
             

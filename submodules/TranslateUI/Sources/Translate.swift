@@ -144,8 +144,15 @@ public var popularTranslationLanguages = [
 @available(iOS 12.0, *)
 private let languageRecognizer = NLLanguageRecognizer()
 
+// MARK: AyuGram
+// The language translations go to: exteraGram's target language, else the app language as given.
+public func ayuTranslationTargetLanguage(appLanguage: String) -> String {
+    return ExteraSettings.shared.translationTargetLanguage(appLanguage: appLanguage)
+}
+//
+
 public func effectiveIgnoredTranslationLanguages(context: AccountContext, ignoredLanguages: [String]?) -> Set<String> {
-    var baseLang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+    var baseLang = ayuTranslationTargetLanguage(appLanguage: context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode) // MARK: AyuGram
     let rawSuffix = "-raw"
     if baseLang.hasSuffix(rawSuffix) {
         baseLang = String(baseLang.dropLast(rawSuffix.count))

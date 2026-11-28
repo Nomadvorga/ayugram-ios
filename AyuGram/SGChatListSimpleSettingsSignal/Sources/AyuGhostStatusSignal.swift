@@ -4,8 +4,8 @@ import SwiftSignalKit
 
 // MARK: AyuGram
 // The current value of an Ayu setting, emitted again whenever the settings change.
-public func ayuSettingSignal(_ current: @escaping () -> Bool) -> Signal<Bool, NoError> {
-    let changes = Signal<Bool, NoError> { subscriber in
+public func ayuSettingSignal<T: Equatable>(_ current: @escaping () -> T) -> Signal<T, NoError> {
+    let changes = Signal<T, NoError> { subscriber in
         subscriber.putNext(current())
         let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
             subscriber.putNext(current())

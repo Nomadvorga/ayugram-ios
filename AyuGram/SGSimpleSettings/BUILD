@@ -12,6 +12,7 @@ swift_library(
     deps = [
         "//AyuGram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//AyuGram/SGLogging:SGLogging",
+        "//AyuGram/AyuSettingsBackup:AyuSettingsBackup",
     ],
     visibility = [
         "//visibility:public",

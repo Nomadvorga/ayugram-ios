@@ -16,6 +16,7 @@ import NotificationSoundSelectionUI
 import TelegramStringFormatting
 import NotificationPeerExceptionController
 import AlertComponent
+import SGStrings
 
 private struct CounterTagSettings: OptionSet {
     var rawValue: Int32
@@ -138,6 +139,8 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
     case accountsHeader(PresentationTheme, String)
     case allAccounts(PresentationTheme, String, Bool)
     case accountsInfo(PresentationTheme, String)
+    // MARK: AyuGram
+    case ayuAccounts(PresentationTheme, String, String)
     
     case permissionInfo(PresentationTheme, String, String, Bool)
     case permissionEnable(PresentationTheme, String)
@@ -170,7 +173,7 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
     
     var section: ItemListSectionId {
         switch self {
-            case .accountsHeader, .allAccounts, .accountsInfo:
+            case .accountsHeader, .allAccounts, .accountsInfo, .ayuAccounts:
                 return NotificationsAndSoundsSection.accounts.rawValue
             case .permissionInfo, .permissionEnable:
                 return NotificationsAndSoundsSection.permission.rawValue
@@ -241,7 +244,18 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
                 return 26
             case .resetNotice:
                 return 27
+            case .ayuAccounts:
+                return 100
         }
+    }
+
+    // MARK: AyuGram
+    // The accounts row stands between the all accounts switch (1) and its footer (2).
+    private var ayuSortIndex: Int32 {
+        if case .ayuAccounts = self {
+            return 3
+        }
+        return self.stableId * 2
     }
     
     var tag: ItemListItemTag? {
@@ -285,6 +299,12 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
                 }
             case let .accountsInfo(lhsTheme, lhsText):
                 if case let .accountsInfo(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText {
+                    return true
+                } else {
+                    return false
+                }
+            case let .ayuAccounts(lhsTheme, lhsText, lhsValue):
+                if case let .ayuAccounts(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
                     return true
                 } else {
                     return false
@@ -425,7 +445,7 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
     }
     
     static func <(lhs: NotificationsAndSoundsEntry, rhs: NotificationsAndSoundsEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        return lhs.ayuSortIndex < rhs.ayuSortIndex
     }
     
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -439,6 +459,10 @@ private enum NotificationsAndSoundsEntry: ItemListNodeEntry {
                 }, tag: self.tag)
             case let .accountsInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+            case let .ayuAccounts(_, text, value):
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                    arguments.pushController(ayuAccountNotificationsController(context: arguments.context))
+                })
             case let .permissionInfo(_, title, text, suppressed):
                 return ItemListInfoItem(presentationData: presentationData, systemStyle: .glass, title: title, text: .plain(text), style: .blocks, sectionId: self.section, closeAction: suppressed ? nil : {
                     arguments.suppressWarning()
@@ -527,12 +551,16 @@ private func filteredGlobalSound(_ sound: PeerMessageSound) -> PeerMessageSound 
     }
 }
 
-private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warningSuppressed: Bool, globalSettings: GlobalNotificationSettingsSet, inAppSettings: InAppNotificationSettings, exceptions: (users: NotificationExceptionMode, groups: NotificationExceptionMode, channels: NotificationExceptionMode, stories: NotificationExceptionMode), presentationData: PresentationData, hasMoreThanOneAccount: Bool) -> [NotificationsAndSoundsEntry] {
+private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warningSuppressed: Bool, globalSettings: GlobalNotificationSettingsSet, inAppSettings: InAppNotificationSettings, exceptions: (users: NotificationExceptionMode, groups: NotificationExceptionMode, channels: NotificationExceptionMode, stories: NotificationExceptionMode), presentationData: PresentationData, hasMoreThanOneAccount: Bool, ayuAccounts: AyuNotifyingAccounts) -> [NotificationsAndSoundsEntry] {
     var entries: [NotificationsAndSoundsEntry] = []
     
     if hasMoreThanOneAccount {
         entries.append(.accountsHeader(presentationData.theme, presentationData.strings.NotificationSettings_ShowNotificationsFromAccountsSection))
         entries.append(.allAccounts(presentationData.theme, presentationData.strings.NotificationSettings_ShowNotificationsAllAccounts, inAppSettings.displayNotificationsFromAllAccounts))
+        if inAppSettings.displayNotificationsFromAllAccounts {
+            let lang = presentationData.strings.baseLanguageCode
+            entries.append(.ayuAccounts(presentationData.theme, i18n("Extera.NotificationAccounts", lang), i18n("Extera.NotificationAccounts.Count", lang, "\(ayuAccounts.notifyingCount(inAppSettings))", "\(ayuAccounts.userIds.count)")))
+        }
         entries.append(.accountsInfo(presentationData.theme, inAppSettings.displayNotificationsFromAllAccounts ? presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOn : presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOff))
     }
     
@@ -850,8 +878,8 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
     }
     |> distinctUntilChanged
     
-    let signal = combineLatest(context.sharedContext.presentationData, sharedData, preferences, notificationExceptions.get(), DeviceAccess.authorizationStatus(applicationInForeground: context.sharedContext.applicationBindings.applicationInForeground, subject: .notifications), notificationsWarningSuppressed.get(), hasMoreThanOneAccount)
-        |> map { presentationData, sharedData, view, exceptions, authorizationStatus, warningSuppressed, hasMoreThanOneAccount -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    let signal = combineLatest(context.sharedContext.presentationData, sharedData, preferences, notificationExceptions.get(), DeviceAccess.authorizationStatus(applicationInForeground: context.sharedContext.applicationBindings.applicationInForeground, subject: .notifications), notificationsWarningSuppressed.get(), hasMoreThanOneAccount, ayuNotifyingAccounts(context: context))
+        |> map { presentationData, sharedData, view, exceptions, authorizationStatus, warningSuppressed, hasMoreThanOneAccount, ayuAccounts -> (ItemListControllerState, (ItemListNodeState, Any)) in
             
             let viewSettings: GlobalNotificationSettingsSet
             if let settings = view?.get(GlobalNotificationSettings.self) {
@@ -867,7 +895,7 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
                 inAppSettings = InAppNotificationSettings.defaultSettings
             }
             
-            let entries = notificationsAndSoundsEntries(authorizationStatus: authorizationStatus, warningSuppressed: warningSuppressed, globalSettings: viewSettings, inAppSettings: inAppSettings, exceptions: exceptions, presentationData: presentationData, hasMoreThanOneAccount: hasMoreThanOneAccount)
+            let entries = notificationsAndSoundsEntries(authorizationStatus: authorizationStatus, warningSuppressed: warningSuppressed, globalSettings: viewSettings, inAppSettings: inAppSettings, exceptions: exceptions, presentationData: presentationData, hasMoreThanOneAccount: hasMoreThanOneAccount, ayuAccounts: ayuAccounts)
             
             var index = 0
             var scrollToItem: ListViewScrollToItem?

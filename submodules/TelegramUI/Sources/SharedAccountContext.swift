@@ -1851,12 +1851,15 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         #endif
         
         let settings = self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])
-        |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool) in
+        |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool, ayuMutedAccountUserIds: Set<Int64>) in
             let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.inAppNotificationSettings]?.get(InAppNotificationSettings.self) ?? InAppNotificationSettings.defaultSettings
-            return (settings.displayNotificationsFromAllAccounts, false)
+            return (settings.displayNotificationsFromAllAccounts, false, settings.ayuMutedAccountUserIds)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             if lhs.allAccounts != rhs.allAccounts {
+                return false
+            }
+            if lhs.ayuMutedAccountUserIds != rhs.ayuMutedAccountUserIds {
                 return false
             }
             if lhs.includeMuted != rhs.includeMuted {
@@ -1895,6 +1898,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     activeProductionUserIds = []
                     activeTestingUserIds = []
                 }
+            } else if !settings.ayuMutedAccountUserIds.isEmpty {
+                // MARK: AyuGram
+                // An account switched off in "Show notifications for" gives up its token like the others do
+                // when all accounts are off; the current account always keeps it.
+                let primaryUserId = primary?.account.peerId.id
+                let notifies: (EnginePeer.Id.Id) -> Bool = { id in
+                    return id == primaryUserId || !settings.ayuMutedAccountUserIds.contains(id._internalGetInt64Value())
+                }
+                activeProductionUserIds = activeProductionUserIds.filter(notifies)
+                activeTestingUserIds = activeTestingUserIds.filter(notifies)
             }
             
             for (_, account, _) in activeAccounts {

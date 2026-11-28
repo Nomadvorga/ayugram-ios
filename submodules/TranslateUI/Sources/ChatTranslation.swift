@@ -405,7 +405,7 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
     let loggingEnabled = context.sharedContext.immediateExperimentalUISettings.logLanguageRecognition
     
     if #available(iOS 12.0, *) {
-        var baseLang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+        var baseLang = ayuTranslationTargetLanguage(appLanguage: context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode) // MARK: AyuGram
         let rawSuffix = "-raw"
         if baseLang.hasSuffix(rawSuffix) {
             baseLang = String(baseLang.dropLast(rawSuffix.count))

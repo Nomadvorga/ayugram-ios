@@ -427,6 +427,7 @@ public final class AvatarStoryIndicatorComponent: Component {
     public let counters: Counters?
     public let progress: Progress?
     public let isRoundedRect: Bool
+    public let avatarCornerRadius: CGFloat? // MARK: AyuGram
     
     public init(
         hasUnseen: Bool,
@@ -437,7 +438,8 @@ public final class AvatarStoryIndicatorComponent: Component {
         inactiveLineWidth: CGFloat,
         counters: Counters?,
         progress: Progress? = nil,
-        isRoundedRect: Bool = false
+        isRoundedRect: Bool = false,
+        avatarCornerRadius: CGFloat? = nil // MARK: AyuGram
     ) {
         self.hasUnseen = hasUnseen
         self.hasUnseenCloseFriendsItems = hasUnseenCloseFriendsItems
@@ -448,7 +450,19 @@ public final class AvatarStoryIndicatorComponent: Component {
         self.counters = counters
         self.progress = progress
         self.isRoundedRect = isRoundedRect
+        self.avatarCornerRadius = avatarCornerRadius
     }
+    
+    // MARK: AyuGram
+    // The ring's centre line: concentric with an avatar of a custom corner radius, else the stock rounded square.
+    fileprivate func roundedRectPath(rect: CGRect, diameter: CGFloat, lineWidth: CGFloat) -> CGPath {
+        if let avatarCornerRadius = self.avatarCornerRadius {
+            let radius = min(avatarCornerRadius + self.activeLineWidth * 2.0 - lineWidth * 0.5, min(rect.width, rect.height) * 0.5)
+            return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        }
+        return UIBezierPath(roundedRect: rect, cornerRadius: floor(diameter * 0.27)).cgPath
+    }
+    //
     
     public static func ==(lhs: AvatarStoryIndicatorComponent, rhs: AvatarStoryIndicatorComponent) -> Bool {
         if lhs.hasUnseen != rhs.hasUnseen {
@@ -476,6 +490,9 @@ public final class AvatarStoryIndicatorComponent: Component {
             return false
         }
         if lhs.isRoundedRect != rhs.isRoundedRect {
+            return false
+        }
+        if lhs.avatarCornerRadius != rhs.avatarCornerRadius {
             return false
         }
         return true
@@ -693,11 +710,11 @@ public final class AvatarStoryIndicatorComponent: Component {
                     if component.isRoundedRect {
                         let lineWidth: CGFloat = (component.hasUnseen || component.hasLiveItems) ? component.activeLineWidth : component.inactiveLineWidth
                         context.setLineWidth(lineWidth)
-                        let path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), cornerRadius: floor(diameter * 0.27))
+                        let path = component.roundedRectPath(rect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), diameter: diameter, lineWidth: lineWidth) // MARK: AyuGram
                         
                         var startPoint: CGPoint?
                         var vertices: [CurveVertex] = []
-                        path.cgPath.applyWithBlock({ element in
+                        path.applyWithBlock({ element in
                             switch element.pointee.type {
                             case .moveToPoint:
                                 startPoint = element.pointee.points[0]
@@ -764,7 +781,7 @@ public final class AvatarStoryIndicatorComponent: Component {
                             
                             context.resetClip()
                             context.setLineDash(phase: -firstOffset - spacing * 0.5 - CGFloat(index) * (spacing + segmentLength), lengths: dashWidths)
-                            context.addPath(path.cgPath)
+                            context.addPath(path)
                             
                             context.replacePathWithStrokedPath()
                             context.clip()
@@ -837,8 +854,8 @@ public final class AvatarStoryIndicatorComponent: Component {
                     let lineWidth: CGFloat = (component.hasUnseen || component.hasLiveItems) ? component.activeLineWidth : component.inactiveLineWidth
                     context.setLineWidth(lineWidth)
                     if component.isRoundedRect {
-                        let path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), cornerRadius: floor(diameter * 0.27))
-                        context.addPath(path.cgPath)
+                        let path = component.roundedRectPath(rect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), diameter: diameter, lineWidth: lineWidth) // MARK: AyuGram
+                        context.addPath(path)
                     } else {
                         context.addEllipse(in: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
                     }

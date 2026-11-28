@@ -1680,7 +1680,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     return false
                 }
                 
-                let action = item.controllerInteraction.canSetupReply(item.message)
+                let action = ayuSwipeMessageAction(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message)) // MARK: AyuGram
                 strongSelf.currentSwipeAction = action
                 if case .none = action {
                     return false
@@ -2154,7 +2154,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 needsShareButton = true
             }
             
-            if let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
+            if ExteraSettings.shared.value(.telegramAiSummaries) /* MARK: AyuGram */, let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
                 needsSummarizeButton = true
             }
             
@@ -6796,6 +6796,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                             } else {
                                 item.controllerInteraction.openMessageContextMenu(openContextMenu.tapMessage, openContextMenu.selectAll, self, openContextMenu.subFrame, nil, nil)
                             }
+                        }, otherAction: { action in
+                            item.controllerInteraction.ayuPerformDoubleTapAction(openContextMenu.tapMessage, action)
                         })
                         //
                     }
@@ -6809,6 +6811,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         if canAddMessageReactions(message: EngineMessage(item.message)) {
                             item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                         }
+                    }, otherAction: { action in
+                        item.controllerInteraction.ayuPerformDoubleTapAction(item.message, action)
                     })
                     //
                 }
@@ -8337,6 +8341,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private var playedSwipeToReplyHaptic = false
+    
+    private var ayuSwipeCarousel: AyuSwipeActionsCarouselDriver? // MARK: AyuGram
     /// A secondary click at `point`: the bubble's own recognizer's, or one a content node took itself
     /// (`ChatMessageBubbleContentNode.secondaryTap`).
     private func secondaryTapped(at point: CGPoint, recognizer: TapLongTapOrDoubleTapGestureRecognizer?) {
@@ -8405,7 +8411,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
             
                 if let item = self.item, self.swipeToReplyNode == nil {
-                    let swipeToReplyNode = ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: ChatMessageSwipeToReplyNode.Action(self.currentSwipeAction))
+                    // MARK: AyuGram
+                    let makeSwipeToReplyNode: (ChatMessageSwipeToReplyNode.Action) -> ChatMessageSwipeToReplyNode = { action in
+                        return ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: action)
+                    }
+                    let ayuSwipeCarousel = AyuSwipeActionsCarouselDriver(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message), makeNode: makeSwipeToReplyNode)
+                    self.ayuSwipeCarousel = ayuSwipeCarousel
+                    let swipeToReplyNode = makeSwipeToReplyNode(ayuSwipeCarousel.primaryNodeAction)
                     self.swipeToReplyNode = swipeToReplyNode
                     self.insertSubnode(swipeToReplyNode, at: 0)
                 }
@@ -8436,6 +8448,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     
                     let progress = abs(translation.x) / swipeOffset
                     swipeToReplyNode.updateProgress(progress)
+                    self.ayuSwipeCarousel?.update(itemNode: self, primaryNode: swipeToReplyNode, recognizer: recognizer, translationX: translation.x, trigger: swipeOffset, progress: progress) // MARK: AyuGram
                     
                     if progress > 1.0 - .ulpOfOne && !self.playedSwipeToReplyHaptic {
                         self.playedSwipeToReplyHaptic = true
@@ -8459,7 +8472,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                             case .none:
                                 break
                             case .reply:
-                                item.controllerInteraction.setupReply(item.message.id)
+                                ayuPerformSwipeMessageAction(message: item.message, controllerInteraction: item.controllerInteraction, action: self.ayuSwipeCarousel?.selectedAction) // MARK: AyuGram
                             }
                         }
                     }
@@ -8477,6 +8490,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 self.updateAttachedAvatarNodeOffset(offset: 0.0, transition: .animated(duration: 0.3, curve: .spring))
 
                 self.shadowNode.layer.animateBounds(from: previousShadowBounds, to: shadowBounds, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
+                // MARK: AyuGram
+                self.ayuSwipeCarousel?.finish()
+                self.ayuSwipeCarousel = nil
                 if let swipeToReplyNode = self.swipeToReplyNode {
                     self.swipeToReplyNode = nil
                     swipeToReplyNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak swipeToReplyNode] _ in

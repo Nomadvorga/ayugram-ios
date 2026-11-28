@@ -2397,6 +2397,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 guard let strongSelf = self, let peer = strongSelf.data?.peer else {
                     return
                 }
+                // MARK: AyuGram
+                if peer.emojiStatus == nil, peerStatus != nil, ayuPresentExteraBadgeInfo(context: strongSelf.context, presentationData: strongSelf.presentationData, peer: peer, present: { [weak self] controller in
+                    self?.controller?.present(controller, in: .current)
+                }) {
+                    return
+                }
+                //
                 let currentTimestamp = CACurrentMediaTime()
                 if let previousTimestamp, currentTimestamp < previousTimestamp + 1.0 {
                     return

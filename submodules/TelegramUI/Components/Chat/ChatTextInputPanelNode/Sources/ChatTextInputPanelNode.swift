@@ -216,6 +216,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let textInputNodeClippingContainer: UIView
     public let textInputSeparator: GlassBackgroundView.ContentColorView
     public private(set) var richTextInputNode: ChatRichTextInputNode?
+    private var ayuInlineMathGhost: AyuInlineMathGhost? // MARK: AyuGram
     private var textInputNodeLayout: (frame: CGRect, insets: UIEdgeInsets)?
     
     public let textInputBackgroundNode: ASImageNode
@@ -1357,6 +1358,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         richTextInputNode.inputIsUserInteractionEnabled = !self.sendingTextDisabled
         richTextInputNode.returnKeyType = SGSimpleSettings.shared.sendWithReturnKey ? .send : .default // MARK: AyuGram
         self.richTextInputNode = richTextInputNode
+        // MARK: AyuGram
+        if self.ayuInlineMathGhost == nil, let context = self.context {
+            self.ayuInlineMathGhost = AyuInlineMathGhost(context: context, language: { [weak self] in
+                return self?.presentationInterfaceState?.strings.baseLanguageCode ?? "en"
+            })
+        }
+        self.ayuInlineMathGhost?.attach(to: richTextInputNode.usesNativeRichTextEngine ? nil : richTextInputNode.inputView as? ChatInputTextView)
+        //
         richTextInputNode.emojiViewProvider = { [weak self] emoji in
             return self?.emojiViewProvider?(emoji)
         }
@@ -3827,7 +3836,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var isAIButtonVisible = false
         var attachmentPillHeight: CGFloat = 40.0
         let inputHasNonWhitespaceText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
-        if self.isAIEnabled, inputHasNonWhitespaceText, let node = self.richTextInputNode {
+        if self.isAIEnabled, ExteraSettings.shared.value(.telegramAiEditor) /* MARK: AyuGram */, inputHasNonWhitespaceText, let node = self.richTextInputNode {
             let threeLineHeight = self.threeLineFieldHeight(forWidth: baseWidth, node: node, metrics: metrics, bottomInset: bottomInset, textFieldInsets: textFieldInsets)
             if textInputHeight >= threeLineHeight - 0.5 {
                 isAIButtonVisible = true
@@ -5219,6 +5228,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func chatInputTextNodeDidChangeSelection(dueToEditing: Bool) {
+        self.ayuInlineMathGhost?.selectionDidChange() // MARK: AyuGram
         if !dueToEditing && !self.updatingInputState {
             let inputTextState = self.inputTextState
             self.interfaceInteraction?.updateTextInputStateAndMode({ _, inputMode in return (inputTextState, inputMode) })
@@ -5246,6 +5256,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func chatInputTextNodeDidBeginEditing() {
+        self.ayuInlineMathGhost?.focusDidChange() // MARK: AyuGram
         guard let interfaceInteraction = self.interfaceInteraction, let presentationInterfaceState = self.presentationInterfaceState else {
             return
         }
@@ -5276,6 +5287,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var skipPresentationInterfaceStateUpdate = false
     public func chatInputTextNodeDidFinishEditing() {
+        self.ayuInlineMathGhost?.focusDidChange() // MARK: AyuGram
         guard let richTextInputNode = self.richTextInputNode else {
             return
         }
@@ -5772,6 +5784,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         // MARK: AyuGram
         if SGSimpleSettings.shared.sendWithReturnKey && text == "\n" {
             self.sendButtonPressed()
+            return false
+        }
+        if self.ayuInlineMathGhost?.handle(range: range, replacement: text) == true {
             return false
         }
         //

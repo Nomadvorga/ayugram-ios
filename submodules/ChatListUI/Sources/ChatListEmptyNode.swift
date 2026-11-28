@@ -369,10 +369,10 @@ final class ChatListEmptyNode: ASDisplayNode {
                     self.view.addSubview(emptyArchiveView)
                 }
                 
-                let cancelledOutHeight: CGFloat = max(0.0, ChatListNavigationBar.searchScrollHeight - offset)
-                let visibleNavigationHeight: CGFloat = navigationHeight - ChatListNavigationBar.searchScrollHeight + cancelledOutHeight
+                let cancelledOutHeight: CGFloat = max(0.0, AyuChatListSearchBar.scrollHeight - offset)
+                let visibleNavigationHeight: CGFloat = navigationHeight - AyuChatListSearchBar.scrollHeight + cancelledOutHeight
                 
-                let additionalOffset = min(0.0, -offset + ChatListNavigationBar.searchScrollHeight)
+                let additionalOffset = min(0.0, -offset + AyuChatListSearchBar.scrollHeight)
                 
                 var archiveFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleNavigationHeight + floorToScreenPixels((size.height - visibleNavigationHeight - emptyArchiveSize.height - 50.0) * 0.5)), size: emptyArchiveSize)
                 archiveFrame.origin.y = max(archiveFrame.origin.y, visibleNavigationHeight + 20.0)

@@ -251,6 +251,8 @@ public class SGSimpleSettings {
         case `default`
         case gtranslate
         case system
+        case yandex
+        case microsoft
         // Make sure to update TranslationConfiguration
     }
         

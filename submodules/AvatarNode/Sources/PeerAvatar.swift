@@ -7,6 +7,7 @@ import TelegramCore
 import TinyThumbnail
 import FastBlur
 import Postbox
+import SGSimpleSettings
 
 private let roundCorners = { () -> UIImage in
     let diameter: CGFloat = 60.0
@@ -21,6 +22,30 @@ private let roundCorners = { () -> UIImage in
     UIGraphicsEndImageContext()
     return image
 }()
+
+// MARK: AyuGram
+// exteraGram "Avatar Corners": the outline of an avatar in `rect`, or nil while the stock shape applies.
+func ayuAvatarOutlinePath(clipStyle: AvatarNodeClipStyle, rect: CGRect) -> CGPath? {
+    let forum: Bool
+    switch clipStyle {
+    case .round:
+        forum = false
+    case .roundedRect:
+        forum = true
+    case .none, .bubble:
+        return nil
+    }
+    guard let radius = ExteraSettings.shared.avatarCornerRadius(side: rect.width, forum: forum) else {
+        return nil
+    }
+    if radius <= 0.0 {
+        return CGPath(rect: rect, transform: nil)
+    }
+    // Plain arcs: UIBezierPath's rounded rect turns into a pill well before the radius reaches half the side.
+    let cornerRadius = min(radius, min(rect.width, rect.height) * 0.5)
+    return CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+}
+//
 
 public enum PeerAvatarImageType {
     case blurred
@@ -191,13 +216,21 @@ public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, aut
                 if emptyColor == nil && data == nil {
                     return .single(nil)
                 }
+                // MARK: AyuGram
+                let ayuOutline = ayuAvatarOutlinePath(clipStyle: clipStyle, rect: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                let shapeClipStyle: AvatarNodeClipStyle = ayuOutline != nil ? .none : clipStyle
+                //
                 let roundedImage = generateImage(displayDimensions, contextGenerator: { size, context -> Void in
                     if let (data, dataType) = data {
                         if let imageSource = CGImageSourceCreateWithData(data as CFData, nil), var dataImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) {
                             context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                             context.setBlendMode(.copy)
                             
-                            switch clipStyle {
+                            if let ayuOutline { // MARK: AyuGram
+                                context.addPath(ayuOutline)
+                                context.clip()
+                            }
+                            switch shapeClipStyle {
                             case .none:
                                 break
                             case .round:
@@ -259,7 +292,7 @@ public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, aut
                                 context.fill(CGRect(origin: CGPoint(), size: size))
                                 context.setBlendMode(.copy)
                             }
-                            switch clipStyle {
+                            switch shapeClipStyle {
                             case .none:
                                 break
                             case .round:
@@ -276,7 +309,11 @@ public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, aut
                             if let emptyColor = emptyColor {
                                 context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                                 context.setFillColor(emptyColor.cgColor)
-                                switch clipStyle {
+                                if let ayuOutline { // MARK: AyuGram
+                                    context.addPath(ayuOutline)
+                                    context.clip()
+                                }
+                                switch shapeClipStyle {
                                 case .none:
                                     context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
                                 case .round:
@@ -302,7 +339,11 @@ public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, aut
                         context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                         context.setFillColor(emptyColor.cgColor)
                         
-                        switch clipStyle {
+                        if let ayuOutline { // MARK: AyuGram
+                            context.addPath(ayuOutline)
+                            context.clip()
+                        }
+                        switch shapeClipStyle {
                         case .none:
                             context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
                         case .round:
@@ -350,7 +391,11 @@ public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, aut
                         } else if let emptyColor = emptyColor {
                             context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                             context.setFillColor(emptyColor.cgColor)
-                            switch clipStyle {
+                            if let ayuOutline { // MARK: AyuGram
+                                context.addPath(ayuOutline)
+                                context.clip()
+                            }
+                            switch shapeClipStyle {
                             case .none:
                                 context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
                             case .round:

@@ -20,6 +20,9 @@ swift_library(
     ],
     deps = [
         "//AyuGram/SGSimpleSettings:SGSimpleSettings",
+        "//AyuGram/SGStrings:SGStrings",
+        "//AyuGram/AyuInlineResults:AyuInlineResults",
+        "//submodules/AppBundle:AppBundle",
         "//AyuGram/SGInputToolbar:SGInputToolbar",
         "//submodules/Display",
         "//submodules/AsyncDisplayKit",

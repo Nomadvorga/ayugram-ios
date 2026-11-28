@@ -37,12 +37,16 @@ public struct InAppNotificationSettings: Codable, Equatable {
     public var displayNameOnLockscreen: Bool
     public var displayNotificationsFromAllAccounts: Bool
     public var customSound: String?
+    // MARK: AyuGram
+    // User ids of the accounts switched off in "Show notifications for"; they apply while
+    // `displayNotificationsFromAllAccounts` is on, and never to the current account.
+    public var ayuMutedAccountUserIds: Set<Int64>
     
     public static var defaultSettings: InAppNotificationSettings {
         return InAppNotificationSettings(playSounds: true, vibrate: false, displayPreviews: true, totalUnreadCountDisplayStyle: .filtered, totalUnreadCountDisplayCategory: .messages, totalUnreadCountIncludeTags: .all, displayNameOnLockscreen: true, displayNotificationsFromAllAccounts: true, customSound: nil)
     }
     
-    public init(playSounds: Bool, vibrate: Bool, displayPreviews: Bool, totalUnreadCountDisplayStyle: TotalUnreadCountDisplayStyle, totalUnreadCountDisplayCategory: TotalUnreadCountDisplayCategory, totalUnreadCountIncludeTags: EnginePeerSummaryCounterTags, displayNameOnLockscreen: Bool, displayNotificationsFromAllAccounts: Bool, customSound: String?) {
+    public init(playSounds: Bool, vibrate: Bool, displayPreviews: Bool, totalUnreadCountDisplayStyle: TotalUnreadCountDisplayStyle, totalUnreadCountDisplayCategory: TotalUnreadCountDisplayCategory, totalUnreadCountIncludeTags: EnginePeerSummaryCounterTags, displayNameOnLockscreen: Bool, displayNotificationsFromAllAccounts: Bool, customSound: String?, ayuMutedAccountUserIds: Set<Int64> = []) {
         self.playSounds = playSounds
         self.vibrate = vibrate
         self.displayPreviews = displayPreviews
@@ -52,6 +56,16 @@ public struct InAppNotificationSettings: Codable, Equatable {
         self.displayNameOnLockscreen = displayNameOnLockscreen
         self.displayNotificationsFromAllAccounts = displayNotificationsFromAllAccounts
         self.customSound = customSound
+        self.ayuMutedAccountUserIds = ayuMutedAccountUserIds
+    }
+
+    // MARK: AyuGram
+    // exteraGram's AccountNotifications.shouldShow.
+    public func ayuNotifies(accountUserId: Int64, isCurrentAccount: Bool) -> Bool {
+        if isCurrentAccount {
+            return true
+        }
+        return self.displayNotificationsFromAllAccounts && !self.ayuMutedAccountUserIds.contains(accountUserId)
     }
     
     public init(from decoder: Decoder) throws {
@@ -86,6 +100,7 @@ public struct InAppNotificationSettings: Codable, Equatable {
         self.displayNotificationsFromAllAccounts = (try container.decodeIfPresent(Int32.self, forKey: "displayNotificationsFromAllAccounts") ?? 1) != 0
         
         self.customSound = try container.decodeIfPresent(String.self, forKey: "customSound")
+        self.ayuMutedAccountUserIds = Set(try container.decodeIfPresent([Int64].self, forKey: "ayuMutedAccountUserIds") ?? [])
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -100,6 +115,7 @@ public struct InAppNotificationSettings: Codable, Equatable {
         try container.encode((self.displayNameOnLockscreen ? 1 : 0) as Int32, forKey: "displayNameOnLockscreen")
         try container.encode((self.displayNotificationsFromAllAccounts ? 1 : 0) as Int32, forKey: "displayNotificationsFromAllAccounts")
         try container.encodeIfPresent(self.customSound, forKey: "customSound")
+        try container.encode(self.ayuMutedAccountUserIds.sorted(), forKey: "ayuMutedAccountUserIds")
     }
 }
 

@@ -822,12 +822,18 @@ private final class NativePictureInPictureContentImpl: NSObject, AVPictureInPict
         }
     }
     
+    // MARK: AyuGram
+    var isPictureInPictureActive: Bool {
+        return self.pictureInPictureController?.isPictureInPictureActive ?? false
+    }
+    
     func updateIsCentral(isCentral: Bool) {
         guard let pictureInPictureController = self.pictureInPictureController else {
             return
         }
         
-        if isCentral {
+        // MARK: AyuGram — exteraGram "Auto-Pause Videos": minimizing pauses the video instead of moving it into picture-in-picture.
+        if isCentral && !ExteraSettings.shared.pauseOnMinimizeVideo {
             pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = true
         } else {
             pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = false
@@ -995,6 +1001,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private let hasExpandedCaptionPromise = Promise<Bool>()
     private var hideControlsDisposable: Disposable?
     private var automaticPictureInPictureDisposable: Disposable?
+    private var ayuBackgroundObserver: NSObjectProtocol? // MARK: AyuGram
     
     var playbackCompleted: (() -> Void)?
     
@@ -1067,6 +1074,12 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         self.moreBarButton.addTarget(self, action: #selector(self.moreButtonPressed), forControlEvents: .touchUpInside)
+        
+        // MARK: AyuGram
+        self.ayuBackgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.ayuPauseOnMinimizeIfNeeded()
+        })
+        //
         
         self.footerContentNode.interacting = { [weak self] value in
             self?.isInteractingPromise.set(value)
@@ -1209,6 +1222,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.scrubbingFrameDisposable?.dispose()
         self.hideControlsDisposable?.dispose()
         self.automaticPictureInPictureDisposable?.dispose()
+        if let ayuBackgroundObserver = self.ayuBackgroundObserver {
+            NotificationCenter.default.removeObserver(ayuBackgroundObserver)
+        }
     }
     
     override func ready() -> Signal<Void, NoError> {
@@ -4061,6 +4077,28 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     // quality instead of Auto. iOS never plays the source file while a video has HLS qualities, so the best one is the
     // top entry of the quality menu, selected the way a tap on that entry selects it. Decided once per video, when the
     // player first owns its content, so a later choice in the menu stays.
+    // exteraGram "Auto-Pause Videos". A video the user already moved into picture-in-picture keeps playing; GIFs are left alone.
+    private func ayuPauseOnMinimizeIfNeeded() {
+        guard ExteraSettings.shared.pauseOnMinimizeVideo, self.isCentral == true, let videoNode = self.videoNode, videoNode.ownsContentNode else {
+            return
+        }
+        if let item = self.item {
+            if let content = item.content as? NativeVideoContent, content.fileReference.media.isAnimated {
+                return
+            }
+            if let content = item.content as? HLSVideoContent, content.fileReference.media.isAnimated {
+                return
+            }
+        }
+        if self.context.sharedContext.mediaManager.currentPictureInPictureNode != nil {
+            return
+        }
+        if #available(iOS 15.0, *), let content = self.nativePictureInPictureContent as? NativePictureInPictureContentImpl, content.isPictureInPictureActive {
+            return
+        }
+        videoNode.pause()
+    }
+
     private func applyPreferOriginalQualityIfNeeded() {
         if self.didApplyPreferOriginalQuality {
             return

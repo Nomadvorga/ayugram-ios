@@ -77,11 +77,39 @@ func sgGTranslate(text: String, fromLang: String? = nil, toLang: String) -> Sign
     }
 }
 
+// Yandex and Microsoft, with GTranslate behind them like the other services.
+func sgProviderTranslate(backend: SGSimpleSettings.TranslationBackend, texts: [(String, [MessageTextEntity])], fromLang: String? = nil, toLang: String) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
+    let inputLength = texts.reduce(0) { $0 + $1.0.count }
+    let request: Signal<[String], AyuTranslateProviderError>
+    if backend == .microsoft {
+        request = ayuMicrosoftTranslate(texts: texts.map { $0.0 }, toLang: toLang)
+    } else {
+        request = ayuYandexTranslate(texts: texts.map { $0.0 }, toLang: toLang)
+    }
+    return request
+    |> map { translated -> [(String, [MessageTextEntity])] in
+        sgTranslationDebugSuccess(backend: backend, inputLength: inputLength, outputLength: translated.reduce(0) { $0 + $1.count }, fromLang: fromLang, toLang: toLang)
+        return translated.map { ($0, []) }
+    }
+    |> `catch` { error -> Signal<[(String, [MessageTextEntity])], TranslationError> in
+        sgTranslationDebugError(backend: backend, inputLength: inputLength, fromLang: fromLang, toLang: toLang, error: error)
+        sgTranslationDebugFallback(backend: backend, inputLength: inputLength, fromLang: fromLang, toLang: toLang)
+        return sgGTranslate(texts: texts, toLang: toLang)
+    }
+}
+
+func sgProviderTranslate(backend: SGSimpleSettings.TranslationBackend, text: String, fromLang: String? = nil, toLang: String) -> Signal<(String, [MessageTextEntity])?, TranslationError> {
+    return sgProviderTranslate(backend: backend, texts: [(text, [])], fromLang: fromLang, toLang: toLang)
+    |> map { $0.first }
+}
+
 func sgWrappedTranslateSingle(text: String, toLang: String, `default`: Signal<(String, [MessageTextEntity])?, TranslationError>) -> Signal<(String, [MessageTextEntity])?, TranslationError> {
     let backend = SGSimpleSettings.shared.translationBackendEnum
     switch backend {
     case .gtranslate:
         return sgGTranslate(text: text, toLang: toLang)
+    case .yandex, .microsoft:
+        return sgProviderTranslate(backend: backend, text: text, toLang: toLang)
     case .system:
         guard let engineExperimentalInternalTranslationService else {
             sgTranslationDebugError(backend: backend, inputLength: text.count, fromLang: nil, toLang: toLang, error: "unavailable")
@@ -128,6 +156,8 @@ func sgWrappedTranslateMultiple(texts: [(String, [MessageTextEntity])], toLang: 
     switch backend {
     case .gtranslate:
         return sgGTranslate(texts: texts, toLang: toLang)
+    case .yandex, .microsoft:
+        return sgProviderTranslate(backend: backend, texts: texts, toLang: toLang)
     case .system:
         guard let engineExperimentalInternalTranslationService else {
             sgTranslationDebugError(backend: backend, inputLength: texts.reduce(0) { $0 + $1.0.count }, fromLang: nil, toLang: toLang, error: "unavailable")
@@ -203,6 +233,9 @@ func sgTranslateRawText(account: Account, text: String, fromLang: String?, toLan
     let backend = SGSimpleSettings.shared.translationBackendEnum
     if forceGTranslate || backend == .gtranslate {
         return sgGTranslate(text: text, fromLang: fromLang, toLang: toLang)
+    }
+    if backend == .yandex || backend == .microsoft {
+        return sgProviderTranslate(backend: backend, text: text, fromLang: fromLang, toLang: toLang)
     }
     if backend == .system {
         guard let engineExperimentalInternalTranslationService else {

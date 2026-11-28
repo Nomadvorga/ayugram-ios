@@ -56,6 +56,9 @@ func ayuMakeReadUntilContextMenuAction(context: AccountContext, chatPresentation
 
 // "Repeat": sends a copy of the message to the same chat, without the forward header.
 func ayuMakeRepeatMessageContextMenuAction(context: AccountContext, chatPresentationInterfaceState: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {
+    if !ExteraSettings.shared.showRepeatButton {
+        return nil
+    }
     if message.id.namespace != Namespaces.Message.Cloud || message.ayuDeletedDate != nil || !canSendMessagesToChat(chatPresentationInterfaceState) || chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected() {
         return nil
     }

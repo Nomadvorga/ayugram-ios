@@ -741,7 +741,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 credibilityIcon = .fake
             } else if peer.isScam {
                 credibilityIcon = .scam
-            } else if let emojiStatus = peer.emojiStatus {
+            } else if let emojiStatus = peer.emojiStatus ?? ayuExteraBadgeEmojiStatus(for: peer) { // MARK: AyuGram
                 statusIcon = .emojiStatus(emojiStatus)
             } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !ayuHidesPremiumStatuses() /* MARK: AyuGram */ && (peer.id != self.context.account.peerId || self.isSettings || self.isMyProfile) {
                 credibilityIcon = .premium

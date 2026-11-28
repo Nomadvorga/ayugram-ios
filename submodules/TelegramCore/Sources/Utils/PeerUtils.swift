@@ -662,6 +662,31 @@ public func ayuHidesPremiumStatuses() -> Bool {
 }
 
 // MARK: AyuGram
+// exteraGram's badge of a supporter or a developer, as an emoji status for the place next to the name.
+// Shown where the peer has no emoji status of its own, like exteraGram for Android does.
+public func ayuExteraBadgeEmojiStatus(for peer: Peer?) -> PeerEmojiStatus? {
+    guard let peer else {
+        return nil
+    }
+    let isUser: Bool
+    if peer is TelegramUser {
+        isUser = true
+    } else if peer is TelegramGroup || peer is TelegramChannel {
+        isUser = false
+    } else {
+        return nil
+    }
+    guard let fileId = AyuExteraProfilesStore.shared.profile(id: peer.id.id._internalGetInt64Value(), isUser: isUser)?.badgeDocumentId else {
+        return nil
+    }
+    return PeerEmojiStatus(content: .emoji(fileId: fileId), expirationDate: nil)
+}
+
+public func ayuExteraBadgeEmojiStatus(for peer: EnginePeer) -> PeerEmojiStatus? {
+    return ayuExteraBadgeEmojiStatus(for: peer._asPeer())
+}
+
+// MARK: AyuGram
 // exteraGram "Hide reactions" toggles: whether reactions are hidden in the chat with this peer.
 // Channels / groups and supergroups / every chat with a user (bots, Saved Messages and secret chats included).
 public func ayuHidesReactions(inChatWith peer: Peer?) -> Bool {

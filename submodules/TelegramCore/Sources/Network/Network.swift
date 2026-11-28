@@ -552,7 +552,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             apiEnvironment.disableUpdates = supplementary
             apiEnvironment = apiEnvironment.withUpdatedLangPackCode(languageCode ?? "en")
             
-            if let effectiveActiveServer = proxySettings?.effectiveActiveServer {
+            if let effectiveActiveServer = proxySettings?.ayuEffectiveActiveServer { // MARK: AyuGram
                 apiEnvironment = apiEnvironment.withUpdatedSocksProxySettings(effectiveActiveServer.mtProxySettings)
             }
             
@@ -602,7 +602,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
 
             let baseTcpConnectionInterfaceFactory = context.makeTcpConnectionInterface
             let isAppExtension = Bundle.main.bundlePath.hasSuffix(".appex")
-            let initialActiveServer = proxySettings?.effectiveActiveServer
+            let initialActiveServer = proxySettings?.ayuEffectiveActiveServer // MARK: AyuGram
             let initialWebProxyConfiguration = initialActiveServer?.webProxyConfiguration
             WebProxyTransport.shared.apply(configuration: isAppExtension ? nil : initialWebProxyConfiguration)
             if initialActiveServer?.isWebProxy == true {

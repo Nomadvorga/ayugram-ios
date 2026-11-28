@@ -1764,7 +1764,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 leftInset: layout.safeInsets.left,
                 rightInset: layout.safeInsets.right,
                 trailingButtonsInset: layout.navigationBarTrailingButtonsInset,
-                search: ChatListNavigationBar.Search(isEnabled: true),
+                search: ChatListNavigationBar.Search(isEnabled: true, isHiddenWhenInactive: AyuChatListSearchBar.isHidden), // MARK: AyuGram
                 activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,
                 secondaryContent: headerContent?.secondaryContent,
@@ -1848,7 +1848,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         self.mainContainerNode.updateScrollingOffset(navigationHeight: navigationHeight, offset: mainOffset, transition: transition)
         
-        mainOffset = min(mainOffset, ChatListNavigationBar.searchScrollHeight)
+        mainOffset = min(mainOffset, AyuChatListSearchBar.scrollHeight)
         if abs(mainOffset) < 0.1 {
             mainOffset = 0.0
         }
@@ -1865,7 +1865,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             } else {
                 inlineOffset = navigationHeight
             }
-            inlineOffset = min(inlineOffset, ChatListNavigationBar.searchScrollHeight)
+            inlineOffset = min(inlineOffset, AyuChatListSearchBar.scrollHeight)
             if abs(inlineOffset) < 0.1 {
                 inlineOffset = 0.0
             }
@@ -1938,7 +1938,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         let navigationBarLayout = self.updateNavigationBar(layout: layout, deferScrollApplication: true, transition: ComponentTransition(transition))
         // The chat side list opens with its search shown, not scrolled under the header.
-        self.mainContainerNode.initialScrollingOffset = ((self.controller?.isSideList ?? false) ? 0.0 : ChatListNavigationBar.searchScrollHeight) + navigationBarLayout.storiesInset
+        self.mainContainerNode.initialScrollingOffset = ((self.controller?.isSideList ?? false) ? 0.0 : AyuChatListSearchBar.scrollHeight) + navigationBarLayout.storiesInset
         
         navigationBarHeight = navigationBarLayout.navigationHeight
         visualNavigationHeight = navigationBarLayout.navigationHeight
@@ -2440,7 +2440,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         if let clippedScrollOffset = navigationBarComponentView.clippedScrollOffset {
             let searchScrollOffset = clippedScrollOffset
-            if searchScrollOffset > 0.0 && searchScrollOffset < ChatListNavigationBar.searchScrollHeight {
+            if searchScrollOffset > 0.0 && searchScrollOffset < AyuChatListSearchBar.scrollHeight {
                 return true
             } else if clippedScrollOffset < 0.0 && clippedScrollOffset > -listView.tempTopInset {
                 return true
@@ -2522,11 +2522,11 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         if let clippedScrollOffset = navigationBarComponentView.clippedScrollOffset {
             let searchScrollOffset = clippedScrollOffset
-            if searchScrollOffset > 0.0 && searchScrollOffset < ChatListNavigationBar.searchScrollHeight {
-                if searchScrollOffset < ChatListNavigationBar.searchScrollHeight * 0.5 {
+            if searchScrollOffset > 0.0 && searchScrollOffset < AyuChatListSearchBar.scrollHeight {
+                if searchScrollOffset < AyuChatListSearchBar.scrollHeight * 0.5 {
                     let _ = listView.scrollToOffsetFromTop(0.0, animated: true)
                 } else {
-                    let _ = listView.scrollToOffsetFromTop(ChatListNavigationBar.searchScrollHeight, animated: true)
+                    let _ = listView.scrollToOffsetFromTop(AyuChatListSearchBar.scrollHeight, animated: true)
                 }
                 return true
             } else if clippedScrollOffset < 0.0 && clippedScrollOffset > -listView.tempTopInset {

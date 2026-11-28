@@ -2215,7 +2215,7 @@ extension ChatControllerImpl {
                         strongSelf.onUpdated?(previousState)
                     })
                     
-                    var baseLanguageCode = self.presentationData.strings.baseLanguageCode
+                    var baseLanguageCode = ayuTranslationTargetLanguage(appLanguage: self.presentationData.strings.baseLanguageCode) // MARK: AyuGram
                     if baseLanguageCode.contains("-") {
                         baseLanguageCode = baseLanguageCode.components(separatedBy: "-").first ?? baseLanguageCode
                     }

@@ -1881,6 +1881,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     strongSelf.interfaceInteraction?.setupEditMessage(message.id, { _ in })
                 }
             }
+        }, ayuPerformDoubleTapAction: { [weak self] message, action in
+            self?.ayuPerformDoubleTapAction(message: message, rawAction: action)
         }, openPeer: { [weak self] peer, navigation, fromMessage, source in
             var expandAvatar = false
             if case let .groupParticipant(storyStats, avatarHeaderNode) = source {
@@ -4664,7 +4666,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             if #available(iOS 18.0, *) {
                                 useSystemTranslation = true
                             }
-                        case .gtranslate:
+                        case .gtranslate, .yandex, .microsoft:
                             useSystemTranslation = false
                         case .default:
                             break

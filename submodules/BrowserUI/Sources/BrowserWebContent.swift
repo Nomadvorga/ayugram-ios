@@ -1,5 +1,7 @@
 import Foundation
 import UIKit
+import AyuAdBlock
+import SGSimpleSettings
 import Display
 import ComponentFlow
 import TelegramCore
@@ -285,6 +287,15 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
             }, name: "blobInterface")
             configuration.userContentController = contentController
             configuration.applicationNameForUserAgent = computedUserAgent()
+            // MARK: AyuGram
+            if ExteraSettings.shared.value(.enableAdBlock) {
+                AyuAdBlockStore.shared.ruleLists { [weak contentController] lists in
+                    for list in lists {
+                        contentController?.add(list)
+                    }
+                }
+            }
+            //
         }
         
         if context.sharedContext.immediateExperimentalUISettings.enablePWA {
@@ -736,6 +747,26 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     
     func reload() {
         self.webView.reload()
+    }
+
+    // MARK: AyuGram
+    // Puts the ad blocker's rule lists on this page or takes them off, as the setting says, and loads it again.
+    func ayuUpdateAdBlock() {
+        let contentController = self.webView.configuration.userContentController
+        contentController.removeAllContentRuleLists()
+        guard ExteraSettings.shared.value(.enableAdBlock) else {
+            self.webView.reload()
+            return
+        }
+        AyuAdBlockStore.shared.ruleLists { [weak self] lists in
+            guard let self, ExteraSettings.shared.value(.enableAdBlock) else {
+                return
+            }
+            for list in lists {
+                contentController.add(list)
+            }
+            self.webView.reload()
+        }
     }
     
     func navigateBack() {

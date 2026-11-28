@@ -9,10 +9,11 @@ import ChatControllerInteraction
 private let size = CGSize(width: 33.0, height: 33.0)
 
 public final class ChatMessageSwipeToReplyNode: ASDisplayNode {
-    public enum Action {
+    public enum Action: Equatable {
         case reply
         case like
         case unlike
+        case icon(String) // MARK: AyuGram
     }
     
     private var backgroundContent: WallpaperBubbleBackgroundNode?
@@ -44,6 +45,18 @@ public final class ChatMessageSwipeToReplyNode: ASDisplayNode {
                     
                     context.translateBy(x: imageRect.midX, y: imageRect.midY)
                     context.scaleBy(x: -1.0, y: -1.0)
+                    context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
+                    context.clip(to: imageRect, mask: image.cgImage!)
+                    context.setFillColor(foregroundColor.cgColor)
+                    context.fill(imageRect)
+                }
+            case let .icon(name): // MARK: AyuGram
+                if let image = UIImage(bundleImageName: name) {
+                    let imageSize = image.size.aspectFitted(CGSize(width: 21.0, height: 21.0))
+                    let imageRect = CGRect(origin: CGPoint(x: floor((size.width - imageSize.width) / 2.0), y: floor((size.height - imageSize.height) / 2.0)), size: imageSize)
+                    
+                    context.translateBy(x: imageRect.midX, y: imageRect.midY)
+                    context.scaleBy(x: 1.0, y: -1.0)
                     context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
                     context.clip(to: imageRect, mask: image.cgImage!)
                     context.setFillColor(foregroundColor.cgColor)

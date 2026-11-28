@@ -1,4 +1,5 @@
 import SGSimpleSettings // MARK: AyuGram
+import SGStrings
 import PeerInfoUI
 import Foundation
 import UIKit
@@ -1605,6 +1606,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if let messageHistoryAction = ayuMakeMessageHistoryContextMenuAction(chatPresentationInterfaceState: chatPresentationInterfaceState, interfaceInteraction: interfaceInteraction, message: message) {
             actions.append(messageHistoryAction)
         }
+        if let messageDetailsAction = ayuMakeMessageDetailsContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(messageDetailsAction)
+        }
+        if let searchImageAction = ayuMakeSearchImageContextMenuAction(context: context, controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(searchImageAction)
+        }
+        if let shareAsImageAction = ayuMakeShareAsImageContextMenuAction(controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
+            actions.append(shareAsImageAction)
+        }
         if let shadowBanAction = ayuMakeShadowBanContextMenuAction(context: context, chatPresentationInterfaceState: chatPresentationInterfaceState, message: message) {
             actions.append(shadowBanAction)
         }
@@ -2000,6 +2010,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], nil)
                     f(.dismissWithoutContent)
                 })))
+                // MARK: AyuGram
+                if ExteraSettings.shared.value(.showSaveMessageButton), chatPresentationInterfaceState.chatLocation.peerId != context.account.peerId {
+                    actions.append(.action(ContextMenuActionItem(text: i18n("Extera.SaveMessage", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                        // The bookmark is a 30 pt asset, the menu's icons are 24 pt.
+                        return generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: "Item List/Icons/SavedMessages"), color: theme.actionSheet.primaryTextColor), size: CGSize(width: 24.0, height: 24.0), opaque: false)
+                    }, action: { _, f in
+                        interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], "forwardMessagesToCloud")
+                        f(.dismissWithoutContent)
+                    })))
+                }
             }
         }
         

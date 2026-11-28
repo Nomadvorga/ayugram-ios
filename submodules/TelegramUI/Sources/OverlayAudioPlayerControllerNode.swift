@@ -1,4 +1,5 @@
 import Foundation
+import SGStrings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -1586,6 +1587,20 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 })))
             }
             
+            // MARK: AyuGram
+            if file.isMusic, let query = ayuTrackQuery(file: file) {
+                items.append(.action(ContextMenuActionItem(text: i18n("Extera.Lyrics", presentationData.strings.baseLanguageCode), icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Caption"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                    f(.dismissWithoutContent)
+
+                    guard let self, let navigationController = (self.getParentController() as? OverlayAudioPlayerControllerImpl)?.parentNavigationController else {
+                        return
+                    }
+                    self.requestDismiss()
+                    navigationController.pushViewController(AyuLyricsController(context: context, query: query, messageId: message.id))
+                })))
+            }
+            //
+
             var addedSeparator = false
             
             if message.id.namespace == Namespaces.Message.Cloud {

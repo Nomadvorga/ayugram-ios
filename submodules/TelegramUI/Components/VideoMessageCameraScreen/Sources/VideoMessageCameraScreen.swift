@@ -1014,7 +1014,17 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
             let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
-            let isFrontPosition = !AyuCameraSettings.shared.roundVideoUsesBackCamera // MARK: AyuGram
+            // MARK: AyuGram
+            let isFrontPosition: Bool
+            switch ExteraSettings.shared.videoMessagesCamera {
+            case .lastUsed:
+                isFrontPosition = !AyuCameraSettings.shared.roundVideoUsesBackCamera
+            case .front:
+                isFrontPosition = true
+            case .back:
+                isFrontPosition = false
+            }
+            //
             
             self.mainPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
             self.additionalPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)

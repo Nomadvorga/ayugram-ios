@@ -482,9 +482,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     //
                     let isFirstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter == mainContainerNode_availableFilters.first?.filter // MARK: AyuGram
                     
-                    if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && strongSelf.chatListDisplayNode.inlineStackContainerNode != nil {
+                    if offset <= AyuChatListSearchBar.scrollHeight + 1.0 && strongSelf.chatListDisplayNode.inlineStackContainerNode != nil {
                         strongSelf.setInlineChatList(location: nil)
-                    } else if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && !isFirstFilter {
+                    } else if offset <= AyuChatListSearchBar.scrollHeight + 1.0 && !isFirstFilter {
                         // MARK: AyuGram
                         var effectiveContainerNode_availableFilters = strongSelf.chatListDisplayNode.mainContainerNode.availableFilters
                         if SGSimpleSettings.shared.allChatsHidden {
@@ -7053,6 +7053,7 @@ private final class ChatListLocationContext {
     
     private var titleDisposable: Disposable?
     private var ayuShowsGhostStatus = false // MARK: AyuGram
+    private var ayuRootTitle: String? // MARK: AyuGram
     
     private(set) var title: String = ""
     private(set) var chatTitleComponent: ChatTitleComponent?
@@ -7061,6 +7062,7 @@ private final class ChatListLocationContext {
     var leftButton: NavigationBarComponent.Button?
     var rightButton: NavigationBarComponent.Button?
     var settingsButton: NavigationBarComponent.Button? // MARK: AyuGram
+    var ayuHidesSearchButton = false // MARK: AyuGram
     var proxyButton: NavigationBarComponent.Button?
     var storyButton: NavigationBarComponent.Button?
     
@@ -7080,6 +7082,17 @@ private final class ChatListLocationContext {
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
         }
+        // MARK: AyuGram — with the search field hidden, search opens from the header.
+        if AyuChatListSearchBar.isHidden && !self.ayuHidesSearchButton {
+            result.append(NavigationBarComponent.Button(id: "search",
+                content: .icon(imageName: "Navigation/Search"),
+                tint: .generic,
+                action: { [weak self] _ in
+                    self?.parentController?.activateSearch()
+                }
+            ))
+        }
+        //
         return result
     }
     
@@ -7113,10 +7126,12 @@ private final class ChatListLocationContext {
         self.location = location
         self.parentController = parentController
         
-        let hasProxy = context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
-        |> map { sharedData -> (Bool, Bool) in
+        // MARK: AyuGram
+        // The shield reads as off while "Disable Proxy" bypasses the proxy.
+        let hasProxy = combineLatest(context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings]), ayuProxyAutoDisabledSignal())
+        |> map { sharedData, isAutoDisabled -> (Bool, Bool) in
             if let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) {
-                return (!settings.servers.isEmpty, settings.enabled)
+                return (!settings.servers.isEmpty, settings.enabled && !isAutoDisabled)
             } else {
                 return (false, false)
             }
@@ -7126,7 +7141,41 @@ private final class ChatListLocationContext {
         })
         
         // MARK: AyuGram
-        let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
+        // exteraGram "Chat List Title": the main list is titled with the account's username, first name or the app name.
+        let ayuRootTitle: Signal<String?, NoError>
+        switch self.location {
+        case .chatList(.root):
+            ayuRootTitle = combineLatest(
+                ayuSettingSignal({ ExteraSettings.shared.titleText }),
+                context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+            )
+            |> map { titleText, peer -> String? in
+                switch titleText {
+                case .default:
+                    return nil
+                case .appName:
+                    return "AyuGram"
+                case .username, .firstName:
+                    guard case let .user(user) = peer else {
+                        return nil
+                    }
+                    if titleText == .username, let username = user.addressName, !username.isEmpty {
+                        return username
+                    }
+                    if let firstName = user.firstName, !firstName.isEmpty {
+                        return firstName
+                    }
+                    if let lastName = user.lastName, !lastName.isEmpty {
+                        return lastName
+                    }
+                    return nil
+                }
+            }
+            |> distinctUntilChanged
+        default:
+            ayuRootTitle = .single(nil)
+        }
+        let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal(), ayuRootTitle) // MARK: AyuGram
         //
         
         let passcode = context.sharedContext.accountManager.accessChallengeData()
@@ -7220,6 +7269,7 @@ private final class ChatListLocationContext {
                         return
                     }
                     self.ayuShowsGhostStatus = hideStoriesAndGhostStatus.1 // MARK: AyuGram
+                    self.ayuRootTitle = hideStoriesAndGhostStatus.2 // MARK: AyuGram
                     
                     self.updateChatList(
                         hideStories: hideStoriesAndGhostStatus.0, // MARK: AyuGram
@@ -7508,7 +7558,7 @@ private final class ChatListLocationContext {
         switch location {
         case let .chatList(groupId):
             if groupId == .root {
-                defaultTitle = presentationData.strings.DialogList_Title
+                defaultTitle = self.ayuRootTitle ?? presentationData.strings.DialogList_Title // MARK: AyuGram
             } else {
                 defaultTitle = presentationData.strings.ChatList_ArchivedChatsTitle
             }
@@ -7520,6 +7570,8 @@ private final class ChatListLocationContext {
         let previousEditingAndNetworkState = self.previousEditingAndNetworkStateValue.swap((stateAndFilterId.state.editing, networkState))
         
         var titleContent: NetworkStatusTitle
+        
+        self.ayuHidesSearchButton = stateAndFilterId.state.editing || isReorderingTabs // MARK: AyuGram
         
         if stateAndFilterId.state.editing {
             if case .chatList(.root) = self.location {
