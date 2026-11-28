@@ -774,6 +774,39 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
             "isShowing": { state, args, context in
                 guard args.isEmpty, let token = state["token"]?.string else { throw Self.invalid() }
                 return .value(.bool(self.isShowing(token, owner: context.pluginID)))
+            },
+            // Progress dialogs only; an alert has no progress line or live cancel switch.
+            "setProgress": { state, args, context in
+                guard args.count == 1, let value = args[0].integer, let token = state["token"]?.string else { throw Self.invalid() }
+                let owner = context.pluginID
+                return .prepared(AyuBridgeProviderResult(.value(.null), commit: { _ in
+                    DispatchQueue.main.async {
+                        guard self.isCurrent(token, owner: owner) else { return }
+                        (self.dialogs[token] as? AyuPluginProgressDialogController)?.setProgress(Int(clamping: value))
+                    }
+                }))
+            },
+            // `android.app.ProgressDialog` (the "indeterminate" progress dialog) only.
+            "setMessage": { state, args, context in
+                guard args.count == 1, args[0] == .null || args[0].string != nil, let token = state["token"]?.string else { throw Self.invalid() }
+                let owner = context.pluginID, text = args[0].string
+                return .prepared(AyuBridgeProviderResult(.value(.null), commit: { _ in
+                    DispatchQueue.main.async {
+                        guard self.isCurrent(token, owner: owner),
+                              let dialog = self.dialogs[token] as? AyuPluginProgressDialogController, dialog.isIndeterminate else { return }
+                        dialog.setMessage(text)
+                    }
+                }))
+            },
+            "setCancelable": { state, args, context in
+                guard args.count == 1, case let .bool(flag) = args[0], let token = state["token"]?.string else { throw Self.invalid() }
+                let owner = context.pluginID
+                return .prepared(AyuBridgeProviderResult(.value(.null), commit: { _ in
+                    DispatchQueue.main.async {
+                        guard self.isCurrent(token, owner: owner) else { return }
+                        (self.dialogs[token] as? AyuPluginProgressDialogController)?.cancelable = flag
+                    }
+                }))
             }
         ], validateState: { state in guard Set(state.keys) == ["token"], UUID(uuidString: state["token"]?.string ?? "") != nil else { throw Self.invalid() } })
         let notificationCenter = AyuBridgeClassAdapter(name: Self.notificationCenter,
@@ -1012,6 +1045,12 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         let button: AlertAction?
         /// The still iOS icon of the Android resource a bulletin names.
         var icon: AyuPluginIcon? = nil
+        /// `spinner` or `loading`: Android's button-less progress dialog instead of a system alert.
+        var progress: String? = nil
+        var progressValue: Int64 = 0
+        var cancelable = true
+        var canCancel = true
+        var cancel: AyuBridgeNativeCallback? = nil
     }
 
     private func preparePresentation(_ arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext, expectedScreen: UUID? = nil, token suppliedToken: String? = nil) throws -> AyuBridgeProviderResult {
@@ -1026,8 +1065,24 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         var durationMilliseconds: Int64 = 3000
         var bulletinButton: AlertAction?
         var bulletinIcon: AyuPluginIcon?
+        var progress: String?, progressValue: Int64 = 0, alertCancelable = true, canCancel = true
+        var cancelSink: AyuBridgeNativeCallback?
         if kind == "alert" {
-            guard Set(config.keys).isSubset(of: ["context", "title", "message", "items", "positive_button", "negative_button", "neutral_button", "cancelable"]) else { throw AyuBridgeFailure.unsupported("alert configuration or custom view") }
+            guard Set(config.keys).isSubset(of: ["context", "title", "message", "items", "positive_button", "negative_button", "neutral_button", "cancelable",
+                                                 "progress", "value", "can_cancel", "on_cancel"]) else { throw AyuBridgeFailure.unsupported("alert configuration or custom view") }
+            if let supplied = config["progress"] {
+                guard let name = supplied.string, ["spinner", "loading", "indeterminate"].contains(name), config["items"] == nil else { throw Self.invalid() }
+                // Android's spinner dialog draws nothing but the spinner.
+                guard name != "spinner" || Set(config.keys).isSubset(of: ["context", "progress", "can_cancel", "on_cancel"]) else { throw Self.invalid() }
+                progress = name
+                if let value = config["value"] { guard let number = value.integer else { throw Self.invalid() }; progressValue = number }
+                if let value = config["can_cancel"] { guard case let .bool(flag) = value else { throw Self.invalid() }; canCancel = flag }
+                if let callback = config["on_cancel"], callback != .null { cancelSink = try context.callback(callback) }
+            } else {
+                guard config["value"] == nil, config["can_cancel"] == nil else { throw Self.invalid() }
+                // Reported by the Cancel button the host adds to a cancelable alert.
+                if let callback = config["on_cancel"], callback != .null { cancelSink = try context.callback(callback) }
+            }
             if let reference = config["context"], reference != .null {
                 let snapshot = try context.snapshot(of: reference)
                 guard [Self.context, Self.fragment].contains(snapshot.className), try self.screen(state: snapshot.state).identity == screen.identity else { throw Self.invalid() }
@@ -1054,8 +1109,11 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
             let cancelable: Bool
             if let value = config["cancelable"] { guard case let .bool(flag) = value else { throw Self.invalid() }; cancelable = flag }
             else { cancelable = true }
-            if !actions.contains(where: \.isCancel), cancelable { actions.append(AlertAction(title: "Отмена", which: -2, callback: nil, isCancel: true)) }
-            guard !actions.isEmpty, title != nil || text != nil || config["items"] != nil else { throw Self.invalid() }
+            alertCancelable = cancelable
+            if progress == nil {
+                if !actions.contains(where: \.isCancel), cancelable { actions.append(AlertAction(title: "Отмена", which: -2, callback: cancelSink, isCancel: true)) }
+                guard !actions.isEmpty, title != nil || text != nil || config["items"] != nil else { throw Self.invalid() }
+            }
         } else if kind == "bulletin" {
             guard Set(config.keys).isSubset(of: ["style", "text", "fragment", "duration_ms", "button", "icon"]), let supplied = config["style"]?.string, ["simple", "success", "error"].contains(supplied),
                    let value = try Self.optionalText(config["text"], limit: 4096), !value.isEmpty else { throw Self.invalid() }
@@ -1086,7 +1144,8 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
         self.ownerGenerations[context.pluginID] = generation
         self.reservations[token] = Reservation(owner: context.pluginID, generation: generation)
         self.lock.unlock()
-        let presentation = Presentation(token: token, owner: context.pluginID, generation: generation, screen: screen, kind: kind, title: title, text: text, style: style, actions: actions, durationMilliseconds: durationMilliseconds, button: bulletinButton, icon: bulletinIcon)
+        let presentation = Presentation(token: token, owner: context.pluginID, generation: generation, screen: screen, kind: kind, title: title, text: text, style: style, actions: actions, durationMilliseconds: durationMilliseconds, button: bulletinButton, icon: bulletinIcon,
+                                        progress: progress, progressValue: progressValue, cancelable: alertCancelable, canCancel: canCancel, cancel: cancelSink)
         let result: AyuBridgeAdapterResult = kind == "alert" ? .instance(className: Self.dialog, state: ["token": .string(token)]) : .value(.null)
         return AyuBridgeProviderResult(result, rollback: { self.cancelReservation(token) }, commit: { reference in
             DispatchQueue.main.async { self.present(presentation, reference: reference) }
@@ -1166,6 +1225,34 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
               let presenter = self.presenterSource?(), presenter.viewIfLoaded?.window != nil else { self.cancelReservation(presentation.token); return }
         if presentation.kind == "alert" {
             guard presenter.presentedViewController == nil, self.dialogs.isEmpty else { self.cancelReservation(presentation.token); return }
+            if let progress = presentation.progress {
+                // Closes the dialog once and reports afterwards, so the callback can present again.
+                let close: @MainActor (@escaping @MainActor () -> Void) -> Void = { [weak self] report in
+                    guard let self, self.isCurrent(presentation.token, owner: presentation.owner, generation: presentation.generation) else { return }
+                    self.cancelReservation(presentation.token)
+                    guard let dialog = self.dialogs.removeValue(forKey: presentation.token), let presenting = dialog.presentingViewController else { report(); return }
+                    presenting.dismiss(animated: true) { report() }
+                }
+                let dialog = AyuPluginProgressDialogController(
+                    spinner: progress == "spinner", indeterminate: progress == "indeterminate", title: presentation.title, message: presentation.text,
+                    progress: Int(clamping: presentation.progressValue), cancelable: presentation.cancelable,
+                    buttons: presentation.actions.map { action in
+                        .init(title: action.title) { close { action.callback?.send([reference, .integer(action.which)]) } }
+                    })
+                dialog.onTouch = { [weak dialog] in
+                    guard let dialog else { return }
+                    guard dialog.isSpinner else { close { presentation.cancel?.send([reference]) }; return }
+                    // Android: AlertDialog.showCancelAlert(), unless setCanCancel(false).
+                    guard presentation.canCancel, dialog.presentedViewController == nil else { return }
+                    let prompt = UIAlertController(title: "Остановить загрузку?", message: "Вы хотите отменить загрузку?", preferredStyle: .alert)
+                    prompt.addAction(UIAlertAction(title: "Подождать", style: .default))
+                    prompt.addAction(UIAlertAction(title: "Остановить", style: .cancel) { _ in close { presentation.cancel?.send([reference]) } })
+                    dialog.present(prompt, animated: true)
+                }
+                self.dialogs[presentation.token] = dialog
+                presenter.present(dialog, animated: true)
+                return
+            }
             let alert = UIAlertController(title: presentation.title, message: presentation.text, preferredStyle: .alert)
             for action in presentation.actions {
                 alert.addAction(UIAlertAction(title: action.title, style: action.isCancel ? .cancel : .default) { [weak self, weak alert] _ in
@@ -1249,7 +1336,10 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     }
 
     @MainActor private func removePresentation(_ token: String) {
-        self.dialogs.removeValue(forKey: token)?.dismiss(animated: false)
+        if let dialog = self.dialogs.removeValue(forKey: token) {
+            // A progress dialog may carry its "stop loading?" prompt; dismissing from below removes both.
+            ((dialog as? AyuPluginProgressDialogController)?.presentingViewController ?? dialog).dismiss(animated: false)
+        }
         self.bulletins.removeValue(forKey: token)?.removeFromSuperview()
         self.bulletinScreens.removeValue(forKey: token)
     }

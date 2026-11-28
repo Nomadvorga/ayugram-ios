@@ -73,7 +73,7 @@ class MessageObjectTests(unittest.TestCase):
         self.assertEqual((plain.messageText, plain.caption, plain.isMediaEmpty()), ("hi", None, True))
         media = MessageObject(0, message(document("audio/mpeg", audio())))
         self.assertEqual((media.caption, media.isMediaEmpty()), ("hi", False))
-        for read in (lambda: media.messageText, lambda: media.type, lambda: media.isSticker()):
+        for read in (lambda: media.messageText, lambda: media.type):
             with self.subTest(read=read), self.assertRaises(bridge.UnsupportedAPI):
                 read()
         with self.assertRaises(bridge.UnsupportedAPI):

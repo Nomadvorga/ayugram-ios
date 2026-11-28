@@ -775,7 +775,7 @@ final class ShareControllerNode: ViewControllerTracingNode, ASScrollViewDelegate
             self.setActionNodesHidden(false, inputField: true, actions: true, animated: false)
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         // Replace your current accessibility setup with this:
         self.isAccessibilityElement = false
         self.accessibilityViewIsModal = true

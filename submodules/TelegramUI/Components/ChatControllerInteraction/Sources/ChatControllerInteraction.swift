@@ -212,7 +212,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     }
     
     public let openMessage: (EngineRawMessage, OpenMessageParams) -> Bool
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public let sgStartMessageEdit: (EngineRawMessage) -> Void
     public let sgGetChatPredictedLang: () -> String?
     //
@@ -411,7 +411,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     
     public init(
         openMessage: @escaping (EngineRawMessage, OpenMessageParams) -> Bool,
-        // MARK: Swiftgram
+        // MARK: AyuGram
         sgGetChatPredictedLang: @escaping () -> String? = { return nil },
         sgStartMessageEdit: @escaping (EngineRawMessage) -> Void = { _ in },
         //
@@ -549,7 +549,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         presentationContext: ChatPresentationContext
     ) {
         self.openMessage = openMessage
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgGetChatPredictedLang = sgGetChatPredictedLang
         self.sgStartMessageEdit = sgStartMessageEdit
         //

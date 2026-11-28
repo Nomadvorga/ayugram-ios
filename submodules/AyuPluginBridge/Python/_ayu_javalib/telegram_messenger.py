@@ -20,6 +20,7 @@ import math
 import os
 import re
 import secrets
+import unicodedata
 import zlib
 
 from . import HostField, returns
@@ -267,6 +268,35 @@ def _usernames(owner, editable):
     return None
 
 
+_EXTRA_DIACRITICS = re.compile("([\u0300-\u036f]{1,2})[\u0300-\u036f]+")
+_RTL_MARKS = re.compile("[\u200e\u200f\u202a-\u202e]")
+
+
+def _java_trim(value):
+    """``String.trim``: only code points up to U+0020, unlike ``str.strip``."""
+    start, end = 0, len(value)
+    while start < end and value[start] <= " ":
+        start += 1
+    while end > start and value[end - 1] <= " ":
+        end -= 1
+    return value[start:end]
+
+
+def _name_display_order():
+    """``LocaleController.nameDisplayOrder`` as ``recreateFormatters`` sets it."""
+    locale = _runtime().jclass(PACKAGE + "LocaleController").getInstance().getCurrentLocale()
+    language = locale.getLanguage()
+    return 2 if str("en" if language is None else language).lower() == "ko" else 1
+
+
+def _format_name(first, last):
+    """``ContactsController.formatName(firstName, lastName)`` (``maxLength`` 0)."""
+    first = "" if first is None else _java_trim(str(first))
+    last = "" if last is None else _java_trim(str(last))
+    parts = (first, last) if _name_display_order() == 1 else (last, first)
+    return " ".join(part for part in parts if part)
+
+
 @_local_arguments
 class UserObject(_Java):
     # Without ``telegram.peer`` the only users a plugin can obtain are the host's snapshots.
@@ -303,6 +333,15 @@ class UserObject(_Java):
     @staticmethod
     def isService(user_id):
         return _int(user_id, 64, "user_id") in (333000, 777000, 42777)
+
+    @staticmethod
+    def getUserName(user):
+        if UserObject.isDeleted(user):
+            raise _unsupported("UserObject.getUserName of a deleted user needs Telegram Android's HiddenName string")
+        name = _RTL_MARKS.sub("", _EXTRA_DIACRITICS.sub(r"\1", _format_name(user.first_name, user.last_name)))
+        if not name and user.phone:
+            raise _unsupported("UserObject.getUserName of a nameless user needs Telegram Android's PhoneFormat")
+        return name
 
     @staticmethod
     def getPublicUsername(user, editable=False):
@@ -755,6 +794,9 @@ class FileLoader(_Java):
     def _target(self, value):
         if isinstance(value, MessageObject):
             value = value.messageOwner
+        locate = vars(type(value)).get("_ayu_file_target")
+        if locate is not None:
+            value = locate(value)
         if not isinstance(value, tl.TLObject):
             raise TypeError("Expected a TL object or MessageObject")
         return value
@@ -1282,6 +1324,118 @@ class MessageObject(_Java):
     def isVideoSticker(self):
         document = self.getDocument() if isinstance(self, MessageObject) else self
         return document is not None and MessageObject.isVideoStickerDocument(document)
+
+    def _raw_sticker(self):
+        document = self.getDocument()
+        return MessageObject.isStickerDocument(document) or MessageObject.isVideoSticker(document)
+
+    def _raw_animated_sticker(self):
+        owner = self.messageOwner
+        secret = DialogObject.isEncryptedDialog(self.getDialogId())
+        if secret and owner.stickerVerified != 1:
+            return False
+        return MessageObject.isAnimatedStickerDocument(self.getDocument(), not secret or self.isOut())
+
+    def _media_type(self):
+        """Android's ``setType`` for a message with media; 1000 is its unset value, None a service type."""
+        owner = self.messageOwner
+        if isinstance(owner, TLRPC.TL_messageService):
+            return None
+        if not isinstance(owner, TLRPC.TL_message):
+            return 1000
+        media = MessageObject.getMedia(owner)
+        if isinstance(media, TLRPC.TL_messageMediaUnsupported):
+            return MessageObject.TYPE_UNSUPPORTED
+        if owner.restriction_reason:
+            raise _unsupported("MessageObject type of a message with restriction reasons needs the app's restriction rules")
+        if owner.rich_message is not None or isinstance(media, TLRPC.TL_messageMediaWidget):
+            return MessageObject.TYPE_ARTICLE
+        if isinstance(owner.media, TLRPC.TL_messageMediaPaidMedia):
+            return MessageObject.TYPE_PAID_MEDIA
+        if self.isMediaEmpty():
+            return MessageObject.TYPE_TEXT
+        if (not isinstance(owner.media, TLRPC.TL_messageMediaPaidMedia) and owner.media.extended_media
+                and isinstance(owner.media.extended_media[0], TLRPC.TL_messageExtendedMediaPreview)):
+            return MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW
+        if media.ttl_seconds != 0 and (isinstance(media.photo, TLRPC.TL_photoEmpty)
+                                       or isinstance(self.getDocument(), TLRPC.TL_documentEmpty)
+                                       or isinstance(media, TLRPC.TL_messageMediaDocument) and self.getDocument() is None):
+            return MessageObject.TYPE_DATE
+        if isinstance(media, TLRPC.TL_messageMediaGiveaway):
+            return MessageObject.TYPE_GIVEAWAY
+        if isinstance(media, TLRPC.TL_messageMediaGiveawayResults):
+            return MessageObject.TYPE_GIVEAWAY_RESULTS
+        if isinstance(media, TLRPC.TL_messageMediaDice):
+            return MessageObject.TYPE_ANIMATED_STICKER
+        if isinstance(media, TLRPC.TL_messageMediaPhoto):
+            return MessageObject.TYPE_VIDEO if self.isVideo() else MessageObject.TYPE_PHOTO
+        if isinstance(media, (TLRPC.TL_messageMediaGeo, TLRPC.TL_messageMediaVenue, TLRPC.TL_messageMediaGeoLive)):
+            return MessageObject.TYPE_GEO
+        if self.isRoundVideo():
+            return MessageObject.TYPE_ROUND_VIDEO
+        if self.isVideo():
+            return MessageObject.TYPE_VIDEO
+        if self.isVoice():
+            return MessageObject.TYPE_VOICE
+        if self.isMusic():
+            return MessageObject.TYPE_MUSIC
+        if isinstance(media, TLRPC.TL_messageMediaContact):
+            return MessageObject.TYPE_CONTACT
+        if isinstance(media, (TLRPC.TL_messageMediaPoll, TLRPC.TL_messageMediaToDo)):
+            return MessageObject.TYPE_POLL
+        if isinstance(media, TLRPC.TL_messageMediaDocument):
+            document = self.getDocument()
+            if document is not None and document.mime_type is not None:
+                # hasValidGroupId() here: every document that reaches this branch counts as isDocument().
+                if MessageObject.isGifDocument(document, self.getGroupId() != 0):
+                    return MessageObject.TYPE_GIF
+                if self._raw_sticker():
+                    return MessageObject.TYPE_STICKER
+                if self._raw_animated_sticker():
+                    return MessageObject.TYPE_ANIMATED_STICKER
+            return MessageObject.TYPE_FILE
+        if isinstance(media, (TLRPC.TL_messageMediaGame, TLRPC.TL_messageMediaInvoice)):
+            return MessageObject.TYPE_TEXT
+        if isinstance(media, TLRPC.TL_messageMediaStory):
+            return MessageObject.TYPE_STORY_MENTION if media.via_mention else MessageObject.TYPE_STORY
+        return 1000
+
+    def _may_be_big_emoji(self):
+        """Whether Android may show this text message as one big emoji, whose sticker is app state."""
+        owner = self.messageOwner
+        media = MessageObject.getMedia(owner)
+        if not isinstance(owner, TLRPC.TL_message) or owner.grouped_id != 0 or owner.restriction_reason:
+            return False
+        if media is not None and not isinstance(media, TLRPC.TL_messageMediaEmpty):
+            return False
+        text, entities = owner.message or "", owner.entities
+        if not text or len(entities) > 1 or entities and not isinstance(entities[0], TLRPC.TL_messageEntityCustomEmoji):
+            return False
+        keycap = "\u20e3" in text
+        for char in text:
+            if char < "\x80":
+                if not (keycap and char in "0123456789#*"):
+                    return False
+            elif char != "\u2139" and unicodedata.category(char)[0] in "LZ":
+                return False
+        return True
+
+    def isSticker(self):
+        if not isinstance(self, MessageObject):
+            raise TypeError("MessageObject.isSticker is an instance method")
+        if self._may_be_big_emoji():
+            raise _unsupported("MessageObject.isSticker of an emoji-only text message needs the app's animated emoji")
+        kind = self._media_type()
+        return self._raw_sticker() if kind == 1000 else kind == MessageObject.TYPE_STICKER
+
+    def isDocument(self):
+        if not isinstance(self, MessageObject):
+            raise TypeError("MessageObject.isDocument is an instance method")
+        # An emoji-only text message has either no document or a sticker type, so the answer is the same.
+        if self.getDocument() is None or self.isVideo() or self.isMusic() or self.isVoice():
+            return False
+        return self._media_type() not in (MessageObject.TYPE_STICKER, MessageObject.TYPE_ANIMATED_STICKER,
+                                          MessageObject.TYPE_EMOJIS)
 
 
 # --- Host-backed controllers ----------------------------------------------------
@@ -1880,6 +2034,18 @@ class SendMessagesHelper(_Java):
     def getInstance(num):
         return SendMessagesHelper(num)
 
+    def generatePhotoSizes(self, *args):
+        from . import telegram_photo_sizes
+        if len(args) != 2:
+            raise _unsupported("SendMessagesHelper.generatePhotoSizes takes (path, uri)")
+        path, uri = args
+        if uri is not None:
+            raise _unsupported("SendMessagesHelper.generatePhotoSizes of a content Uri")
+        if path is not None and not isinstance(path, str):
+            raise TypeError("generatePhotoSizes takes a String path")
+        return telegram_photo_sizes.generate(TLRPC, path, _compose()._external_cache_dir().getAbsolutePath(),
+                                             ConnectionsManager(self.currentAccount).getCurrentTime)
+
     def sendMessage(self, *args):
         if len(args) != 1 or not isinstance(args[0], SendMessageParams):
             raise _unsupported("SendMessagesHelper.sendMessage accepts a SendMessageParams object")
@@ -2220,6 +2386,38 @@ def _utilities_cache_dir(*args):
     return _compose()._external_cache_dir()
 
 
+def _find_activity(*args):
+    """``AndroidUtilities.findActivity(context)``: null for null, else the Activity behind the context.
+
+    Every host ``Context`` is the visible screen's Activity (what ``getParentActivity()`` answers), so it is its own answer.
+    """
+    if len(args) != 1:
+        raise TypeError("AndroidUtilities.findActivity takes one Context")
+    context = args[0]
+    if context is None:
+        return None
+    if getattr(context, "_class_name", None) != "android.content.Context":
+        raise _unsupported("AndroidUtilities.findActivity of an object that is not a host Context")
+    return context
+
+
+def _is_valid_account(*args):
+    """``UserConfig.isValidAccount(num)``: an index below ``MAX_ACCOUNT_COUNT`` whose account is signed in."""
+    if len(args) != 1:
+        raise TypeError("UserConfig.isValidAccount takes one account index")
+    num = _int(args[0], 32, "num")
+    if not 0 <= num < 16:
+        return False
+    from ayu_bridge import BridgeError
+    try:
+        return bool(_runtime().jclass(PACKAGE + "UserConfig").getInstance(num).isClientActivated())
+    except BridgeError as error:
+        # The host has no UserConfig for an index without an account; Android's is empty there.
+        if str(error.code).upper() != "ACCOUNT_UNAVAILABLE":
+            raise
+        return False
+
+
 def _client_user_id(config):
     """``UserConfig.clientUserId``: the field behind ``getClientUserId()``."""
     return config.getClientUserId()
@@ -2232,6 +2430,7 @@ HOST_MEMBERS = {
     PACKAGE + "ApplicationLoader": {"getFilesDirFixed": _files_dir_fixed, "getApplicationId": _application_id},
     PACKAGE + "AndroidUtilities": {
         "density": HostField(_density), "displaySize": HostField(_display_size), "getCacheDir": _utilities_cache_dir,
+        "findActivity": _find_activity,
         "TYPEFACE_ROBOTO_CONDENSED_BOLD": "fonts/rcondensedbold.ttf", "TYPEFACE_ROBOTO_REGULAR": "fonts/rregular.ttf",
         "TYPEFACE_ROBOTO_ITALIC": "fonts/ritalic.ttf", "TYPEFACE_ROBOTO_MEDIUM": "fonts/rmedium.ttf",
         "TYPEFACE_ROBOTO_EXTRA_BOLD": "fonts/rextrabold.ttf", "TYPEFACE_ROBOTO_MEDIUM_ITALIC": "fonts/rmediumitalic.ttf",
@@ -2239,7 +2438,7 @@ HOST_MEMBERS = {
         "TYPEFACE_NUNITO_EXTRABOLD": "fonts/nunito_extrabold.ttf",
     },
     PACKAGE + "UserConfig": {"MAX_ACCOUNT_COUNT": 16, "MAX_ACCOUNT_DEFAULT_COUNT": 8,
-                             "clientUserId": HostField(_client_user_id)},
+                             "clientUserId": HostField(_client_user_id), "isValidAccount": _is_valid_account},
     # The host adapter answers while ``telegram.peer`` is undeclared; its constants are the same data.
     PACKAGE + "MessagesController": dict(_CONTROLLER_CONSTANTS),
 }

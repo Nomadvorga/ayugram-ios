@@ -272,6 +272,18 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 giftEmojiFileId = nil
             }
             //
+            // MARK: AyuGram: exteraGram's "Reply Elements" (ReplyMessageLine.check, TYPE_REPLY); all three are on by default.
+            let exteraReplyEmoji = ExteraSettings.shared.replyEmoji
+            let exteraReplyBackground = ExteraSettings.shared.replyBackground
+            if !ExteraSettings.shared.replyColors {
+                authorNameColor = nil
+                dashSecondaryColor = nil
+                dashTertiaryColor = nil
+            }
+            if !exteraReplyEmoji {
+                giftEmojiFileId = nil
+            }
+            //
             
             switch arguments.type {
             case let .bubble(incoming):
@@ -958,7 +970,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 node.backgroundView.frame = backgroundFrame
                 
                 var pattern: MessageInlineBlockBackgroundView.Pattern?
-                if !ayuSimpleReplies, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
+                if !ayuSimpleReplies, exteraReplyEmoji, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
                     pattern = MessageInlineBlockBackgroundView.Pattern(
                         context: arguments.context,
                         fileId: backgroundEmojiId,
@@ -973,6 +985,11 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 if case .standalone = arguments.type {
                     isTransparent = true
                 }
+                // MARK: AyuGram: exteraGram's "Reply Background" off keeps the line and drops the fill.
+                if !exteraReplyBackground {
+                    isTransparent = true
+                }
+                //
                 // Without bubbles a reply sits on the page, where its block is rounder.
                 if arguments.bubbleStyle.isBubbleless, case .bubble = arguments.type {
                     node.backgroundView.clipCornerRadius = chatMessageBubblelessInlineBlockCornerRadius

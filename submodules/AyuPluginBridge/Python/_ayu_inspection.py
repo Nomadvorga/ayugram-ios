@@ -15,6 +15,11 @@ import _ayu_intents
 import _ayu_xposed
 
 
+def _window_services(tree):
+    from _ayu_javalib import android_view
+    return android_view.static_window_services(tree)
+
+
 _SDK_ROOT = Path(__file__).resolve().parent
 _MAX_SOURCE_BYTES = 4 * 1024 * 1024
 _MAX_NODES = 100_000
@@ -26,6 +31,15 @@ NATIVE_PREFIXES = tuple(root + "." for root in NATIVE_ROOTS)
 # Chaquopy's ``java`` package re-exports its extension module ``java.chaquopy``; the bundled
 # ``java`` module registers that name with the same public surface.
 _MODULE_ALIASES = {"java.chaquopy": "java"}
+# Names Android's SDK (plugins-pysdk, exteraGram 13.2.2) lacks as well: the import raises ImportError
+# there too, so one a handler absorbs runs the same fallback on both platforms and blocks nothing.
+# ``AyuState`` is AyuGram Android only: exteraGram has no ``com.radolyn`` package at all.
+ANDROID_ABSENT = frozenset({"ui.dialogs", "client_utils.get_current_fragment", "com.radolyn.ayugram.AyuState"})
+# Members exteraGram 13.2.2 lacks as well: reading one raises AttributeError there too, so a handler
+# that absorbs it, a blanket one included, runs the same fallback on both platforms.
+ANDROID_ABSENT_MEMBERS = frozenset("org.telegram.ui.ActionBar.Theme." + key for key in (
+    "key_dialogTextRed", "key_dialogButtonRed", "key_dialogTextBlue3", "key_listSelectorSDK21", "key_chat_attachAudioText",
+    "key_chat_attachFileText", "key_chat_attachLocationText", "key_chat_attachPollText"))
 
 
 def _bounded_nodes(tree):
@@ -323,6 +337,74 @@ def send_hook_fields(tree):
     return sorted(result)
 
 
+def send_hook_resend(tree):
+    """True when ``on_send_message_hook`` hands its parameters object to a ``sendMessage`` call.
+
+    The object is followed through aliases, closures and the plugin's own functions. The SDK refuses
+    that call: the host does not describe every field of the message to the hook.
+    """
+    parents, functions = {}, {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            functions.setdefault(node.name, []).append(node)
+    seen = set()
+
+    def positional(function):
+        names = [item.arg for item in function.args.posonlyargs + function.args.args]
+        static = any(isinstance(item, ast.Name) and item.id == "staticmethod" for item in function.decorator_list)
+        return names[1:] if isinstance(parents.get(id(function)), ast.ClassDef) and not static else names
+
+    def resent(function, name):
+        if (id(function), name) in seen:
+            return False
+        seen.add((id(function), name))
+        names, changed = {name}, True
+        while changed:
+            changed = False
+            for node in ast.walk(function):
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name) and node.value.id in names:
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id not in names:
+                            names.add(target.id)
+                            changed = True
+        for node in ast.walk(function):
+            if not (isinstance(node, ast.Name) and node.id in names and isinstance(node.ctx, ast.Load)):
+                continue
+            call, keyword = parents.get(id(node)), None
+            if isinstance(call, ast.keyword):
+                call, keyword = parents.get(id(call)), call.arg
+            if not isinstance(call, ast.Call) or call.func is node:
+                continue
+            called = call.func
+            target = called.attr if isinstance(called, ast.Attribute) else called.id if isinstance(called, ast.Name) else None
+            own = len(functions.get(target, ())) == 1 and (isinstance(called, ast.Name) or isinstance(called.value, ast.Name)
+                                                            and called.value.id in ("self", "cls"))
+            if not own:
+                if isinstance(called, ast.Attribute) and target == "sendMessage":
+                    return True
+                continue
+            callee = functions[target][0]
+            accepted = positional(callee)
+            if keyword is None:
+                index = next((index for index, item in enumerate(call.args) if item is node), len(accepted))
+                if index >= len(accepted):
+                    continue
+                keyword = accepted[index]
+            elif keyword not in accepted + [item.arg for item in callee.args.kwonlyargs]:
+                continue
+            if resent(callee, keyword):
+                return True
+        return False
+
+    for function in functions.get(_SEND_HOOK, ()):
+        names = positional(function)
+        if len(names) == 2 and resent(function, names[1]):
+            return True
+    return False
+
+
 def _probed_attributes(nodes):
     """Ids of attribute nodes inside a ``try`` body whose handler names the error of a missing member."""
     found = set()
@@ -386,6 +468,8 @@ def import_inventory(tree, sdk_modules):
                 # other one raises, which blocks unless the plugin absorbs the ImportError.
                 if bundled and (guarded or not shim_lacks(parent, parts[index - 1])):
                     return
+                if guarded and name in ANDROID_ABSENT:
+                    return
                 missing(parent or name, parts[index - 1])
                 return
 
@@ -410,6 +494,8 @@ def import_inventory(tree, sdk_modules):
                     if alias.name != "*" and shim_lacks(node.module, alias.name):
                         missing(node.module, alias.name)
             for alias in node.names:
+                if guarded and node.module + "." + alias.name in ANDROID_ABSENT:
+                    continue
                 symbols.add(alias.name)
                 if alias.name == "*":
                     if owned(node.module) and module_path(node.module) is not None:
@@ -525,8 +611,9 @@ def import_inventory(tree, sdk_modules):
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             defined.add(node.name)
     return {"sdk_references": sorted(references), "method_calls": sorted(called - defined),
-            "send_hook_fields": send_hook_fields(tree),
+            "send_hook_fields": send_hook_fields(tree), "send_hook_resend": send_hook_resend(tree),
             "hook_targets": _ayu_xposed.static_targets(tree), "intent_actions": _ayu_intents.static_actions(tree),
+            "window_services": _window_services(tree),
             "imported_symbols": {module: sorted(symbols) for module, symbols in sorted(imports.items())},
             "unsupported_sdk_symbols": {module: sorted(symbols) for module, symbols in sorted(unsupported.items())},
             "classes": sorted(classes), "dynamic_class_lookup_lines": sorted(dynamic),
@@ -602,6 +689,33 @@ def _probes_member(statement):
         if matches(kind) or isinstance(kind, ast.Tuple) and any(matches(item) for item in kind.elts):
             return not any(isinstance(item, ast.Raise) for part in handler.body for item in ast.walk(part))
     return False
+
+
+def _absorbed_nodes(tree):
+    """The nodes that run inside a ``try`` whose first handler for ``AttributeError`` does not re-raise."""
+    def catches(kind):
+        if kind is None:
+            return True
+        if isinstance(kind, ast.Tuple):
+            return any(catches(item) for item in kind.elts)
+        name = kind.id if isinstance(kind, ast.Name) else kind.attr if (
+            isinstance(kind, ast.Attribute) and isinstance(kind.value, ast.Name) and kind.value.id == "builtins") else None
+        return name in ("AttributeError", "Exception", "BaseException")
+    found = set()
+    for statement in _bounded_nodes(tree):
+        if not isinstance(statement, (ast.Try, getattr(ast, "TryStar", ast.Try))):
+            continue
+        handler = next((item for item in statement.handlers if catches(item.type)), None)
+        if handler is None or any(isinstance(item, ast.Raise) for part in handler.body for item in ast.walk(part)):
+            continue
+        pending = list(statement.body)
+        while pending:
+            node = pending.pop()
+            found.add(id(node))
+            # A function defined here runs later, outside the handler.
+            pending.extend(child for child in ast.iter_child_nodes(node)
+                           if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)))
+    return found
 
 
 def member_inventory(tree, sdk_modules, tables, watch=frozenset()):
@@ -910,6 +1024,7 @@ def member_inventory(tree, sdk_modules, tables, watch=frozenset()):
 
     counts = {"verified": 0, "guarded": 0, "missing_accesses": 0, "unknown": 0, "unknown_java_style": 0}
     missing, unresolved = {}, set()
+    absorbed = _absorbed_nodes(tree)
 
     def unknown(name):
         counts["unknown"] += 1
@@ -936,6 +1051,8 @@ def member_inventory(tree, sdk_modules, tables, watch=frozenset()):
         elif provided:
             counts["verified"] += 1
         elif use != "construct" and (id(node) in guarded_nodes or name in probes.get(id(owners[id(node)]), ())):
+            counts["guarded"] += 1
+        elif use == "read" and id(node) in absorbed and tables.label(base[1]) + "." + name in ANDROID_ABSENT_MEMBERS:
             counts["guarded"] += 1
         else:
             counts["missing_accesses"] += 1

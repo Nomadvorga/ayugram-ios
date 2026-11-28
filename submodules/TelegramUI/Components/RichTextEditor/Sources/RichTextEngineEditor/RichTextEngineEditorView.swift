@@ -24,7 +24,7 @@ extension UIPasteboard: EnginePasteboard {}
 public final class RichTextEngineEditorView: UIView {
     internal let engine: TGIDObservingBlockTextView
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     /// Forward keyboard appearance to the engine, which owns text input and its traits.
     public var composerReturnKeyType: UIReturnKeyType {
         get { self.engine.returnKeyType }

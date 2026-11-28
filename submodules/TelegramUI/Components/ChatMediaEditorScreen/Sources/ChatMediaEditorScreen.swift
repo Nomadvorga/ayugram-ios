@@ -228,7 +228,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
         weak var timerTooltipController: TooltipScreen?
         weak var muteTooltipController: TooltipScreen?
         var muteButton: UIButton?
-        var sgTelescopeButton: UIButton? // MARK: Swiftgram
+        var sgTelescopeButton: UIButton? // MARK: AyuGram
         var coverModel: ChatMediaEditorCoverModel?
         var coverButton: ChatMediaEditorCoverButton?
         var coverEditView: ChatMediaEditorCoverEditView?
@@ -944,7 +944,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
             guard let controller = self.controller, !self.isSending, !controller.isDismissing, !self.isInvalidated else {
                 return
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             let sgCurrentId = self.pageModel.currentItem.uniqueId
             let sgHasTelescope = self.mediaEditor.values.sgSendAsTelescope || (controller.selection?.selectedIds() ?? []).contains { uniqueId in
                 return uniqueId != sgCurrentId && controller.store.entry(for: uniqueId)?.values?.sgSendAsTelescope == true
@@ -1051,7 +1051,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
     let initialTool: ChatMediaEditorInitialTool
     let initialCaption: NSAttributedString
     let recipientName: String?
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let sgCanShowTelescope: Bool
     let sgCanSendTelescope: Bool
     let sgHasPaidMedia: (String) -> Bool
@@ -1090,7 +1090,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
         self.store = ChatMediaEditorItemStore()
         self.initialIndex = 0
         self.isGallery = false
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgCanShowTelescope = false
         self.sgCanSendTelescope = false
         self.sgHasPaidMedia = { _ in false }
@@ -1127,7 +1127,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
         reminder: Bool,
         presentSchedulePicker: @escaping (@escaping (Int32, Bool) -> Void) -> Void,
         gallery: ChatMediaEditorGalleryConfiguration?,
-        // MARK: Swiftgram
+        // MARK: AyuGram
         sgCanShowTelescope: Bool = false,
         sgCanSendTelescope: Bool = false,
         sgHasPaidMedia: @escaping (String) -> Bool = { _ in false },
@@ -1140,7 +1140,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
         self.store = store
         self.initialIndex = max(0, min(itemsSource.count - 1, initialIndex))
         self.isGallery = true
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgCanShowTelescope = sgCanShowTelescope
         self.sgCanSendTelescope = sgCanSendTelescope
         self.sgHasPaidMedia = sgHasPaidMedia

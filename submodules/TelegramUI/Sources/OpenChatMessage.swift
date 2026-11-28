@@ -237,6 +237,10 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
             case let .document(file, immediateShare):
                 params.dismissInput()
                 if !immediateShare, let fileName = file.fileName, ["plugin", "elyx", "eaf"].contains((fileName as NSString).pathExtension.lowercased()) {
+                    guard AyuPluginManagerViewController.isEngineEnabled else {
+                        presentAyuPluginEngineNotice(context: params.context, navigationController: params.navigationController, fileName: fileName)
+                        return true
+                    }
                     let _ = Task { @MainActor in
                         guard var presenter = params.navigationController?.view.window?.rootViewController else { return }
                         var depth = 0

@@ -390,7 +390,7 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
             }
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let needsQuickTranslateButton: Bool
         if viewClassName == ChatMessageBubbleItemNode.self {
             if self.message.attributes.first(where: { $0 is QuickTranslationMessageAttribute }) as? QuickTranslationMessageAttribute != nil {
@@ -405,7 +405,7 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
         
         let configure = {
             let node = (viewClassName as! ChatMessageItemView.Type).init(rotated: self.controllerInteraction.chatIsRotated)
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if let node = node as? ChatMessageBubbleItemNode {
                 node.needsQuickTranslateButton = needsQuickTranslateButton
             }

@@ -83,9 +83,6 @@ SYMBOLS = {
     "base_plugin.MenuItemTypes.DRAWER_MENU": MENU_FULL,
     "base_plugin.MenuItemTypes.MAIN_MENU": MENU_FULL,
     "base_plugin.MenuItemTypes.PROFILE_ACTION_MENU": MENU_FULL,
-    # Progress dialogs: ``ui.present`` has no kind for them, so the builder refuses these styles.
-    "ui.alert.AlertDialogBuilder.ALERT_TYPE_LOADING": UNPROVIDED,
-    "ui.alert.AlertDialogBuilder.ALERT_TYPE_SPINNER": UNPROVIDED,
     # The Pillow subset is a facade over the host image service (``protocol-images.md``).
     "PIL.Image.open": (("image.decode",),),
     "PIL.Image.new": (("image.create",),),
@@ -125,6 +122,8 @@ METHODS = {
     # ``AccountClient`` getters (``get_client().get_file_loader()``), as their ``client_utils`` namesakes.
     "get_connections_manager": CONNECTION,
     "get_send_messages_helper": SEND,
+    "generatePhotoSizes": (("image.decode", "image.resize", "image.encode", "image.transpose", "image.convert",
+                            "image.create", "image.alpha_composite", "telegram.connection"),),
     "get_file_loader": FILES,
     "get_messages_storage": (("telegram.messages",),),
     "get_media_data_controller": (("telegram.stickers",),),
@@ -150,11 +149,11 @@ METHODS = {
 # proof that every other member exists. Remove a name when something implements it.
 UNPROVIDED_MEMBERS = (
     "addDialogToFolder", "readAllDialogs",                                  # MessagesController, MessagesStorage
-    "isSticker", "isDocument", "applyNewText",                              # MessageObject (need its computed type)
-    "prepareSendingPhoto", "prepareSendingDocument", "generatePhotoSizes",  # SendMessagesHelper, ImageLoader
+    "applyNewText",                                                        # MessageObject (needs its text layout)
+    "prepareSendingPhoto", "prepareSendingDocument",                       # SendMessagesHelper
     "findMessageCell", "finishFragment",                                    # ChatActivity, BaseFragment
     "getWindow", "getDecorView",                                            # Activity
-    "smoothScrollBy",  # views
+    "smoothScrollBy",                                                       # views
     "getDeclaredField", "queryFinalized",                                   # reflection, SQLiteDatabase
     "quantize", "getpalette", "putpalette", "getexif", "getmask", "set_variation_by_name",  # Pillow outside the PIL subset
 )
@@ -166,7 +165,8 @@ METHODS.update(dict.fromkeys(UNPROVIDED_MEMBERS, UNPROVIDED))
 METHOD_NAMES = frozenset(METHODS)
 
 
-def requirements(references, method_calls, send_hook_fields=None, hook_targets=None, intent_actions=()):
+def requirements(references, method_calls, send_hook_fields=None, hook_targets=None, intent_actions=(),
+                 window_services=(), send_hook_resend=False):
     """Requirements of what a source references, keyed by the SDK symbol or ``<method>()``.
 
     ``send_hook_fields`` is what ``on_send_message_hook`` touches of its parameters (None when
@@ -193,12 +193,17 @@ def requirements(references, method_calls, send_hook_fields=None, hook_targets=N
         if lost:
             found["on_send_message_hook params." + lost[0]] = UNPROVIDED
     for api, labels in (hook_targets or {}).items():
-        if labels and api + "()" in found:
+        if labels is not None and api + "()" in found:
             import _ayu_xposed
             del found[api + "()"]
             found.update({f"{api}(): {label}": _ayu_xposed.requirement(label) for label in labels})
     # Reserved: an Android-only intent action; no host declares it.
     found.update({"Intent " + action: (("intents.android_only",),) for action in intent_actions})
+    # ``_ayu_javalib.android_view.static_window_services``: the window service is not provided.
+    found.update(dict.fromkeys(window_services, UNPROVIDED))
+    if send_hook_resend:
+        # ``_ayu_inspection.send_hook_resend``: ``SendMessagesHelper.sendMessage`` refuses a delivered object.
+        found["sendMessage(on_send_message_hook params)"] = UNPROVIDED
     return {name: [list(group) for group in groups] for name, groups in sorted(found.items())}
 
 

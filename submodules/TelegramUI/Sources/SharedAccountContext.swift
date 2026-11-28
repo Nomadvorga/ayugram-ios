@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 //
 import Foundation
@@ -315,7 +315,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     private var experimentalUISettingsDisposable: Disposable?
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var immediateSGStatusValue = Atomic<SGStatus>(value: SGStatus.default)
     public var immediateSGStatus: SGStatus {
         return self.immediateSGStatusValue.with { $0 }
@@ -582,7 +582,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 MediaEditorVideoExport.forceLegacyChatWriter = settings.chatLegacyVideoWriter
             }
         })
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let immediateSGStatusValue = self.immediateSGStatusValue
         self.sgStatusDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.sgStatus])
         |> deliverOnMainQueue).start(next: { sharedData in
@@ -1189,10 +1189,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.callPeerDisposable?.dispose()
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     var didPerformSGUISettingsMigration = false
     //
-    // MARK: Swiftgram
+    // MARK: AyuGram
     func sgPrimaryAccountContextForMigration() -> AccountContext? {
         return self.activeAccountsValue?.primary
     }
@@ -1200,7 +1200,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private var didPerformAccountSettingsImport = false
     
     private func performAccountSettingsImportIfNecessary() {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.performSGUISettingsMigrationIfNecessary()
         //
         if self.didPerformAccountSettingsImport {
@@ -5001,7 +5001,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func makeShareScreen(context: AccountContext, params: ShareControllerParams) -> ViewController {
-        if params.immediateExternalShare || SGSimpleSettings.shared.forceSystemSharing { // MARK: Swiftgram
+        if params.immediateExternalShare || SGSimpleSettings.shared.forceSystemSharing { // MARK: AyuGram
             return self.makeShareController(context: context, params: params)
         }
         func mapSubject(_ subject: ShareControllerSubject) -> (ShareScreenSubject, ShareControllerSubject.MediaParameters?) {
@@ -5431,7 +5431,7 @@ private func useFlatModalCallsPresentation(context: AccountContext) -> Bool {
 
 
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension SharedAccountContextImpl {
     public func makeSGUpdateIOSController() -> ViewController {
         let presentationData = self.currentPresentationData.with { $0 }

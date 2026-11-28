@@ -10,12 +10,12 @@ enum AyuBridgeJavaRuntime {
     /// Canvas, ScrollView and widget adapter models remain excluded when the
     /// native-host view registry owns those classes. Paint is a value-only model.
     static var integratedAdapters: [AyuBridgeClassAdapter] {
-        let enabled: Set<String> = ["android.os.Bundle", "android.os.SystemClock", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.Matrix", "android.graphics.Paint", "android.graphics.Paint$Cap", "android.graphics.Paint$Join", "android.graphics.Paint$Style", "android.graphics.Path", "android.graphics.Rect", "android.graphics.RectF", "android.graphics.Typeface", "android.text.TextUtils$TruncateAt", "android.widget.ImageView$ScaleType", "java.util.Locale", "java.nio.ByteBuffer", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.graphics.PorterDuff$Mode", "android.graphics.PorterDuffColorFilter", "android.view.MotionEvent", "android.view.View$MeasureSpec", "android.view.ViewConfiguration", "android.os.Handler", "android.view.animation.LinearInterpolator", "android.view.animation.DecelerateInterpolator", "android.view.animation.OvershootInterpolator", "android.animation.ValueAnimator"]
+        let enabled: Set<String> = ["android.os.Bundle", "android.os.SystemClock", "android.content.Intent", "android.net.Uri", "android.graphics.Color", "android.graphics.Matrix", "android.graphics.Paint", "android.graphics.Paint$Cap", "android.graphics.Paint$Join", "android.graphics.Paint$Style", "android.graphics.Path", "android.graphics.Rect", "android.graphics.RectF", "android.graphics.Typeface", "android.text.TextUtils$TruncateAt", "android.widget.ImageView$ScaleType", "java.util.Locale", "java.nio.ByteBuffer", "android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.graphics.PorterDuff$Mode", "android.graphics.PorterDuffColorFilter", "android.view.MotionEvent", "android.view.View$MeasureSpec", "android.view.ViewConfiguration", "android.os.Handler", "android.view.animation.LinearInterpolator", "android.view.animation.DecelerateInterpolator", "android.view.animation.OvershootInterpolator", "android.view.animation.AccelerateDecelerateInterpolator", "android.view.animation.AccelerateInterpolator", "android.view.animation.AnticipateInterpolator", "android.view.animation.AnticipateOvershootInterpolator", "android.view.animation.BounceInterpolator", "android.animation.ValueAnimator"]
         return self.adapters.filter { enabled.contains($0.name) }
     }
 
     static var adapters: [AyuBridgeClassAdapter] {
-        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, paintCap, paintJoin, paintStyle, path, matrix, canvas, color, rect, rectF, typeface, truncateAt, imageScaleType, locale, byteBuffer, colorDrawable, gradientDrawable, porterDuffMode, porterDuffColorFilter, runnable, handler, measureSpec, viewConfiguration, systemClock, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast, linearInterpolator, decelerateInterpolator, overshootInterpolator, valueAnimator]
+        [bundle, intent, uri, view, layoutConstraints, motionEvent, paint, paintCap, paintJoin, paintStyle, path, matrix, canvas, color, rect, rectF, typeface, truncateAt, imageScaleType, locale, byteBuffer, colorDrawable, gradientDrawable, porterDuffMode, porterDuffColorFilter, runnable, handler, measureSpec, viewConfiguration, systemClock, textView, editText, linearLayout, frameLayout, imageView, scrollView, checkBox, toast, linearInterpolator, decelerateInterpolator, overshootInterpolator, accelerateDecelerateInterpolator, accelerateInterpolator, anticipateInterpolator, anticipateOvershootInterpolator, bounceInterpolator, valueAnimator]
     }
 
     private static let maximumByteBufferBytes = 4096
@@ -620,6 +620,49 @@ enum AyuBridgeJavaRuntime {
         self.interpolatorAdapter("android.view.animation.OvershootInterpolator", defaultParameter: 2) { input, tension in
             let shifted = input - 1
             return shifted * shifted * ((tension + 1) * shifted + tension) + 1
+        }
+    }
+
+    static var accelerateDecelerateInterpolator: AyuBridgeClassAdapter {
+        self.interpolatorAdapter("android.view.animation.AccelerateDecelerateInterpolator", defaultParameter: nil) { input, _ in
+            cos((input + 1) * Double.pi) / 2 + 0.5
+        }
+    }
+
+    static var accelerateInterpolator: AyuBridgeClassAdapter {
+        self.interpolatorAdapter("android.view.animation.AccelerateInterpolator", defaultParameter: 1) { input, factor in
+            factor == 1 ? input * input : pow(input, 2 * factor)
+        }
+    }
+
+    static var anticipateInterpolator: AyuBridgeClassAdapter {
+        self.interpolatorAdapter("android.view.animation.AnticipateInterpolator", defaultParameter: 2) { input, tension in
+            input * input * ((tension + 1) * input - tension)
+        }
+    }
+
+    static var anticipateOvershootInterpolator: AyuBridgeClassAdapter {
+        // Android multiplies the one-argument tension by 1.5; the stored
+        // parameter is the constructor argument, as for the other curves.
+        self.interpolatorAdapter("android.view.animation.AnticipateOvershootInterpolator", defaultParameter: 2) { input, tension in
+            let scaled = tension * 1.5
+            if input < 0.5 {
+                let t = input * 2
+                return 0.5 * (t * t * ((scaled + 1) * t - scaled))
+            }
+            let t = input * 2 - 2
+            return 0.5 * (t * t * ((scaled + 1) * t + scaled) + 2)
+        }
+    }
+
+    static var bounceInterpolator: AyuBridgeClassAdapter {
+        self.interpolatorAdapter("android.view.animation.BounceInterpolator", defaultParameter: nil) { input, _ in
+            let t = input * 1.1226
+            func bounce(_ value: Double) -> Double { value * value * 8 }
+            if t < 0.3535 { return bounce(t) }
+            if t < 0.7408 { return bounce(t - 0.54719) + 0.7 }
+            if t < 0.9644 { return bounce(t - 0.8526) + 0.9 }
+            return bounce(t - 1.0435) + 0.95
         }
     }
 

@@ -285,7 +285,7 @@ class FacadeClassTests(HostCase):
             directory = controller.pluginsDir
             self.assertIs(type(directory), java_io.File)
             self.assertEqual(directory.getAbsolutePath(), file_utils.get_plugins_dir())
-            for name in ("setPluginEnabled", "deletePlugin", "getPluginPath", "getPluginEngine"):
+            for name in ("setPluginEnabled", "deletePlugin", "getPluginEngine"):
                 with self.subTest(name), self.assertRaises(bridge.UnsupportedAPI):
                     getattr(controller, name)
         self.assertNotIn(PLUGINS, javalib.local_class_names(["plugins.list"]))

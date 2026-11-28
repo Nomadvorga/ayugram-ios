@@ -49,6 +49,19 @@ class InstallationWiringTests(unittest.TestCase):
         for forbidden in ("importPlugin(", "service.enable(", "runtime.load(", "UndoOverlayController("):
             self.excludes(route, forbidden)
 
+    def test_chat_attachment_is_not_opened_while_the_engine_is_off(self):
+        route = section(self.chat, 'if !immediateShare, let fileName', '\n                let presentationData =')
+        guard = route.find("guard AyuPluginManagerViewController.isEngineEnabled else {")
+        self.assertGreater(guard, 0, "Missing wiring: the engine guard")
+        self.assertLess(guard, route.find("AyuPluginDetailViewController(fileName: fileName)"))
+        self.contains(section(route, "guard AyuPluginManagerViewController.isEngineEnabled else {", "}"), "presentAyuPluginEngineNotice(")
+        notice = read(ROOT / "submodules/TelegramUI/Sources/AyuPluginEngineNotice.swift")
+        self.contains(notice, 'customUndoText: "Включить"')
+        self.contains(notice, "ayuPluginManagerController(context: context)")
+        for forbidden in ("importPlugin(", ".enable(", "AyuPluginDetailViewController("):
+            self.excludes(notice, forbidden)
+        self.contains(self.manager, "UserDefaults.standard.bool(forKey: Self.engineKey)")
+
     def test_download_waits_for_complete_bytes_and_has_cancellation(self):
         route = section(self.chat, 'if !immediateShare, let fileName', '\n                let presentationData =')
         self.contains(route, "resources.fetch(")
@@ -170,6 +183,25 @@ class InstallationWiringTests(unittest.TestCase):
         self.contains(enable, "self?.service.enable(plugin.id)")
         self.contains(self.detail, "pushViewController(AyuPluginSettingsViewController(")
         self.contains(self.detail, "AyuPluginManagerViewController(service: self.service)")
+
+    def test_list_card_switch_asks_for_consent_and_other_card_actions_never_enable(self):
+        card = section(self.manager, "private func perform(_ action: AyuPluginCell.Action", "private func confirmEnable(")
+        self.contains(card, "guard !self.batchRunning, !self.batchSelecting")
+        self.contains(card, "else if plugin.blockers.isEmpty { self.confirmEnable(plugin) }")
+        self.contains(card, "AyuPluginAlerts.deleteConfirmation(for: plugin)")
+        self.excludes(card, ".enable(")
+        consent = section(self.manager, "private func confirmEnable(", "private func run(")
+        self.contains(consent, "AyuPluginAlerts.enableConsent(for: plugin)")
+        self.contains(consent, "style: .cancel")
+        self.contains(consent, "service.enable(plugin.id)")
+        self.assertEqual(self.manager.count(".enable("), 1, "The list has one enable call, behind the consent alert")
+        share = section(self.service, "public func exportCopy(", "public func settings(")
+        self.contains(share, "try Self.requireRegularFile(stored)")
+        for forbidden in ("runtime.", "self.enable(", "importPlugin("):
+            self.excludes(share, forbidden)
+        cell = read(BRIDGE / "AyuPluginCell.swift")
+        for forbidden in ("AyuPluginService", ".enable(", ".disable(", ".delete("):
+            self.excludes(cell, forbidden)
 
     def test_settings_notifications_are_host_owner_and_generation_scoped(self):
         settings = section(self.manager, "@MainActor final class AyuPluginSettingsViewController:",

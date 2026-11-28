@@ -145,12 +145,12 @@ final class MentionChatInputPanelItemNode: ListViewItemNode, UIGestureRecognizer
         let recognizer = ItemListRevealOptionsGestureRecognizer(target: self, action: #selector(self.revealGesture(_:)))
         self.recognizer = recognizer
         recognizer.allowAnyDirection = false
-        // MARK: Swiftgram
+        // MARK: AyuGram
         recognizer.delegate = self
         //
         self.view.addGestureRecognizer(recognizer)
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
         longPressRecognizer.minimumPressDuration = 0.3
         longPressRecognizer.delegate = self
@@ -483,7 +483,7 @@ final class MentionChatInputPanelItemNode: ListViewItemNode, UIGestureRecognizer
 
 
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension MentionChatInputPanelItemNode {
     @objc private func longPressed(_ gestureRecognizer: UILongPressGestureRecognizer) {
         switch gestureRecognizer.state {

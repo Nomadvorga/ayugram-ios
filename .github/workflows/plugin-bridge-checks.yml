@@ -7,7 +7,7 @@ on:
       - 'submodules/AyuPluginBridge/**'
       - 'tools/plugin_inspector/**'
       - 'third-party/ayu-python/**'
-      - 'Swiftgram/SGSettingsUI/Sources/AyuPluginManagerController.swift'
+      - 'AyuGram/SGSettingsUI/Sources/AyuPluginManagerController.swift'
       - 'submodules/TelegramUI/Sources/OpenChatMessage.swift'
       - '.github/workflows/plugin-bridge-checks.yml'
   workflow_dispatch:

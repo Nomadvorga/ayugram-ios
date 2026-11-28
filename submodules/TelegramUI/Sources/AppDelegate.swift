@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import StoreKit
 
 import SGActionRequestHandlerSanitizer
@@ -357,7 +357,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         precondition(!testIsLaunched)
         testIsLaunched = true
-        NSLog("[SG.Launch] didFinishLaunching") // MARK: Swiftgram
+        NSLog("[SG.Launch] didFinishLaunching") // MARK: AyuGram
         
         let _ = voipTokenPromise.get().start(next: { token in
             self.voipDeviceToken.set(.single(token))
@@ -454,7 +454,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         self.window = window
         self.nativeWindow = window
-        // MARK: Swiftgram
+        // MARK: AyuGram
         NSLog("[SG.Launch] Window created; checking recovery settings")
         let sgPresentRecovery: SGResetPresenter = { [weak window] controller, completion in
             window?.rootViewController?.present(controller, animated: false, completion: completion)
@@ -589,13 +589,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let baseAppBundleId = Bundle.main.bundleIdentifier!
         let appGroupName = "group.\(baseAppBundleId)"
-        NSLog("[SG.Launch] Configuring passcode environment") // MARK: Swiftgram
+        NSLog("[SG.Launch] Configuring passcode environment") // MARK: AyuGram
         try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .mainApp, biometricKeychainService: walletBiometricKeychainService), privateAccessGroup: {
             BuildConfig.keychainAccessGroup(baseAppBundleId: baseAppBundleId)
         })
-        NSLog("[SG.Launch] Resolving app-group container") // MARK: Swiftgram
+        NSLog("[SG.Launch] Resolving app-group container") // MARK: AyuGram
         let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
-        NSLog("[SG.Launch] App-group container resolved: \(maybeAppGroupUrl != nil)") // MARK: Swiftgram
+        NSLog("[SG.Launch] App-group container resolved: \(maybeAppGroupUrl != nil)") // MARK: AyuGram
         
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
         self.buildConfig = buildConfig
@@ -748,11 +748,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         } else {
             rootPath = rootPathForBasePath(appGroupUrl.path)
         }
-        NSLog("[SG.Launch] Data root resolved; starting app-group upgrades") // MARK: Swiftgram
+        NSLog("[SG.Launch] Data root resolved; starting app-group upgrades") // MARK: AyuGram
         if !isUITest {
             performAppGroupUpgrades(appGroupPath: appGroupUrl.path, rootPath: rootPath)
         }
-        NSLog("[SG.Launch] App-group upgrades complete; initializing encryption and temporary storage") // MARK: Swiftgram
+        NSLog("[SG.Launch] App-group upgrades complete; initializing encryption and temporary storage") // MARK: AyuGram
         
         let deviceSpecificEncryptionParameters = BuildConfig.deviceSpecificEncryptionParameters(rootPath, baseAppBundleId: baseAppBundleId)
         let encryptionParameters = ValueBoxEncryptionParameters(forceEncryptionIfNoSet: false, key: ValueBoxEncryptionParameters.Key(data: deviceSpecificEncryptionParameters.key)!, salt: ValueBoxEncryptionParameters.Salt(data: deviceSpecificEncryptionParameters.salt)!)
@@ -783,7 +783,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             writeAbilityTestSuccess = false
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgFreeBytes = (try? FileManager.default.attributesOfFileSystem(forPath: appGroupUrl.path)[.systemFreeSize]) as? NSNumber
         NSLog("[SG.Launch] Storage write test: \(writeAbilityTestSuccess); free bytes: \(sgFreeBytes?.int64Value ?? -1)")
         //
@@ -792,7 +792,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
                 preconditionFailure()
             }))
-            self.window?.makeKeyAndVisible() // MARK: Swiftgram
+            self.window?.makeKeyAndVisible() // MARK: AyuGram
             self.mainWindow?.presentNative(alertController)
             
             return true
@@ -1049,7 +1049,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 icons.append(PresentationAppIcon(name: "PremiumBlack", imageName: "PremiumBlack", isPremium: true))
                 
                 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 // MARK: AyuGram
                 icons = [
                     PresentationAppIcon(name: "SGDefault", imageName: "SGDefault", isDefault: true),
@@ -1099,7 +1099,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         })
         
-        NSLog("[SG.Launch] Scheduling account-manager initialization") // MARK: Swiftgram
+        NSLog("[SG.Launch] Scheduling account-manager initialization") // MARK: AyuGram
         let accountManager: AccountManager<TelegramAccountManagerTypes> = setupAccountManager(basePath: rootPath + "/accounts-metadata", isTemporary: false, isReadOnly: false, useCaches: true, removeDatabaseOnError: true, resetLocalSecrets: {
             try resetWalletLocalSecrets()
         })
@@ -1150,9 +1150,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.pushRegistry = pushRegistry
         pushRegistry.delegate = self
 
-        NSLog("[SG.Launch] Waiting for initial account records (synchronous)") // MARK: Swiftgram
+        NSLog("[SG.Launch] Waiting for initial account records (synchronous)") // MARK: AyuGram
         self.accountManagerState = extractAccountManagerState(records: accountManager._internalAccountRecordsSync())
-        NSLog("[SG.Launch] Initial account records loaded") // MARK: Swiftgram
+        NSLog("[SG.Launch] Initial account records loaded") // MARK: AyuGram
         let _ = (accountManager.accountRecords()
         |> deliverOnMainQueue).start(next: { view in
             self.accountManagerState = extractAccountManagerState(records: view)
@@ -1176,7 +1176,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         |> deliverOnMainQueue
         |> mapToSignal { [self] accountManager, initialPresentationDataAndSettings -> Signal<(SharedApplicationContext, LoggingSettings), NoError> in
-            NSLog("[SG.Launch] Initial presentation settings loaded") // MARK: Swiftgram
+            NSLog("[SG.Launch] Initial presentation settings loaded") // MARK: AyuGram
             self.mainWindow?.hostView.containerView.backgroundColor =  initialPresentationDataAndSettings.presentationData.theme.chatList.backgroundColor
             
             let legacyBasePath = appGroupUrl.path
@@ -1372,7 +1372,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             |> deliverOnMainQueue
             |> map { accountAndSettings -> AuthorizedApplicationContext? in
                 return accountAndSettings.flatMap { context, callListSettings in
-                    return AuthorizedApplicationContext(sharedApplicationContext: sharedApplicationContext, mainWindow: self.mainWindow, context: context as! AccountContextImpl, accountManager: sharedApplicationContext.sharedContext.accountManager, showContactsTab: callListSettings.showContactsTab, /* MARK: Swiftgram */ showCallsTab: callListSettings.showTab, reinitializedNotificationSettings: {
+                    return AuthorizedApplicationContext(sharedApplicationContext: sharedApplicationContext, mainWindow: self.mainWindow, context: context as! AccountContextImpl, accountManager: sharedApplicationContext.sharedContext.accountManager, showContactsTab: callListSettings.showContactsTab, /* MARK: AyuGram */ showCallsTab: callListSettings.showTab, reinitializedNotificationSettings: {
                         let _ = (self.context.get()
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { context in
@@ -1473,7 +1473,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         print("Application: context took \(readyTime) to become ready")
                     }
                     print("Launch to ready took \((CFAbsoluteTimeGetCurrent() - launchStartTime) * 1000.0) ms")
-                    NSLog("[SG.Launch] Authorized context ready after \(CFAbsoluteTimeGetCurrent() - launchStartTime) seconds") // MARK: Swiftgram
+                    NSLog("[SG.Launch] Authorized context ready after \(CFAbsoluteTimeGetCurrent() - launchStartTime) seconds") // MARK: AyuGram
 
                     self.mainWindow.debugAction = nil
                     self.mainWindow.viewController = context.rootController
@@ -1502,7 +1502,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     self.registerForNotifications(context: context.context, authorize: authorizeNotifications)
                     
                     self.resetIntentsIfNeeded(context: context.context)
-                    // MARK: Swiftgram - Disable automatic prompts to send crash logs to the upstream bot.
+                    // MARK: AyuGram - Disable automatic prompts to send crash logs to the upstream bot.
                     #if false
                     self.crashReportPromptDisposable.set(setupCrashReportPrompt(context: context.context, isInternalBuild: buildConfig.isInternalBuild, navigationController: context.rootController, present: { [weak appDelegate = self, weak applicationContext = context] controller in
                         guard let appDelegate, let applicationContext, appDelegate.contextValue === applicationContext else { return }
@@ -1671,7 +1671,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         if let url = launchOptions?[.url] {
             if let url = url as? URL, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme || WalletContext.isTonConnectUrl(url.absoluteString) {
-                self.openUrlWhenReady(url: sgActionRequestHandlerSanitizer(url), external: true) // MARK: Swiftgram
+                self.openUrlWhenReady(url: sgActionRequestHandlerSanitizer(url), external: true) // MARK: AyuGram
             } else if let urlString = url as? String, urlString.lowercased().hasPrefix("tg:") || urlString.lowercased().hasPrefix("ton:") || urlString.lowercased().hasPrefix("\(buildConfig.appSpecificUrlScheme):") || WalletContext.isTonConnectUrl(urlString), let url = URL(string: urlString) {
                 self.openUrlWhenReady(url: url, external: true)
             }
@@ -2754,7 +2754,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         }
         |> deliverOnMainQueue).start(next: { sharedContext, context, authContext in
-            let url = sgActionRequestHandlerSanitizer(url) // MARK: Swiftgram
+            let url = sgActionRequestHandlerSanitizer(url) // MARK: AyuGram
             if let authContext = authContext, let confirmationCode = parseConfirmationCodeUrl(sharedContext: sharedContext, url: url) {
                 authContext.rootController.applyConfirmationCode(confirmationCode)
             } else if let context = context {

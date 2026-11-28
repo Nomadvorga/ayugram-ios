@@ -1,6 +1,6 @@
 import class SwiftUI.UIHostingController
 import SGSimpleSettings
-import SGInputToolbar // MARK: Swiftgram
+import SGInputToolbar // MARK: AyuGram
 
 import Foundation
 import UIKit
@@ -631,7 +631,7 @@ public final class MessageInputPanelComponent: Component {
         private let counter = ComponentView<Empty>()
         private var header: ComponentView<Empty>?
         
-        private var toolbarView: UIView? // MARK: Swiftgram
+        private var toolbarView: UIView? // MARK: AyuGram
         
         private var disabledPlaceholder: ComponentView<Empty>?
         private var textClippingView = UIView()
@@ -742,7 +742,7 @@ public final class MessageInputPanelComponent: Component {
                 }
             )
             
-            self.initToolbarIfNeeded(context: context) // MARK: Swiftgram
+            self.initToolbarIfNeeded(context: context) // MARK: AyuGram
         }
         
         required init?(coder: NSCoder) {
@@ -952,7 +952,7 @@ public final class MessageInputPanelComponent: Component {
                 return panelResult
             }
             
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if result == nil, let toolbarView = self.toolbarView, let toolbarResult = toolbarView.hitTest(self.convert(point, to: toolbarView), with: event) {
                 return toolbarResult
             }
@@ -2831,7 +2831,7 @@ public final class MessageInputPanelComponent: Component {
                                     if let range = mentionQueryRange {
                                         let inputText = NSMutableAttributedString(attributedString: inputState.inputText)
                                         if let addressName = peer.addressName, !addressName.isEmpty {
-                                            let replacementText = addressName + " "
+                                            let replacementText = addressName + chatTextInputMentionSuffix(peer: peer) // MARK: AyuGram
                                             inputText.replaceCharacters(in: range, with: replacementText)
                                             
                                             let selectionPosition = range.lowerBound + (replacementText as NSString).length
@@ -2839,7 +2839,7 @@ public final class MessageInputPanelComponent: Component {
                                         } else if !peer.compactDisplayTitle.isEmpty {
                                             let replacementText = NSMutableAttributedString()
                                             replacementText.append(NSAttributedString(string: peer.compactDisplayTitle, attributes: [ChatTextInputAttributes.textMention: ChatTextInputTextMentionAttribute(peerId: peer.id)]))
-                                            replacementText.append(NSAttributedString(string: " "))
+                                            replacementText.append(NSAttributedString(string: chatTextInputMentionSuffix(peer: peer))) // MARK: AyuGram
                                             
                                             let updatedRange = NSRange(location: range.location - 1, length: range.length + 1)
                                             inputText.replaceCharacters(in: updatedRange, with: replacementText)
@@ -3165,7 +3165,7 @@ public final class MessageInputPanelComponent: Component {
                 }
             }
             
-            size = self.layoutToolbar(transition: transition, layoutFromTop: layoutFromTop, size: size, availableSize: availableSize, defaultInsets: defaultInsets, textFieldSize: textFieldSize, previousComponent: previousComponent) // MARK: Swiftgram
+            size = self.layoutToolbar(transition: transition, layoutFromTop: layoutFromTop, size: size, availableSize: availableSize, defaultInsets: defaultInsets, textFieldSize: textFieldSize, previousComponent: previousComponent) // MARK: AyuGram
             
             return size
         }
@@ -3221,7 +3221,7 @@ final class ViewForOverlayContent: UIView {
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension MessageInputPanelComponent.View {
     func initToolbarIfNeeded(context: AccountContext) {
         guard #available(iOS 13.0, *) else { return }

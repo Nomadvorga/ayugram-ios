@@ -6,6 +6,8 @@ plugin list and asks the host to reload or open a plugin's settings; managing ot
 """
 from __future__ import annotations
 
+import os
+
 from . import telegram_messenger as messenger
 from . import telegram_tl as tl
 
@@ -13,6 +15,9 @@ PACKAGE = "com.exteragram.messenger.plugins."
 _unsupported = tl._unsupported
 _Java = messenger._Java
 MAX_PLUGINS = 1024
+# AyuPluginService.root and AyuPluginService.packageExtensions (Integration/AyuPluginService.swift).
+_SERVICE_STORAGE = "AyuPlugins"
+_PACKAGE_EXTENSIONS = (".elyx", ".eaf")
 
 
 def _runtime():
@@ -169,6 +174,23 @@ class PluginsController(_Java):
         """The directory plugin files have on Android: ``plugins`` below ``ApplicationLoader.getFilesDirFixed()``."""
         import file_utils
         return messenger.File(file_utils.get_plugins_dir())
+
+    def getPluginPath(self, id=None):
+        """The source file of an installed plugin, or ``None`` for an empty or unknown id.
+
+        Android answers ``pluginsDir/<id>.py``; the iOS service keeps the file it installed as
+        ``Application Support/AyuPlugins/<id>.plugin`` (a package keeps its archive extension).
+        """
+        if id is None or id == "":
+            return None
+        if not isinstance(id, str):
+            raise TypeError("getPluginPath(String)")
+        if self.plugins.get(id) is None:
+            return None
+        import file_utils
+        root = file_utils._location("Library", "Application Support", _SERVICE_STORAGE)
+        paths = [os.path.join(root, id + extension) for extension in (".plugin",) + _PACKAGE_EXTENSIONS]
+        return next((path for path in paths if os.path.isfile(path)), paths[0])
 
     @staticmethod
     def _id(value):

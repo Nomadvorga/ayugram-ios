@@ -21,6 +21,7 @@ enum AyuBridgeViewMembers {
         "setMinHeight": [textView, editText], "setMinWidth": [textView, editText],
         "getMinHeight": [textView, editText], "getMinWidth": [textView, editText],
         "setTextIsSelectable": [textView], "isTextSelectable": [textView],
+        "setShadowLayer": [textView], "getShadowRadius": [textView], "getShadowDx": [textView], "getShadowDy": [textView], "getShadowColor": [textView],
         "setSelectAllOnFocus": [editText], "setCursorVisible": [editText], "isCursorVisible": [editText],
         "setOnFocusChangeListener": [editText],
         "setWeightSum": [linearLayout], "getWeightSum": [linearLayout],
@@ -86,6 +87,14 @@ enum AyuBridgeViewMembers {
         case "setTextIsSelectable":
             let selectable = try self.flag(args, method)
             return Prepared(method: method, arguments: [.bool(selectable)], fields: ["m_selectable": .bool(selectable)])
+        case "setShadowLayer":
+            guard let radius = args[0].number, let dx = args[1].number, let dy = args[2].number, let color = args[3].integer,
+                  [radius, dx, dy].allSatisfy({ $0.isFinite && abs($0) <= 100_000 }), Int32(exactly: color) != nil || UInt32(exactly: color) != nil else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid shadow layer")
+            }
+            return Prepared(method: method, arguments: [.number(radius), .number(dx), .number(dy), .integer(color)],
+                            fields: ["m_shadow_radius": .number(radius), "m_shadow_dx": .number(dx), "m_shadow_dy": .number(dy),
+                                     "m_shadow_color": .integer(Int64(Int32(truncatingIfNeeded: color)))])
         case "setSelectAllOnFocus":
             return Prepared(method: method, arguments: [.bool(try self.flag(args, method))])
         case "setCursorVisible":
@@ -129,6 +138,10 @@ enum AyuBridgeViewMembers {
         case "getMinHeight": value = fields["m_min_height"] ?? .integer(-1)
         case "getMinWidth": value = fields["m_min_width"] ?? .integer(-1)
         case "isTextSelectable": value = fields["m_selectable"] ?? .bool(false)
+        case "getShadowRadius": value = fields["m_shadow_radius"] ?? .number(0)
+        case "getShadowDx": value = fields["m_shadow_dx"] ?? .number(0)
+        case "getShadowDy": value = fields["m_shadow_dy"] ?? .number(0)
+        case "getShadowColor": value = fields["m_shadow_color"] ?? .integer(0)
         case "isCursorVisible": value = fields["m_cursor_visible"] ?? .bool(true)
         case "isLongClickable": value = fields["m_long_clickable"] ?? .bool(false)
         case "getWeightSum": value = fields["m_weight_sum"] ?? .number(0)
@@ -173,6 +186,16 @@ enum AyuBridgeViewMembers {
             return false
         case "setTextIsSelectable":
             members.setTextSelectable(args[0].bool ?? false, view: view)
+        case "setShadowLayer":
+            guard let layer = view.label?.layer else { break }
+            let radius = args[0].number ?? 0
+            // Android draws no shadow for a zero radius. Its blur sigma is `0.57735 * radius + 0.5`
+            // (Skia), and a layer's `shadowRadius` is a sigma.
+            layer.shadowOpacity = radius > 0 ? 1 : 0
+            layer.shadowRadius = radius > 0 ? CGFloat(0.57735 * radius + 0.5) : 0
+            layer.shadowOffset = CGSize(width: args[1].number ?? 0, height: args[2].number ?? 0)
+            layer.shadowColor = self.color(args[3].integer ?? 0).cgColor
+            members.layoutSelectableText(view)
         case "setSelectAllOnFocus":
             members.selectAllOnFocus = args[0].bool ?? false; members.observeEditing(view)
         case "setCursorVisible":
@@ -344,6 +367,10 @@ enum AyuBridgeViewMembers {
         text.textAlignment = label.textAlignment
         text.textContainer.maximumNumberOfLines = label.numberOfLines
         text.textContainer.lineBreakMode = label.lineBreakMode
+        text.layer.shadowOpacity = label.layer.shadowOpacity
+        text.layer.shadowRadius = label.layer.shadowRadius
+        text.layer.shadowOffset = label.layer.shadowOffset
+        text.layer.shadowColor = label.layer.shadowColor
         // The label places its text by gravity; the copy starts where the label would draw.
         let drawn = label.textRect(forBounds: label.bounds, limitedToNumberOfLines: label.numberOfLines)
         text.textContainerInset = UIEdgeInsets(top: max(0, drawn.minY - label.bounds.minY), left: 0, bottom: 0, right: 0)

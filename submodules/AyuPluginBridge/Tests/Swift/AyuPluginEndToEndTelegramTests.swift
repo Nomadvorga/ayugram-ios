@@ -722,4 +722,184 @@ final class AyuPluginEndToEndTelegramTests: XCTestCase {
         XCTAssertTrue(backend.state.value.messageReads.contains([77, 12]))
         await stack.remove(id)
     }
+
+    /// The run-time path of an outgoing-text filter of the corpus shape: settings rows, the send
+    /// hook that rewrites or holds a message, a confirmation built from HTML, and a chat menu row
+    /// that opens the plugin's own settings.
+    func testAnOutgoingTextFilterRewritesHoldsAndConfirmsLikeOnAndroid() async throws {
+        let stack = try AyuEndToEnd.shared()
+        let (backend, screen) = self.bind(stack)
+        let menus = AyuPluginMenuBridge.shared
+        let account = try XCTUnwrap(AyuPluginTelegramBridge.shared.currentEnvironment()?.account(0)).identity
+        menus.bindLocations(resolve: { request in
+            AyuPluginMenuLocation(kind: request.kind, screen: screen, accountIdentity: account,
+                                  dialogID: request.kind.needsDialog ? 77 : nil, messageID: request.messageID)
+        }, isCurrent: { location, _ in location.isCurrent(screen: screen, accountIdentity: account) })
+        defer {
+            menus.unbindLocations()
+            self.unbind(stack)
+        }
+        backend.state.update { $0.peers = ["user:77": tlBytes([0xd3bc_4b7a, 77, 0])] }
+        let source = AyuEndToEnd.source(id: "e2e_tg_filter", metadata: "__min_version__ = \"11.12.0\"", """
+        import re
+        import string
+        from typing import Any
+        from base_plugin import BasePlugin, HookResult, HookStrategy, MenuItemData, MenuItemType
+        from ui.settings import Switch, Header, Divider, Input
+        from android_utils import run_on_ui_thread
+        from client_utils import send_message, get_last_fragment
+        from ui.alert import AlertDialogBuilder
+        from ui.bulletin import BulletinHelper
+        from hook_utils import find_class
+        from com.exteragram.messenger.plugins import PluginsController
+        from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
+        \(AyuEndToEnd.recorder)
+
+
+        class FilterPlugin(Recorder, BasePlugin):
+            def open_settings(self, context: dict):
+                @run_on_ui_thread
+                def action():
+                    def step():
+                        plugin = PluginsController.getInstance().plugins.get(self.id)
+                        fragment = context.get("fragment")
+                        self.set_setting("menu", [plugin is not None, fragment is not None])
+                        if plugin and fragment:
+                            fragment.presentFragment(PluginSettingsActivity(plugin))
+                        return "presented"
+                    self.record("menu_result", step)
+
+            def on_plugin_load(self):
+                self.add_on_send_message_hook()
+                self.record("row", lambda: self.add_menu_item(MenuItemData(menu_type=MenuItemType.CHAT_ACTION_MENU, text="Filter settings",
+                                                                           icon="msg_settings_solar", on_click=self.open_settings)))
+
+            def create_settings(self):
+                return [
+                    Header(text="Filter"),
+                    Switch(key="master_enabled", text="Enabled", subtext="Main switch", default=True, icon="msg_power"),
+                    Switch(key="show_warning", text="Warn", subtext="Ask before sending", default=False, icon="msg_warning"),
+                    Divider(),
+                    Input(key="words_to_filter", text="Words", subtext="Comma separated", default="", icon="input_bot1_remix"),
+                    Divider(),
+                ]
+
+            def confirm(self, params: Any, original: str, final: str):
+                @run_on_ui_thread
+                def action():
+                    def step():
+                        fragment = get_last_fragment()
+                        self.set_setting("fragment", [fragment is not None, bool(fragment and fragment.getParentActivity())])
+                        if not fragment or not fragment.getParentActivity():
+                            send_message({"peer": params.peer, "message": final, "replyToMsg": getattr(params, "replyToMsg", None)})
+                            return "sent without asking"
+                        activity = fragment.getParentActivity()
+                        TextUtils = find_class("android.text.TextUtils")
+                        Html = find_class("android.text.Html")
+                        Build = find_class("android.os.Build")
+                        AndroidUtilities = find_class("org.telegram.messenger.AndroidUtilities")
+                        html = ("Changed:<br><br><b>Was:</b><br><code>" + TextUtils.htmlEncode(original) + "</code><br><br>"
+                                "<b>Now:</b><br><code>" + TextUtils.htmlEncode(final) + "</code><br><br>Send?")
+                        if Build.VERSION.SDK_INT >= 24:
+                            formatted = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
+                        else:
+                            formatted = Html.fromHtml(html)
+                        self.set_setting("formatted", [type(formatted).__name__, str(formatted)])
+                        builder = AlertDialogBuilder(activity)
+                        builder.set_title("Warning")
+                        builder.set_message(formatted)
+
+                        def send_action(dialog, which):
+                            send_message({"peer": params.peer, "message": final, "replyToMsg": getattr(params, "replyToMsg", None)})
+                            dialog.dismiss()
+
+                        def cancel_action(dialog, which):
+                            AndroidUtilities.addToClipboard(original)
+                            BulletinHelper.show_info("Copied", fragment)
+                            dialog.dismiss()
+
+                        builder.set_positive_button("Send", send_action)
+                        builder.set_negative_button("Cancel", cancel_action)
+                        builder.show()
+                        return "asked"
+                    self.record("confirm", step)
+
+            def filter_words(self, text: str) -> str:
+                words = [word.strip().strip(string.punctuation) for word in self.get_setting("words_to_filter", "").split(",") if word.strip()]
+                if not words:
+                    return text
+                pattern = r"\\b(" + "|".join(re.escape(word) for word in words) + r")\\b"
+                return re.sub(r"\\s{2,}", " ", re.sub(pattern, "", text, flags=re.IGNORECASE)).strip()
+
+            def on_send_message_hook(self, account: int, params: Any) -> HookResult:
+                if not self.get_setting("master_enabled", True):
+                    return HookResult()
+                if not hasattr(params, "message") or not isinstance(params.message, str):
+                    return HookResult()
+                original = params.message
+                final = self.filter_words(original)
+                if original != final:
+                    if self.get_setting("show_warning", False):
+                        self.confirm(params, original, final)
+                        return HookResult(strategy=HookStrategy.CANCEL)
+                    params.message = final
+                    return HookResult(strategy=HookStrategy.MODIFY, params=params)
+                return HookResult()
+        """)
+        let preview = try await stack.preview(source)
+        XCTAssertEqual(preview.plugin.blockers, [], "the path has no static blocker")
+        let id = try await stack.start(source)
+        XCTAssertNotNil(stack.stored(id, "row").string, "\(stack.stored(id, "row"))")
+        let rows = try await stack.service.settings(id)
+        XCTAssertEqual(rows.map { ($0.descriptor.object?["type"]?.string ?? "?") + ":" + ($0.descriptor.object?["key"]?.string ?? "") + "=" + "\($0.value)" },
+                       ["Header:=null", "Switch:master_enabled=bool(true)", "Switch:show_warning=bool(false)", "Divider:=null", "Input:words_to_filter=string(\"\")", "Divider:=null"])
+        let bridge = AyuPluginTelegramBridge.shared
+        func send(_ text: String) async -> String {
+            var message = AyuPluginTelegramHookedMessage(peer: 77)
+            message.message = text
+            let decision = await withCheckedContinuation { continuation in bridge.interceptSendMessage(account: 0, message: message) { continuation.resume(returning: $0) } }
+            guard case let .send(sent, _) = decision else { return "<held>" }
+            return sent.message ?? "<nil>"
+        }
+        let unfiltered = await send("hello bad world")
+        XCTAssertEqual(unfiltered, "hello bad world", "nothing to remove yet")
+        try stack.store(id, "words_to_filter", .string("bad, Ugly!"))
+        let rewritten = await send("hello BAD  ugly world")
+        XCTAssertEqual(rewritten, "hello world")
+        try stack.store(id, "master_enabled", .bool(false))
+        let off = await send("hello bad world")
+        XCTAssertEqual(off, "hello bad world")
+        try stack.store(id, "master_enabled", .bool(true))
+        try stack.store(id, "show_warning", .bool(true))
+
+        // With a chat screen the message is held and the plugin asks. The question itself needs a
+        // window, which this runner does not have: the path is checked up to the presentation.
+        let held = await send("a <bad> & 'b'")
+        XCTAssertEqual(held, "<held>")
+        let asked = await stack.waitForStored(id, "confirm")
+        XCTAssertEqual(asked, .string("!BridgeError: SCREEN_UNAVAILABLE: Presentation root is not visible"))
+        XCTAssertEqual(stack.stored(id, "fragment"), .array([.bool(true), .bool(true)]))
+        // `Html.fromHtml` of the escaped text: line breaks for <br>, the entities read back.
+        XCTAssertEqual(stack.stored(id, "formatted"), .array([.string("SpannableStringBuilder"), .string("Changed:\n\nWas:\na <bad> & 'b'\n\nNow:\na <> & 'b'\n\nSend?")]))
+        XCTAssertEqual(backend.state.value.outgoing.count, 0, "a held message is not sent")
+
+        let chat = await menus.open(AyuPluginMenuRequest(kind: .chatActionMenu, accountKey: nil), isPresented: { true })
+        XCTAssertEqual(chat.entries.map(\.text), ["Filter settings"])
+        XCTAssertEqual(chat.entries.map { $0.icon != nil }, [true], "msg_settings_solar has an iOS icon")
+        if let row = chat.entries.first { chat.activate(row) }
+        let opened = await stack.waitForStored(id, "menu_result")
+        XCTAssertEqual(stack.stored(id, "menu"), .array([.bool(true), .bool(true)]), "the plugin finds itself and the chat screen")
+        XCTAssertEqual(opened, .string("!BridgeError: SCREEN_UNAVAILABLE: No visible screen can show plugin settings"))
+
+        // Without a screen there is nobody to ask: the plugin sends the filtered text itself.
+        try stack.store(id, "confirm", .null)
+        stack.application.bindScreen(screen: { nil }, presenter: { nil })
+        let direct = await send("x bad y")
+        XCTAssertEqual(direct, "<held>")
+        let sent = await stack.waitForStored(id, "confirm")
+        XCTAssertEqual(sent, .string("sent without asking"))
+        XCTAssertEqual(stack.stored(id, "fragment"), .array([.bool(false), .bool(false)]))
+        XCTAssertEqual(backend.state.value.outgoing.map { "\($0.peer):\($0.message ?? "<nil>")" }, ["77:x y"])
+        await stack.remove(id)
+    }
 }

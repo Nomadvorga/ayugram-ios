@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 
 import Foundation

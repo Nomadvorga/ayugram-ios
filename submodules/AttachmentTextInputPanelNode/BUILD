@@ -1,8 +1,8 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 sgDeps = [
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
-    "//Swiftgram/SGInputToolbar:SGInputToolbar"
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGInputToolbar:SGInputToolbar"
 ]
 
 swift_library(

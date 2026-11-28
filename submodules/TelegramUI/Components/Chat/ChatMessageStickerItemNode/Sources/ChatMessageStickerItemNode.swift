@@ -29,6 +29,7 @@ import ChatMessageReactionsFooterContentNode
 import ChatSwipeToReplyRecognizer
 import ChatMessageSuggestedPostInfoNode
 import StaticGlassBackground
+import SGSimpleSettings // MARK: AyuGram
 
 private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
@@ -90,10 +91,37 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     private var bubblelessHeaderNode: ChatMessageBubblelessHeaderNode?
     /// Whether the time is hidden because the sticker has no bubble, so that it comes back with bubbles.
     private var hidesStatusWithoutBubbles = false
-    public var sizeCoefficient: Float = 1.0 // MARK: Swiftgram
+    public var sizeCoefficient: Float = 1.0 // MARK: AyuGram
+    
+    // MARK: AyuGram
+    // Sticker Shape: rounds the sticker itself (the image node is larger than the sticker by its insets).
+    private var stickerShapeMaskLayer: CALayer?
+    private func updateStickerShape(radius: CGFloat, contentRect: CGRect) {
+        let radius = min(radius, min(contentRect.width, contentRect.height) / 2.0)
+        if radius > 0.0 {
+            let maskLayer: CALayer
+            if let current = self.stickerShapeMaskLayer {
+                maskLayer = current
+            } else {
+                maskLayer = CALayer()
+                maskLayer.backgroundColor = UIColor.black.cgColor
+                maskLayer.cornerCurve = .continuous
+                self.stickerShapeMaskLayer = maskLayer
+                self.imageNode.layer.mask = maskLayer
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            maskLayer.frame = contentRect
+            maskLayer.cornerRadius = radius
+            CATransaction.commit()
+        } else if self.stickerShapeMaskLayer != nil {
+            self.stickerShapeMaskLayer = nil
+            self.imageNode.layer.mask = nil
+        }
+    }
     
     private var viaBotNode: TextNode?
-    public let dateAndStatusNode: ChatMessageDateAndStatusNode // MARK: Swiftgram
+    public let dateAndStatusNode: ChatMessageDateAndStatusNode // MARK: AyuGram
     private var threadInfoNode: ChatMessageThreadInfoNode?
     private var replyInfoNode: ChatMessageReplyInfoNode?
     private var replyBackgroundContent: WallpaperBubbleBackgroundNode?
@@ -441,7 +469,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     }
     
     override public func asyncLayout() -> (_ item: ChatMessageItem, _ params: ListViewItemLayoutParams, _ mergedTop: ChatMessageMerge, _ mergedBottom: ChatMessageMerge, _ dateHeaderAtBottom: ChatMessageHeaderSpec) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation, ListViewItemApply, Bool) -> Void) {
-        let displaySize = CGSize(width: 184.0 * CGFloat(self.sizeCoefficient), height: 184.0 * CGFloat(self.sizeCoefficient)) // MARK: Swiftgram
+        let displaySize = CGSize(width: 184.0 * CGFloat(self.sizeCoefficient), height: 184.0 * CGFloat(self.sizeCoefficient)) // MARK: AyuGram
         let telegramFile = self.telegramFile
         let layoutConstants = self.layoutConstants
         let imageLayout = self.imageNode.asyncLayout()
@@ -1111,6 +1139,20 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     strongSelf.updateAttachedDateHeader(hasDate: dateHeaderAtBottom.hasDate, hasPeer: dateHeaderAtBottom.hasTopic)
                     
                     transition.updateFrame(node: strongSelf.imageNode, frame: updatedImageFrame)
+                    
+                    // MARK: AyuGram
+                    var stickerShapeRadius: CGFloat = 0.0
+                    if telegramFile != nil && !isEmoji {
+                        switch ExteraSettings.shared.stickerShape {
+                        case .default:
+                            break
+                        case .rounded:
+                            stickerShapeRadius = 6.0
+                        case .roundedAsMessage:
+                            stickerShapeRadius = item.presentationData.chatBubbleCorners.mainRadius
+                        }
+                    }
+                    strongSelf.updateStickerShape(radius: stickerShapeRadius, contentRect: CGRect(origin: CGPoint(x: innerImageInset, y: innerImageInset), size: imageSize))
                     
                     if let bubblelessHeader {
                         let headerNode = bubblelessHeader.apply()

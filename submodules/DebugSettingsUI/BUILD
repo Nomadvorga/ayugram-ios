@@ -1,9 +1,9 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgdeps = [
-    "//Swiftgram/SGLogging:SGLogging",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings"
+    "//AyuGram/SGLogging:SGLogging",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings"
 ]
 #
 
@@ -16,7 +16,7 @@ swift_library(
     copts = [
         "-warnings-as-errors",
     ],
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
         "//submodules/BuildConfig:BuildConfig",
         "//submodules/CrashReporting:CrashReporting",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",

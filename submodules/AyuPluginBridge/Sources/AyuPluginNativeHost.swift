@@ -600,8 +600,13 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func presentCustomDialog(owner: String, config: [String: AyuBridgeValue], generation: UUID) throws -> AyuBridgeValue {
-        guard Set(config.keys).isSubset(of: ["context", "title", "message", "view", "positive_button", "negative_button", "neutral_button", "cancelable"]),
+        guard Set(config.keys).isSubset(of: ["context", "title", "message", "view", "positive_button", "negative_button", "neutral_button", "cancelable", "fullscreen"]),
               config["view"] != nil else { throw AyuBridgeFailure.unsupported("alert configuration") }
+        // `android.app.Dialog` with a full-screen theme: its content view only.
+        let fullscreen = config["fullscreen"] != nil
+        guard !fullscreen || (config["fullscreen"] == .bool(true) && Set(config.keys).isSubset(of: ["context", "view", "fullscreen"])) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid full-screen dialog")
+        }
         if let context = config["context"], context != .null { _ = try self.remote(self.handle(context), owner: owner) }
         let viewHandle = try self.handle(config["view"] ?? .null)
         let content = try self.remote(viewHandle, owner: owner)
@@ -633,7 +638,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let cancelable = config["cancelable"]?.bool ?? true
         do {
             try DispatchQueue.main.sync {
-                let controller = try self.ui.makeCustomDialog(owner: owner, generation: generation, handle: viewHandle, title: title, message: message, actions: actions, cancelable: cancelable)
+                let controller = try self.ui.makeCustomDialog(owner: owner, generation: generation, handle: viewHandle, title: title, message: message, actions: actions, cancelable: cancelable && !fullscreen, fullscreen: fullscreen)
                 controller.onDismiss = { [weak self] in (self?.provider as? AyuPluginDialogHost)?.dismissBridgeDialog(token: token, pluginID: owner) }
                 self.ui.trackCustomDialog(owner: owner, controller: controller)
                 try dialogHost.presentBridgeDialog(controller, token: token, pluginID: owner)
@@ -1218,6 +1223,25 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 throw AyuBridgeFailure("invalid_arguments", method + " takes no arguments")
             }
             return remote.fields[method == "getMax" ? "progress_max" : "progress"] ?? .integer(0)
+        }
+        if method == "getLocationOnScreen" || method == "getLocationInWindow" {
+            let args = arguments["args"]?.array ?? []
+            guard args.count == 1 else { throw AyuBridgeFailure("invalid_arguments", method + " takes an int[2]") }
+            let location = try DispatchQueue.main.sync { try self.ui.read(owner: owner, handle: handle, method: method) }
+            // A Python sequence is copied into the int[] and never copied back (Chaquopy): only a Java array is filled.
+            if let copied = args[0].array {
+                guard copied.count >= 2, copied.allSatisfy({ $0.integer != nil }) else { throw AyuBridgeFailure("invalid_arguments", "outLocation must be an array of two integers") }
+                return .null
+            }
+            let arrayHandle = try self.handle(args[0])
+            let array = try self.remote(arrayHandle, owner: owner)
+            guard array.kind == "array", array.fields["component"] == .string("int"), var values = array.fields["values"]?.array, values.count >= 2,
+                  let point = location.array, point.count == 2 else {
+                throw AyuBridgeFailure("invalid_arguments", "outLocation must be an array of two integers")
+            }
+            values[0] = point[0]; values[1] = point[1]
+            self.objects[arrayHandle]?.fields["values"] = .array(values)
+            return .null
         }
         if Self.readMethods.contains(method) || (Self.isScrollViewClass(remote.className) && Self.scrollReadMethods.contains(method)) {
             guard (arguments["args"]?.array ?? []).isEmpty else { throw AyuBridgeFailure("invalid_arguments", method + " takes no arguments") }
@@ -2742,7 +2766,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     private static let scrollWriteMethods: [String: Int] = ["setFillViewport": 1, "setVerticalScrollBarEnabled": 1, "setHorizontalScrollBarEnabled": 1,
         "setClipToPadding": 1, "setOverScrollMode": 1, "scrollTo": 2, "scrollBy": 2, "smoothScrollTo": 2]
     private static let otherWriteMethods: [String: Int] = ["setImageBitmap": 1, "setBackgroundDrawable": 1, "setMax": 1, "setProgress": 1, "setProgressTintList": 1, "setChecked": 1, "setButtonTintList": 1, "setOnCheckedChangeListener": 1,
-        "setIncludeFontPadding": 1, "setLineSpacing": 2, "setLetterSpacing": 1, "setMinHeight": 1, "setMinWidth": 1, "setTextIsSelectable": 1,
+        "setIncludeFontPadding": 1, "setLineSpacing": 2, "setLetterSpacing": 1, "setMinHeight": 1, "setMinWidth": 1, "setTextIsSelectable": 1, "setShadowLayer": 4,
         "setSelectAllOnFocus": 1, "setCursorVisible": 1, "setOnFocusChangeListener": 1, "setOnLongClickListener": 1, "setLongClickable": 1,
         "setWeightSum": 1, "setIndeterminate": 1, "setIndeterminateTintList": 1, "setProgressBackgroundTintList": 1]
     /// Commands accepted by `AyuBridgeUI.apply`. Keep transaction input narrower
@@ -2764,7 +2788,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "bringToFront", "setOnClickListener", "setOnTouchListener", "addTextChangedListener", "removeTextChangedListener",
         "setImageBase64", "setImageBitmap", "setImageDrawable", "setImageResource", "setColorFilter", "clearColorFilter", "unmount", "animate",
     ]
-    private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getId", "getMinimumWidth", "getMinimumHeight", "getElevation", "getAlpha", "getRotation", "getRotationX", "getRotationY", "getPivotX", "getPivotY", "getCameraDistance", "getScaleX", "getScaleY", "getTranslationX", "getTranslationY", "getVisibility", "getOrientation", "getGravity", "getClipChildren", "getClipToOutline", "getOutlineProvider", "getBackground", "getContext", "getResources", "isEnabled", "isClickable", "isFocusable", "isSelected", "isShown", "hasFocus", "getSelectionStart", "getSelectionEnd", "getColorFilter", "isAttachedToWindow", "getText", "getContentDescription", "getPaddingLeft", "getPaddingTop", "getPaddingRight", "getPaddingBottom", "getParent", "getRootView", "getTag", "getChildCount", "getChildAt", "getLayoutParams", "getTypeface", "getIncludeFontPadding", "getLineSpacingExtra", "getLineSpacingMultiplier", "getLetterSpacing", "getMinHeight", "getMinWidth", "isTextSelectable", "isCursorVisible", "isLongClickable", "getWeightSum", "isIndeterminate"]
+    private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getId", "getMinimumWidth", "getMinimumHeight", "getElevation", "getAlpha", "getRotation", "getRotationX", "getRotationY", "getPivotX", "getPivotY", "getCameraDistance", "getScaleX", "getScaleY", "getTranslationX", "getTranslationY", "getVisibility", "getOrientation", "getGravity", "getClipChildren", "getClipToOutline", "getOutlineProvider", "getBackground", "getContext", "getResources", "isEnabled", "isClickable", "isFocusable", "isSelected", "isShown", "hasFocus", "getSelectionStart", "getSelectionEnd", "getColorFilter", "isAttachedToWindow", "getText", "getContentDescription", "getPaddingLeft", "getPaddingTop", "getPaddingRight", "getPaddingBottom", "getParent", "getRootView", "getTag", "getChildCount", "getChildAt", "getLayoutParams", "getTypeface", "getIncludeFontPadding", "getLineSpacingExtra", "getLineSpacingMultiplier", "getLetterSpacing", "getMinHeight", "getMinWidth", "isTextSelectable", "getShadowRadius", "getShadowDx", "getShadowDy", "getShadowColor", "getLocationOnScreen", "getLocationInWindow", "isCursorVisible", "isLongClickable", "getWeightSum", "isIndeterminate"]
     private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setRotation": 1, "setRotationX": 1, "setRotationY": 1, "setPivotX": 1, "setPivotY": 1, "setCameraDistance": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setId": 1, "findViewById": 1, "setTag": 1, "setEnabled": 1, "setClickable": 1, "setFocusable": 1, "setSelected": 1, "setMinimumWidth": 1, "setMinimumHeight": 1, "setElevation": 1, "setClipChildren": 1, "setClipToOutline": 1, "setOutlineProvider": 1, "requestLayout": 0, "invalidate": 0, "post": 1, "postDelayed": 2, "performHapticFeedback": 1, "setBackgroundColor": 1, "setBackground": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setTypeface": 1, "setMaxLines": 1, "setEllipsize": 1, "setTextAlignment": 1, "setHint": 1, "setHintTextColor": 1, "setInputType": 1, "setScaleType": 1, "setSingleLine": 1, "setMinLines": 1, "setSelection": 1, "setColorFilter": 1, "clearColorFilter": 0, "setGravity": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "addTextChangedListener": 1, "removeTextChangedListener": 1, "clearFocus": 0, "requestFocus": 0, "setContentDescription": 1, "setImageBase64": 1, "setImageDrawable": 1, "setImageResource": 1, "unmount": 0, "animate": 1]
     private static func methods(for name: String) -> Set<String> {
         if name == "android.view.ViewPropertyAnimator" {

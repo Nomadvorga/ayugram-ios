@@ -132,10 +132,8 @@ class AlertTests(Case):
         scope = self.load()
         with bridge.runtime.context(scope):
             builder = AlertDialogBuilder(None).set_title("T").set_positive_button("OK")
-            for call in (lambda: builder.set_on_cancel_listener(lambda dialog: None),
-                         lambda: builder.set_on_back_button_listener(lambda dialog, which: None)):
-                with self.subTest(call=call), self.assertRaises(bridge.UnsupportedAPI):
-                    call()
+            with self.assertRaises(bridge.UnsupportedAPI):
+                builder.set_on_back_button_listener(lambda dialog, which: None)
             with self.assertRaises(TypeError):
                 builder.set_on_cancel_listener("not callable")
             # Colour is cosmetic: the dialog works, and the missing styling is logged once per generation.
@@ -212,7 +210,7 @@ class AlertTests(Case):
             view = bridge.runtime.jclass("android.view.View")()
             builder = AlertDialogBuilder(None, 0, object()).set_title(None).set_view(view, 300)
             builder.set_positive_button("OK").set_dim_enabled(False).set_blurred_background(True).show()
-            for call in (lambda: AlertDialogBuilder(None, AlertDialogBuilder.ALERT_TYPE_SPINNER),
+            for call in (lambda: AlertDialogBuilder(None, 1),
                          lambda: AlertDialogBuilder(None).set_top_image(1, 0),
                          lambda: AlertDialogBuilder(None).set_top_animation(1, 1, True, 0),
                          lambda: AlertDialogBuilder(None).set_message_text_view_clickable(True),

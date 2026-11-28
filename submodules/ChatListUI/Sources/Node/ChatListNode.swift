@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 //
 import Foundation
 import UIKit
@@ -1423,7 +1423,7 @@ public final class ChatListNode: ListViewImpl {
     
     public var startedScrollingAtUpperBound: Bool = false
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public var getNavigationController: (() -> NavigationController?)?
     //
     
@@ -1433,9 +1433,9 @@ public final class ChatListNode: ListViewImpl {
     
     public var synchronousDrawingWhenNotAnimated: Bool = false
     
-    public init(context: AccountContext, location: ChatListControllerLocation, chatListFilter: ChatListFilter? = nil, previewing: Bool, fillPreloadItems: Bool, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)? = nil, theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, /* MARK: Swiftgram */ getNavigationController: (() -> NavigationController?)? = nil, /* MARK: Swiftgram */ disableAnimations: Bool, isInlineMode: Bool, isSideList: Bool = false, autoSetReady: Bool, isMainTab: Bool?) {
+    public init(context: AccountContext, location: ChatListControllerLocation, chatListFilter: ChatListFilter? = nil, previewing: Bool, fillPreloadItems: Bool, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)? = nil, theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, /* MARK: AyuGram */ getNavigationController: (() -> NavigationController?)? = nil, /* MARK: AyuGram */ disableAnimations: Bool, isInlineMode: Bool, isSideList: Bool = false, autoSetReady: Bool, isMainTab: Bool?) {
         self.context = context
-        self.getNavigationController = getNavigationController // MARK: Swiftgram
+        self.getNavigationController = getNavigationController // MARK: AyuGram
         self.location = location
         self.isSideList = isSideList
         self.chatListFilter = chatListFilter

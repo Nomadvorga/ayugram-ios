@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import Postbox
 import SwiftSignalKit
@@ -505,12 +505,12 @@ private final class FetchImpl {
             
             self.fastDownloads = network.engineKind == .rust
             if isStory {
-                self.defaultPartSize = getSGDownloadPartSize(512 * 1024, fileSize: self.size) // MARK: Swiftgram
+                self.defaultPartSize = getSGDownloadPartSize(512 * 1024, fileSize: self.size) // MARK: AyuGram
             } else {
-                self.defaultPartSize = getSGDownloadPartSize(128 * 1024, fileSize: self.size) // MARK: Swiftgram
+                self.defaultPartSize = getSGDownloadPartSize(128 * 1024, fileSize: self.size) // MARK: AyuGram
             }
             self.cdnPartSize = 128 * 1024
-            // MARK: Swiftgram
+            // MARK: AyuGram
             self.masterPendingParts = self.fastDownloads ? fastDownloadMasterPendingParts : getSGMaxPendingParts(6)
             self.cdnPendingParts = self.fastDownloads ? fastDownloadCdnPendingParts : getSGMaxPendingParts(6)
             //

@@ -30,6 +30,8 @@ import PlainButtonComponent
 import LottieComponent
 import UndoUI
 import TelegramStringFormatting
+// MARK: AyuGram
+import SGSimpleSettings
 
 private final class ChatMessagePollOptionRadioNodeParameters: NSObject {
     let timestamp: Double
@@ -448,6 +450,9 @@ private struct ChatMessagePollOptionResult: Equatable {
     let percent: Int
     let count: Int32
     let recentVoterPeerIds: [EnginePeer.Id]
+    // MARK: AyuGram
+    // "Show Results Before Voting": the result is shown, but the option can still be voted for.
+    var isPreview: Bool = false
 }
 
 private struct ChatMessagePollOptionSelection: Equatable {
@@ -747,7 +752,8 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
             return
         }
         
-        if let _ = self.currentResult {
+        // MARK: AyuGram
+        if let currentResult = self.currentResult, !currentResult.isPreview {
             self.resultPressed?()
             return
         }
@@ -888,7 +894,9 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                 message: message
             )
 
-            let shouldHaveRadioNode = optionResult == nil
+            // MARK: AyuGram
+            let isResultPreview = optionResult?.isPreview ?? false
+            let shouldHaveRadioNode = optionResult == nil || isResultPreview
             let isSelectable: Bool
             if shouldHaveRadioNode, poll.kind.multipleAnswers, forceSelected == nil, !Namespaces.Message.allNonRegular.contains(message.id.namespace) {
                 isSelectable = true
@@ -909,6 +917,12 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
             if displayCount && (currentResult != optionResult || themeUpdated) {
                 let value = optionResult?.count ?? 0
                 updatedCountImage = generateCountImage(presentationData: presentationData, incoming: incoming, value: value, targetValue: value)
+                // MARK: AyuGram
+                // The radio button takes the place of the percentage, so the percentage goes to the trailing edge.
+                if isResultPreview {
+                    let percent = optionResult?.percent ?? 0
+                    updatedCountImage = generatePercentageImage(presentationData: presentationData, incoming: incoming, value: percent, targetValue: percent)
+                }
             }
 //            let countInset: CGFloat
 //            if displayCount {
@@ -1182,7 +1196,7 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                     if let image = node.countImage, displayCount {
                         let countFrame = CGRect(origin: CGPoint(x: trailingOriginX - image.size.width, y: floor((contentLayoutHeight - image.size.height) * 0.5)), size: image.size)
                         node.countNode.frame = countFrame
-                        if animated && previousResult?.count != optionResult?.count {
+                        if animated && previousResult?.count != optionResult?.count && !isResultPreview { // MARK: AyuGram
                             let countDuration = 0.27
                             let images = generateCountAnimationImages(presentationData: presentationData, incoming: incoming, from: previousResult?.count ?? 0, to: optionResult?.count ?? 0, duration: countDuration)
                             if !images.isEmpty {
@@ -1451,7 +1465,7 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                     node.resultBarIconNode.frame = CGRect(origin: CGPoint(x: barFrame.minX - 6.0 - 16.0, y: barFrame.minY + floor((barFrame.height - 16.0) / 2.0)), size: CGSize(width: 16.0, height: 16.0))
                     node.resultBarBackgroundNode.alpha = optionResult != nil ? 1.0 : 0.0
                     node.resultBarNode.alpha = optionResult != nil ? 1.0 : 0.0
-                    node.percentageNode.alpha = optionResult != nil ? 1.0 : 0.0
+                    node.percentageNode.alpha = (optionResult != nil && !isResultPreview) ? 1.0 : 0.0 // MARK: AyuGram
                     node.countNode.alpha = optionResult != nil ? 1.0 : 0.0
                     node.separatorNode.alpha = optionResult == nil ? 1.0 : 0.0
                     node.resultBarIconNode.alpha = optionResult != nil ? 1.0 : 0.0
@@ -1460,7 +1474,9 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                             if optionResult != nil {
                                 node.resultBarBackgroundNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
                                 node.resultBarNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                                node.percentageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                                if !isResultPreview { // MARK: AyuGram
+                                    node.percentageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                                }
                                 node.countNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                                 if !recentVoterPeers.isEmpty {
                                     node.avatarsNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
@@ -2957,6 +2973,9 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                     } else {
                         voters = poll.results.voters
                     }
+                    // MARK: AyuGram
+                    // Same polls as exteraGram: not closed, and results not hidden until the end (unless it is our poll).
+                    let showResultsBeforeVoting = ExteraSettings.shared.showResultsBeforeVoting && !isClosed && !isRestricted && (!poll.hideResultsUntilClose || poll.isCreator)
                     var votedFor = Set<Data>()
                     if let voters = voters, let totalVoters = poll.results.totalVoters {
                         var didVote = false
@@ -2967,7 +2986,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                         }
                         totalVoterCount = totalVoters
-                        if didVote || isClosed || isPreviewingResults || isRestricted {
+                        if didVote || isClosed || isPreviewingResults || isRestricted || showResultsBeforeVoting {
                             for i in 0 ..< poll.options.count {
                                 inner: for optionVoters in voters {
                                     if optionVoters.opaqueIdentifier == poll.options[i].opaqueIdentifier {
@@ -3012,6 +3031,10 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                         } else if isClosed || isRestricted {
                             optionResult = ChatMessagePollOptionResult(normalized: 0, percent: 0, count: 0, recentVoterPeerIds: recentVoterPeerIds)
+                        }
+                        // MARK: AyuGram
+                        if showResultsBeforeVoting && votedFor.isEmpty && !isPreviewingResults {
+                            optionResult?.isPreview = true
                         }
                         
                         var translation: TranslationMessageAttribute.Additional?

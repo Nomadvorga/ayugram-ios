@@ -112,8 +112,8 @@ class ProviderLoadingTests(unittest.TestCase):
     def test_fixed_provider_list_and_absent_providers_are_skipped(self):
         self.assertEqual(javalib.PROVIDER_MODULES, (
             "java_lang", "java_reflect", "java_util", "java_io", "java_nio", "java_net", "java_text", "java_time",
-            "org_json", "android_os", "android_text", "android_util", "android_content", "android_graphics",
-            "android_bitmap", "android_compose", "android_intents", "concurrency", "telegram_tl", "telegram_messenger", "telegram_ui",
+            "org_json", "android_os", "android_text", "android_util", "android_content", "android_graphics", "android_bitmap",
+            "android_compose", "android_intents", "android_media", "android_exif", "android_view", "concurrency", "telegram_tl", "telegram_messenger", "telegram_images", "telegram_events", "telegram_ui",
             "exteragram"))
         self.sandbox.install({"synthetic_one": PROVIDER}, listed=("synthetic_absent", "synthetic_one"))
         self.assertIn("com.synthetic.Counter", javalib.local_classes())

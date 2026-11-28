@@ -48,6 +48,7 @@ import ChatMessageTransitionNode
 import ChatMessageSuggestedPostInfoNode
 import TelegramStringFormatting
 import StaticGlassBackground
+import SGSimpleSettings // MARK: AyuGram
 
 private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
@@ -149,8 +150,44 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     private let disposable = MetaDisposable()
     private let disposables = DisposableSet()
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public var sizeCoefficient: Float = 1.0
+    
+    // MARK: AyuGram
+    // Sticker Shape: rounds video stickers (the image node is larger than the sticker by its insets).
+    private var stickerShapeMaskLayer: CALayer?
+    private func updateStickerShape(radius: CGFloat, contentRect: CGRect) {
+        let radius = min(radius, min(contentRect.width, contentRect.height) / 2.0)
+        if radius > 0.0 {
+            let maskLayer: CALayer
+            if let current = self.stickerShapeMaskLayer {
+                maskLayer = current
+            } else {
+                maskLayer = CALayer()
+                maskLayer.backgroundColor = UIColor.black.cgColor
+                maskLayer.cornerCurve = .continuous
+                self.stickerShapeMaskLayer = maskLayer
+                self.imageNode.layer.mask = maskLayer
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            maskLayer.frame = contentRect
+            maskLayer.cornerRadius = radius
+            CATransaction.commit()
+            if let animationNode = self.animationNode {
+                animationNode.layer.cornerRadius = radius
+                animationNode.layer.cornerCurve = .continuous
+                animationNode.layer.masksToBounds = true
+            }
+        } else if self.stickerShapeMaskLayer != nil {
+            self.stickerShapeMaskLayer = nil
+            self.imageNode.layer.mask = nil
+            if let animationNode = self.animationNode {
+                animationNode.layer.cornerRadius = 0.0
+                animationNode.layer.masksToBounds = false
+            }
+        }
+    }
 
     private var viaBotNode: TextNode?
     public let dateAndStatusNode: ChatMessageDateAndStatusNode
@@ -1786,6 +1823,20 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     }
                     
                     animation.animator.updateFrame(layer: strongSelf.imageNode.layer, frame: updatedContentFrame, completion: nil)
+                    
+                    // MARK: AyuGram
+                    var stickerShapeRadius: CGFloat = 0.0
+                    if let telegramFile, telegramFile.isVideoSticker, !isEmoji {
+                        switch ExteraSettings.shared.stickerShape {
+                        case .default:
+                            break
+                        case .rounded:
+                            stickerShapeRadius = 6.0
+                        case .roundedAsMessage:
+                            stickerShapeRadius = item.presentationData.chatBubbleCorners.mainRadius
+                        }
+                    }
+                    strongSelf.updateStickerShape(radius: stickerShapeRadius, contentRect: CGRect(origin: CGPoint(), size: updatedContentFrame.size).insetBy(dx: imageInset, dy: imageInset))
                     
                     strongSelf.contextSourceNode.contentRect = contextContentFrame
                     strongSelf.containerNode.targetNodeForActivationProgressContentRect = strongSelf.contextSourceNode.contentRect

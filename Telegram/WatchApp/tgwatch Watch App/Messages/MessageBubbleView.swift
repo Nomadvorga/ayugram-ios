@@ -6,7 +6,7 @@ struct MessageBubbleView: View {
     let onVideoTap: (VideoVisual) -> Void
     let onVideoNoteTap: (VideoNoteVisual) -> Void
     let onPollTap: (Int64, PollVisual) -> Void
-    // MARK: Swiftgram
+    // MARK: AyuGram
     var onAvatarRequestDownload: (Int) -> Void = { _ in }
     var onAvatarCancelDownload: (Int) -> Void = { _ in }
     //
@@ -18,7 +18,7 @@ struct MessageBubbleView: View {
             if bubble.isOutgoing { Spacer(minLength: 16) }
             VStack(alignment: bubble.isOutgoing ? .trailing : .leading, spacing: 1) {
                 if let name = bubble.senderName, !bubble.isOutgoing, bubble.sticker == nil {
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     SenderNameLabelView(
                         name: name,
                         avatar: bubble.senderAvatar,
@@ -36,7 +36,7 @@ struct MessageBubbleView: View {
                         senderColorIndex: bubble.senderColorIndex,
                         isOutgoing: bubble.isOutgoing,
                         replyHeader: bubble.replyHeader,
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         senderAvatar: bubble.senderAvatar,
                         onAvatarRequestDownload: onAvatarRequestDownload,
                         onAvatarCancelDownload: onAvatarCancelDownload

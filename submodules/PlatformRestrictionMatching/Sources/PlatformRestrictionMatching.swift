@@ -7,7 +7,7 @@ public extension EngineRawMessage {
     }
     
     func restrictionReason(platform: String, contentSettings: ContentSettings) -> String? {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let author = self.author {
             let chatId = author.id.id._internalGetInt64Value()
             if contentSettings.appConfiguration.sgWebSettings.global.forceReasons.contains(chatId) {
@@ -27,7 +27,7 @@ public extension EngineRawMessage {
 
 public extension RestrictedContentMessageAttribute {
     func platformText(platform: String, contentSettings: ContentSettings, chatId: Int64? = nil) -> String? {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let chatId = chatId {
             if contentSettings.appConfiguration.sgWebSettings.global.forceReasons.contains(chatId) {
                 return "Unavailable in AyuGram due to App Store Guidelines"
@@ -49,7 +49,7 @@ public extension RestrictedContentMessageAttribute {
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 public extension EngineRawMessage {
     func canRevealContent(contentSettings: ContentSettings) -> Bool {
         if contentSettings.appConfiguration.sgWebSettings.global.canViewMessages && self.flags.contains(.CopyProtected) {

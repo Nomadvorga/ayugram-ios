@@ -39,6 +39,7 @@ import BundleIconComponent
 import VideoPlaybackControlsComponent
 import PhotoResources
 import GlassBackgroundComponent
+import SGSimpleSettings // MARK: AyuGram
 
 public enum UniversalVideoGalleryItemContentInfo {
     case message(Message, GalleryMediaSubject?)
@@ -963,6 +964,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private(set) var item: UniversalVideoGalleryItem?
     private var playbackRate: Double?
     private var videoQuality: UniversalVideoContentVideoQuality = .auto
+    private var didApplyPreferOriginalQuality = false // MARK: AyuGram
+    private var didForcePreferredOriginalQuality = false // MARK: AyuGram
     private let playbackRatePromise = ValuePromise<Double>()
     private let videoQualityPromise = ValuePromise<UniversalVideoContentVideoQuality>()
     
@@ -1228,10 +1231,14 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         if case let .playback(_, seekable) = self.footerContentNode.content, seekable {
+            // MARK: AyuGram
+            // "Double Tap Skip Time" (exteraGram): 5, 10, 15 (stock) or 30 seconds. Only this gesture follows the
+            // setting; the on-screen skip buttons keep their "15" label and their 15 seconds.
+            let doubleTapSeekDuration = Double(ExteraSettings.shared.doubleTapSeekDuration)
             if location.x >= self.bounds.width * 0.3 {
-                self.footerContentNode.seekForward?(15.0)
+                self.footerContentNode.seekForward?(doubleTapSeekDuration)
             } else {
-                self.footerContentNode.seekBackward?(15.0)
+                self.footerContentNode.seekBackward?(doubleTapSeekDuration)
             }
             return true
         }
@@ -1542,9 +1549,20 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             let videoSize = CGSize(width: item.content.dimensions.width * videoScale, height: item.content.dimensions.height * videoScale)
             let actualVideoSize = CGSize(width: item.content.dimensions.width, height: item.content.dimensions.height)
             videoNode.updateLayout(size: videoSize, actualSize: actualVideoSize, transition: .immediate)
+            // MARK: AyuGram
+            self.didApplyPreferOriginalQuality = false
+            if self.didForcePreferredOriginalQuality {
+                self.didForcePreferredOriginalQuality = false
+                self.videoQuality = .auto
+            }
             videoNode.ownsContentNodeUpdated = { [weak self] value in
                 if let strongSelf = self {
                     strongSelf.updateDisplayPlaceholder(!value)
+                    
+                    // MARK: AyuGram
+                    if value {
+                        strongSelf.applyPreferOriginalQualityIfNeeded()
+                    }
                     
                     if strongSelf.playOnContentOwnership {
                         strongSelf.playOnContentOwnership = false
@@ -4036,6 +4054,30 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
 
         self.playbackRatePromise.set(self.playbackRate ?? 1.0)
+    }
+    
+    // MARK: AyuGram
+    // "Prefer Original Quality" (exteraGram, VideoPlayer.getSavedQuality): the gallery's player starts on the best
+    // quality instead of Auto. iOS never plays the source file while a video has HLS qualities, so the best one is the
+    // top entry of the quality menu, selected the way a tap on that entry selects it. Decided once per video, when the
+    // player first owns its content, so a later choice in the menu stays.
+    private func applyPreferOriginalQualityIfNeeded() {
+        if self.didApplyPreferOriginalQuality {
+            return
+        }
+        if !ExteraSettings.shared.preferOriginalQuality {
+            self.didApplyPreferOriginalQuality = true
+            return
+        }
+        guard let videoNode = self.videoNode, let qualityState = videoNode.videoQualityState() else {
+            return
+        }
+        self.didApplyPreferOriginalQuality = true
+        guard qualityState.available.count > 1, let quality = qualityState.available.max() else {
+            return
+        }
+        self.didForcePreferredOriginalQuality = true
+        self.updateVideoQuality(.quality(quality))
     }
     
     func updateVideoQuality(_ videoQuality: UniversalVideoContentVideoQuality) {

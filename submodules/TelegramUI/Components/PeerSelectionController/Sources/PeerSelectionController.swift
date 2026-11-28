@@ -357,7 +357,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
         
         self.displayNode = PeerSelectionControllerNode(
             context: self.context,
-            forceHideNames: self.forceHideNames, // MARK: Swiftgram
+            forceHideNames: self.forceHideNames, // MARK: AyuGram
             controller: self,
             presentationData: self.presentationData,
             filter: nodeFilter,

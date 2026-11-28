@@ -1,16 +1,16 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgdeps = [
-    "//Swiftgram/SGSettingsUI:SGSettingsUI",
-    "//Swiftgram/SGStrings:SGStrings",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGSettingsUI:SGSettingsUI",
+    "//AyuGram/SGStrings:SGStrings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
 
 ]
 #
-# MARK: Swiftgram
+# MARK: AyuGram
 sgsrcs = [
-    "//Swiftgram/SGPeerInfoRows:SGPeerInfoRows",
+    "//AyuGram/SGPeerInfoRows:SGPeerInfoRows",
 ]
 #
 
@@ -20,11 +20,11 @@ swift_library(
     module_name = "PeerInfoScreen",
     srcs = glob([
         "Sources/**/*.swift",
-    ]) + sgsrcs, # MARK: Swiftgram
+    ]) + sgsrcs, # MARK: AyuGram
     copts = [
         "-warnings-as-errors",
     ],
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
         "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
         "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/AyuPluginBridge:AyuPluginBridge",

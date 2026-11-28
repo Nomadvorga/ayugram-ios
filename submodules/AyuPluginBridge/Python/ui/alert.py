@@ -5,9 +5,15 @@ screen performs one ``ui.present``. The host draws a system alert, so dim,
 blur, button colour key, resources provider and custom view height have no
 visual effect, and a button marked red keeps its default colour (logged once
 per plugin generation). What the host cannot present or report raises
-``UNSUPPORTED_API``: progress styles, item icons, top images and animations,
-clickable message links, cancel and back-button listeners, and changing a
-dialog that is already on screen.
+``UNSUPPORTED_API``: item icons, top images and animations, clickable message
+links, back-button listeners, a cancel listener on a custom-view dialog, and
+changing an alert that is already on screen.
+
+The progress styles are host dialogs without buttons. ``ALERT_TYPE_SPINNER``
+draws only the spinner, as Android does; a touch asks "stop loading?" and
+Stop runs the cancel listener. ``ALERT_TYPE_LOADING`` draws title, message,
+buttons and a progress line that ``set_progress`` moves while it is on screen;
+a tap outside cancels it while it is cancelable.
 
 The host calls back for the buttons and items the plugin set. It does not
 call back when the user closes a dialog another way (the Cancel button the
@@ -36,6 +42,12 @@ def _text(value):
     return str(value)
 
 
+def _call_listener(listener, method, *arguments):
+    """A Java listener given as an object implementing ``method`` or as a callable."""
+    bound = getattr(listener, method, None)
+    return (bound if callable(bound) else listener)(*arguments)
+
+
 class _AlertDialog:
     """The members of Android's ``AlertDialog`` this bridge can honour."""
 
@@ -48,7 +60,15 @@ class _AlertDialog:
     def dismiss(self):
         self._builder.dismiss()
 
-    cancel = dismiss
+    def cancel(self):
+        self._builder.cancel()
+
+    def setOnCancelListener(self, listener):
+        builder = self._builder
+        builder.set_on_cancel_listener(None if listener is None else lambda _: _call_listener(listener, "onCancel", self))
+
+    def setCanCancel(self, value):
+        self._builder._set_can_cancel(value)
 
     def isShowing(self):
         return self._builder._on_screen()
@@ -76,11 +96,14 @@ class AlertDialogBuilder:
     BUTTON_POSITIVE = -1
     BUTTON_NEGATIVE = -2
     BUTTON_NEUTRAL = -3
+    _PROGRESS_KIND = "loading"
 
     def __init__(self, context, progress_style=ALERT_TYPE_MESSAGE, resources_provider=None):
         self._scope = runtime.require()
-        if type(progress_style) is not int or progress_style != self.ALERT_TYPE_MESSAGE:
-            raise UnsupportedAPI("Progress dialogs require a native adapter")
+        if type(progress_style) is not int:
+            raise TypeError("Progress style must be an int")
+        if progress_style not in (self.ALERT_TYPE_MESSAGE, self.ALERT_TYPE_LOADING, self.ALERT_TYPE_SPINNER):
+            raise UnsupportedAPI("Unknown dialog progress style")
         self._context = context
         self._progress_style = progress_style
         self.config = {"context": context}
@@ -89,10 +112,13 @@ class AlertDialogBuilder:
         self._showing = False
         self._clicking = False
         self._callback_ids = set()
-        self._cancelable = True
-        self._canceled_on_touch_outside = True
+        # Android's spinner dialog turns both cancel switches off in its constructor.
+        self._cancelable = self._canceled_on_touch_outside = progress_style != self.ALERT_TYPE_SPINNER
         self._presented_cancelable = None
         self._on_dismiss = None
+        self._on_cancel = None
+        self._can_cancel = True
+        self._progress = 0
 
     def get_context(self):
         runtime.require(self._scope)
@@ -100,7 +126,8 @@ class AlertDialogBuilder:
 
     def _set(self, key, value):
         runtime.require(self._scope)
-        if self._on_screen():
+        # Android's spinner dialog draws none of its texts, buttons or views.
+        if self._progress_style != self.ALERT_TYPE_SPINNER and self._on_screen():
             raise UnsupportedAPI("Changing a dialog that is on screen requires a native adapter")
         if value is None:
             self.config.pop(key, None)
@@ -230,7 +257,43 @@ class AlertDialogBuilder:
         return self
 
     def set_on_cancel_listener(self, listener=None):
-        return self._unreported(listener, "cancel")
+        runtime.require(self._scope)
+        if listener is not None and not callable(listener):
+            raise TypeError("Dialog listener must be callable or None")
+        self._on_cancel = listener
+        return self
+
+    def _cancelled(self, dialog=None, which=None):
+        """The user cancelled the dialog (Android: back or outside touch, or Stop in the spinner's prompt)."""
+        runtime.require(self._scope)
+        self._clicking = True
+        try:
+            if self._on_cancel is not None:
+                self._on_cancel(self)
+        except BridgeError:
+            raise
+        except Exception as error:
+            _log("Error in AlertDialog CancelListener: " + type(error).__name__)
+        finally:
+            self._clicking = False
+            # Android dismisses after the cancel listener.
+            self._finish()
+
+    def cancel(self):
+        """``Dialog.cancel()``: the cancel listener, then the dismissal."""
+        runtime.require(self._scope)
+        native = self._native if self._showing else None
+        try:
+            self._cancelled()
+        finally:
+            if native is not None:
+                native.dismiss()
+
+    def _set_can_cancel(self, value):
+        runtime.require(self._scope)
+        if bool(value) != self._can_cancel and self._progress_style == self.ALERT_TYPE_SPINNER and self._on_screen():
+            raise UnsupportedAPI("Changing a dialog that is on screen requires a native adapter")
+        self._can_cancel = bool(value)
 
     def set_top_image(self, res_id, background_color):
         runtime.require(self._scope)
@@ -278,7 +341,20 @@ class AlertDialogBuilder:
             return self
         self.create()
         config = dict(self.config)
-        if not self._effective_cancelable():
+        if self._progress_style == self.ALERT_TYPE_SPINNER:
+            config = {"context": self._context, "progress": "spinner", "on_cancel": self._cancelled}
+            if not self._can_cancel:
+                config["can_cancel"] = False
+        elif self._progress_style == self.ALERT_TYPE_LOADING:
+            if "view" in config or "items" in config:
+                raise UnsupportedAPI("A loading dialog with items or a custom view requires a native adapter")
+            config.update(progress=self._PROGRESS_KIND, value=self._progress, on_cancel=self._cancelled)
+        elif self._on_cancel is not None:
+            if "view" in config:
+                raise UnsupportedAPI("A cancel listener on a custom-view dialog requires a native adapter")
+            # Reported when the user takes the Cancel button the host adds to a cancelable alert.
+            config["on_cancel"] = self._cancelled
+        if config.get("progress") != "spinner" and not self._effective_cancelable():
             config["cancelable"] = False
         before = set(scope.callbacks)
         result = runtime.call("ui.present", {"kind": "alert", "config": config})
@@ -316,9 +392,22 @@ class AlertDialogBuilder:
         runtime.require(self._scope)
         if self._alert_dialog is None:
             _log("AlertDialogBuilder: set_progress called before dialog is created.")
+        elif self._progress_style == self.ALERT_TYPE_LOADING:
+            if type(progress) is not int or not -2 ** 31 <= progress < 2 ** 31:
+                raise TypeError("Progress must be a Java int")
+            self._progress = progress
+            if self._on_screen():
+                self._native.setProgress(progress)
 
     def _changed_cancel_policy(self):
+        if self._progress_style == self.ALERT_TYPE_SPINNER:
+            # No back button and no outside on iOS: the spinner dialog covers the screen.
+            return
         if self._on_screen() and self._effective_cancelable() != self._presented_cancelable:
+            if self._progress_style == self.ALERT_TYPE_LOADING:
+                self._native.setCancelable(self._effective_cancelable())
+                self._presented_cancelable = self._effective_cancelable()
+                return
             raise UnsupportedAPI("Changing a dialog that is on screen requires a native adapter")
 
     def set_cancelable(self, cancelable):
@@ -344,3 +433,25 @@ class AlertDialogBuilder:
         except UnsupportedAPI:
             self._canceled_on_touch_outside = previous
             raise
+
+
+class IndeterminateDialog(AlertDialogBuilder):
+    """Presenter of ``android.app.ProgressDialog`` in ``STYLE_SPINNER``: a spinner beside a message that may change on screen."""
+    _PROGRESS_KIND = "indeterminate"
+
+    def __init__(self, context):
+        super().__init__(context, self.ALERT_TYPE_LOADING)
+
+    def set_message(self, message):
+        if not self._on_screen():
+            return super().set_message(message)
+        text = None if message is None else _text(message)
+        self._native.setMessage(text)
+        if text is None:
+            self.config.pop("message", None)
+        else:
+            self.config["message"] = text
+        return self
+
+    def set_progress(self, progress):
+        raise UnsupportedAPI("A spinner progress dialog has no progress line")

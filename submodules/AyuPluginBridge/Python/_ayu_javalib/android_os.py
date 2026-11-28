@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 
 from . import java_lang as _l
@@ -347,6 +348,209 @@ class FileUtils(Object):
                 pass
 
 
+_SHARED_STORAGE = "external_storage"
+_STANDARD_DIRECTORIES = ("Music", "Podcasts", "Ringtones", "Alarms", "Notifications", "Pictures", "Movies", "Download",
+                         "DCIM", "Documents", "Screenshots", "Audiobooks", "Recordings")
+
+
+def _shared_storage(*parts, create=True):
+    import file_utils
+    place = file_utils._directory if create else file_utils._location
+    return place("Library", "Application Support", file_utils._STORAGE_NAME, _SHARED_STORAGE, *parts)
+
+
+def _on_external_storage(path):
+    """Whether ``path`` lies in the shared storage or in the application's external files/cache directory."""
+    import file_utils
+    from . import java_io
+    if not isinstance(path, java_io.File):
+        raise TypeError("Environment takes a java.io.File")
+    target = os.path.normpath(path.getAbsolutePath())
+    roots = [file_utils._location("Library", base, file_utils._STORAGE_NAME, name)
+             for base, name in (("Application Support", _SHARED_STORAGE), ("Application Support", "external"),
+                                ("Caches", "external"))]
+    return any(target == root or target.startswith(root + os.sep) for root in roots)
+
+
+def _volume(args, name):
+    """Checks the optional ``File`` of the storage-volume queries, which Android refuses outside a volume."""
+    if len(args) > 1:
+        raise TypeError(f"Environment.{name} takes no argument or a File")
+    if args and not _on_external_storage(args[0]):
+        raise _l.IllegalArgumentException(f"Failed to find storage device at {args[0]}")
+
+
+class Environment(Object):
+    """Android's shared storage, kept inside the application container.
+
+    iOS has no storage shared between applications. ``getExternalStorageDirectory()`` is a
+    directory of the bridge's own persistent storage (next to the one ``Context.getExternalFilesDir``
+    returns) and the standard public directories exist in it, as on a device. Files written
+    there stay until the application is removed; no other application sees them. The storage
+    is built in, always mounted and fully accessible to the application, so the "all files
+    access" query answers ``True``.
+    """
+    DIRECTORY_MUSIC, DIRECTORY_PODCASTS, DIRECTORY_RINGTONES, DIRECTORY_ALARMS = "Music", "Podcasts", "Ringtones", "Alarms"
+    DIRECTORY_NOTIFICATIONS, DIRECTORY_PICTURES, DIRECTORY_MOVIES = "Notifications", "Pictures", "Movies"
+    DIRECTORY_DOWNLOADS, DIRECTORY_DCIM, DIRECTORY_DOCUMENTS = "Download", "DCIM", "Documents"
+    DIRECTORY_SCREENSHOTS, DIRECTORY_AUDIOBOOKS, DIRECTORY_RECORDINGS = "Screenshots", "Audiobooks", "Recordings"
+    MEDIA_UNKNOWN, MEDIA_REMOVED, MEDIA_UNMOUNTED, MEDIA_CHECKING = "unknown", "removed", "unmounted", "checking"
+    MEDIA_NOFS, MEDIA_MOUNTED, MEDIA_MOUNTED_READ_ONLY, MEDIA_SHARED = "nofs", "mounted", "mounted_ro", "shared"
+    MEDIA_BAD_REMOVAL, MEDIA_UNMOUNTABLE, MEDIA_EJECTING = "bad_removal", "unmountable", "ejecting"
+
+    @staticmethod
+    def getExternalStorageDirectory():
+        from . import java_io
+        return java_io.File(_shared_storage())
+
+    @staticmethod
+    def getExternalStoragePublicDirectory(kind):
+        from . import java_io
+        if kind is None:
+            raise NullPointerException("type")
+        if not isinstance(kind, str) or not kind or kind.startswith("/") or ".." in kind.split("/") or "\0" in kind:
+            raise _l.unsupported("Environment.getExternalStoragePublicDirectory takes a relative directory name")
+        parts = [part for part in kind.split("/") if part]
+        # A device ships the standard directories; any other one is the caller's to create, as on Android.
+        return java_io.File(_shared_storage(*parts, create=len(parts) == 1 and parts[0] in _STANDARD_DIRECTORIES))
+
+    @staticmethod
+    def getDataDirectory():
+        """Android's user data directory: here the application container, on the device's data volume."""
+        import file_utils
+        from . import java_io
+        from ayu_bridge import runtime
+        runtime.require()
+        return java_io.File(file_utils._container())
+
+    @staticmethod
+    def getExternalStorageState(*args):
+        if len(args) > 1:
+            raise TypeError("Environment.getExternalStorageState takes no argument or a File")
+        if args and not _on_external_storage(args[0]):
+            return Environment.MEDIA_UNKNOWN
+        return Environment.MEDIA_MOUNTED
+
+    @staticmethod
+    def isExternalStorageRemovable(*args):
+        _volume(args, "isExternalStorageRemovable")
+        return False
+
+    @staticmethod
+    def isExternalStorageEmulated(*args):
+        _volume(args, "isExternalStorageEmulated")
+        return True
+
+    @staticmethod
+    def isExternalStorageManager(*args):
+        _volume(args, "isExternalStorageManager")
+        return True
+
+    @staticmethod
+    def isExternalStorageLegacy(*args):
+        _volume(args, "isExternalStorageLegacy")
+        return False
+
+
+class _Policy(Object):
+    """A StrictMode policy that detects nothing, the only kind this bridge can build."""
+
+    def toString(self):
+        return f"[{type(self).__name__}; mask=0]"
+
+    __repr__ = toString
+
+
+class _PolicyBuilder(Object):
+    _policy = _Policy
+
+    def __init__(self, *args):
+        if len(args) > 1 or (args and not isinstance(args[0], self._policy)):
+            raise TypeError(f"{self._policy.__name__}.Builder takes no argument or a {self._policy.__name__}")
+
+    def build(self):
+        return self._policy()
+
+
+class _ThreadPolicy(_Policy):
+    pass
+
+
+class _ThreadPolicyBuilder(_PolicyBuilder):
+    _policy = _ThreadPolicy
+
+    def permitAll(self):
+        return self
+
+    permitDiskReads = permitDiskWrites = permitNetwork = permitCustomSlowCalls = permitAll
+    permitResourceMismatches = permitUnbufferedIo = permitExplicitGc = permitAll
+
+
+class _VmPolicy(_Policy):
+    pass
+
+
+class _VmPolicyBuilder(_PolicyBuilder):
+    _policy = _VmPolicy
+
+    def permitNonSdkApiUsage(self):
+        return self
+
+    permitUnsafeIntentLaunch = permitNonSdkApiUsage
+
+
+_ThreadPolicy.Builder, _VmPolicy.Builder = _ThreadPolicyBuilder, _VmPolicyBuilder
+_ThreadPolicy.LAX, _VmPolicy.LAX = _ThreadPolicy(), _VmPolicy()
+
+
+class StrictMode(Object):
+    """Policies that detect nothing.
+
+    StrictMode reports violations Android itself detects (disk access on the main thread,
+    ``file://`` exposure and so on). Nothing detects them here, so the ``detect*`` and
+    ``penalty*`` builder methods are absent and a policy is always the permissive one;
+    installing it changes nothing a plugin can observe, exactly as on Android.
+    """
+    ThreadPolicy, VmPolicy = _ThreadPolicy, _VmPolicy
+    _threads = threading.local()
+    _vm = _VmPolicy.LAX
+
+    def __init__(self):
+        raise _l.unsupported("android.os.StrictMode cannot be constructed")
+
+    @staticmethod
+    def getThreadPolicy():
+        return getattr(StrictMode._threads, "policy", _ThreadPolicy.LAX)
+
+    @staticmethod
+    def setThreadPolicy(policy):
+        if policy is None:
+            raise NullPointerException("policy")
+        if not isinstance(policy, _ThreadPolicy):
+            raise TypeError("StrictMode.setThreadPolicy takes a StrictMode.ThreadPolicy")
+        StrictMode._threads.policy = policy
+
+    @staticmethod
+    def getVmPolicy():
+        return StrictMode._vm
+
+    @staticmethod
+    def setVmPolicy(policy):
+        if policy is None:
+            raise NullPointerException("policy")
+        if not isinstance(policy, _VmPolicy):
+            raise TypeError("StrictMode.setVmPolicy takes a StrictMode.VmPolicy")
+        StrictMode._vm = policy
+
+    @staticmethod
+    def allowThreadDiskReads():
+        return StrictMode.getThreadPolicy()
+
+    @staticmethod
+    def allowThreadDiskWrites():
+        return StrictMode.getThreadPolicy()
+
+
 CLASSES = _l.register({
     "android.os.Build": Build,
     "android.os.Build$VERSION": _Version,
@@ -357,4 +561,10 @@ CLASSES = _l.register({
     "android.os.PersistableBundle": PersistableBundle,
     "android.os.StatFs": StatFs,
     "android.os.FileUtils": FileUtils,
+    "android.os.Environment": Environment,
+    "android.os.StrictMode": StrictMode,
+    "android.os.StrictMode$ThreadPolicy": _ThreadPolicy,
+    "android.os.StrictMode$ThreadPolicy$Builder": _ThreadPolicyBuilder,
+    "android.os.StrictMode$VmPolicy": _VmPolicy,
+    "android.os.StrictMode$VmPolicy$Builder": _VmPolicyBuilder,
 })

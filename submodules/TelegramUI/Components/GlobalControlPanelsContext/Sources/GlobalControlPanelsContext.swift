@@ -351,7 +351,7 @@ public final class GlobalControlPanelsContext {
                     starsSubscriptionsContextPromise.get(),
                     accountFreezeConfiguration
                 )
-                |> mapToSignal { suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in // MARK: Swiftgram
+                |> mapToSignal { suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in // MARK: AyuGram
                     let (accountPeer, birthday) = data
                     
 
@@ -414,10 +414,10 @@ public final class GlobalControlPanelsContext {
                     } else if suggestions.contains(.gracePremium) {
                         return .single(.premiumGrace)
                     } else if suggestions.contains(.xmasPremiumGift) {
-                        if ({ return true }()) { return .single(nil) } // MARK: Swiftgram
+                        if ({ return true }()) { return .single(nil) } // MARK: AyuGram
                         return .single(.xmasPremiumGift)
                     } else if suggestions.contains(.annualPremium) || suggestions.contains(.upgradePremium) || suggestions.contains(.restorePremium), let inAppPurchaseManager = context.inAppPurchaseManager {
-                        if ({ return true }()) { return .single(nil) } // MARK: Swiftgram
+                        if ({ return true }()) { return .single(nil) } // MARK: AyuGram
                         return inAppPurchaseManager.availableProducts
                         |> map { products -> ChatListNotice? in
                             if products.count > 1 {

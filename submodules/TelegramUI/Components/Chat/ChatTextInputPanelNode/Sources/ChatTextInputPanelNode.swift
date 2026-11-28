@@ -1,7 +1,7 @@
-import TelegramUIPreferences // MARK: Swiftgram
-import SGSimpleSettings // MARK: Swiftgram
-import SwiftUI // MARK: Swiftgram
-import SGInputToolbar // MARK: Swiftgram
+import TelegramUIPreferences // MARK: AyuGram
+import SGSimpleSettings // MARK: AyuGram
+import SwiftUI // MARK: AyuGram
+import SGInputToolbar // MARK: AyuGram
 
 import Foundation
 import UniformTypeIdentifiers
@@ -372,7 +372,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private let hapticFeedback = HapticFeedback()
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
 //    private var toolbarHostingController: UIViewController? //Any? //  UIHostingController<ChatToolbarView>?
     private var toolbarNode: ASDisplayNode?
     private var sgToolbarFormatting = false
@@ -901,7 +901,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.useInputDecEngineEditor = true
         }
 
-        self.initToolbarIfNeeded(context: context) // MARK: Swiftgram
+        self.initToolbarIfNeeded(context: context) // MARK: AyuGram
 
         self.sendAsAvatarContainerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self else {
@@ -965,7 +965,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         self.attachmentButtonDisabledNode.addTarget(self, action: #selector(self.attachmentButtonPressed), forControlEvents: .touchUpInside)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.attachmentButtonLongPressed(_:)))
         longPressGesture.minimumPressDuration = 1.0
         self.attachmentButton.addGestureRecognizer(longPressGesture)
@@ -1355,7 +1355,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.textInputNodeClippingContainer.addSubnode(richTextInputNode.asNode)
         richTextInputNode.inputView.disablesInteractiveTransitionGestureRecognizer = true
         richTextInputNode.inputIsUserInteractionEnabled = !self.sendingTextDisabled
-        richTextInputNode.returnKeyType = SGSimpleSettings.shared.sendWithReturnKey ? .send : .default // MARK: Swiftgram
+        richTextInputNode.returnKeyType = SGSimpleSettings.shared.sendWithReturnKey ? .send : .default // MARK: AyuGram
         self.richTextInputNode = richTextInputNode
         richTextInputNode.emojiViewProvider = { [weak self] emoji in
             return self?.emojiViewProvider?(emoji)
@@ -2113,7 +2113,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var updatedPlaceholder: String?
         var placeholderHasStar = false
         
-        self.toolbarNode?.view.overrideUserInterfaceStyle = interfaceState.theme.overallDarkAppearance ? .dark : .light // MARK: Swiftgram
+        self.toolbarNode?.view.overrideUserInterfaceStyle = interfaceState.theme.overallDarkAppearance ? .dark : .light // MARK: AyuGram
         let themeUpdated = self.presentationInterfaceState?.theme !== interfaceState.theme
         // Text Size changes the placeholder font and the live text's decoration; neither is theme-keyed.
         // False on the first layout (no previous state): the placeholder is built by `initializedPlaceholder`
@@ -2657,7 +2657,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if buttonTitleUpdated && !transition.isAnimated {
             transition = .animated(duration: 0.3, curve: .easeInOut)
         }
-        let originalLeftInset = leftInset // MARK: Swiftgram
+        let originalLeftInset = leftInset // MARK: AyuGram
         
         let textInputBackgroundWidthOffset: CGFloat = 0.0
         var attachmentButtonX: CGFloat = hideOffset.x + leftInset + leftMenuInset + 8.0
@@ -2854,7 +2854,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if additionalSideInsets.right > 0.0 {
             textFieldInsets.right += additionalSideInsets.right / 3.0
         }
-        if SGSimpleSettings.shared.hideRecordingButton || inputHasText || self.extendedSearchLayout || hasMediaDraft || hasForward || hasSlowmodeButton || isEditingMedia { // MARK: Swiftgram
+        if SGSimpleSettings.shared.hideRecordingButton || inputHasText || self.extendedSearchLayout || hasMediaDraft || hasForward || hasSlowmodeButton || isEditingMedia { // MARK: AyuGram
         } else {
             if let customRightAction = self.customRightAction, case .empty = customRightAction {
                 textFieldInsets.right = 8.0
@@ -4179,7 +4179,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             overscrollIsland.updateAnchor(container: container, anchorFrame: anchorFrame)
         }
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgPanelHeight = contentHeight + (isAgentLayout ? self.agentContainerExtraBottomInset : 0.0)
         let sgToolbarOffset = layoutToolbar(transition: transition, panelHeight: sgPanelHeight, width: width, leftInset: originalLeftInset, rightInset: rightInset, displayBotStartButton: displayBotStartButton)
         return sgPanelHeight + sgToolbarOffset
@@ -4921,8 +4921,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let blurTransitionOut: ComponentTransition = transition.isAnimated ? .easeInOut(duration: 0.18) : .immediate
         let sendButtonBlurOut: CGFloat = 4.0
         
-        var hideMicButton = SGSimpleSettings.shared.hideRecordingButton // MARK: Swiftgram
-        var hideMicButtonBackground = SGSimpleSettings.shared.hideRecordingButton // MARK: Swiftgram
+        var hideMicButton = SGSimpleSettings.shared.hideRecordingButton // MARK: AyuGram
+        var hideMicButtonBackground = SGSimpleSettings.shared.hideRecordingButton // MARK: AyuGram
         
         if self.customRightAction != nil {
             self.mediaActionButtons.isHidden = true
@@ -5010,7 +5010,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             // screen (a pending forward, a media draft, a media edit): the mic/expand button is moved off screen
             // then, so it is the only way to send. Otherwise the button is laid out at scale 0.001, and making it
             // opaque would only let a hardware Return send through a button the user cannot see.
-            if (SGSimpleSettings.shared.hideRecordingButton || hasText || (keepSendButtonEnabled && (sendButtonIsLaidOut || !mediaInputIsActive) && !hasSlowModeButton)) { // MARK: Swiftgram
+            if (SGSimpleSettings.shared.hideRecordingButton || hasText || (keepSendButtonEnabled && (sendButtonIsLaidOut || !mediaInputIsActive) && !hasSlowModeButton)) { // MARK: AyuGram
                 if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
                     alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
                     self.sendActionButtons.updateSendButtonGlassVisibility(true, transition: alphaTransition)
@@ -5691,7 +5691,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private final func updateFormattingAttribute(_ attribute: NSAttributedString.Key, value: Any?) {
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: attribute, value: value), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: attribute, value: value), inputMode) // MARK: AyuGram
         }
     }
     
@@ -5769,7 +5769,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         self.updateActivity()
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if SGSimpleSettings.shared.sendWithReturnKey && text == "\n" {
             self.sendButtonPressed()
             return false
@@ -6384,7 +6384,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     @objc func attachmentButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
     }
@@ -6710,7 +6710,7 @@ private final class AgentChipMenuReferenceSource: ContextReferenceContentSource 
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension ChatTextInputPanelNode {
     
     func initToolbarIfNeeded(context: AccountContext) {

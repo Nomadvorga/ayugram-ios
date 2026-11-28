@@ -46,7 +46,7 @@ This branch is implementing a compatibility bridge for the supplied Android Pyth
 - Embedded CPython facade on a dedicated OS thread, native-owned dispatch context and asynchronous main-thread completions.
 - Python SDK lifecycle, settings, declarative settings rows, callback/token lifetime, virtual Java class/member/array/proxy facade and explicit unsupported-API errors.
 - Native owner-scoped host and bounded UIKit view registry; partial FrameLayout/LinearLayout/TextView/ImageView adaptation and native animation/batch entry points. The layout model is intentionally documented as partial.
-- Plugin manager reachable from AyuGram settings: import, inspection, user-driven enable/disable/delete, settings and a preview surface. Plugins do not automatically execute at startup.
+- Plugin manager reachable from AyuGram settings: import, inspection, user-driven enable/disable/delete, settings and a preview surface. Plugins do not automatically execute at startup. Its list follows exteraGram's `PluginsActivity` (one card per plugin with switch, share, pin, settings and delete; pinned first, then by name; name search; empty state; compact view switch; an icon slot for `__icon__ = "Pack/N"`, 56 pt above the name or 49 pt beside it in the compact view); the catalog, the engine switch and the info screen are not ported, the app does not yet supply the sticker pictures for the icon slot (`AyuPluginManagerViewController.iconProvider` is unset, so no card shows one), and the layout has only been rendered off-device.
 - Bundled synthetic smoke plugin without Telegram/network actions.
 - Checksum-pinned iOS Python packaging and CI test/build wiring are being integrated.
 

@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 import SGSettingsUI
 import SGStrings
@@ -170,7 +170,7 @@ enum PeerInfoContextSubject {
 
 enum PeerInfoSettingsSection {
     case ayugram // MARK: AyuGram
-    // MARK: Swiftgram
+    // MARK: AyuGram
     case swiftgram
     case swiftgramPro
     //
@@ -399,7 +399,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             action()
         }
     }
-    private(set) var nearestChatParticipant: (String?, Int32?) = (nil, nil) // MARK: Swiftgram
+    private(set) var nearestChatParticipant: (String?, Int32?) = (nil, nil) // MARK: AyuGram
     private(set) var data: PeerInfoScreenData?
     
     var state = PeerInfoState(
@@ -570,7 +570,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.paneContainerNode.parentController = controller
         
         self._interaction = PeerInfoInteraction(
-            // MARK: Swiftgram
+            // MARK: AyuGram
             notifyTextCopied: { [weak self] in
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                 self?.controller?.present(UndoOverlayController(presentationData: presentationData, content: .copy(text: presentationData.strings.Conversation_TextCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
@@ -2179,7 +2179,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                     strongSelf.crossDissolveContentExceptNavigationBar()
                 }
-                (strongSelf.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.3, curve: .linear)) // MARK: Swiftgram
+                (strongSelf.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.3, curve: .linear)) // MARK: AyuGram
             case .select:
                 strongSelf.state = strongSelf.state.withSelectedMessageIds(Set())
                 if let (layout, navigationHeight) = strongSelf.validLayout {
@@ -2624,7 +2624,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             reactionSourceMessage = .single(nil)
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let nearestChatParticipantSignal = .single((nil, nil)) |> then(self.fetchNearestChatParticipant()) |> distinctUntilChanged { lhs, rhs in
             if lhs.0 != rhs.0 {
                 return false
@@ -2638,11 +2638,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
 
         self.dataDisposable = combineLatest(
             queue: Queue.mainQueue(),
-            nearestChatParticipantSignal, // MARK: Swiftgram
+            nearestChatParticipantSignal, // MARK: AyuGram
             screenData,
             self.forceIsContactPromise.get(),
             reactionSourceMessage
-        ).startStrict(next: { [weak self] nearestChatParticipant, data, forceIsContact, reactionSourceMessage in // MARK: Swiftgram
+        ).startStrict(next: { [weak self] nearestChatParticipant, data, forceIsContact, reactionSourceMessage in // MARK: AyuGram
             guard let strongSelf = self else {
                 return
             }
@@ -2661,7 +2661,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             strongSelf.canDeleteReaction = canDeleteReaction
 
-            strongSelf.nearestChatParticipant = nearestChatParticipant // MARK: Swiftgram
+            strongSelf.nearestChatParticipant = nearestChatParticipant // MARK: AyuGram
             if data.isContact && forceIsContact {
                 strongSelf.forceIsContactPromise.set(false)
             } else {
@@ -4505,7 +4505,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
     }
         
-    public func openParticipantsSection(section: PeerInfoParticipantsSection) { // MARK: Swiftgram
+    public func openParticipantsSection(section: PeerInfoParticipantsSection) { // MARK: AyuGram
         guard let data = self.data, let peer = data.peer else {
             return
         }
@@ -5427,7 +5427,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         controller.dismissAllTooltips()
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.4, curve: .spring)) // MARK: Swiftgram
+            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(SGSimpleSettings.shared.hideTabBar, transition: .animated(duration: 0.4, curve: .spring)) // MARK: AyuGram
         }
         
         if let (layout, navigationHeight) = self.validLayout {
@@ -5801,7 +5801,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             insets.left += sideInsets.sectionLeft
             insets.right += sideInsets.sectionRight
             
-            let items = self.isSettings ? settingsItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, isExpanded: self.headerNode.isAvatarExpanded) : infoItems(nearestChatParticipant: self.nearestChatParticipant, data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, reactionSourceMessageId: self.reactionSourceMessageId, canDeleteReaction: self.canDeleteReaction, callMessages: self.callMessages, chatLocation: self.chatLocation, isOpenedFromChat: self.isOpenedFromChat, isMyProfile: self.isMyProfile) // MARK: Swiftgram
+            let items = self.isSettings ? settingsItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, isExpanded: self.headerNode.isAvatarExpanded) : infoItems(nearestChatParticipant: self.nearestChatParticipant, data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, reactionSourceMessageId: self.reactionSourceMessageId, canDeleteReaction: self.canDeleteReaction, callMessages: self.callMessages, chatLocation: self.chatLocation, isOpenedFromChat: self.isOpenedFromChat, isMyProfile: self.isMyProfile) // MARK: AyuGram
             
             contentHeight += headerHeight
             if !((self.isSettings || self.isMyProfile) && self.state.isEditing) {
@@ -6263,7 +6263,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 navigationFlags.canEditBotPreviews = true
             }
             navigationFlags.isOwnStories = self.data?.peer?.id == self.context.account.peerId
-            // MARK: Swiftgram
+            // MARK: AyuGram
             var navigationSets = peerInfoNavigationButtonSets(navigationFlags)
             if self.isSettings && !self.state.isEditing && SGSimpleSettings.shared.hideTabBar {
                 // The bar has one leading item. Keep QR accessible beside the trailing items.
@@ -7476,7 +7476,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         
         var items: [ContextMenuItem] = []
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         #if DEBUG
         #endif
         //
@@ -7868,7 +7868,7 @@ struct ClearPeerHistory {
 
 
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension PeerInfoScreenImpl {
 
     public func tabBarItemContextActionRawUIView(sourceView: UIView, gesture: ContextGesture?) {
@@ -7880,7 +7880,7 @@ extension PeerInfoScreenImpl {
         
         var items: [ContextMenuItem] = []
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         #if DEBUG
         #endif
         //

@@ -97,10 +97,10 @@ class SeamTests(unittest.TestCase):
         self.host.capabilities["operations"].remove("log.write")
         self.host.capabilities["operations"].remove("client.call")
         self.assertEqual(self.blockers(text), {("CLASS", "android.util.Log"), ("CLASS", "android.content.ClipboardManager")})
-        absent = fixtures.source(imports="from android.graphics import Bitmap\nfrom android.os import Environment\n"
+        absent = fixtures.source(imports="from android.graphics import Bitmap\nfrom android.os import DropBoxManager\n"
                                          "from java.lang import InterruptedException\n")
         self.assertEqual({detail for code, detail in self.blockers(absent) if code == "CLASS"} - {"java.lang.InterruptedException"},
-                         {"android.graphics.Bitmap", "android.os.Environment"})
+                         {"android.graphics.Bitmap", "android.os.DropBoxManager"})
 
     def test_plugin_uses_local_classes_and_sends_plain_values_to_the_host(self):
         with tempfile.TemporaryDirectory() as directory:

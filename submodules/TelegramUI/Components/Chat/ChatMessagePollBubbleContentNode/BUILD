@@ -37,6 +37,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ComposePollScreen",
         "//submodules/UndoUI",
         "//submodules/TelegramStringFormatting",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

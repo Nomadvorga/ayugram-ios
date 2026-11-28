@@ -5,12 +5,12 @@ load("@build_bazel_rules_apple//apple/testing/default_runner:ios_test_runner.bzl
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 sgsrc = [
-    "//Swiftgram/SGAppBadgeOffset:SGAppBadgeOffset"
+    "//AyuGram/SGAppBadgeOffset:SGAppBadgeOffset"
 ]
 
 sgdeps = [
     "//submodules/Utils/DeviceModel",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
 ]
 
 swift_library(

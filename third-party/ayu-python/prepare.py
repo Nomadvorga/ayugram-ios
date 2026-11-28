@@ -77,16 +77,11 @@ class PrepareError(RuntimeError):
 
 def validate_relative_path(path: str | PurePosixPath) -> PurePosixPath:
     """Reject absolute, empty, and traversal paths before joining a root."""
-    raw = str(path)
-    if "\\" in raw:
-        raise PrepareError(f"backslash is not valid in archive paths: {raw}")
-    # PurePosixPath collapses repeated separators and dot components. Check the
-    # archive spelling first so a malformed name cannot become a different path.
-    if any(part in ("", ".", "..") for part in raw.split("/")):
-        raise PrepareError(f"unsafe relative path: {raw}")
     rel = PurePosixPath(path)
     if rel.is_absolute() or not rel.parts or any(part in ("", ".", "..") for part in rel.parts):
-        raise PrepareError(f"unsafe relative path: {raw}")
+        raise PrepareError(f"unsafe relative path: {path!s}")
+    if "\\" in str(path):
+        raise PrepareError(f"backslash is not valid in archive paths: {path!s}")
     return rel
 
 

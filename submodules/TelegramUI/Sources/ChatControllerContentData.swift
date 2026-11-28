@@ -143,7 +143,7 @@ extension ChatControllerImpl {
             var requestsState: PeerInvitationImportersState?
             var dismissedInvitationRequests: [Int64]?
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             var predictedChatLanguage: String?
             
             var customEmojiAvailable: Bool = false
@@ -176,7 +176,7 @@ extension ChatControllerImpl {
         private var premiumGiftSuggestionDisposable: Disposable?
         private var translationStateDisposable: Disposable?
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         private var chatLanguagePredictionDisposable: Disposable?
 
         private let isPeerInfoReady = ValuePromise<Bool>(false, ignoreRepeated: true)
@@ -2242,7 +2242,7 @@ extension ChatControllerImpl {
                         if counterAndTimestamp.0 >= 3 {
                             maybeSuggestPremium = true
                         }
-                        if (isPremium || maybeSuggestPremium || hasAutoTranslate || true /* MARK: Swiftgram */) && !isHidden {
+                        if (isPremium || maybeSuggestPremium || hasAutoTranslate || true /* MARK: AyuGram */) && !isHidden {
                             return chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId)
                             |> map { translationState -> ChatPresentationTranslationState? in
                                 if let translationState, !translationState.fromLang.isEmpty && (translationState.fromLang != baseLanguageCode || translationState.isEnabled) {
@@ -2268,7 +2268,7 @@ extension ChatControllerImpl {
                         strongSelf.onUpdated?(previousState)
                     })
 
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     self.chatLanguagePredictionDisposable = (
                         chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId, forcePredict: true)
                         |> map { translationState -> ChatPresentationTranslationState? in
@@ -2594,7 +2594,7 @@ extension ChatControllerImpl {
             self.cachedDataDisposable?.dispose()
             self.premiumGiftSuggestionDisposable?.dispose()
             self.translationStateDisposable?.dispose()
-            // MARK: Swiftgram
+            // MARK: AyuGram
             self.chatLanguagePredictionDisposable?.dispose()
             self.inviteRequestsDisposable?.dispose()
         }

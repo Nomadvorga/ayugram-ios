@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import TelegramCore
+import SGSimpleSettings // MARK: AyuGram
 
 public enum MessageBubbleImageNeighbors {
     case none
@@ -140,6 +141,11 @@ public func messageBubbleArguments(maxCornerRadius: CGFloat, minCornerRadius: CG
         bottomLeftRadius = tmp
     }
     
+    // MARK: AyuGram - Remove Message Tail
+    if ExteraSettings.shared.removeMessageTail {
+        drawTail = false
+    }
+    
     return (topLeftRadius, topRightRadius, bottomLeftRadius, bottomRightRadius, drawTail)
 }
 
@@ -189,7 +195,8 @@ public func messageBubbleImage(maxCornerRadius: CGFloat, minCornerRadius: CGFloa
         drawTail = false
     }
     // `tail: false` (bubble mode off) keeps the neighbor corner shapes and the tail's reserved column, and draws no tail.
-    if !tail {
+    // MARK: AyuGram - Remove Message Tail: same tailless shape for every bubble, incoming too.
+    if !tail || ExteraSettings.shared.removeMessageTail {
         drawTail = false
     }
     

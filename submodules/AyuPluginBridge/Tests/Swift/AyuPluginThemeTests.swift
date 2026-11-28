@@ -31,13 +31,52 @@ final class AyuPluginThemeTests: XCTestCase {
             "key_featuredStickers_addButton": 688, "key_featuredStickers_buttonText": 692, "key_player_progress": 747,
         ]
         for (name, id) in android { XCTAssertEqual(keys[name]?.id, id, name) }
-        XCTAssertEqual(AyuPluginTheme.keyConstants.count, keys.count)
+        // The slot table names Android keys only, with Android's ids.
+        let table = Dictionary(uniqueKeysWithValues: AyuPluginTheme.androidKeys.map { ($0.name, $0) })
+        for (name, key) in keys { XCTAssertEqual(table[name]?.id, key.id, name) }
+        XCTAssertEqual(AyuPluginTheme.keyConstants.count, AyuPluginTheme.androidKeys.count)
         XCTAssertEqual(AyuPluginTheme.keyConstants["key_divider"], .integer(101))
         XCTAssertEqual(Set(keys.values.map(\.slot)), Set(AyuPluginThemePalette.Slot.allCases))
-        // Keys Android does not define at this version, or that have no presentation theme colour, stay absent.
-        for name in ["key_actionBarTitle", "key_switchThumb", "key_dialogTextRed", "key_listSelectorSDK21", "key_premiumStarGradient2", "key_undo_cancelColor"] {
-            XCTAssertNil(keys[name], name)
+        // Keys Android does not define at this version stay absent, as do the two it computes from the wallpaper.
+        for name in ["key_actionBarTitle", "key_dialogTextRed", "key_dialogButtonRed", "key_listSelectorSDK21", "key_chat_serviceBackground", "key_chat_serviceBackgroundSelected"] {
+            XCTAssertNil(AyuPluginTheme.keyConstants[name], name)
         }
+    }
+
+    /// A sample of exteraGram 13.2.2: `Theme.java` ids, `ThemeColors.java` defaults and `darkblue.attheme`.
+    func testAndroidKeyTablePinsIdsAndDefaultColours() {
+        let table = Dictionary(uniqueKeysWithValues: AyuPluginTheme.androidKeys.map { ($0.name, $0) })
+        XCTAssertEqual(table.count, 864)
+        XCTAssertEqual(Set(AyuPluginTheme.androidKeys.map(\.id)).count, 864)
+        XCTAssertEqual(AyuPluginTheme.androidKeys.map(\.id).max(), 865)
+        let android: [(String, Int64, UInt32, UInt32)] = [
+            ("key_wallpaperFileOffset", 0, 0xFFFF_0000, 0xFFFF_FFFF),
+            ("key_dialogBackground", 1, 0xFFFF_FFFF, 0xFF21_2D3B),
+            ("key_dialogTextBlack", 3, 0xFF1A_1D21, 0xFFF6_F6F6),
+            ("key_dialogTextHint", 13, 0xFF97_9797, 0xFF7D_8B99),
+            ("key_windowBackgroundWhite", 49, 0xFFFF_FFFF, 0xFF1D_2733),
+            ("key_divider", 101, 0xFFD9_D9D9, 0x9500_0000),
+            ("key_chats_name", 196, 0xFF1A_1D21, 0xFFE9_EEF4),
+            ("key_chat_attachPhotoBackground", 248, 0x0C00_0000, 0x0C00_0000),
+            ("key_chat_outBubble", 316, 0xFFEF_FFDE, 0xFF3E_618A),
+            ("key_chat_messagePanelSend", 491, 0xFF22_9AF0, 0xFF22_9AF0),
+            ("key_undo_cancelColor", 732, 0xFF85_CAFF, 0xFF85_CAFF),
+            ("key_premiumStarGradient2", 799, 0xFFE3_ECFA, 0xFFC0_66FA),
+            ("key_iv_background", 843, 0xFFFF_FFFF, 0xFF00_0000),
+        ]
+        for (name, id, light, dark) in android {
+            XCTAssertEqual(table[name], AyuPluginTheme.AndroidKey(name: name, id: id, light: light, dark: dark), name)
+        }
+        // getColor returns a signed Java int; a key without a slot answers by the theme's appearance.
+        let light = AyuPluginThemePalette(isDark: false, isNight: false, colors: [:])
+        let dark = AyuPluginThemePalette(isDark: true, isNight: false, colors: [:])
+        XCTAssertEqual(try AyuPluginTheme.color(799, palette: light), -1_839_878)
+        XCTAssertEqual(try AyuPluginTheme.color(799, palette: dark), -4_167_942)
+        XCTAssertEqual(try AyuPluginTheme.color(3, palette: light), -15_065_823)
+        XCTAssertEqual(try AyuPluginTheme.color(3, palette: dark), -592_138)
+        XCTAssertEqual(try AyuPluginTheme.color(248, palette: light), 0x0C00_0000)
+        XCTAssertThrowsError(try AyuPluginTheme.color(866, palette: light))
+        XCTAssertThrowsError(try AyuPluginTheme.color(-1, palette: light))
     }
 
     func testWithoutABoundPaletteColorMembersAreRefusedAndNotAdvertised() async throws {
@@ -75,7 +114,7 @@ final class AyuPluginThemeTests: XCTestCase {
         let session = try await self.session(application)
         let capabilities = try await session.call("runtime.capabilities", owner: "inspector", pluginID: "$runtime")
         let entry = capabilities["members"]["classes"][self.theme]
-        XCTAssertEqual(Set(entry["static_fields"].array?.compactMap(\.string) ?? []), Set(AyuPluginTheme.keys.keys))
+        XCTAssertEqual(Set(entry["static_fields"].array?.compactMap(\.string) ?? []), Set(AyuPluginTheme.keyConstants.keys))
         XCTAssertTrue(Set(entry["static_methods"].array?.compactMap(\.string) ?? []).isSuperset(of: ["getColor", "isCurrentThemeDark", "isCurrentThemeNight", "getActiveTheme", "getSelectorDrawable"]))
         XCTAssertEqual(entry["results"]["getActiveTheme"], .string("org.telegram.ui.ActionBar.Theme$ThemeInfo"))
 
@@ -92,9 +131,11 @@ final class AyuPluginThemeTests: XCTestCase {
         // The ResourcesProvider overload with the app-wide theme.
         ayuExpect(try await session.invokeStatic(self.theme, "getColor", [.integer(1), .null]), .integer(Int64(Int32(bitPattern: try XCTUnwrap(Self.palette().colors[.dialogBackground])))))
 
-        var code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(0)]) }
+        // A key with no slot answers with Android's default for the light appearance.
+        ayuExpect(try await session.invokeStatic(self.theme, "getColor", [try await session.field(self.theme, "key_premiumStarGradient2")]), .integer(-1_839_878))
+        var code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(866)]) }
         XCTAssertEqual(code, "UNSUPPORTED_API")
-        code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(799)]) }
+        code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(-1)]) }
         XCTAssertEqual(code, "UNSUPPORTED_API")
         code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.string("key_divider")]) }
         XCTAssertEqual(code, "INVALID_ARGUMENTS")
@@ -106,9 +147,9 @@ final class AyuPluginThemeTests: XCTestCase {
         ayuExpect(try await session.invokeStatic(self.theme, "getColor", [.integer(1)]), .integer(Int64(Int32(bitPattern: 0xFF10_2030))))
         ayuExpect(try await session.invokeStatic(self.theme, "isCurrentThemeDark"), .bool(true))
         ayuExpect(try await session.invokeStatic(self.theme, "isCurrentThemeNight"), .bool(true))
-        // A slot the app could not fill is refused, never guessed.
-        code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(101)]) }
-        XCTAssertEqual(code, "UNSUPPORTED_API")
+        // A slot the app could not fill answers with Android's dark default.
+        ayuExpect(try await session.invokeStatic(self.theme, "getColor", [.integer(101)]), .integer(Int64(Int32(bitPattern: 0x9500_0000))))
+        ayuExpect(try await session.invokeStatic(self.theme, "getColor", [.integer(799)]), .integer(-4_167_942))
         palette.value = nil
         code = await session.failure { try await session.invokeStatic(self.theme, "getColor", [.integer(1)]) }
         XCTAssertEqual(code, "DATA_UNAVAILABLE")

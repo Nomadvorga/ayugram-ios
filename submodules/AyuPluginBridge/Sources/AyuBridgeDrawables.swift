@@ -103,8 +103,57 @@ enum AyuBridgeDrawables {
         if let bounded = mask["bounded"] { guard bounded.bool != nil else { throw AyuBridgeFailure("invalid_arguments", "Invalid RippleDrawable state") } }
         if let content = state["content"], content != .null {
             guard let shape = content.object else { throw AyuBridgeFailure("invalid_arguments", "Invalid RippleDrawable state") }
-            try Self.validateShape(shape, allowed: ["color", "shape", "corner_radius", "corner_radii"], className: Self.rippleName)
+            try Self.validateShape(shape, allowed: ["color", "shape", "corner_radius", "corner_radii", "stroke_width", "stroke_color"], className: Self.rippleName)
         }
+    }
+
+    private static func rippleLayer(_ value: AyuBridgeValue, context: AyuBridgeAdapterContext) throws -> [String: AyuBridgeValue]? {
+        if value == .null { return nil }
+        let snapshot = try context.snapshot(of: value)
+        let state = snapshot.state
+        switch snapshot.className {
+        case "android.graphics.drawable.ColorDrawable":
+            guard let color = state["color"]?.integer else { throw AyuBridgeFailure.unsupported("RippleDrawable layer") }
+            return Self.shape(color: color, radius: 0)
+        case gradientName, shapeName:
+            // Only what the pressed-highlight renderer draws under a ripple: a solid shape, optionally stroked.
+            guard state["colors"] == nil, (state["alpha"]?.integer ?? 255) == 255, let color = state["color"], let shape = state["shape"] else {
+                throw AyuBridgeFailure.unsupported("RippleDrawable layer with a gradient or alpha")
+            }
+            var layer: [String: AyuBridgeValue] = ["color": color, "shape": shape, "corner_radius": state["corner_radius"] ?? .number(0)]
+            if let radii = state["corner_radii"] { layer["corner_radii"] = radii }
+            if let width = state["stroke_width"]?.number, width > 0 {
+                layer["stroke_width"] = .number(width)
+                layer["stroke_color"] = state["stroke_color"] ?? .integer(0)
+            }
+            return layer
+        default:
+            throw AyuBridgeFailure.unsupported("RippleDrawable layer " + snapshot.className)
+        }
+    }
+
+    /// `RippleDrawable(ColorStateList color, Drawable content, Drawable mask)`. Without a mask Android clips
+    /// the ripple to the content, and without either it is an unbounded circle.
+    static func rippleState(_ args: [AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> [String: AyuBridgeValue] {
+        guard args.count == 3 else { throw AyuBridgeFailure("invalid_arguments", "RippleDrawable takes a ColorStateList, a content and a mask") }
+        guard args[0] != .null else { throw AyuBridgeFailure("invalid_arguments", "RippleDrawable color must not be null") }
+        let colors = try context.snapshot(of: args[0])
+        guard colors.className == "android.content.res.ColorStateList", let color = colors.state["color"]?.integer else {
+            throw AyuBridgeFailure.unsupported("RippleDrawable ColorStateList")
+        }
+        let content = try Self.rippleLayer(args[1], context: context)
+        var mask: [String: AyuBridgeValue] = ["kind": .string("circle"), "radius": .number(-1), "bounded": .bool(false)]
+        if let outline = try Self.rippleLayer(args[2], context: context) ?? content {
+            guard outline["shape"]?.integer == 0 else { throw AyuBridgeFailure.unsupported("RippleDrawable oval mask") }
+            if let radii = outline["corner_radii"] {
+                mask = ["kind": .string("round_rect"), "radii": radii]
+            } else if let radius = outline["corner_radius"]?.number, radius > 0 {
+                mask = ["kind": .string("round_rect"), "radius": .number(radius)]
+            } else {
+                mask = ["kind": .string("rect")]
+            }
+        }
+        return ["ripple_color": .integer(color), "content": content.map(AyuBridgeValue.object) ?? .null, "mask": .object(mask)]
     }
 
     // MARK: Telegram `Theme` drawable factories
@@ -315,7 +364,9 @@ extension AyuBridgeJavaRuntime {
     }
 
     static var rippleDrawable: AyuBridgeClassAdapter {
-        AyuBridgeClassAdapter(name: "android.graphics.drawable.RippleDrawable", validateState: { try AyuBridgeDrawables.validateRipple($0) })
+        AyuBridgeClassAdapter(name: "android.graphics.drawable.RippleDrawable",
+            constructor: { try AyuBridgeDrawables.rippleState($0, context: $1) },
+            validateState: { try AyuBridgeDrawables.validateRipple($0) })
     }
 }
 

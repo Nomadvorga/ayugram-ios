@@ -1,7 +1,7 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 sgdeps = [
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings"
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings"
 ]
 
 swift_library(
@@ -13,7 +13,7 @@ swift_library(
     copts = [
         "-warnings-as-errors",
     ],
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
         "//submodules/ShimmerEffect",
         "//submodules/AsyncDisplayKit",
         "//submodules/SSignalKit/SwiftSignalKit",

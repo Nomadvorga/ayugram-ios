@@ -1,9 +1,9 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgdeps = [
-    "//Swiftgram/SGStrings:SGStrings",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings"
+    "//AyuGram/SGStrings:SGStrings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings"
 ]
 #
 
@@ -16,7 +16,7 @@ swift_library(
     copts = [
         "-warnings-as-errors",
     ],
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
         "//submodules/UrlWhitelist",
         "//submodules/Display",
         "//submodules/AsyncDisplayKit",

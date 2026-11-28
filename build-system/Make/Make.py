@@ -49,7 +49,7 @@ class BazelCommandLine:
         self.enable_sandbox = False
         self.disable_provisioning_profiles = False
         self.profile_swift = False
-        # MARK: Swiftgram
+        # MARK: AyuGram
         self.bazel_profile = None
         #
         self.embed_watch_app = False
@@ -149,7 +149,7 @@ class BazelCommandLine:
     def set_profile_swift(self, value):
         self.profile_swift = value
 
-    # MARK: Swiftgram
+    # MARK: AyuGram
     def set_bazel_profile(self, path):
         self.bazel_profile = path
     #
@@ -306,7 +306,7 @@ class BazelCommandLine:
         if self.show_actions:
             combined_arguments += ['--subcommands']
 
-        # MARK: Swiftgram
+        # MARK: AyuGram
         if self.bazel_profile is not None:
             combined_arguments += ['--profile={}'.format(self.bazel_profile)]
         #
@@ -665,7 +665,7 @@ def build(bazel, arguments):
     bazel_command_line.set_continue_on_error(arguments.continueOnError)
     bazel_command_line.set_show_actions(arguments.showActions)
     bazel_command_line.set_enable_sandbox(arguments.sandbox)
-    # MARK: Swiftgram
+    # MARK: AyuGram
     if arguments.disableProvisioningProfiles:
         bazel_command_line.set_disable_provisioning_profiles()
     if arguments.bazelProfile is not None:
@@ -1079,7 +1079,7 @@ if __name__ == '__main__':
         help='Generate .swiftmodule files in parallel to building modules, can speed up compilation on multi-core '
              'systems. '
     )
-    # MARK: Swiftgram
+    # MARK: AyuGram
     buildParser.add_argument(
         '--disableProvisioningProfiles',
         action='store_true',

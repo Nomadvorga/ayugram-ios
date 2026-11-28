@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 //
 import Foundation
@@ -86,7 +86,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
-    private var sgContactsTabController: ContactsController? // MARK: Swiftgram
+    private var sgContactsTabController: ContactsController? // MARK: AyuGram
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -244,7 +244,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func getContactsController() -> ViewController? {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let sgContactsTabController = self.sgContactsTabController, self.rootTabController?.controllers.contains(where: { $0 === sgContactsTabController }) == true {
             return sgContactsTabController
         }
@@ -295,7 +295,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.updateAtmosphericSnow()
     }
     
-    public func addRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
+    public func addRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: AyuGram */ showNewsTab: Bool) {
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.currentControllerUpdated = { [weak self] _ in
             self?.updateAtmosphericSnow()
@@ -312,7 +312,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         var controllers: [ViewController] = []
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgContactsTabController = ContactsController(context: self.context, sgIsTabMode: true)
         sgContactsTabController.sgSwitchToChatsController = { [weak self] in
             self?.openChatsController(activateSearch: false)
@@ -361,12 +361,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.pushViewController(tabBarController, animated: false)
     }
         
-    public func updateRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
+    public func updateRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: AyuGram */ showNewsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
         var controllers: [ViewController] = []
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if showContactsTab, let sgContactsTabController = self.sgContactsTabController {
             controllers.append(sgContactsTabController)
         }
@@ -1049,14 +1049,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         )
     }
     
-    /// Opens the optional Contacts tab, or pushes Contacts over Settings when the tab is hidden. // MARK: Swiftgram
+    /// Opens the optional Contacts tab, or pushes Contacts over Settings when the tab is hidden. // MARK: AyuGram
     public func openContacts() {
         guard let rootTabController = self.rootTabController else {
             return
         }
         
         self.popToRoot(animated: false)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let sgContactsTabController = self.sgContactsTabController, let index = rootTabController.controllers.firstIndex(where: { $0 === sgContactsTabController }) {
             rootTabController.selectedIndex = index
             return

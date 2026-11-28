@@ -294,6 +294,8 @@ class ChatActivity(_Navigable):
     _ayu_kind = "chat"
     MODE_DEFAULT, MODE_SCHEDULED, MODE_PINNED, MODE_SAVED = 0, 1, 2, 3
     MODE_QUICK_REPLIES, MODE_EDIT_BUSINESS_LINK, MODE_SEARCH, MODE_SUGGESTIONS, MODE_WELCOME_MESSAGES = 5, 6, 7, 8, 9
+    # Android's ``private long dialog_id``: found by getDeclaredField only, read after setAccessible(true).
+    __ayu_private_fields__ = {"dialog_id": lambda self: self._dialog()}
 
     @staticmethod
     def of(dialogId, messageId=None):
@@ -385,8 +387,8 @@ def _unrendered(what):
 
 
 def _literal_style(arguments, index):
-    """Whether literal constructor arguments leave the progress style at ``ALERT_TYPE_MESSAGE``."""
-    return len(arguments) <= index or arguments[index] is ... or arguments[index] == 0
+    """Whether literal constructor arguments name a progress style Android's ``AlertDialog`` has."""
+    return len(arguments) <= index or arguments[index] is ... or arguments[index] in (0, 2, 3)
 
 
 class AlertDialog(messenger._l.Object):
@@ -394,10 +396,11 @@ class AlertDialog(messenger._l.Object):
 
     The dialog is a description until ``show``; the host then presents one alert and answers
     ``isShowing``/``dismiss`` for it. Listeners receive this object as Android's ``dialog``.
-    What ``ui.alert`` refuses is refused here the same way: a progress style (``ALERT_TYPE_LOADING``,
-    ``ALERT_TYPE_SPINNER``) and changing a dialog that is on screen raise ``UNSUPPORTED_API``, and a
-    red button is only logged. Members the host alert has no counterpart for (button views, the
-    window, top images, cancel and back-button listeners) are not defined.
+    What ``ui.alert`` refuses is refused here the same way: changing an alert that is on screen
+    raises ``UNSUPPORTED_API``, and a red button is only logged. The progress styles
+    (``ALERT_TYPE_LOADING``, ``ALERT_TYPE_SPINNER``) are the host's button-less progress dialogs.
+    Members the host alert has no counterpart for (button views, the window, top images,
+    back-button listeners) are not defined.
     """
     __ayu_overrides_host__ = True
     __ayu_requires__ = ("ui.present",)
@@ -449,8 +452,14 @@ class AlertDialog(messenger._l.Object):
         self._presenter.dismiss()
 
     def cancel(self):
-        # Dialog.cancel() tells the cancel listener, which cannot be set here, and dismisses.
-        self._presenter.dismiss()
+        self._presenter.cancel()
+
+    def setOnCancelListener(self, listener):
+        cancel = _dialog_listener(listener, "onCancel")
+        self._presenter.set_on_cancel_listener(None if cancel is None else lambda presenter: cancel(self))
+
+    def setProgress(self, progress):
+        self._presenter.set_progress(progress)
 
     def isShowing(self):
         return self._presenter.get_dialog().isShowing()
@@ -486,8 +495,8 @@ class AlertDialog(messenger._l.Object):
         self._presenter.set_canceled_on_touch_outside(cancel)
 
     def setCanCancel(self, value):
-        # Read by the progress styles' "stop loading?" prompt only.
-        self._can_cancel = bool(value)
+        # Read by the spinner style's "stop loading?" prompt only.
+        self._presenter._set_can_cancel(value)
 
     def redPositive(self):
         self._presenter.make_button_red(self.BUTTON_POSITIVE)
@@ -620,6 +629,152 @@ class _OnButtonClickListener(messenger._l.Object):
         raise messenger._l.missing_member(type(self), "onClick")
 
 
+class ProgressDialog(messenger._l.Object):
+    """``android.app.ProgressDialog`` in its default ``STYLE_SPINNER``: a spinner beside a message.
+
+    The message may change while the dialog is on screen. ``STYLE_HORIZONTAL`` and its members
+    (``setProgressStyle``, ``setMax``, ``setProgress``, ...) have no host presentation and are not defined.
+    """
+    __ayu_requires__ = ("ui.present",)
+    STYLE_SPINNER, STYLE_HORIZONTAL = 0, 1
+    BUTTON_POSITIVE, BUTTON_NEGATIVE, BUTTON_NEUTRAL = -1, -2, -3
+    _BUTTONS = AlertDialog._BUTTONS
+
+    def __init__(self, context, theme=0):
+        from ui.alert import IndeterminateDialog
+        if type(theme) is not int:
+            raise TypeError("ProgressDialog takes (Context[, int theme])")
+        presenter = IndeterminateDialog(context)
+        presenter.create()
+        presenter.set_on_dismiss_listener(self._dismissed)
+        self._presenter = presenter
+        self._on_dismiss = None
+
+    def _dismissed(self, presenter):
+        if self._on_dismiss is not None:
+            self._on_dismiss(self)
+
+    def getContext(self):
+        return self._presenter.get_context()
+
+    def show(self):
+        self._presenter.show()
+
+    def dismiss(self):
+        self._presenter.dismiss()
+
+    def cancel(self):
+        self._presenter.cancel()
+
+    def isShowing(self):
+        return self._presenter.get_dialog().isShowing()
+
+    def setTitle(self, text):
+        self._presenter.set_title(text)
+
+    def setMessage(self, text):
+        self._presenter.set_message(text)
+
+    def setButton(self, whichButton, text, listener):
+        AlertDialog._button(self, whichButton, text, listener)
+
+    def setOnCancelListener(self, listener):
+        cancel = _dialog_listener(listener, "onCancel")
+        self._presenter.set_on_cancel_listener(None if cancel is None else lambda presenter: cancel(self))
+
+    def setOnDismissListener(self, listener):
+        self._on_dismiss = _dialog_listener(listener, "onDismiss")
+
+    def setCancelable(self, flag):
+        self._presenter.set_cancelable(flag)
+
+    def setCanceledOnTouchOutside(self, cancel):
+        self._presenter.set_canceled_on_touch_outside(cancel)
+
+
+class _AndroidStyle(messenger._l.Object):
+    """``android.R.style``: the framework themes ``Dialog`` below can present (AOSP ``public.xml`` ids)."""
+    Theme_Black_NoTitleBar = 0x01030009
+    Theme_Black_NoTitleBar_Fullscreen = 0x0103000a
+
+
+class _AndroidR(messenger._l.Object):
+    """``android.R``: only ``style``; the other resource kinds name Android assets iOS lacks."""
+    style = _AndroidStyle
+
+
+class Dialog(messenger._l.Object):
+    """``android.app.Dialog`` with a black full-screen theme: the content view alone covers the screen.
+
+    Only ``Dialog(context, theme)`` with ``Theme_Black_NoTitleBar[_Fullscreen]`` has a host presentation;
+    the floating default theme is refused, and the window accessor is not defined. iOS has no
+    back button, so the dialog closes through ``dismiss``/``cancel`` only and the listeners are exact.
+    """
+    __ayu_requires__ = ("ui.present",)
+    _THEMES = (_AndroidStyle.Theme_Black_NoTitleBar, _AndroidStyle.Theme_Black_NoTitleBar_Fullscreen)
+
+    def __init__(self, context, themeResId=0):
+        if type(themeResId) is not int:
+            raise TypeError("Dialog takes (Context[, int themeResId])")
+        if themeResId not in self._THEMES:
+            raise _unsupported("android.app.Dialog is presented with a black full-screen theme only")
+        self._scope = _runtime().require()
+        self._context, self._view, self._native = context, None, None
+        self._on_dismiss = self._on_cancel = None
+
+    @staticmethod
+    def __ayu_constructs__(arguments):
+        return len(arguments) == 2 and (arguments[1] is ... or arguments[1] in Dialog._THEMES)
+
+    def getContext(self):
+        return self._context
+
+    def setContentView(self, view):
+        from ayu_bridge import RemoteObject
+        if not isinstance(view, RemoteObject):
+            raise _unsupported("Dialog.setContentView takes a view owned by the native host")
+        if self.isShowing():
+            raise _unsupported("Changing the content of a dialog that is on screen")
+        self._view = view
+
+    def isShowing(self):
+        _runtime().require(self._scope)
+        return self._native is not None and bool(self._native.isShowing())
+
+    def show(self):
+        runtime = _runtime()
+        runtime.require(self._scope)
+        if self.isShowing():
+            return
+        if self._view is None:
+            raise _unsupported("A Dialog without a content view")
+        self._native = runtime.call("ui.present", {"kind": "alert", "config": {
+            "context": self._context, "view": self._view, "fullscreen": True}})
+
+    def _close(self, cancelled):
+        _runtime().require(self._scope)
+        if self._native is None:
+            return
+        native, self._native = self._native, None
+        native.dismiss()
+        # Android: cancel() reports the cancel listener, then dismisses.
+        for listener in ((self._on_cancel, self._on_dismiss) if cancelled else (self._on_dismiss,)):
+            if listener is not None:
+                listener(self)
+
+    def dismiss(self):
+        self._close(False)
+
+    def cancel(self):
+        self._close(True)
+
+    def setOnDismissListener(self, listener):
+        self._on_dismiss = _dialog_listener(listener, "onDismiss")
+
+    def setOnCancelListener(self, listener):
+        self._on_cancel = _dialog_listener(listener, "onCancel")
+
+
 AlertDialog.Builder = _AlertDialogBuilder
 AlertDialog.OnButtonClickListener = _OnButtonClickListener
 
@@ -636,5 +791,9 @@ CLASSES = {
     PACKAGE + "ActionBar.AlertDialog": AlertDialog,
     PACKAGE + "ActionBar.AlertDialog$Builder": _AlertDialogBuilder,
     PACKAGE + "ActionBar.AlertDialog$OnButtonClickListener": _OnButtonClickListener,
+    "android.app.ProgressDialog": ProgressDialog,
+    "android.app.Dialog": Dialog,
+    "android.R": _AndroidR,
+    "android.R$style": _AndroidStyle,
 }
 messenger._l.register(CLASSES)

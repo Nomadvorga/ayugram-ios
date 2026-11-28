@@ -61,6 +61,9 @@ def _local_model(cls, declared):
             fields[name] = True
     for name in table.instance - table.static:
         fields[name] = False
+    if declared:
+        for name in vars(cls).get("__ayu_private_fields__", ()):
+            fields[name] = False
     return fields, methods
 
 
@@ -179,10 +182,25 @@ class AccessibleObject(_l.Object):
 
 
 class Field(AccessibleObject):
+    def _private(self):
+        """The reader of a private field a local class models (``__ayu_private_fields__``), else None."""
+        owner = self._owner
+        return vars(owner).get("__ayu_private_fields__", {}).get(self._name) if isinstance(owner, type) else None
+
+    def getModifiers(self):
+        return _l.Modifier.PRIVATE if self._private() is not None else super().getModifiers()
+
     def get(self, target):
-        return getattr(self._receiver(target), self._name)
+        reader = self._private()
+        if reader is None:
+            return getattr(self._receiver(target), self._name)
+        if not self._accessible:
+            raise _l.IllegalAccessException(f"Cannot access private field {_owner_name(self._owner)}.{self._name}")
+        return reader(self._receiver(target))
 
     def set(self, target, value):
+        if self._private() is not None:
+            raise _l.unsupported(f"{_owner_name(self._owner)}.{self._name} cannot be written through reflection")
         setattr(self._receiver(target), self._name, value)
 
     def _typed(self, target, accepted, what):

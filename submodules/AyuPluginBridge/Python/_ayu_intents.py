@@ -3,7 +3,9 @@
 Three intent shapes have an iOS counterpart: a document picker (``ACTION_GET_CONTENT`` and
 ``ACTION_OPEN_DOCUMENT`` with ``startActivityForResult``), the share sheet (``ACTION_SEND`` and
 ``ACTION_SEND_MULTIPLE``, usually inside ``Intent.createChooser``) and opening a link
-(``ACTION_VIEW`` of an ``http``, ``https`` or ``tg`` URI). Every other shape is refused by name.
+(``ACTION_VIEW`` of an ``http``, ``https`` or ``tg`` URI). ``ACTION_VIEW`` of a file the bridge may
+share shows the same sheet as sharing it: there the user picks the application that opens it, as
+in Android's "Open with". Every other shape is refused by name.
 
 Picked documents are copies the host made into the plugin's part of the cache directory. The SDK
 names each with a ``content://`` URI of its own authority and keeps the table that
@@ -175,9 +177,9 @@ def resolve(text):
     return None
 
 
-def _shared_path(uri):
-    """The local file an ``EXTRA_STREAM`` URI names, when the bridge may share it."""
-    text = uri_text(uri, "EXTRA_STREAM")
+def _shared_path(uri, what="EXTRA_STREAM"):
+    """The local file an ``EXTRA_STREAM`` or data URI names, when the bridge may share it."""
+    text = uri_text(uri, what)
     found = resolve(text)
     if found is not None:
         kind, record = found
@@ -187,7 +189,7 @@ def _shared_path(uri):
                 from _ayu_javalib import java_io
                 raise java_io.FileNotFoundException(path + " (No such file or directory)")
             return os.path.realpath(path)
-    raise _unsupported("EXTRA_STREAM names a file outside the plugin storage: only a picked document, a "
+    raise _unsupported(what + " names a file outside the plugin storage: only a picked document, a "
                        "FileProvider URI or a file of the plugin directories can be shared")
 
 
@@ -291,7 +293,9 @@ def plan(intent, for_result):
             raise android_intents.ActivityNotFoundException("No Activity found to handle Intent { act=" + action + " }")
         url = uri_text(target.getData(), "data")
         scheme = url.partition(":")[0].lower()
-        if target.getType() is not None or scheme in ("content", "file"):
+        if scheme in ("content", "file"):
+            return {"kind": "share", "files": [_shared_path(target.getData(), "The data URI")]}
+        if target.getType() is not None:
             raise _unsupported(f"{name} of a file cannot be launched: iOS has no viewer application to hand it to")
         if scheme not in _VIEW_SCHEMES:
             raise _unsupported(f"{name} of a {scheme}: URI cannot be launched: only http, https and tg links open")
@@ -403,11 +407,18 @@ def _deliver(activity, request_code, wire):
 
 # --- static preflight -------------------------------------------------------------------------
 
-def static_actions(tree):
-    """Android-only actions a source gives to an ``Intent`` constructor or to ``setAction``, sorted.
+def _own_package(node):
+    """Whether an argument is certainly not the name of another Android application."""
+    return not (isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value != PACKAGE_NAME)
 
-    Found from the AST alone: the first argument is ``<anything>.ACTION_<NAME>`` of the table
-    above, its string value, or an ``android.settings.`` action string.
+
+def static_actions(tree):
+    """What a source gives to an ``Intent`` that only Android can serve, sorted.
+
+    Found from the AST alone: an action given to the constructor or to ``setAction`` as
+    ``<anything>.ACTION_<NAME>`` of the table above, its string value, ``Settings.ACTION_<NAME>``
+    or an ``android.settings.`` string; and a literal package of another application given to
+    ``setPackage``, ``setClassName`` or ``ComponentName``.
     """
     found = set()
     for node in ast.walk(tree):
@@ -415,11 +426,18 @@ def static_actions(tree):
             continue
         function = node.func
         name = function.attr if isinstance(function, ast.Attribute) else function.id if isinstance(function, ast.Name) else ""
+        argument = node.args[0]
+        if name == "setPackage" and len(node.args) == 1 and not _own_package(argument):
+            found.add("package " + argument.value[:128])
+        elif name in ("setClassName", "ComponentName") and len(node.args) == 2 and not _own_package(argument):
+            found.add("component of the package " + argument.value[:128])
         if name not in ("Intent", "setAction"):
             continue
-        argument = node.args[0]
         if isinstance(argument, ast.Attribute) and argument.attr in ANDROID_ONLY_ACTIONS:
             found.add(ANDROID_ONLY_ACTIONS[argument.attr])
+        elif isinstance(argument, ast.Attribute) and argument.attr.startswith("ACTION_") and (
+                getattr(argument.value, "attr", None) or getattr(argument.value, "id", None)) == "Settings":
+            found.add("Settings." + argument.attr[:128])
         elif isinstance(argument, ast.Constant) and isinstance(argument.value, str) and (
                 argument.value in _ANDROID_ONLY_VALUES or argument.value.startswith("android.settings.")):
             found.add(argument.value[:128])

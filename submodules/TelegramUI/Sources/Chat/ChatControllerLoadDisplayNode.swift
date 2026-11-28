@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import SwiftSignalKit
@@ -1977,7 +1977,7 @@ extension ChatControllerImpl {
                 strongSelf.commitPurposefulAction()
                 if let forwardMessageIdsSet = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds {
                     let forwardMessageIds = Array(forwardMessageIdsSet).sorted()
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     if let mode = mode {
                         switch (mode) {
                         case "toCloud":
@@ -2007,7 +2007,7 @@ extension ChatControllerImpl {
                 
                 strongSelf.commitPurposefulAction()
                 let forwardMessageIds = messages.map { $0.id }.sorted()
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if let mode = mode {
                     switch (mode) {
                         case "forwardMessagesToCloudWithNoNamesAndOpen":
@@ -4639,7 +4639,7 @@ extension ChatControllerImpl {
             default:
                 break
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             switch SGSimpleSettings.shared.translationBackendEnum {
             case .system:
                 if #available(iOS 18.0, *) {

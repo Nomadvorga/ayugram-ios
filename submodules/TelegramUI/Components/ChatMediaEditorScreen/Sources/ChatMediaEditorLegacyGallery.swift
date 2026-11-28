@@ -544,7 +544,7 @@ public func makeChatMediaEditorGalleryController(context: AccountContext, parame
         reminder: parameters.reminder,
         presentSchedulePicker: parameters.presentSchedulePicker,
         gallery: gallery,
-        // MARK: Swiftgram
+        // MARK: AyuGram
         sgCanShowTelescope: context.currentAppConfiguration.with { $0 }.sgWebSettings.global.canShowTelescope,
         sgCanSendTelescope: context.currentAppConfiguration.with { $0 }.sgWebSettings.user.canSendTelescope,
         sgHasPaidMedia: { uniqueId in

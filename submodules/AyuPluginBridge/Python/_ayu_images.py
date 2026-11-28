@@ -1,4 +1,4 @@
-"""Client of the host image service (the ``image.*`` operations, see ``protocol-images.md``).
+"""Client of the host image service (the ``image.*`` operations, see *Images* in ``protocol-telegram.md``).
 
 Shared by the ``PIL`` package and the ``android.graphics`` bitmap classes. Pixels stay in the
 host: Python holds a ``Handle`` and every operation names images by handle. Encoded files

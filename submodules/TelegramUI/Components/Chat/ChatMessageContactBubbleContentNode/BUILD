@@ -24,6 +24,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageAttachedContentButtonNode",
         "//submodules/TelegramUI/Components/ChatControllerInteraction",
         "//submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

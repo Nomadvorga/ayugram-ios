@@ -347,7 +347,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         
         // Pushed (from Settings) the header has a back button.
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let backPressed: (() -> Void)?
         if self.controller?.sgIsTabMode == true {
             backPressed = nil

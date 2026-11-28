@@ -197,7 +197,7 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Whether predictive text / autocorrection is enabled.
     var autocorrectionType: UITextAutocorrectionType { get set }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     /// The system keyboard's return-key appearance.
     var returnKeyType: UIReturnKeyType { get set }
     //
@@ -859,7 +859,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         set { self.textInputNodeImpl.textView.autocorrectionType = newValue }
     }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     var returnKeyType: UIReturnKeyType {
         get { return self.textInputNodeImpl.textView.returnKeyType }
         set { self.textInputNodeImpl.textView.returnKeyType = newValue }

@@ -182,7 +182,7 @@ private final class ReplaceBoostSheetContent: CombinedComponent {
                         }
                     },
                     tapAction: { _, _ in
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         if ({ return false }()) { giftPremium() }
                     }
                 ),

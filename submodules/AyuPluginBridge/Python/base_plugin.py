@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from functools import wraps
 
+import _ayu_hook_map
 import _ayu_hooks
 import _ayu_xposed
 from ayu_bridge import BridgeError, Registration, UnsupportedAPI, runtime
@@ -821,6 +822,9 @@ class BasePlugin:
 
     def hook_method(self, method_or_constructor, xposed_hook=None, priority=None, **callbacks):
         self._scope()
+        if _ayu_hook_map.undetermined(xposed_hook):
+            self.log(_ayu_hook_map.message(xposed_hook))
+            return None
         # A method a hook point serves is kept by the SDK; every other member needs ``hooks.java_method``.
         mapped = _ayu_xposed.hook_method(self, method_or_constructor, xposed_hook, priority, **callbacks)
         if mapped is not NotImplemented:
@@ -832,6 +836,9 @@ class BasePlugin:
         if not isinstance(method_name, str) or not method_name:
             raise ValueError("Method name is required")
         self._scope()
+        if _ayu_hook_map.undetermined(xposed_hook):
+            self.log(_ayu_hook_map.message(xposed_hook))
+            return None
         mapped = _ayu_xposed.hook_all_methods(self, hook_class, method_name, xposed_hook, priority, **callbacks)
         if mapped is not NotImplemented:
             return mapped
@@ -839,6 +846,10 @@ class BasePlugin:
                                  java_class=hook_class, name=method_name, **callbacks)
 
     def hook_all_constructors(self, hook_class, xposed_hook=None, priority=None, **callbacks):
+        self._scope()
+        if _ayu_hook_map.undetermined(xposed_hook):
+            self.log(_ayu_hook_map.message(xposed_hook))
+            return None
         return self._method_hook("java_all_constructors", xposed_hook, priority,
                                  java_class=hook_class, **callbacks)
 

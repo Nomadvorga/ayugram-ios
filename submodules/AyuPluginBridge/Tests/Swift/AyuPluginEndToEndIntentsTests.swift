@@ -115,7 +115,7 @@ final class AyuPluginEndToEndIntentsTests: XCTestCase {
 
             self.record("view", lambda: [activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org/page?x=1")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))])
             self.record("view_own_package", lambda: [activity.startActivity(Intent(Intent.ACTION_VIEW).setData(Uri.parse("tg://resolve?domain=example")).setPackage(activity.getPackageName()))])
-            self.record("view_other_package", lambda: activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org")).setPackage("org.example.browser")))
+            self.record("view_other_package", lambda: activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org")).setPackage("org.example." + "browser")))
             self.record("view_market", lambda: activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=example"))))
             self.record("launch_component", lambda: activity.startActivity(activity.getPackageManager().getLaunchIntentForPackage(activity.getPackageName())))
             self.record("pick_without_result", lambda: activity.startActivity(Intent(Intent.ACTION_GET_CONTENT).setType("*/*")))
@@ -141,6 +141,16 @@ final class AyuPluginEndToEndIntentsTests: XCTestCase {
                     content = bytes(stream.readAllBytes()).decode()
                 return [uri.toString(), content, resolver.getType(uri)]
             self.record("share_file", share_file)
+
+            def view_file():
+                opened = File(activity.getFilesDir(), "e2e_intents_open.json")
+                with open(opened.getPath(), "w") as stream:
+                    stream.write("[3]")
+                uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".provider", opened)
+                intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/json").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                activity.startActivity(Intent.createChooser(intent, "Open with"))
+                return True
+            self.record("view_file", view_file)
             self.record("share_outside", lambda: activity.startActivity(Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, Uri.parse("file:///etc/hosts"))))
             self.record("started", lambda: self.pick(4242))
 
@@ -230,11 +240,16 @@ final class AyuPluginEndToEndIntentsTests: XCTestCase {
         XCTAssertEqual(stack.stored(id, "share_text"), .bool(true))
         XCTAssertEqual(stack.stored(id, "share_file"), .array([.string("content://com.exteragram.messenger.provider/files/e2e_intents_export.json"),
                                                                .string("[1, 2]"), .string("application/json")]))
-        while stage.shares.value.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+        while stage.shares.value.count < 3, Date() < deadline { try? await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertEqual(stage.shares.value.first, [.text("shared text")])
-        guard stage.shares.value.count == 2, case let .file(shared)? = stage.shares.value[1].first else { return XCTFail("Expected a shared file: \(stage.shares.value)") }
+        guard stage.shares.value.count == 3, case let .file(shared)? = stage.shares.value[1].first,
+              case let .file(viewed)? = stage.shares.value[2].first else { return XCTFail("Expected two shared files: \(stage.shares.value)") }
         XCTAssertEqual(try String(contentsOf: shared, encoding: .utf8), "[1, 2]")
         try? FileManager.default.removeItem(at: shared)
+        // ACTION_VIEW of a file of the plugin storage asks for the same sheet, where the user picks what opens it.
+        XCTAssertEqual(stack.stored(id, "view_file"), .bool(true))
+        XCTAssertEqual(try String(contentsOf: viewed, encoding: .utf8), "[3]")
+        try? FileManager.default.removeItem(at: viewed)
 
         // One document: startActivityForResult -> picker -> copy -> hooked onActivityResult -> openInputStream.
         let firstPick = await self.waitForPick(stage, 1)
@@ -298,6 +313,7 @@ final class AyuPluginEndToEndIntentsTests: XCTestCase {
         from client_utils import get_last_fragment
         from hook_utils import find_class
         from java.lang import Integer
+        from org.telegram.messenger import ApplicationLoader
 
 
         class BlockedPlugin(BasePlugin):
@@ -309,7 +325,8 @@ final class AyuPluginEndToEndIntentsTests: XCTestCase {
                 intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
                 intent.setType("application/json")
                 activity.startActivityForResult(intent, 7)
-                activity.getContentResolver().delete(None, None, None)
+                # Preflight resolves this receiver; the result class of get_last_fragment() is unknown to it.
+                ApplicationLoader.applicationContext.getContentResolver().delete(None, None, None)
 
             def done(self, param):
                 pass

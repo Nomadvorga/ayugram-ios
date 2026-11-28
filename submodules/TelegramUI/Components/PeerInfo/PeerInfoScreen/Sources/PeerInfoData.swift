@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 //
 import SGSimpleSettings // MARK: AyuGram
 import Foundation
@@ -416,7 +416,7 @@ private func peerInfoStatusWithHiddenCommunityPrefix(_ status: PeerInfoStatusDat
 }
 
 final class PeerInfoScreenData {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let channelCreationTimestamp: Int32?
     //
     let peer: EnginePeer?
@@ -484,7 +484,7 @@ final class PeerInfoScreenData {
     }
     
     init(
-        // MARK: Swiftgram
+        // MARK: AyuGram
         channelCreationTimestamp: Int32? = nil,
         //
         peer: EnginePeer?,
@@ -538,7 +538,7 @@ final class PeerInfoScreenData {
         agentSettingsContext: AgentSettingsContext? = nil,
         agentState: AgentSettingsContext.State? = nil
     ) {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.channelCreationTimestamp = channelCreationTimestamp
         //
         self.peer = peer
@@ -1074,7 +1074,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         
         var enableQRLogin = false
         let appConfiguration = accountPreferences?.get(AppConfiguration.self)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let appConfiguration, appConfiguration.sgWebSettings.global.qrLogin {
             enableQRLogin = true
         }
@@ -1661,7 +1661,7 @@ func peerInfoScreenData(
                 savedMusicContext.state,
                 combineLatest(businessConnectedBot, walletBalance, agentState)
             )
-            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBotAndWalletBalanceAndAgentState -> Signal<PeerInfoScreenData, NoError> in // MARK: Swiftgram
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBotAndWalletBalanceAndAgentState -> Signal<PeerInfoScreenData, NoError> in // MARK: AyuGram
                 let (businessConnectedBot, walletBalance, agentState) = businessConnectedBotAndWalletBalanceAndAgentState
                 var availablePanes = availablePanes
                 if isMyProfile {
@@ -1970,7 +1970,7 @@ func peerInfoScreenData(
             let didRefreshWelcomeMessages = Atomic<Bool>(value: false)
             
             return combineLatest(
-                getFirstMessage(context: context, peerId: peerId), // MARK: Swiftgram
+                getFirstMessage(context: context, peerId: peerId), // MARK: AyuGram
                 context.account.viewTracker.peerView(peerId, updateData: true),
                 peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
@@ -1991,7 +1991,7 @@ func peerInfoScreenData(
                 profileGiftsContext.state,
                 personalChannelAndFirstWelcomeMessageText
             )
-            |> mapToSignal { firstMessage, peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannelAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in // MARK: Swiftgram
+            |> mapToSignal { firstMessage, peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannelAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in // MARK: AyuGram
                 let (personalChannel, firstWelcomeMessageText) = personalChannelAndFirstWelcomeMessageText
 
                 if let channel = peerViewMainPeer(peerView) as? TelegramChannel, channel.hasPermission(.manageWelcomeMessages) {
@@ -2105,7 +2105,7 @@ func peerInfoScreenData(
                     }
                     
                     return PeerInfoScreenData(
-                        channelCreationTimestamp: firstMessage?.timestamp, // MARK: Swiftgram
+                        channelCreationTimestamp: firstMessage?.timestamp, // MARK: AyuGram
                         peer: peerView.peers[peerId].flatMap(EnginePeer.init),
                         chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
                         savedMessagesPeer: nil,
@@ -2352,7 +2352,7 @@ func peerInfoScreenData(
             let didRefreshWelcomeMessages = Atomic<Bool>(value: false)
             
             return combineLatest(queue: .mainQueue(),
-                Signal<EngineMessage?, NoError>.single(nil) |> then (getFirstMessage(context: context, peerId: peerId)), // MARK: Swiftgram
+                Signal<EngineMessage?, NoError>.single(nil) |> then (getFirstMessage(context: context, peerId: peerId)), // MARK: AyuGram
                 context.account.viewTracker.peerView(groupId, updateData: true),
                 peerInfoAvailableMediaPanes(context: context, peerId: groupId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
@@ -2372,7 +2372,7 @@ func peerInfoScreenData(
                 isPremiumRequiredForStoryPosting,
                 starsRevenueContextAndStateAndFirstWelcomeMessageText
             )
-            |> mapToSignal { firstMessage, peerView, availablePanes, globalNotificationSettings, status, membersData, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, threadData, preferencesView, accountIsPremium, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndStateAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in // MARK: Swiftgram
+            |> mapToSignal { firstMessage, peerView, availablePanes, globalNotificationSettings, status, membersData, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, threadData, preferencesView, accountIsPremium, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndStateAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in // MARK: AyuGram
                 let (starsRevenueContextAndState, firstWelcomeMessageText) = starsRevenueContextAndStateAndFirstWelcomeMessageText
 
                 if let group = peerViewMainPeer(peerView) as? TelegramGroup {
@@ -2457,7 +2457,7 @@ func peerInfoScreenData(
 
                 let appConfiguration: AppConfiguration = preferencesView?.get(AppConfiguration.self) ?? .defaultValue
 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 var channelCreationTimestamp = firstMessage?.timestamp
                 if groupId.namespace == Namespaces.Peer.CloudChannel, let firstMessage {
                     for media in firstMessage.engineMedia {
@@ -2508,7 +2508,7 @@ func peerInfoScreenData(
                     }
 
                     return PeerInfoScreenData(
-                        channelCreationTimestamp: channelCreationTimestamp, // MARK: Swiftgram
+                        channelCreationTimestamp: channelCreationTimestamp, // MARK: AyuGram
                         peer: peerView.peers[groupId].flatMap(EnginePeer.init),
                         chatPeer: peerView.peers[groupId].flatMap(EnginePeer.init),
                         savedMessagesPeer: nil,
@@ -2849,7 +2849,7 @@ func peerInfoHeaderButtons(peer: EnginePeer?, cachedData: EngineCachedPeerData?,
                 result.append(.message)
             }
             result.append(.mute)
-            /* /* MARK: Swiftgram */ if case let .broadcast(info) = channel.info, info.flags.contains(.hasMonoforum), !channel.hasPermission(.manageDirect) {
+            /* /* MARK: AyuGram */ if case let .broadcast(info) = channel.info, info.flags.contains(.hasMonoforum), !channel.hasPermission(.manageDirect) {
             } else*/ if hasDiscussion {
                 result.append(.discussion)
             }
@@ -3022,7 +3022,7 @@ private func isPremiumRequiredForStoryPosting(context: AccountContext) -> Signal
 }
 
 
-// MARK: Swiftgram
+// MARK: AyuGram
 private func getFirstMessage(context: AccountContext, peerId: EnginePeer.Id) -> Signal<EngineMessage?, NoError> {
     return context.engine.messages.getMessagesLoadIfNecessary([EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 1)])
     |> `catch` { _ in

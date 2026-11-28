@@ -1,6 +1,6 @@
 """``android.graphics`` bitmaps, their factory, an off-screen ``Canvas`` and ``BitmapDrawable``.
 
-The pixels live in the host image service (``_ayu_images``, ``protocol-images.md``): a
+The pixels live in the host image service (``_ayu_images``, *Images* in ``protocol-telegram.md``): a
 ``Bitmap`` is a handle, and every class here needs the ``image.*`` operations. A bitmap is
 ``ARGB_8888`` (host mode ``RGBA``) or opaque (host mode ``RGB``: ``RGB_565`` and decoded
 images without alpha, kept at eight bits per channel). Colors are Android's ARGB ints with
@@ -22,7 +22,7 @@ from . import java_lang as _l
 from .java_lang import IllegalArgumentException, IllegalStateException, NullPointerException, Object, RuntimeException
 
 _REQUIRES = ("image.create", "image.decode", "image.encode", "image.copy", "image.convert", "image.crop", "image.resize",
-             "image.transform", "image.pixels.get", "image.pixels.put", "image.draw")
+             "image.transform", "image.pixels.get", "image.pixels.put", "image.draw", "image.alpha_composite")
 _Config = _g.CLASSES["android.graphics.Bitmap$Config"]
 _CompressFormat = _g.CLASSES["android.graphics.Bitmap$CompressFormat"]
 _MIME = {"JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif", "WEBP": "image/webp", "BMP": "image/bmp"}
@@ -43,6 +43,13 @@ def _argb(color):
         raise TypeError("Expected a color int")
     color &= 0xFFFFFFFF
     return [(color >> 16) & 255, (color >> 8) & 255, color & 255, color >> 24]
+
+
+def _stored(value, alpha):
+    """A color channel as Android reads it back from premultiplied storage (Skia's rounding both ways)."""
+    product = value * alpha + 128
+    premultiplied = (product + (product >> 8)) >> 8
+    return min(255, (((255 << 25) + alpha) // (2 * alpha) * premultiplied + (1 << 23)) >> 24)
 
 
 def _mode(config):
@@ -251,7 +258,16 @@ class Bitmap(Object):
         bands = self._handle.bands
         if bands == 3:
             return [_l.i32(0xFF000000 | data[i] << 16 | data[i + 1] << 8 | data[i + 2]) for i in range(0, len(data), 3)]
-        return [_l.i32(data[i + 3] << 24 | data[i] << 16 | data[i + 1] << 8 | data[i + 2]) for i in range(0, len(data), 4)]
+        colors = []
+        for i in range(0, len(data), 4):
+            alpha = data[i + 3]
+            if alpha == 255:
+                colors.append(_l.i32(0xFF000000 | data[i] << 16 | data[i + 1] << 8 | data[i + 2]))
+            elif alpha == 0:
+                colors.append(0)  # premultiplied storage keeps no color under zero alpha
+            else:
+                colors.append(_l.i32(alpha << 24 | _stored(data[i], alpha) << 16 | _stored(data[i + 1], alpha) << 8 | _stored(data[i + 2], alpha)))
+        return colors
 
     def _bytes(self, colors):
         bands = self._handle.bands
@@ -318,8 +334,16 @@ class Bitmap(Object):
         source = self._handle
         opaque = None
         if name == "JPEG" and source.mode == "RGBA":
-            # Android drops alpha for JPEG (transparent pixels come out black).
-            opaque = source = _new("image.convert", {"image": source.require(), "mode": "RGB"})
+            # Android writes the premultiplied colors: the bitmap over black.
+            black = _new("image.create", {"mode": "RGBA", "width": source.width, "height": source.height, "color": [0, 0, 0, 255]})
+            try:
+                over = _new("image.alpha_composite", {"image": black.require(), "source": source.require()})
+            finally:
+                black.release()
+            try:
+                opaque = source = _new("image.convert", {"image": over.require(), "mode": "RGB"})
+            finally:
+                over.release()
         try:
             data = _ayu_images.encode(source, name, quality if name == "JPEG" else None)
         finally:
@@ -446,8 +470,6 @@ class Canvas(Object):
     modes, path clips and layers are not.
     """
     __ayu_requires__ = _REQUIRES
-
-    # Keep the nested Java name identical to the constants provider's class.
     EdgeType = _g.CLASSES["android.graphics.Canvas$EdgeType"]
 
     def __init__(self, bitmap=None):

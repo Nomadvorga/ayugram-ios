@@ -99,7 +99,7 @@ final class AyuPluginEndToEndMembersTests: XCTestCase {
                                                Theme.getColor(Theme.key_dialogLinkSelection), Theme.getColor(Theme.key_text_RedBold, None)])
                 self.record("dark", lambda: [Theme.isCurrentThemeDark(), Theme.isCurrentThemeNight(), Theme.getActiveTheme().isDark()])
                 self.record("unfilled_slot", lambda: Theme.getColor(Theme.key_chats_name))
-                self.record("unknown_key", lambda: Theme.getColor(799))
+                self.record("unknown_key", lambda: Theme.getColor(100000))
                 button = TextView(context)
                 row = FrameLayout(context)
                 self.record("drawables", lambda: [
@@ -121,7 +121,8 @@ final class AyuPluginEndToEndMembersTests: XCTestCase {
         XCTAssertEqual(stored("colors"), .array([.integer(-1), .integer(Int64(Int32(bitPattern: 0xFF00_7AFF))), .integer(-1), .integer(Int64(Int32(bitPattern: 0xFFC8_C7CC))),
                                                  .integer(0x3300_7AFF), .integer(Int64(Int32(bitPattern: 0xFFFF_3B30)))]))
         XCTAssertEqual(stored("dark"), .array([.bool(false), .bool(false), .bool(false)]))
-        XCTAssertEqual(stored("unfilled_slot").string?.hasPrefix("!BridgeError: UNSUPPORTED_API"), true, "\(stored("unfilled_slot"))")
+        // A slot the app left empty answers with Android's light default (`ThemeColors`).
+        XCTAssertEqual(stored("unfilled_slot"), .integer(Int64(Int32(bitPattern: 0xFF1A_1D21))))
         XCTAssertEqual(stored("unknown_key").string?.hasPrefix("!BridgeError: UNSUPPORTED_API"), true, "\(stored("unknown_key"))")
         let ripple = AyuBridgeValue.string("android.graphics.drawable.RippleDrawable")
         XCTAssertEqual(stored("drawables"), .array([.null, ripple, .null, ripple, .null, .null, .null, .string("android.graphics.drawable.ShapeDrawable"), .null]))
@@ -201,7 +202,7 @@ final class AyuPluginEndToEndMembersTests: XCTestCase {
                     bar.setIndeterminateTintList(None)])
                 gradient = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, [-65536, -16776961])
                 self.record("gradient", lambda: [
-                    gradient.setCornerRadii([8.0, 8.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0]) is gradient or gradient.getClass().getName(),
+                    gradient.setCornerRadii([8.0, 8.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0]).getClass().getName(),
                     gradient.setColors(jarray(jint)([-1, -16777216, -65536])).getClass().getName(),
                     gradient.setGradientType(GradientDrawable.RADIAL_GRADIENT).getClass().getName(), gradient.setGradientRadius(120.0) is None,
                     gradient.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM) is None, gradient.setCornerRadii(jarray(jfloat)([4.0] * 8)) is None,
@@ -209,9 +210,11 @@ final class AyuPluginEndToEndMembersTests: XCTestCase {
                     GradientDrawable.Orientation.BL_TR.name(), GradientDrawable.Orientation.BL_TR.ordinal()])
                 self.record("gradient_colors", lambda: gradient.setColors([-1]))
                 self.record("gradient_radii", lambda: gradient.setCornerRadii([1.0, 2.0]))
-                self.record("wrong_class", lambda: row.setLineSpacing(1.0, 1.0))
+                # The preflight blocks these two when it can name the receiver's class; a computed
+                # name reaches the host's own refusal.
+                self.record("wrong_class", lambda: getattr(row, "set" + "LineSpacing")(1.0, 1.0))
                 self.record("wrong_argument", lambda: text.setLetterSpacing("wide"))
-                self.record("edit_selectable", lambda: edit.setTextIsSelectable(True))
+                self.record("edit_selectable", lambda: getattr(edit, "set" + "TextIsSelectable")(True))
         """))
         func stored(_ key: String) -> AyuBridgeValue { stack.stored(id, key) }
         func refusal(_ key: String, _ prefix: String, file: StaticString = #filePath, line: UInt = #line) {

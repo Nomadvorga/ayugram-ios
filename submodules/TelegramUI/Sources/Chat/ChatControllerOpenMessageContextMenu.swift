@@ -77,6 +77,11 @@ extension ChatControllerImpl {
                         allowedReactions = nil
                     }
                 }
+                // MARK: AyuGram
+                // exteraGram hide-reactions toggles: no reaction picker above the menu either (Saved Messages tags stay)
+                if allowedReactions != nil, !topMessage.areReactionsTags(accountPeerId: self.context.account.peerId), ayuHidesReactions(inChatWith: topMessage.peers[topMessage.id.peerId] ?? self.presentationInterfaceState.renderedPeer?.peer) {
+                    allowedReactions = nil
+                }
 
                 var tip: ContextController.Tip?
                 

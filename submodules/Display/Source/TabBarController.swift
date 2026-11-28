@@ -29,7 +29,7 @@ public protocol TabBarController: ViewController {
     
     func updateControllerLayout(controller: ViewController)
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     /// The effective hidden state, including settings and screen-driven overrides.
     var sgIsTabBarHidden: Bool { get }
     //

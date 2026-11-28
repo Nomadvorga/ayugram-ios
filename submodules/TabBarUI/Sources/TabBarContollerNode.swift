@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 import SwiftSignalKit
 //
@@ -78,7 +78,7 @@ final class TabBarControllerNode: ASDisplayNode {
 
     private weak var currentController: ViewController?
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var sgSearchEnabled: Bool = SGSimpleSettings.shared.tabBarSearchEnabled
     private let sgSearchEnabledDisposable = MetaDisposable()
     //
@@ -165,7 +165,7 @@ final class TabBarControllerNode: ASDisplayNode {
         
         //self.addSubnode(self.tabBarNode)
         //self.addSubnode(self.disabledOverlayNode)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgSearchEnabledDisposable.set((sgSimpleSettingsBoolSignal(.tabBarSearchEnabled, defaultValue: true)
         |> deliverOnMainQueue).start(next: { [weak self] enabled in
             guard let self, self.sgSearchEnabled != enabled else {
@@ -180,7 +180,7 @@ final class TabBarControllerNode: ASDisplayNode {
         //
     }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     deinit {
         self.sgSearchEnabledDisposable.dispose()
     }
@@ -210,7 +210,7 @@ final class TabBarControllerNode: ASDisplayNode {
         transition.updateAlpha(node: self.disabledOverlayNode, alpha: value ? 0.0 : 1.0)
     }
     
-    var tabBarHidden = SGSimpleSettings.shared.hideTabBar { // MARK: Swiftgram
+    var tabBarHidden = SGSimpleSettings.shared.hideTabBar { // MARK: AyuGram
         didSet {
             if self.tabBarHidden != oldValue {
                 self.requestUpdate()
@@ -351,7 +351,7 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 search: (sidePlacement != nil || (!self.sgSearchEnabled && self.currentController?.tabBarSearchState?.isActive != true)) ? nil : TabBarComponent.Search(
                     isActive: self.currentController?.tabBarSearchState?.isActive ?? false,
                     activate: { [weak self] in

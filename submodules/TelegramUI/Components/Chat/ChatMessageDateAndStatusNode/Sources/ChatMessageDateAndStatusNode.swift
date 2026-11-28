@@ -614,6 +614,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             //
             
             var updatedDateText = arguments.dateText
+            // MARK: AyuGram: exteraGram's "Show Forward Count"
+            let forwardsCountText = ayuExtractForwardsCount(from: &updatedDateText)
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else {
@@ -622,6 +624,10 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 }
             }
             if let impressionCount = arguments.impressionCount {
+                // MARK: AyuGram: exteraGram's "Show Forward Count": views, then forwards, then the time
+                if let forwardsCountText = forwardsCountText {
+                    updatedDateText = forwardsCountText + " " + updatedDateText
+                }
                 updatedDateText = compactNumericCountString(impressionCount, decimalSeparator: arguments.presentationData.dateTimeFormat.decimalSeparator) + " " + updatedDateText
             }
             
@@ -1589,7 +1595,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
 }
 
 public func shouldDisplayInlineDateReactions(message: EngineMessage, isPremium: Bool, forceInline: Bool) -> Bool {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     // With 10.13 it now hides reactions in favor of message effect badge
     return SGSimpleSettings.shared.hideReactions
 }

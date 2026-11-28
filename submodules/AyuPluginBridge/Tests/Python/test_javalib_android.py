@@ -9,8 +9,6 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Python"))
 
 import ayu_bridge as bridge
-import _ayu_javalib as javalib
-from _ayu_javalib import android_bitmap as bitmap
 from _ayu_javalib import android_compose as compose
 from _ayu_javalib import android_content as content
 from _ayu_javalib import android_graphics as graphics
@@ -139,13 +137,6 @@ class ContentTests(unittest.TestCase):
 
 
 class GraphicsTests(unittest.TestCase):
-    def test_canvas_nested_enum_matches_the_provider_registry(self):
-        classes = javalib.local_classes()
-        edge_type = classes["android.graphics.Canvas$EdgeType"]
-        self.assertIs(classes["android.graphics.Canvas"], bitmap.Canvas)
-        self.assertIs(edge_type, graphics.CLASSES["android.graphics.Canvas$EdgeType"])
-        self.assertIs(bitmap.Canvas.EdgeType, edge_type)
-
     def test_color(self):
         color = graphics.Color
         self.assertEqual((color.WHITE, color.BLACK, color.RED, color.TRANSPARENT, color.DKGRAY), (-1, -16777216, -65536, 0, -12303292))

@@ -253,30 +253,24 @@ import UIKit
     }
 
     private func confirmEnable(_ plugin: AyuInstalledPlugin) {
-        let isNative = plugin.nativeAdapter != nil
-        let message = isNative
-            ? "Функции включатся через нативный адаптер iOS после проверки исходника. После перезапуска приложения плагин потребуется включить снова."
-            : "Python-код получит права приложения, включая доступ к данным и сети. Включайте только плагин, автору которого доверяете. После перезапуска приложения плагин потребуется включить снова."
-        let alert = UIAlertController(title: isNative ? "Включить плагин?" : "Доверять коду плагина?", message: message, preferredStyle: .alert)
+        let consent = AyuPluginAlerts.enableConsent(for: plugin)
+        let alert = UIAlertController(title: consent.title, message: consent.message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: isNative ? "Включить" : "Доверяю, включить", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: consent.confirm, style: .default) { [weak self] _ in
             self?.run { [weak self] in try await self?.service.enable(plugin.id) }
         })
         self.present(alert, animated: true)
     }
 
     private func confirmDelete(_ plugin: AyuInstalledPlugin) {
-        let alert = UIAlertController(title: "Удалить плагин?", message: "Будут удалены локальная копия кода и настройки плагина «\(plugin.name)».", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+        self.present(AyuPluginAlerts.deleteConfirmation(for: plugin) { [weak self] in
             self?.run { [weak self] in
                 guard let self else { return }
                 try await self.service.delete(plugin.id)
                 if self.installedID != nil { self.navigationController?.popViewController(animated: true) }
                 else { self.installedAfterImport = false }
             }
-        })
-        self.present(alert, animated: true)
+        }, animated: true)
     }
 
     private func run(_ work: @escaping @MainActor () async throws -> Void) {

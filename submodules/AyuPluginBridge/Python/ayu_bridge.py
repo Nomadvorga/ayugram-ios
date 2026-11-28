@@ -733,7 +733,8 @@ class Runtime:
                              "sdk_requirements": _ayu_operations.requirements(
                                  inventory["sdk_references"], inventory["method_calls"],
                                  inventory["send_hook_fields"], inventory.get("hook_targets"),
-                                 inventory.get("intent_actions", ())),
+                                 inventory.get("intent_actions", ()), inventory.get("window_services", ()),
+                                 inventory.get("send_hook_resend", False)),
                             "unguarded_native_imports": inventory["unguarded_native_imports"],
                             "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
@@ -1076,6 +1077,10 @@ class NativeImporter(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             if fullname in declared:
                 # As with Chaquopy's import hook, a class is imported from its package, never as a module.
                 raise ModuleNotFoundError(f"No module named {fullname!r}: it is a Java class", name=fullname)
+            from _ayu_inspection import ANDROID_ABSENT
+            if any(name.startswith(fullname + ".") for name in ANDROID_ABSENT):
+                # Android has no such package either, so the import fails as Chaquopy's does.
+                raise ModuleNotFoundError(f"No module named {fullname!r}", name=fullname)
             raise UnsupportedAPI(f"Native package not declared: {fullname}")
         return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
 

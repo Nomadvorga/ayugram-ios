@@ -731,6 +731,27 @@ public struct AyuPluginImportPreview: Sendable {
         self.plugins.removeAll { $0.id == id }; self.changed()
     }
 
+    /// A private copy of the stored file for the share sheet, named `<id>.<extension>`. Only the
+    /// stored bytes are read; the caller removes the copy's directory when the sheet closes.
+    public func exportCopy(_ id: String) async throws -> URL {
+        guard Self.validID(id), let plugin = self.plugins.first(where: { $0.id == id }) else { throw Failure.identity }
+        guard !plugin.isBusy else { throw Failure.busy }
+        let fileExtension = plugin.packageExtension ?? "plugin"
+        guard fileExtension == "plugin" || Self.packageExtensions.contains(fileExtension) else { throw Failure.source }
+        let stored = self.root.appendingPathComponent(id + "." + fileExtension)
+        do {
+            return try await Task.detached(priority: .utility) {
+                try Self.requireRegularFile(stored)
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AyuPluginShare-" + UUID().uuidString, isDirectory: true)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+                let copy = directory.appendingPathComponent(stored.lastPathComponent)
+                do { try FileManager.default.copyItem(at: stored, to: copy) }
+                catch { try? FileManager.default.removeItem(at: directory); throw error }
+                return copy
+            }.value
+        } catch { throw (error as? Failure) ?? Failure.storage }
+    }
+
     public func settings(_ id: String) async throws -> [AyuPluginSetting] {
         guard self.plugins.contains(where: { $0.id == id && $0.isEnabled && !$0.isBusy }) else { throw Failure.inactive }
         if id == AyuAtmosphericPluginAdapter.pluginID, let adapter = self.atmosphericAdapter { return try adapter.settings() }

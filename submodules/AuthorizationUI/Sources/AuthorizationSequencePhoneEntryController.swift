@@ -230,7 +230,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 guard let pkDict = params["publicKey"] as? [String: Any] else {
                     return
                 }
-                /* MARK: Swiftgram
+                /* MARK: AyuGram
                 guard let relyingPartyIdentifier = pkDict["rpId"] as? String else {
                     return
                 }*/
@@ -407,7 +407,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 actions.append(TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {}))
                 self.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.presentationData.strings.Login_PhoneNumberAlreadyAuthorized, actions: actions), in: .window(.root))
             } else {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if (number == "0000000000") {
                     self.sharedContext.beginNewAuth(testingEnvironment: true)
                     return

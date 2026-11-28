@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -892,8 +892,8 @@ public final class TabBarComponent: Component {
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 4.0
             let isSystemLayout = component.axis == .horizontal && !component.isCompact && component.usesSystemLayout
-            var availableSize = CGSize(width: isSystemLayout ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: Swiftgram
-            // MARK: Swiftgram
+            var availableSize = CGSize(width: isSystemLayout ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: AyuGram
+            // MARK: AyuGram
             let sgUnreducedAvailableWidth = availableSize.width
             // Compact layouts already size the bar for the visible items and search button.
             if component.axis == .horizontal && !component.isCompact && !(SGSimpleSettings.shared.wideTabBar || component.search?.isActive ?? false) {
@@ -912,7 +912,7 @@ public final class TabBarComponent: Component {
                     widthReducer = 1.0
                 }
                 availableSize.width = availableSize.width / widthReducer
-                if component.search == nil { // MARK: Swiftgram
+                if component.search == nil { // MARK: AyuGram
                     availableSize.width -= 48.0
                     availableSize.width -= innerInset * 2.0
                 }
@@ -936,15 +936,15 @@ public final class TabBarComponent: Component {
             
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
 
-            let sgShowsTitle = !component.isCompact && SGSimpleSettings.shared.showTabNames // MARK: Swiftgram
+            let sgShowsTitle = !component.isCompact && SGSimpleSettings.shared.showTabNames // MARK: AyuGram
             // The search button is as tall as the bar.
             let barHeight: CGFloat
             if isSystemLayout {
-                barHeight = sgShowsTitle ? tabBarSystemBarThickness : tabBarCompactBarThickness // MARK: Swiftgram
+                barHeight = sgShowsTitle ? tabBarSystemBarThickness : tabBarCompactBarThickness // MARK: AyuGram
             } else if component.isCompact {
                 barHeight = tabBarCompactBarThickness
             } else {
-                barHeight = (sgShowsTitle ? 56.0 : 40.0) + innerInset * 2.0 // MARK: Swiftgram
+                barHeight = (sgShowsTitle ? 56.0 : 40.0) + innerInset * 2.0 // MARK: AyuGram
             }
 
             // Each item's title width at the unselected font, as `-[_UITabButton sizeThatFits:]` measures it.
@@ -975,12 +975,12 @@ public final class TabBarComponent: Component {
                         isUnconstrained: true
                     )),
                     environment: {},
-                    containerSize: CGSize(width: 200.0, height: sgShowsTitle ? 56.0 : 40.0) // MARK: Swiftgram
+                    containerSize: CGSize(width: 200.0, height: sgShowsTitle ? 56.0 : 40.0) // MARK: AyuGram
                 )
                 titleWidths.append(itemSize.width)
             }
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if isSystemLayout && (1 ... 3).contains(component.items.count) && !SGSimpleSettings.shared.wideTabBar && search?.isActive != true {
                 // Keep the compact width, but never squeeze the tabs below Telegram's content-fitting width.
                 let searchWidth: CGFloat = search == nil ? 0.0 : barHeight + 8.0
@@ -993,13 +993,13 @@ public final class TabBarComponent: Component {
             if search != nil {
                 availableLength -= barHeight + 8.0
             }
-            var itemsLayout: TabBarItemsLayout // MARK: Swiftgram
+            var itemsLayout: TabBarItemsLayout // MARK: AyuGram
             if isSystemLayout {
-                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar /* MARK: Swiftgram */)
+                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar /* MARK: AyuGram */)
             } else {
                 itemsLayout = tabBarItemsLayout(axis: component.axis, isCompact: component.isCompact, unboundItemWidths: titleWidths.map { $0 + 10.0 * 2.0 }, availableLength: availableLength)
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if component.axis == .horizontal && !sgShowsTitle {
                 itemsLayout.size.height = barHeight
                 for index in itemsLayout.itemFrames.indices {
@@ -1048,7 +1048,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isSearchActive: search?.isActive == true,
-                        showsTitle: sgShowsTitle, // MARK: Swiftgram
+                        showsTitle: sgShowsTitle, // MARK: AyuGram
                         isSelected: false,
                         tintSelectedItem: component.tintSelectedItem,
                         isSystemLayout: isSystemLayout,
@@ -1063,7 +1063,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isSearchActive: search?.isActive == true,
-                        showsTitle: sgShowsTitle, // MARK: Swiftgram
+                        showsTitle: sgShowsTitle, // MARK: AyuGram
                         isSelected: true,
                         tintSelectedItem: component.tintSelectedItem,
                         isSystemLayout: isSystemLayout,

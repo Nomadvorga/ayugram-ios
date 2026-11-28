@@ -259,10 +259,56 @@ public func stringForMessageTimestampStatus(
         }
     }
     
+    // MARK: AyuGram: exteraGram's "Show Forward Count"
+    if let forwardsCountPrefix = ayuForwardsCountPrefix(message: message, dateTimeFormat: dateTimeFormat) {
+        dateText = forwardsCountPrefix + dateText
+    }
+    
     // MARK: AyuGram
     if message.attributes.contains(where: { $0 is AyuDeletedMessageAttribute }), let mark = AyuCustomizationSettings.shared.deletedMarkPrefix(lang: strings.baseLanguageCode) {
         dateText = "\(mark) \(dateText)"
     }
     
     return dateText
+}
+
+// MARK: AyuGram: exteraGram's "Show Forward Count"
+// The count rides inside the date text as "<marker><count><terminator>", so none of the callers has to pass it along.
+// ChatMessageDateAndStatusNode takes it out again and puts it right after the view count; anything else that shows
+// the date text as is (the header used when bubbles are off) shows it in front of the time.
+private let ayuForwardsCountMarker = "↪\u{FE0E}"
+private let ayuForwardsCountTerminator = "\u{00A0}"
+
+private func ayuForwardsCountPrefix(message: EngineMessage, dateTimeFormat: PresentationDateTimeFormat) -> String? {
+    guard ExteraSettings.shared.showForwardsCount else {
+        return nil
+    }
+    let namespace = message.id.namespace
+    if Namespaces.Message.allScheduled.contains(namespace) || Namespaces.Message.allQuickReply.contains(namespace) || Namespaces.Message.allWelcomeMessages.contains(namespace) {
+        return nil
+    }
+    var hasViewCount = false
+    var forwardCount = 0
+    for attribute in message.attributes {
+        if attribute is ViewCountMessageAttribute {
+            hasViewCount = true
+        } else if let attribute = attribute as? ForwardCountMessageAttribute {
+            forwardCount = attribute.count
+        }
+    }
+    guard hasViewCount, forwardCount > 0 else {
+        return nil
+    }
+    // Same formatting as the view count, so "Disable Number Rounding" applies to both.
+    return ayuForwardsCountMarker + compactNumericCountString(forwardCount, decimalSeparator: dateTimeFormat.decimalSeparator) + ayuForwardsCountTerminator
+}
+
+/// Removes the forwards count that `stringForMessageTimestampStatus` put into `dateText` and returns it ("↪12"), if there is one.
+func ayuExtractForwardsCount(from dateText: inout String) -> String? {
+    guard let markerRange = dateText.range(of: ayuForwardsCountMarker), let terminatorRange = dateText.range(of: ayuForwardsCountTerminator, range: markerRange.upperBound ..< dateText.endIndex) else {
+        return nil
+    }
+    let result = String(dateText[markerRange.lowerBound ..< terminatorRange.lowerBound])
+    dateText.removeSubrange(markerRange.lowerBound ..< terminatorRange.upperBound)
+    return result
 }

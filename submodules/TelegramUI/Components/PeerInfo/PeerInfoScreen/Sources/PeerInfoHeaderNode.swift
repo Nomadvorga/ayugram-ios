@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -1322,7 +1322,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if title.replacingOccurrences(of: "\u{fe0e}", with: "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 title = "" //"\u{00A0}"
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if title.isEmpty {
                 if case let .user(user) = peer, let phone = user.phone, !SGSimpleSettings.shared.hidePhoneInSettings {
                     title = formatPhoneNumber(context: self.context, number: phone)
@@ -1339,7 +1339,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
             
             if self.isSettings, case let .user(user) = peer {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 var formattedPhone = formatPhoneNumber(context: self.context, number: user.phone ?? "")
                 if !formattedPhone.isEmpty && SGSimpleSettings.shared.hidePhoneInSettings {
                     formattedPhone = ""
@@ -2381,7 +2381,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 buttonIcon = .message
             case .discussion:
                 buttonText = presentationData.strings.PeerInfo_ButtonDiscuss
-                buttonIcon = .discussion // MARK: Swiftgram
+                buttonIcon = .discussion // MARK: AyuGram
             case .call:
                 buttonText = presentationData.strings.PeerInfo_ButtonCall
                 buttonIcon = .call

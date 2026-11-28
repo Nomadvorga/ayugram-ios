@@ -35,7 +35,7 @@ private struct MentionChatInputContextPanelEntry: Comparable, Identifiable {
         return lhs.index < rhs.index
     }
     
-    func item(context: AccountContext, presentationData: PresentationData, inverted: Bool, setPeerIdRevealed: @escaping (EnginePeer.Id?) -> Void, peerSelected: @escaping (EnginePeer, Bool) -> Void, removeRequested: @escaping (EnginePeer.Id) -> Void) -> ListViewItem { // MARK: Swiftgram
+    func item(context: AccountContext, presentationData: PresentationData, inverted: Bool, setPeerIdRevealed: @escaping (EnginePeer.Id?) -> Void, peerSelected: @escaping (EnginePeer, Bool) -> Void, removeRequested: @escaping (EnginePeer.Id) -> Void) -> ListViewItem { // MARK: AyuGram
         return MentionChatInputPanelItem(context: context, presentationData: ItemListPresentationData(presentationData), inverted: inverted, peer: self.peer, revealed: self.revealed, setPeerIdRevealed: setPeerIdRevealed, peerSelected: peerSelected, removeRequested: removeRequested)
     }
 }
@@ -46,7 +46,7 @@ private struct CommandChatInputContextPanelTransition {
     let updates: [ListViewUpdateItem]
 }
 
-private func preparedTransition(from fromEntries: [MentionChatInputContextPanelEntry], to toEntries: [MentionChatInputContextPanelEntry], context: AccountContext, presentationData: PresentationData, inverted: Bool, forceUpdate: Bool, setPeerIdRevealed: @escaping (EnginePeer.Id?) -> Void, peerSelected: @escaping (EnginePeer, Bool) -> Void, removeRequested: @escaping (EnginePeer.Id) -> Void) -> CommandChatInputContextPanelTransition { // MARK: Swiftgram
+private func preparedTransition(from fromEntries: [MentionChatInputContextPanelEntry], to toEntries: [MentionChatInputContextPanelEntry], context: AccountContext, presentationData: PresentationData, inverted: Bool, forceUpdate: Bool, setPeerIdRevealed: @escaping (EnginePeer.Id?) -> Void, peerSelected: @escaping (EnginePeer, Bool) -> Void, removeRequested: @escaping (EnginePeer.Id) -> Void) -> CommandChatInputContextPanelTransition { // MARK: AyuGram
     let (deleteIndices, indicesAndItems, updateIndices) = mergeListsStableWithUpdates(leftList: fromEntries, rightList: toEntries, allUpdated: forceUpdate)
     
     let deletions = deleteIndices.map { ListViewDeleteItem(index: $0, directionHint: nil) }
@@ -146,7 +146,7 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
                 strongSelf.revealedPeerId = peerId
                 strongSelf.updateResults(strongSelf.currentResults)
             }
-        }, peerSelected: { [weak self] peer, mentionNext in // MARK: Swiftgram
+        }, peerSelected: { [weak self] peer, mentionNext in // MARK: AyuGram
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
                 switch strongSelf.mode {
                     case .input:
@@ -161,12 +161,12 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
                             
                             if let range = mentionQueryRange {
                                 if let addressName = peer.addressName, !addressName.isEmpty {
-                                    return (textInputState.replacingFlatRange(range, with: addressName + (mentionNext ? " @" : " ")), inputMode) // MARK: Swiftgram
+                                    return (textInputState.replacingFlatRange(range, with: addressName + chatTextInputMentionSuffix(peer: peer) + (mentionNext ? "@" : "")), inputMode) // MARK: AyuGram
                                 } else if !peer.compactDisplayTitle.isEmpty {
                                     let replacementText = NSMutableAttributedString()
                                     replacementText.append(NSAttributedString(string: peer.compactDisplayTitle, attributes: [ChatTextInputAttributes.textMention: ChatTextInputTextMentionAttribute(peerId: peer.id)]))
-                                    // MARK: Swiftgram
-                                    replacementText.append(NSAttributedString(string: mentionNext ? " @" : " "))
+                                    // MARK: AyuGram
+                                    replacementText.append(NSAttributedString(string: chatTextInputMentionSuffix(peer: peer) + (mentionNext ? "@" : "")))
 
                                     // The widened range eats the leading "@" as well as the query.
                                     let updatedRange = NSRange(location: range.location - 1, length: range.length + 1)

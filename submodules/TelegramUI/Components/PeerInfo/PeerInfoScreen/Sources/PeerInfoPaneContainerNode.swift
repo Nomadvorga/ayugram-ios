@@ -23,6 +23,7 @@ import UndoUI
 import HorizontalTabsComponent
 import GlassBackgroundComponent
 import EdgeEffect
+import SGSimpleSettings // MARK: AyuGram
 
 final class PeerInfoPaneWrapper {
     let key: PeerInfoPaneKey
@@ -674,6 +675,9 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     
     private let initialPaneKey: PeerInfoPaneKey?
+    // MARK: AyuGram
+    // Default profile tab; cleared once the user switches panes manually.
+    private var ayuPreferredPaneKey: PeerInfoPaneKey?
     
     init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: EnginePeer.Id, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?, initialGiftCollectionId: Int64?, switchToMediaTarget: PeerInfoSwitchToMediaTarget?) {
         self.context = context
@@ -687,6 +691,18 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.initialStoryFolderId = initialStoryFolderId
         self.initialGiftCollectionId = initialGiftCollectionId
         self.switchToMediaTarget = switchToMediaTarget
+        
+        // MARK: AyuGram
+        if initialPaneKey == nil && !isMediaOnly {
+            switch ExteraSettings.shared.defaultProfileTab {
+            case .media:
+                self.ayuPreferredPaneKey = .media
+            case .commonGroups:
+                self.ayuPreferredPaneKey = .groupsInCommon
+            case .default:
+                break
+            }
+        }
         
         self.tabsBackgroundContainer = GlassBackgroundContainerView()
         self.tabsBackgroundView = MainActor.assumeIsolated {
@@ -825,6 +841,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     let switchToKey = availablePanes[updatedIndex]
                     if switchToKey != self.currentPaneKey && self.currentPanes[switchToKey] != nil{
                         self.currentPaneKey = switchToKey
+                        self.ayuPreferredPaneKey = nil // MARK: AyuGram
                     }
                 }
                 self.transitionFraction = 0.0
@@ -968,7 +985,11 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         var updateCurrentPaneStatus = false
         
         if let previousAvailablePanes, !previousAvailablePanes.contains(.stories), availablePanes.contains(.stories) {
-            self.pendingSwitchToPaneKey = .stories
+            // MARK: AyuGram
+            let keepPreferredPane = self.ayuPreferredPaneKey.map { availablePanes.contains($0) } ?? false
+            if !keepPreferredPane {
+                self.pendingSwitchToPaneKey = .stories
+            }
         }
         
         if let currentPaneKey = self.currentPaneKey, !availablePanes.contains(currentPaneKey) {
@@ -992,6 +1013,11 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             }
         } else if self.currentPaneKey == nil {
             self.pendingSwitchToPaneKey = self.initialPaneKey ?? availablePanes.first
+        }
+        
+        // MARK: AyuGram
+        if let ayuPreferredPaneKey = self.ayuPreferredPaneKey, self.currentPaneKey != ayuPreferredPaneKey, availablePanes.contains(ayuPreferredPaneKey) {
+            self.pendingSwitchToPaneKey = ayuPreferredPaneKey
         }
         
         let currentIndex: Int?
@@ -1384,6 +1410,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                                 }
                                 return
                             }
+                            self.ayuPreferredPaneKey = nil // MARK: AyuGram
                             if self.currentPanes[paneKey] != nil {
                                 self.currentPaneKey = paneKey
                                 

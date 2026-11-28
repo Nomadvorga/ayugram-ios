@@ -788,3 +788,11 @@ CLASSES = _l.register({
     "android.text.style.URLSpan": URLSpan,
     "android.text.style.QuoteSpan": QuoteSpan,
 })
+
+# The host's ``TextUtils`` answers ``isEmpty`` alone; the rest is pure text logic, served here.
+# ``ellipsize`` needs text measurement and stays missing.
+HOST_MEMBERS = {"android.text.TextUtils": {
+    name: getattr(TextUtils, name) for name in (
+        "CAP_MODE_CHARACTERS", "CAP_MODE_WORDS", "CAP_MODE_SENTENCES", "equals", "join", "split", "htmlEncode", "isDigitsOnly",
+        "isGraphic", "getTrimmedLength", "substring", "indexOf", "lastIndexOf", "regionMatches", "stringOrSpannedString",
+        "concat", "replace", "expandTemplate", "copySpansFrom")}}

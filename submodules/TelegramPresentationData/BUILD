@@ -15,7 +15,7 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/Postbox:Postbox",
         "//submodules/Display:Display",
-        "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/MediaResources:MediaResources",

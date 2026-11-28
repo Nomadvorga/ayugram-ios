@@ -39,6 +39,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageReactionsFooterContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatSwipeToReplyRecognizer",
         "//submodules/TelegramUI/Components/Chat/ChatMessageSuggestedPostInfoNode",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

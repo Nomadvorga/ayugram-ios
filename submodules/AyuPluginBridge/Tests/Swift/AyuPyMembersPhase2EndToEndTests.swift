@@ -36,7 +36,7 @@ final class AyuPyMembersPhase2EndToEndTests: XCTestCase {
             self.record("dialog_show", lambda: builder.show())
             self.record("dialog_after", lambda: dialog.isShowing())
             style = AlertDialog.ALERT_TYPE_SPINNER
-            self.record("dialog_progress", lambda: AlertDialog(context, style))
+            self.record("dialog_progress", lambda: AlertDialog(context, style).show())
             self.record("for_name", lambda: [
                 Class.forName("android.graphics.Point").getName(), type(Class.forName("android.graphics.Point")).__name__,
                 Class.forName("android.view.View").getName(), type(Class.forName("android.view.View", False, None)).__name__,
@@ -87,7 +87,7 @@ final class AyuPyMembersPhase2EndToEndTests: XCTestCase {
             params.getClass().getDeclaredField("mPrivate")
             params.getClass().getMethod("explode")
             AlertDialog.Builder(None).setTitle("T").create().getButton(-1)
-            AlertDialog(None, 3)
+            AlertDialog(None, 1)
     """)
 
     func testPhase2MembersAgainstTheRealHost() async throws {
@@ -118,7 +118,8 @@ final class AyuPyMembersPhase2EndToEndTests: XCTestCase {
         // The test process has no window: the description reaches the host's presentation, which refuses.
         XCTAssertEqual(first["dialog_show"], .string("!BridgeError: SCREEN_UNAVAILABLE: Presentation root is not visible"))
         XCTAssertEqual(first["dialog_after"], .bool(false))
-        XCTAssertEqual(first["dialog_progress"], .string("!UnsupportedAPI: UNSUPPORTED_API: Progress dialogs require a native adapter"))
+        // The spinner dialog needs no button: its description reaches the same presentation.
+        XCTAssertEqual(first["dialog_progress"], .string("!BridgeError: SCREEN_UNAVAILABLE: Presentation root is not visible"))
         XCTAssertEqual(first["for_name"], .array([.string("android.graphics.Point"), .string("Class"), .string("android.view.View"),
                                                    .string("RemoteObject"), .bool(true)]))
         XCTAssertEqual(first["for_name_missing"], .string("!ClassNotFoundException: java.lang.ClassNotFoundException: org.sample.Missing"))

@@ -11,6 +11,7 @@ import java
 from _ayu_javalib import android_graphics, java_io, java_lang
 
 INTENT, VIEW, PAINT, URI = "android.content.Intent", "android.view.View", "android.graphics.Paint", "android.net.Uri"
+TEXT_UTILS = "android.text.TextUtils"
 # Android SDK values (``android.content.Intent``, ``android.view.*``, ``android.animation.ValueAnimator``, ...).
 EXPECTED = {
     INTENT: {"ACTION_GET_CONTENT": "android.intent.action.GET_CONTENT", "ACTION_OPEN_DOCUMENT": "android.intent.action.OPEN_DOCUMENT",
@@ -81,6 +82,29 @@ class ConstantTests(HostCase):
         self.assertEqual(self.blockers(imports, body), [
             ("OPERATION", "intents.launch (android.content.Intent.setType)"),
             ("MEMBER", "android.content.Intent.ACTION_INVENTED"), ("MEMBER", "android.view.View.TRANSLATION_X")])
+
+
+class TextUtilsTests(HostCase):
+    def test_the_sdk_serves_the_pure_members_of_the_hosts_text_utils(self):
+        self.declare(TEXT_UTILS, {"isEmpty": lambda target, args: "host"}, entry(static_methods=["isEmpty"]))
+        scope = self.load(imports="from android.text import TextUtils\n")
+        with bridge.runtime.context(scope):
+            utils = scope.module.TextUtils
+            self.assertIsInstance(utils, bridge.JavaClass)
+            # ``android.text.TextUtils.htmlEncode`` escapes exactly these five characters.
+            self.assertEqual(utils.htmlEncode("<a href='x'>&\"ж</a>"), "&lt;a href=&#39;x&#39;&gt;&amp;&quot;ж&lt;/a&gt;")
+            self.assertEqual((utils.join(", ", [1, "b"]), utils.isDigitsOnly("123"), utils.equals("a", "a"), utils.CAP_MODE_WORDS),
+                             ("1, b", True, True, 0x2000))
+            self.assertEqual(self.host_requests(), [])
+            self.assertEqual(utils.isEmpty(""), "host")
+            self.assertEqual(self.host_requests(), [(TEXT_UTILS, "isEmpty")])
+
+    def test_preflight_keeps_the_measuring_member_missing(self):
+        self.declare(TEXT_UTILS, table=entry(static_methods=["isEmpty"]))
+        body = ("    def on_plugin_load(self):\n"
+                "        TextUtils.htmlEncode('<'), TextUtils.isEmpty(''), TextUtils.join(',', [])\n"
+                "        TextUtils.ellipsize('text', None, 10.0, None)\n")
+        self.assertEqual(self.blockers("from android.text import TextUtils\n", body), [("MEMBER", "android.text.TextUtils.ellipsize")])
 
 
 class NestedEnumTests(HostCase):

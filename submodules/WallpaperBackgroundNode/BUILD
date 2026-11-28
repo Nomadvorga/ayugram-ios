@@ -41,7 +41,7 @@ apple_resource_bundle(
 )
 
 sgdeps = [
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
 ]
 
 swift_library(

@@ -181,6 +181,13 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "getWidth", "getMeasuredWidth": return .integer(Int64(view.bounds.width.rounded()))
         case "getHeight", "getMeasuredHeight": return .integer(Int64(view.bounds.height.rounded()))
         case "getX": return .number(Double(view.frame.minX))
+        case "getLocationOnScreen", "getLocationInWindow":
+            // Android reports pixels; this bridge's density is 1. A detached hierarchy is measured from its root.
+            var root: UIView = view
+            while let parent = root.superview { root = parent }
+            var point = view.convert(view.bounds.origin, to: root)
+            if method == "getLocationOnScreen", let window = root as? UIWindow { point = window.convert(point, to: window.screen.coordinateSpace) }
+            return .array([.integer(Int64(point.x.rounded())), .integer(Int64(point.y.rounded()))])
         case "getY": return .number(Double(view.frame.minY))
         case "getId": return .integer(Int64(view.bridgeID))
         case "getMinimumWidth": return .integer(Int64(view.bridgeMinimumWidth))
@@ -283,14 +290,14 @@ final class AyuBridgeUI: @unchecked Sendable {
         let handler: @Sendable () -> Void
     }
 
-    @MainActor func makeCustomDialog(owner: String, generation: UUID, handle: String, title: String?, message: String?, actions: [DialogAction], cancelable: Bool) throws -> AyuBridgeDialogViewController {
+    @MainActor func makeCustomDialog(owner: String, generation: UUID, handle: String, title: String?, message: String?, actions: [DialogAction], cancelable: Bool, fullscreen: Bool = false) throws -> AyuBridgeDialogViewController {
         dispatchPrecondition(condition: .onQueue(.main))
         self.flush()
         guard self.generations[owner] == generation, let view = self.views[handle], view.owner == owner else {
             throw AyuBridgeFailure("invalid_handle", "Dialog content view is unavailable")
         }
         guard view.superview == nil else { throw AyuBridgeFailure("invalid_state", "Dialog content must not have a parent") }
-        return AyuBridgeDialogViewController(title: title, message: message, content: view, actions: actions, cancelable: cancelable)
+        return AyuBridgeDialogViewController(title: title, message: message, content: view, actions: actions, cancelable: cancelable, fullscreen: fullscreen)
     }
 
     @MainActor func trackCustomDialog(owner: String, controller: AyuBridgeDialogViewController) {
@@ -1803,7 +1810,11 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     var onDismiss: (() -> Void)?
     private var didReportDismissal = false
 
-    fileprivate init(title: String?, message: String?, content: AyuBridgeView, actions: [AyuBridgeUI.DialogAction], cancelable: Bool) {
+    /// Android's `Dialog` with a black full-screen theme: the content view alone covers the screen.
+    let isFullscreen: Bool
+
+    fileprivate init(title: String?, message: String?, content: AyuBridgeView, actions: [AyuBridgeUI.DialogAction], cancelable: Bool, fullscreen: Bool = false) {
+        self.isFullscreen = fullscreen
         self.dialogTitle = title
         self.dialogMessage = message
         self.content = content
@@ -1817,6 +1828,18 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        if self.isFullscreen {
+            self.view.backgroundColor = .black
+            self.content.translatesAutoresizingMaskIntoConstraints = false
+            self.view.addSubview(self.content)
+            NSLayoutConstraint.activate([
+                self.content.topAnchor.constraint(equalTo: self.view.topAnchor),
+                self.content.bottomAnchor.constraint(equalTo: self.view.bottomAnchor),
+                self.content.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                self.content.trailingAnchor.constraint(equalTo: self.view.trailingAnchor)
+            ])
+            return
+        }
         self.view.backgroundColor = UIColor.black.withAlphaComponent(0.4)
 
         let card = UIView()

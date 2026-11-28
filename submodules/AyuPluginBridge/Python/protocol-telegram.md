@@ -481,6 +481,53 @@ or action-bar menu members, and an alert's top image or animation raises in the 
 org.telegram.messenger.R.string`, `CLASS org.telegram.messenger.R$string`), and reading a name of such a kind
 inside a plugin raises `UNSUPPORTED_API`.
 
+## Images
+
+Implemented in `Sources/AyuBridgeImages.swift` (`AyuBridgeImageService`, with `AyuBridgeImageOps.swift` and
+`AyuBridgeImageDrawing.swift`) and declared by the host. The SDK client is `_ayu_images.py`; `PIL` and the
+`android.graphics` bitmap classes (`_ayu_javalib/android_bitmap.py`) are built on it. Pixels stay in the host: an
+image is an opaque string handle owned by one plugin generation and dropped with it. An image has a `mode` (`L`,
+`LA`, `RGB`, `RGBA`), eight bits per band, straight (non-premultiplied) alpha, rows top to bottom. Every operation
+that returns an image returns `{image, mode, width, height}`; a color is a list with one value 0...255 per band.
+Unknown argument keys fail with `invalid_arguments`, an unknown handle with `invalid_handle`, an unknown mode,
+filter, format or kind with `UNSUPPORTED_API`.
+
+Limits per plugin generation: 64 images, 134,217,728 pixel bytes, 32 fonts; one image at most 16,384 pixels a side
+and 16,777,216 pixels; a file read by the host at most 67,108,864 bytes; one pixel transfer at most 131,072 raw
+bytes; 256 draw commands a call; 16,384 bytes of text; 4,096 path segments. Exceeding one fails with
+`resource_limit`. A path is absolute, at most 4,096 bytes, and names a regular file.
+
+| Operation | Arguments | Result and rules |
+|---|---|---|
+| `image.create` | `mode`, `width`, `height`, `color?` | New image filled with `color` (zeros by default) |
+| `image.decode` | `path` or `data` (base64), `bounds?` | First frame of a JPEG, PNG, GIF, WebP, BMP or TIFF, decoded by ImageIO without color management; the result adds `format`, `orientation` (EXIF 1...8, not applied) and `frames`. Mode comes from the file: gray or color, with alpha when the file has it. With `bounds: true` only the header is read: no `image` key, nothing is stored. An unreadable file fails with `io_error`, an unidentified one with `image_format` |
+| `image.encode` | `image`, `format` (`PNG`, `JPEG`, `WEBP`), `path`, `quality?` (0...100, default 75) | Writes the file atomically and returns `{bytes}`. PNG ignores `quality`. JPEG refuses an image with alpha (`invalid_arguments`). `WEBP` fails with `UNSUPPORTED_API` where ImageIO has no WebP encoder |
+| `image.release` | `images?`, `fonts?` (lists of at most 256 handles) | Frees them; unknown handles are ignored |
+| `image.copy` | `image` | A copy |
+| `image.convert` | `image`, `mode` | Pillow's `convert`: gray from color by ITU-R 601 luma, alpha added as 255 or dropped (color bands are kept as stored, not composited) |
+| `image.band` | `image`, `band` | One band as an `L` image |
+| `image.merge` | `mode`, `bands` | One `L` image of the same size per band of `mode` |
+| `image.putalpha` | `image`, `alpha` (an `L` image handle of the same size, or 0...255) | In place; `L` becomes `LA` and `RGB` becomes `RGBA`. Returns the new description |
+| `image.pixels.get` | `image`, `box` `[left, top, right, bottom]` | `{data}`: base64 of the interleaved bytes of the box, which lies inside the image and holds at most 131,072 bytes |
+| `image.pixels.put` | `image`, `box`, `data` | Replaces the bytes of the box in place |
+| `image.point` | `image`, `table` (256 values per band) | New image through the lookup table |
+| `image.stats` | `image`, `kind`, `max?` | `histogram`: 256 counts per band; `extrema`: `[low, high]` per band; `bbox`: the box of non-zero pixels (alpha only when the mode has alpha) or null; `colors`: at most `max` (default 256, bound 4,096) distinct colors with counts, null beyond that |
+| `image.crop` | `image`, `box` | New image of the box; the part outside the source is zero |
+| `image.resize` | `image`, `width`, `height`, `filter` (`nearest`, `box`, `bilinear`, `hamming`, `bicubic`, `lanczos`), `box?` | Pillow's resampling of the source box (the whole image by default) |
+| `image.transpose` | `image`, `method` (`flip_left_right`, `flip_top_bottom`, `rotate_90`, `rotate_180`, `rotate_270`, `transpose`, `transverse`) | New image |
+| `image.transform` | `image`, `width`, `height`, `matrix` (six numbers, output pixel to source pixel), `filter` (`nearest`, `bilinear`, `bicubic`), `fill?` | Affine transform; uncovered pixels take `fill` (zeros by default) |
+| `image.paste` | `image`, `box` `[x, y]`, `source` or `color`, `mask?` | In place. `source` has the image's mode; a `color` needs a `mask`; the mask (`L`, `LA` or `RGBA`, the size of the source) weighs the paste by its last band |
+| `image.alpha_composite` | `image`, `source` | Two `RGBA` images of one size; a new image with `source` over `image`, with Pillow's rounding |
+| `image.blend` | `image`, `source`, `alpha` | Same mode and size; `image * (1 - alpha) + source * alpha`, clipped |
+| `image.chop` | `image`, `kind` (`difference`, `multiply`, `add`, `subtract`, `offset`), `source?`, `scale?`, `offset?`, `dx?`, `dy?` | Pillow's `ImageChops`; the result has the common size |
+| `image.filter` | `image`, `kind` (`gaussian_blur`, `box_blur` with `radius`; `kernel` with `size` 3 or 5, `kernel`, `scale`, `offset?`; `rank` with odd `size` up to 15 and `rank`; `unsharp` with `radius`, `percent`, `threshold`) | New image; every band is filtered on its own with Pillow's kernels and borders |
+| `image.draw` | `image`, `commands` | In place; the whole list is validated before the first pixel changes. A command has `op`: `rect`, `round_rect`, `ellipse` (`box`, `radius` or `radii`, `ring?`), `arc` (`box`, `start`, `sweep`, `center?`), `line` (`points`), `path` (`segments` of `M`, `L`, `Q`, `C`, `Z`), `fill` (the whole image), `text` (`text`, `origin` on the baseline, `font` handle or `size`, `stroke_width?`, `stroke_ink?`) or `image` (`source`, `dst`, `src?`, `alpha?`, `filter?`). Shared keys: `fill` and `stroke` inks, `width`, `cap`, `join`, `antialias`, `blend` (`replace`, Pillow's default, or `over`, source-over), `matrix` (six numbers) and `clips` (at most 32 of `{matrix, rect}`). `paint` and `path` may instead be references to an `android.graphics.Paint` and `Path` the plugin owns in the host; the paint then supplies color, style, stroke, text size and filtering and the command blends `over` |
+| `image.font.load` | `size` (1...2048), `path?`, `index?` | `{font, size, ascent, descent, family, style}`: a font file, or the system font without `path` |
+| `image.font.measure` | `font`, `text`, `stroke_width?` | `{advance, ink, ascent, descent}`; `ink` is the outline box relative to the pen on the baseline |
+
+An image reaches a view only through `ImageView.setImageBitmap`/`setImageDrawable` with `{image}`: the host copies
+the pixels for that view, and the copy counts against the plugin's decoded-image quota.
+
 ## Reserved names
 
 The SDK names these operations in preflight blockers. They have no contract and a host must not declare them.
@@ -493,7 +540,7 @@ The SDK names these operations in preflight blockers. They have no contract and 
 | `telegram.contacts`, `telegram.location`, `telegram.notifications`, `telegram.secret_chats`, `telegram.downloads` | the matching `client_utils.get_*` controller getters | not designed |
 | `resources.strings` | `R.string.<name>` (`LocaleController.getString(R.string.x)`) | Android string names have no iOS table; the corpus uses 59 names and the host has no `getString` member |
 | `resources.android` | `R.style`, `R.id`, `R.color`, `R.dimen`, `R.attr`, `R.layout` and the other Android-only kinds | No iOS counterpart |
-| `sdk.unprovided_member` | A call, on any receiver, of a member listed in `_ayu_operations.UNPROVIDED_MEMBERS` (`addDialogToFolder`, `readAllDialogs`, `MessageObject.isSticker`, `getWindow().getDecorView()`, ...) | Neither a host adapter nor a Python-local class provides the member, so the call fails wherever it is made. The list comes from auditing plugins that otherwise pass preflight; it is not complete (see *Member coverage*) |
+| `sdk.unprovided_member` | A call, on any receiver, of a member listed in `_ayu_operations.UNPROVIDED_MEMBERS` (`addDialogToFolder`, `readAllDialogs`, `MessageObject.applyNewText`, `getWindow().getDecorView()`, ...) | Neither a host adapter nor a Python-local class provides the member, so the call fails wherever it is made. The list comes from auditing plugins that otherwise pass preflight; it is not complete (see *Member coverage*) |
 
 ### Member coverage
 

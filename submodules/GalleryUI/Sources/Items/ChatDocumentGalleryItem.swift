@@ -112,20 +112,20 @@ class ChatDocumentGalleryItemNode: ZoomableContentGalleryItemNode, WKNavigationD
     private var status: EngineMediaResource.FetchStatus?
     
     init(context: AccountContext, presentationData: PresentationData) {
-        /* MARK: Swiftgram */ //if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
+        /* MARK: AyuGram */ //if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
             let configuration = WKWebViewConfiguration()
             configuration.defaultWebpagePreferences.allowsContentJavaScript = false
             let webView = WKWebView(frame: CGRect(), configuration: configuration)
             webView.allowsLinkPreview = false
             webView.allowsBackForwardNavigationGestures = false
             self.webView = webView
-        /* MARK: Swiftgram */ /*} else {
+        /* MARK: AyuGram */ /*} else {
             let _ = registeredURLProtocol
             let webView = UIWebView()
             
             webView.scalesPageToFit = true
             self.webView = webView
-        }*/ /* MARK: Swiftgram */
+        }*/ /* MARK: AyuGram */
         self.footerContentNode = ChatItemGalleryFooterContentNode(context: context, presentationData: presentationData)
         
         self.statusNodeContainer = HighlightableButtonNode()

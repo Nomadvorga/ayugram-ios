@@ -78,7 +78,7 @@ class UICompatibilityTests(unittest.TestCase):
             request = next(r for r in self.host.requests if r["operation"] == "ui.present")
             # A click is always reported so the builder knows the dialog closed.
             self.assertIn("$callback", request["arguments"]["config"]["items"]["on_click"])
-            for call in (lambda: AlertDialogBuilder(None, 2),
+            for call in (lambda: AlertDialogBuilder(None, 1),
                          lambda: AlertDialogBuilder(None).set_items(["One"], icons=[1]),
                          lambda: AlertDialogBuilder(None).set_view(object())):
                 with self.assertRaises(bridge.UnsupportedAPI):

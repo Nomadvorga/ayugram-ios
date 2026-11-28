@@ -41,7 +41,7 @@ public enum OpenInLocationDirections: Equatable {
 
 public enum OpenInApplication: Equatable {
     case safari
-    case system // MARK: Swiftgram
+    case system // MARK: AyuGram
     case maps
     case other(title: String, identifier: Int64, scheme: String, store: String?)
 }
@@ -68,7 +68,7 @@ public final class OpenInOption {
             switch self.application {
                 case .safari:
                     return "Safari"
-                case .system: // MARK: Swiftgram
+                case .system: // MARK: AyuGram
                     return "System"
                 case .maps:
                     return "Maps"
@@ -108,7 +108,7 @@ private func allOpenInOptions(context: AccountContext, item: OpenInItem) -> [Ope
                 return .openUrl(url: url)
             }))
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             options.append(OpenInOption(identifier: "system", application: .system, action: {
                 return .openUrl(url: url)
             }))

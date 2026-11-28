@@ -77,6 +77,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/VideoPlaybackControlsComponent",
         "//submodules/UIKitRuntimeUtils",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings", # MARK: AyuGram
     ],
     visibility = [
         "//visibility:public",

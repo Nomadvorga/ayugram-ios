@@ -263,6 +263,76 @@ final class AyuPluginEndToEndImageTests: XCTestCase {
     """#
     // END PILLOW EXPECTED
 
+    static let bitmapCases = #"""
+    def bitmap_cases(record, workdir):
+        from android.graphics import Bitmap, BitmapFactory
+        from java.io import FileOutputStream
+
+        def compressed(bitmap, name, compress_format, quality):
+            path = os.path.join(workdir, name)
+            stream = FileOutputStream(path)
+            try:
+                return bitmap.compress(compress_format, quality, stream), path
+            finally:
+                stream.close()
+
+        def pixels(bitmap, points):
+            return [[(bitmap.getPixel(x, y) >> shift) & 255 for shift in (24, 16, 8, 0)] for x, y in points]
+
+        corners = ((0, 0), (1, 0), (0, 1), (1, 1))
+        colors = [0xFFFF0000 - (1 << 32), 0xFF00FF00 - (1 << 32), 0x80102030 - (1 << 32), 0x00FFFFFF]
+        bitmap = Bitmap.createBitmap(colors, 2, 2, Bitmap.Config.ARGB_8888)
+        record("state", [bitmap.getWidth(), bitmap.getHeight(), bitmap.hasAlpha(), bitmap.isMutable(), bitmap.getConfig().name()])
+        record("pixels", pixels(bitmap, corners))
+        written, path = compressed(bitmap, "bitmap.png", Bitmap.CompressFormat.PNG, 100)
+        record("png_written", written)
+        with open(path, "rb") as stream:
+            data = stream.read()
+        record("png_magic", list(data[:8]))
+        decoded = BitmapFactory.decodeByteArray(data, 0, len(data))
+        record("png_state", [decoded.getWidth(), decoded.getHeight(), decoded.hasAlpha(), decoded.isMutable()])
+        record("png_pixels", pixels(decoded, corners))
+        big = Bitmap.createScaledBitmap(bitmap, 32, 32, False)
+        written, path = compressed(big, "bitmap.jpg", Bitmap.CompressFormat.JPEG, 100)
+        record("jpeg_written", written)
+        options = BitmapFactory.Options()
+        options.inJustDecodeBounds = True
+        record("bounds", [BitmapFactory.decodeFile(path, options) is None, options.outWidth, options.outHeight, options.outMimeType])
+        opaque = BitmapFactory.decodeFile(path)
+        record("jpeg_state", [opaque.getWidth(), opaque.getHeight(), opaque.hasAlpha()])
+        record("jpeg_pixels", pixels(opaque, ((8, 8), (24, 8), (8, 24), (24, 24))))
+        record("undecodable", BitmapFactory.decodeByteArray(b"not an image", 0, 12) is None)
+        try:
+            compressed(bitmap, "bitmap.webp", Bitmap.CompressFormat.WEBP, 90)
+            record("webp", "written")
+        except Exception as error:
+            record("webp", type(error).__name__)
+        bitmap.recycle()
+        record("recycled", bitmap.isRecycled())
+    """#
+
+    static let bitmapExpected = #"""
+    {"state":[2,2,true,false,"ARGB_8888"],"pixels":[[255,255,0,0],[255,0,255,0],[128,16,32,48],[0,0,0,0]],
+     "png_written":true,"png_magic":[137,80,78,71,13,10,26,10],"png_state":[2,2,true,false],
+     "png_pixels":[[255,255,0,0],[255,0,255,0],[128,16,32,48],[0,0,0,0]],
+     "jpeg_written":true,"bounds":[true,32,32,"image/jpeg"],"jpeg_state":[32,32,false],
+     "jpeg_pixels":[[255,255,0,0],[255,0,255,0],[255,8,16,24],[255,0,0,0]],
+     "undecodable":true,"webp":"UnsupportedAPI","recycled":true}
+    """#
+
+    /// Android's results, by hand: premultiplied storage read back, PNG keeping alpha, JPEG over black.
+    func testAndroidBitmapsMatchAndroid() async throws {
+        let stack = try AyuEndToEnd.shared()
+        let id = try await stack.start(Self.plugin(id: "e2e_android_bitmap", function: "bitmap_cases", body: Self.bitmapCases, arguments: ""))
+        let results = try self.results(stack, id)
+        await stack.remove(id)
+        let expected = try JSONDecoder().decode([String: AyuBridgeValue].self, from: Data(Self.bitmapExpected.utf8))
+        for (name, value) in expected.sorted(by: { $0.key < $1.key }) {
+            XCTAssertTrue(Self.matches(results[name] ?? .null, value, Self.tolerance(name)), "\(name): \(Self.text(results[name] ?? .null)) is not \(Self.text(value))")
+        }
+        XCTAssertEqual(Set(results.keys), Set(expected.keys))
+    }
+
     /// How far a value may be from Pillow's: `absolute` units, or `relative` of the larger one.
     /// Anything not listed must be equal.
     private static let tolerances: [(prefix: String, absolute: Double, relative: Double, reason: String)] = [

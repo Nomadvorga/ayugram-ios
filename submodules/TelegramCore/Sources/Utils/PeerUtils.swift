@@ -49,7 +49,7 @@ public extension Peer {
             break
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let chatId = self.id.id._internalGetInt64Value()
         if contentSettings.appConfiguration.sgWebSettings.global.forceReasons.contains(chatId) {
             return "Unavailable in AyuGram due to App Store Guidelines"
@@ -344,7 +344,7 @@ public extension Peer {
     }
     
     var nameColor: PeerColor? {
-        if SGSimpleSettings.shared.accountColorsSaturation == 0 { // MARK: Swiftgram
+        if SGSimpleSettings.shared.accountColorsSaturation == 0 { // MARK: AyuGram
             return nil
         }
         switch self {
@@ -659,4 +659,22 @@ public extension PeerId {
 // "Hide Premium Statuses": no emoji statuses and no premium stars next to names.
 public func ayuHidesPremiumStatuses() -> Bool {
     return AyuCustomizationSettings.shared.hidePremiumStatuses
+}
+
+// MARK: AyuGram
+// exteraGram "Hide reactions" toggles: whether reactions are hidden in the chat with this peer.
+// Channels / groups and supergroups / every chat with a user (bots, Saved Messages and secret chats included).
+public func ayuHidesReactions(inChatWith peer: Peer?) -> Bool {
+    if let channel = peer as? TelegramChannel {
+        if case .broadcast = channel.info {
+            return AyuCustomizationSettings.shared.hideChannelReactions
+        } else {
+            return AyuCustomizationSettings.shared.hideGroupReactions
+        }
+    } else if peer is TelegramGroup {
+        return AyuCustomizationSettings.shared.hideGroupReactions
+    } else if peer is TelegramUser || peer is TelegramSecretChat {
+        return ExteraSettings.shared.hideReactionsInPrivateChats
+    }
+    return false
 }

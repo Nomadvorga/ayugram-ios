@@ -1,6 +1,6 @@
-import SGSimpleSettings // MARK: Swiftgram
-import SGLogging // MARK: Swiftgram
-import TextFormat // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
+import SGLogging // MARK: AyuGram
+import TextFormat // MARK: AyuGram
 import Foundation
 import NaturalLanguage
 import SwiftSignalKit
@@ -57,7 +57,7 @@ public struct ChatTranslationState: Codable, Equatable {
         try container.encode(self.isEnabled, forKey: .isEnabled)
     }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public func withFromLang(_ fromLang: String) -> ChatTranslationState {
         return ChatTranslationState(
             baseLang: self.baseLang,
@@ -251,7 +251,7 @@ public func updateChatTranslationStateInteractively(engine: TelegramEngine, peer
 private let languageRecognizer = NLLanguageRecognizer()
 
 public func translateMessageIds(context: AccountContext, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, viaText: Bool = false, forQuickTranslate: Bool = false) -> Signal<Never, NoError> {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let sgBackend = SGSimpleSettings.shared.translationBackendEnum
     var sgUseMessageIds = true
     if viaText || !context.isPremium || sgBackend != .default {
@@ -276,7 +276,7 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
                         }
                     }
                 }
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 guard forQuickTranslate || message.author?.id != context.account.peerId else {
                     continue
                 }
@@ -325,9 +325,9 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
         default:
             break
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgInputLength = messageDictToTranslate.values.reduce(0) { $0 + $1.count }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if SGSimpleSettings.shared.translatorLogsEnabled {
             SGLogger.shared.log("Translate", "[\(sgUseMessageIds ? "Telegram" : sgBackend.rawValue)] translating \(sgInputLength) chars\(fromLang.flatMap { " from '\($0)'" } ?? "") to '\(toLang)'")
         }
@@ -346,7 +346,7 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
         if forQuickTranslate && messageIdsToTranslate.isEmpty { return .complete() } // Otherwise Telegram's API will return .never()
         return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible)
         |> `catch` { error -> Signal<Never, NoError> in
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if SGSimpleSettings.shared.translatorLogsEnabled {
                 SGLogger.shared.log("Translate", "[\(sgBackend.rawValue)] error translating \(sgInputLength) chars\(fromLang.flatMap { " from '\($0)'" } ?? "") to '\(toLang)', error: \(error)")
                 SGLogger.shared.log("Translate", "[\(SGSimpleSettings.TranslationBackend.gtranslate.rawValue)] attempting GTranslate fallback for \(sgInputLength) chars\(fromLang.flatMap { " from '\($0)'" } ?? "") to '\(toLang)'")
@@ -367,13 +367,13 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
     } |> switchToLatest
 }
 
-public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, forcePredict: Bool = false /* MARK: Swiftgram */) -> Signal<ChatTranslationState?, NoError> {
+public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, forcePredict: Bool = false /* MARK: AyuGram */) -> Signal<ChatTranslationState?, NoError> {
     let sharesPeerChoice = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
     |> map { peer -> Bool in
         return chatTranslationSharesPeerChoice(peer: peer)
     }
     
-    return chatTranslationLocationState(context: context, peerId: peerId, threadId: threadId, forcePredict: forcePredict) // MARK: Swiftgram
+    return chatTranslationLocationState(context: context, peerId: peerId, threadId: threadId, forcePredict: forcePredict) // MARK: AyuGram
     |> mapToSignal { state -> Signal<ChatTranslationState?, NoError> in
         guard let state else {
             return .single(nil)
@@ -393,7 +393,7 @@ public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id,
     |> distinctUntilChanged
 }
 
-private func chatTranslationLocationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, forcePredict: Bool /* MARK: Swiftgram */) -> Signal<ChatTranslationState?, NoError> {
+private func chatTranslationLocationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, forcePredict: Bool /* MARK: AyuGram */) -> Signal<ChatTranslationState?, NoError> {
     if peerId.id == EnginePeer.Id.Id._internalFromInt64Value(777000) {
         return .single(nil)
     }
@@ -419,7 +419,7 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
             context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.AutoTranslateEnabled(id: peerId))
         )
         |> mapToSignal { settings, autoTranslateEnabled in
-            if !settings.translateChats && !autoTranslateEnabled && !forcePredict { // MARK: Swiftgram
+            if !settings.translateChats && !autoTranslateEnabled && !forcePredict { // MARK: AyuGram
                 return .single(nil)
             }
             
@@ -437,7 +437,7 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
             |> mapToSignal { cached in
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                 if let cached, let timestamp = cached.timestamp, cached.baseLang == baseLang && currentTime - timestamp < 60 * 60 {
-                    if !dontTranslateLanguages.contains(cached.fromLang) || forcePredict { // MARK: Swiftgram
+                    if !dontTranslateLanguages.contains(cached.fromLang) || forcePredict { // MARK: AyuGram
                         return .single(cached)
                     } else {
                         return .single(nil)
@@ -548,7 +548,7 @@ private func chatTranslationLocationState(context: AccountContext, peerId: Engin
                                 isEnabled: isEnabled
                             )
                             let _ = updateChatTranslationState(engine: context.engine, peerId: peerId, threadId: threadId, state: state).start()
-                            if !dontTranslateLanguages.contains(fromLang) || forcePredict { // MARK: Swiftgram
+                            if !dontTranslateLanguages.contains(fromLang) || forcePredict { // MARK: AyuGram
                                 return state
                             } else {
                                 return nil

@@ -995,7 +995,7 @@ extension PeerInfoScreenNode {
                     }
                     if canReport {
                         items.append(strongSelf.reportContextMenuItem())
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     } else {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Group_Info_AdminLog, icon: { theme in
                             generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RefProgram/IntroListEye"), color: theme.contextMenu.primaryColor)
@@ -1012,7 +1012,7 @@ extension PeerInfoScreenNode {
                             self?.openParticipantsSection(section: .admins)
                         })))
                     }
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Channel_AdminLogFilter_EventsPinned, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/PinnedList"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] c, f in

@@ -540,6 +540,15 @@ class _TLMeta(type):
 _SNAPSHOT_CLASSES = {}
 
 
+class _GetClass:
+    """``object.getClass()`` and Chaquopy's ``Class.getClass()``: the ``java.lang.Class`` mirror."""
+
+    def __get__(self, instance, owner):
+        from . import java_lang
+        target = owner if instance is None else type(instance)
+        return lambda: java_lang.Class._of(target)
+
+
 class TLObject(metaclass=_TLMeta):
     """``org.telegram.tgnet.TLObject``."""
     _ayu_java_name = PACKAGE + "TLObject"
@@ -563,6 +572,8 @@ class TLObject(metaclass=_TLMeta):
 
     def __repr__(self):
         return f"<{_class_name(type(self)).rpartition('.')[2].replace('$', '.')}>"
+
+    getClass = _GetClass()
 
     def _flags(self, plan):
         """Flag words as Android writes them; the object's fields are updated like Java's."""
@@ -928,3 +939,26 @@ CLASSES.update({
     PACKAGE + "QuickAckDelegate": QuickAckDelegate,
     PACKAGE + "WriteToSocketDelegate": WriteToSocketDelegate,
 })
+
+
+def _of_stars(stars):
+    amount = _TABLE["tl.TL_stars$TL_starsAmount"]()
+    amount.amount = stars
+    return amount
+
+
+_TABLE["tl.TL_stars$StarsAmount"].ofStars = staticmethod(_of_stars)
+
+
+def _register_names():
+    from . import java_lang
+    java_lang.register(CLASSES)
+    # Android moved these out of ``TLRPC``; plugins still fall back to the name older clients had.
+    # Registered after the current names so ``getName()`` and hook names stay the current ones.
+    for old, key in _LEGACY_NAMES.items():
+        setattr(TLRPC, old, _TABLE[key])
+        CLASSES[PACKAGE + "TLRPC$" + old] = _TABLE[key]
+
+
+_LEGACY_NAMES = {"TL_account_updateProfile": "tl.TL_account$updateProfile"}
+_register_names()

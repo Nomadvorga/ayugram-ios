@@ -29,7 +29,7 @@ public enum TranslationTone: String {
     case formal
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 public func normalizeTranslationLanguage(_ code: String) -> String {
     var code = code
     if code.contains("-") {
@@ -58,7 +58,7 @@ func _internal_translate(network: Network, text: String, toLang: String, entitie
         apiText = [.textWithEntities(.init(text: text, entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())))]
     }
 
-    return network.request(Api.functions.messages.translateText(flags: flags, peer: peer, id: messageId.flatMap { [$0] }, text: apiText, toLang: normalizeTranslationLanguage(toLang), tone: tone.rawValue)) // MARK: Swiftgram
+    return network.request(Api.functions.messages.translateText(flags: flags, peer: peer, id: messageId.flatMap { [$0] }, text: apiText, toLang: normalizeTranslationLanguage(toLang), tone: tone.rawValue)) // MARK: AyuGram
     |> mapError { error -> TranslationError in
         if error.errorDescription.hasPrefix("FLOOD_WAIT") {
             return .limitExceeded
@@ -359,7 +359,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
         if id.isEmpty {
             msgs = .single(nil)
         } else {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if enableLocalIfPossible, let engineExperimentalInternalTranslationService {
             //
                 msgs = account.postbox.transaction { transaction -> [MessageId: String] in
@@ -377,10 +377,10 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
                     for (id, text) in messageTexts {
                         mappedTexts[AnyHashable(id)] = text
                     }
-                    return engineExperimentalInternalTranslationService.translate(texts: mappedTexts, fromLang: fromLang ?? "", toLang: toLang) // MARK: Swiftgram
+                    return engineExperimentalInternalTranslationService.translate(texts: mappedTexts, fromLang: fromLang ?? "", toLang: toLang) // MARK: AyuGram
                     |> castError(TranslationError.self)
                     |> mapToSignal { resultTexts -> Signal<Api.messages.TranslatedText?, TranslationError> in
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         guard let resultTexts, resultTexts.count == messageTexts.count else {
                             return .fail(.generic)
                         }
@@ -396,7 +396,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
                     }
                 }
             } else {
-                msgs = account.network.request(Api.functions.messages.translateText(flags: flags, peer: inputPeer, id: id, text: nil, toLang: normalizeTranslationLanguage(toLang), tone: tone != .neutral ? tone.rawValue : nil)) // MARK: Swiftgram
+                msgs = account.network.request(Api.functions.messages.translateText(flags: flags, peer: inputPeer, id: id, text: nil, toLang: normalizeTranslationLanguage(toLang), tone: tone != .neutral ? tone.rawValue : nil)) // MARK: AyuGram
                 |> map(Optional.init)
                 |> mapError { error -> TranslationError in
                     if error.errorDescription.hasPrefix("FLOOD_WAIT") {

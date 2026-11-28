@@ -157,10 +157,10 @@ class BuilderTests(DialogCase):
                     dialog_class.Builder(*arguments)
             for style in (dialog_class.ALERT_TYPE_LOADING, dialog_class.ALERT_TYPE_SPINNER):
                 with self.subTest(style=style):
-                    with self.assertRaises(bridge.UnsupportedAPI):
-                        dialog_class.Builder(None, style, None)
-                    with self.assertRaises(bridge.UnsupportedAPI):
-                        dialog_class(None, style)
+                    self.assertIs(type(dialog_class.Builder(None, style, None).create()), dialog_class)
+                    self.assertIs(type(dialog_class(None, style)), dialog_class)
+            with self.assertRaises(bridge.UnsupportedAPI):
+                dialog_class(None, 1)
             with self.assertRaises(TypeError):
                 dialog_class(None, None)
             # A dialog built without the builder takes the same setters.
@@ -237,16 +237,16 @@ class PreflightTests(DialogCase):
              ("MEMBER", DIALOG + ".getWindow")])
 
     def test_a_literal_progress_style_is_a_missing_constructor(self):
-        self.assertEqual(self.members(["AlertDialog(ctx, 3).show()"]), [("MEMBER", DIALOG + ".<init>")])
-        self.assertEqual(self.members(["AlertDialog(ctx, 2, None)"]), [("MEMBER", DIALOG + ".<init>")])
-        self.assertEqual(self.members(["AlertDialog.Builder(ctx, 3, None)"]), [("MEMBER", DIALOG + "$Builder.<init>")])
+        self.assertEqual(self.members(["AlertDialog(ctx, 1).show()"]), [("MEMBER", DIALOG + ".<init>")])
+        self.assertEqual(self.members(["AlertDialog.Builder(ctx, 4, None)"]), [("MEMBER", DIALOG + "$Builder.<init>")])
+        self.assertEqual(self.members(["AlertDialog(ctx, 3).show()", "AlertDialog(ctx, 2, None)", "AlertDialog.Builder(ctx, 3, None)"]), [])
         self.assertEqual(self.members(["style = 0", "AlertDialog(ctx, style)", "AlertDialog.Builder(ctx, 0, None)"]), [])
 
-    def test_the_sdk_builders_progress_styles_are_unprovided(self):
+    def test_the_sdk_builders_progress_styles_are_provided(self):
         found = self.members(["AlertDialogBuilder(ctx, AlertDialogBuilder.ALERT_TYPE_SPINNER)",
                               "AlertDialogBuilder(ctx, AlertDialogBuilder.ALERT_TYPE_MESSAGE)"],
                              "from ui.alert import AlertDialogBuilder\n")
-        self.assertEqual(found, [("OPERATION", "sdk.unprovided_member (ui.alert.AlertDialogBuilder.ALERT_TYPE_SPINNER)")])
+        self.assertEqual(found, [])
 
     def test_without_the_presentation_operation_the_builder_is_gated(self):
         self.operations(remove=["ui.present"])

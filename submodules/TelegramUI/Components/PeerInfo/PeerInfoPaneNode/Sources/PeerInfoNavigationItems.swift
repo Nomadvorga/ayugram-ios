@@ -118,7 +118,7 @@ public final class PeerInfoNavigationItems {
             // A pill of its own beside the "…": a pane without search (Media) keeps the "…" pill as it is, and only
             // the search pill comes and goes.
             item.requiresOwnSection = true
-        // MARK: Swiftgram
+        // MARK: AyuGram
         case .back:
             item = UIBarButtonItem(backButtonAppearanceWithTitle: "", target: nil, action: nil)
         case .select, .editPhoto, .editVideo, .more, .search, .sort:

@@ -86,7 +86,7 @@ DEFAULT_FILE_DEPENDENCIES = (
     "//submodules/TelegramApi",
     "//submodules/AyuPluginBridge",
 )
-APP_ROOTS = ("submodules", "Swiftgram", "Telegram")  # where --ayu-app looks for plugin wiring
+APP_ROOTS = ("submodules", "AyuGram", "Telegram")  # where --ayu-app looks for plugin wiring
 APP_MARKER = "AyuPlugin"
 APP_EXCLUDED = ("submodules/AyuPluginBridge",)  # has its own harness, typecheck_swift.py
 BUILD_FILE_NAMES = ("BUILD.bazel", "BUILD")
@@ -418,7 +418,7 @@ class Workspace:
         """A label, a package path or a bare module name given on the command line."""
         if text.startswith("//"):
             return parse_label(text, "")
-        candidates = [text] + [f"{prefix}/{text}" for prefix in ("submodules", "Swiftgram", "third-party")]
+        candidates = [text] + [f"{prefix}/{text}" for prefix in ("submodules", "AyuGram", "third-party")]
         found = [candidate for candidate in candidates if is_package(self.root / candidate)]
         if not found:
             for directory, names, _files in os.walk(self.root):

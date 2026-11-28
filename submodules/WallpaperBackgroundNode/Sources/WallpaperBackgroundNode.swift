@@ -1182,7 +1182,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         }
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     //
 
     private var imageContentMode: UIView.ContentMode {

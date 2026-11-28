@@ -21,7 +21,7 @@ load(
     "ios_test_runner",
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 load("@build_bazel_rules_apple//apple:watchos.bzl",
     "watchos_application",
     "watchos_extension",
@@ -170,11 +170,11 @@ genrule(
     # //Tests/ComposerHarness bundles the .data output. `-[_PresentationStrings
     # initWithPrimaryComponent:…]` asserts when it cannot load it, so a standalone app that builds
     # a PresentationData dies at launch without it.
-    visibility = ["//visibility:public"], # MARK: Swiftgram
+    visibility = ["//visibility:public"], # MARK: AyuGram
 )
 
 minimum_os_version = "15.0"
-minimum_watchos_version="7.0" # MARK: Swiftgram
+minimum_watchos_version="7.0" # MARK: AyuGram
 
 notificationServiceExtensionVersion = "v1"
 
@@ -283,14 +283,14 @@ filegroup(
     name = "AppStringResources",
     srcs = [
         "Telegram-iOS/en.lproj/Localizable.strings",
-        "//Swiftgram/SGStrings:SGLocalizableStrings", # MARK: Swiftgram
+        "//AyuGram/SGStrings:SGLocalizableStrings", # MARK: AyuGram
     ] + [
         "{}.lproj/Localizable.strings".format(language) for language in empty_languages
     ],
     # //Tests/ComposerHarness bundles these. `defaultPresentationStrings` FORCE-UNWRAPS
     # `getAppBundle().path(forResource: "Localizable" …)`, so any standalone app that builds a
     # PresentationData traps at launch without them.
-    visibility = ["//visibility:public"], # MARK: Swiftgram
+    visibility = ["//visibility:public"], # MARK: AyuGram
 )
 
 filegroup(
@@ -321,13 +321,13 @@ filegroup(
     ], exclude = ["Telegram-iOS/DefaultAppIcon.xcassets/**/.*"]),
 )
 
-# MARK: Swiftgram alternative icons
+# MARK: AyuGram alternative icons
 alternate_icon_folders = [
     "SGDefault", # MARK: AyuGram: the AyuGram icon
 ]
 #
 
-composer_icon_folders = ["Swiftgram"] # MARK: Swiftgram
+composer_icon_folders = ["Swiftgram"] # MARK: AyuGram
 
 [
     filegroup(
@@ -362,7 +362,7 @@ objc_library(
     ],
 )
 
-SGRESOURCES = ["//Swiftgram/SGSettingsUI:SGUIAssets"] # MARK: Swiftgram
+SGRESOURCES = ["//AyuGram/SGSettingsUI:SGUIAssets"] # MARK: AyuGram
 
 swift_library(
     name = "Lib",
@@ -370,7 +370,7 @@ swift_library(
     srcs = glob([
         "Telegram-iOS/Application.swift",
     ]),
-    data = SGRESOURCES + [ # MARK: Swiftgram
+    data = SGRESOURCES + [ # MARK: AyuGram
         ":Icons",
         ":AppResources",
         ":AppIntentVocabularyResources",
@@ -406,7 +406,7 @@ plist_fragment(
     defaults = {"buildNumber": "1"},
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "UrlTypesInfoPlist",
     extension = "plist",
@@ -506,7 +506,7 @@ official_carplay_fragment = """
 <key>com.apple.developer.carplay-messaging</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment # MARK: Swiftgram if telegram_bundle_id in official_bundle_ids else ""
+carplay_fragment = official_carplay_fragment # MARK: AyuGram if telegram_bundle_id in official_bundle_ids else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>
@@ -528,7 +528,7 @@ icloud_fragment = "" if not telegram_enable_icloud else """
     telegram_icloud_environment="Production" if telegram_aps_environment == "production" else "Development"
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids else """
 <key>com.apple.developer.associated-domains</key>
 <array>
@@ -569,13 +569,13 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment # MARK: Swiftgram if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment # MARK: AyuGram if telegram_bundle_id in official_bundle_ids else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>
 <true/>
 """
-notification_filtering_fragment = official_notification_filtering_fragment if telegram_bundle_id == "app.swiftgram.ios" else "" # MARK: Swiftgram
+notification_filtering_fragment = official_notification_filtering_fragment if telegram_bundle_id == "app.swiftgram.ios" else "" # MARK: AyuGram
 
 store_signin_fragment = """
 <key>com.apple.developer.applesignin</key>
@@ -589,7 +589,7 @@ official_background_gpu_fragment = """
 <key>com.apple.developer.background-tasks.continued-processing.gpu</key>
 <true/>
 """
-background_gpu_fragment = official_background_gpu_fragment if telegram_bundle_id == "app.swiftgram.ios" else "" # MARK: Swiftgram
+background_gpu_fragment = official_background_gpu_fragment if telegram_bundle_id == "app.swiftgram.ios" else "" # MARK: AyuGram
 
 plist_fragment(
     name = "TelegramEntitlements",
@@ -641,7 +641,7 @@ plist_fragment(
     """
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "AppNameInfoPlist",
     extension = "plist",
@@ -1046,7 +1046,7 @@ ios_framework(
     ] + debug_deps,
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "ShareInfoPlist",
     extension = "plist",
@@ -1153,7 +1153,7 @@ ios_extension(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "NotificationContentInfoPlist",
     extension = "plist",
@@ -1263,7 +1263,7 @@ ios_extension(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "WidgetInfoPlist",
     extension = "plist",
@@ -1382,7 +1382,7 @@ ios_extension(
     ]
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "IntentsInfoPlist",
     extension = "plist",
@@ -1547,7 +1547,7 @@ ios_extension(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 # TODO(swiftgram): Localize CFBundleDisplayName
 plist_fragment(
     name = "SGActionRequestHandlerInfoPlist",
@@ -1688,7 +1688,7 @@ ios_extension(
 )
 #
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "BroadcastUploadInfoPlist",
     extension = "plist",
@@ -1784,7 +1784,7 @@ ios_extension(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "NotificationServiceInfoPlist",
     extension = "plist",
@@ -1849,7 +1849,7 @@ ios_extension(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 plist_fragment(
     name = "TelegramInfoPlist",
     extension = "plist",
@@ -2062,7 +2062,7 @@ xcode_provisioning_profile(
 )
 
 apple_prebuilt_watchos_application(
-    name = "SwiftgramWatchApp", # MARK: Swiftgram
+    name = "SwiftgramWatchApp", # MARK: AyuGram
     # Watch bundle id tracks the host config ("<host>.watchkitapp"). The rule passes it
     # to xcodebuild as PRODUCT_BUNDLE_IDENTIFIER (baked + signed); the watch Info.plist
     # derives WKCompanionAppBundleIdentifier from it via $(PRODUCT_BUNDLE_IDENTIFIER:base),
@@ -2075,7 +2075,7 @@ apple_prebuilt_watchos_application(
 )
 
 ios_application(
-    name = "Swiftgram", # MARK: Swiftgram
+    name = "Swiftgram", # MARK: AyuGram
     bundle_id = "{telegram_bundle_id}".format(
         telegram_bundle_id = telegram_bundle_id,
     ),
@@ -2111,11 +2111,11 @@ ios_application(
     strings = [
         ":AppStringResources",
     ],
-    # MARK: Swiftgram
+    # MARK: AyuGram
     extensions = select({
         ":disableExtensionsSetting": [],
         "//conditions:default": [
-            # ":SGActionRequestHandler", # UX sucks https://t.me/swiftgramchat/7335 # MARK: Swiftgram
+            # ":SGActionRequestHandler", # UX sucks https://t.me/swiftgramchat/7335 # MARK: AyuGram
             ":ShareExtension",
             ":NotificationContentExtension",
             ":NotificationServiceExtension" + notificationServiceExtensionVersion,
@@ -2128,7 +2128,7 @@ ios_application(
     # --//Telegram:embedWatchApp is set (Make.py sets it for device configs when
     # --embedWatchApp is passed). Off by default, so simulator/dev builds are unaffected.
     watch_application = select({
-        ":embedWatchAppSetting": ":SwiftgramWatchApp", # MARK: Swiftgram
+        ":embedWatchAppSetting": ":SwiftgramWatchApp", # MARK: AyuGram
         "//conditions:default": None,
     }),
     deps = [
@@ -2141,11 +2141,11 @@ ios_application(
 xcodeproj(
     name = "Telegram_xcodeproj",
     bazel_path = telegram_bazel_path,
-    bazel_env = {"LANG": "en_US.UTF-8","PATH": "/opt/homebrew/bin:/usr/local/bin:/bin:/usr/bin"}, # MARK: Swiftgram, otherwise Bazel through xcode does not see ccache
-    project_name = "Swiftgram", # MARK: Swiftgram
+    bazel_env = {"LANG": "en_US.UTF-8","PATH": "/opt/homebrew/bin:/usr/local/bin:/bin:/usr/bin"}, # MARK: AyuGram, otherwise Bazel through xcode does not see ccache
+    project_name = "Swiftgram", # MARK: AyuGram
     tags = ["manual"],
     top_level_targets = [
-        top_level_target(":Swiftgram", target_environments = ["device", "simulator"]), # MARK: Swiftgram
+        top_level_target(":Swiftgram", target_environments = ["device", "simulator"]), # MARK: AyuGram
         ":iOSAppUITestSuite",
     ],
     xcode_configurations = {
@@ -2187,7 +2187,7 @@ ios_ui_test_suite(
         ":iPhone-17__26.2",
     ],
     tags = ["manual"],
-    test_host = "//Telegram:Swiftgram", # MARK: Swiftgram
+    test_host = "//Telegram:Swiftgram", # MARK: AyuGram
     visibility = ["@rules_xcodeproj//xcodeproj:generated"],
     deps = [":iOSAppUITestSuite.library"],
 )

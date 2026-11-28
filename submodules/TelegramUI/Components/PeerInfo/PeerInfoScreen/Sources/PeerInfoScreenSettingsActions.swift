@@ -263,7 +263,7 @@ extension PeerInfoScreenNode {
                         navigationController.pushViewController(controller)
                     }
                 } else {
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     if count + 1 > maximumSafeNumberOfAccounts {
                         let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
                         let alertController = textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.controller?.updatedPresentationData, title: presentationData.strings.ChatList_DeleteSavedMessagesConfirmationTitle, text: i18n("Auth.AccountBackupReminder", presentationData.strings.baseLanguageCode), actions: [

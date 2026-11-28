@@ -21,7 +21,7 @@ enum SettingsSection: Int, CaseIterable {
     case myProfile
     case wallet
     case proxy
-    // MARK: Swiftgram
+    // MARK: AyuGram
     case swiftgram
     case swiftgramPro
     //
@@ -85,7 +85,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         }))
     }
     
-    items[.edit]!.append(contentsOf: sgPeerInfoSettingsProfileIdItems(data: data, interaction: interaction)) // MARK: Swiftgram
+    items[.edit]!.append(contentsOf: sgPeerInfoSettingsProfileIdItems(data: data, interaction: interaction)) // MARK: AyuGram
     
     if let settings = data.globalSettings {
         if settings.premiumGracePeriod {
@@ -154,7 +154,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
 //                interaction.openSettings(.addAccount)
 //            }))
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         items[.accounts]!.append(PeerInfoScreenActionItem(id: 1000, text: presentationData.strings.Settings_AddAccount, icon: PresentationResourcesItemList.plusIconImage(presentationData.theme), action: {
             interaction.openSettings(.addAccount)
         }))
@@ -206,7 +206,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         }
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let sgWebSettings = context.currentAppConfiguration.with({ $0 }).sgWebSettings
     items[.swiftgram]!.append(contentsOf: sgPeerInfoSettingsItems(context: context, paymentsEnabled: sgWebSettings.global.paymentsEnabled, presentationData: presentationData, interaction: interaction))
     //

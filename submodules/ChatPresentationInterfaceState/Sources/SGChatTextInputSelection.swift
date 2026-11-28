@@ -1,7 +1,7 @@
 import Foundation
 import AccountContext
 
-// MARK: Swiftgram
+// MARK: AyuGram
 /// Calculates toolbar auto-selection without committing an intermediate editor update.
 public func sgChatTextInputStateSelectingLastWordIfIdle(_ state: ChatTextInputState) -> ChatTextInputState {
     // Keep an existing selection; an empty field or a caret at the start needs no change.

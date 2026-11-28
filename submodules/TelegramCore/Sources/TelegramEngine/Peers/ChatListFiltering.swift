@@ -1210,7 +1210,7 @@ func _internal_updatedChatListFilters(postbox: Postbox, hiddenIds: Signal<Set<In
                 return true
             }
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if filters.count > 1 && SGSimpleSettings.shared.allChatsHidden {
             filters.removeAll { $0 == .allChats }
         }

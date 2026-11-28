@@ -16,6 +16,7 @@ import ast
 import itertools
 from dataclasses import dataclass
 
+import _ayu_hook_map
 import _ayu_javalib
 
 # ``XC_MethodHook.PRIORITY_DEFAULT``.
@@ -56,7 +57,14 @@ ACTIVITY_RESULT_POINT = HookPoint("activity.result", "intents.launch")
 ACTIVITY_RESULT = Target("org.telegram.ui.LaunchActivity", "onActivityResult",
                          ("int", "int", "android.content.Intent"), "void", ACTIVITY_RESULT_POINT, live_receiver=True)
 
-TARGETS = {(target.class_name, target.method): (target,) for target in (ACTIVITY_RESULT,)}
+URL_OPEN_POINT = HookPoint("url.open", "hooks.url_open")
+_URL_SIGNATURE = ("android.content.Context", "java.lang.String")
+# Android chains its ``openUrl`` overloads into each other; the point reports the one a link tap enters.
+URL_OPEN = Target("org.telegram.messenger.browser.Browser", "openUrl", _URL_SIGNATURE, "void", URL_OPEN_POINT)
+URL_OPEN_SYSTEM = Target("org.telegram.messenger.browser.Browser", "openUrlInSystemBrowser", _URL_SIGNATURE, "void",
+                         URL_OPEN_POINT)
+
+TARGETS = {(target.class_name, target.method): (target,) for target in (ACTIVITY_RESULT, URL_OPEN, URL_OPEN_SYSTEM)}
 # A host class whose objects are, for naming a hook target, instances of an Android class.
 HOST_CLASSES = {"android.content.Context": "org.telegram.ui.LaunchActivity"}
 _LIVE_RECEIVER = {target.method: target for overloads in TARGETS.values() for target in overloads if target.live_receiver}
@@ -376,9 +384,11 @@ def fire(target, this_object, args):
         _run(hook.before, hook.before_filters, param, True, target.label)
         if param._return_early:
             break
+    # What the original method would have been called with, and whether Xposed would have skipped it.
+    param._call_args, param._call_skipped = list(param.args), param._return_early
+    # Xposed walks one snapshot of the callbacks: a hook removed while the point fires still gets its after phase.
     for hook in reversed(hooks[:ran]):
-        if hook.active:
-            _run(hook.after, hook.after_filters, param, False, target.label)
+        _run(hook.after, hook.after_filters, param, False, target.label)
     if param.hasThrowable():
         _log(f"A hook on {target.label} set {type(param.getThrowable()).__name__}; the bridge has no caller to throw it to")
     return param
@@ -386,6 +396,25 @@ def fire(target, this_object, args):
 
 def hook_count(target):
     return sum(1 for hook in _store().get(target, ()) if hook.active)
+
+
+def open_url(url, context=None, system_browser=False):
+    """Raise ``url.open`` for a URL the app is about to open: the URL to open, or None when a hook cancelled it.
+
+    A before hook cancels by setting a result or a throwable (Xposed then skips the original) and
+    rewrites by replacing ``args[1]``; ``Browser.openUrl`` itself returns at once for a null URL.
+    The after phase runs before the app opens the URL: the method is void and nothing reads its result.
+    """
+    target = URL_OPEN_SYSTEM if system_browser else URL_OPEN
+    if not hook_count(target):
+        return url
+    if context is None:
+        from ayu_bridge import runtime
+        context = runtime.jclass("org.telegram.messenger.ApplicationLoader").applicationContext
+    param = fire(target, None, [context, url])
+    if param._call_skipped or len(param._call_args) < 2 or param._call_args[1] is None:
+        return None
+    return str(param._call_args[1])
 
 
 # --- static preflight ----------------------------------------------------------------------
@@ -663,6 +692,9 @@ class _Inspector:
         if any(isinstance(item, ast.Starred) for item in positional) or any(keyword.arg is None for keyword in call.keywords):
             return None
         labels = set()
+        if _ayu_hook_map.static_undetermined(api, positional, arguments):
+            # Android registers nothing for this call, whatever target it names.
+            return labels
         if api == "hook_method":
             member = positional[0] if positional else arguments.get("method_or_constructor")
             values = self.value(member) if member is not None else None
@@ -697,6 +729,8 @@ class _Inspector:
 
 def static_targets(tree):
     """Per hook API a source calls: the sorted labels of the mapped targets it names, or None.
+
+    The list is empty when every call of the API is one Android drops (``_ayu_hook_map``).
 
     None means at least one call of that API names a target inspection cannot resolve or the
     table does not list; such a source needs ``hooks.java_method``.

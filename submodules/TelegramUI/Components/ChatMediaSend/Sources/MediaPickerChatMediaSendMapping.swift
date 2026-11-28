@@ -189,7 +189,7 @@ public func mediaPickerChatMediaSendItems(selection: MediaPickerChatMediaSendSel
         default:
             break
         }
-        var options = ChatMediaSendItemOptions( // MARK: Swiftgram
+        var options = ChatMediaSendItemOptions( // MARK: AyuGram
             caption: editing.caption(for: uniqueId),
             timer: timer,
             spoiler: editing.spoiler(for: uniqueId),
@@ -201,7 +201,7 @@ public func mediaPickerChatMediaSendItems(selection: MediaPickerChatMediaSendSel
             isMuted: isVideoSource && (values?.videoIsMuted ?? false),
             excludedFromGrouping: isGifSource
         )
-        options.sgSendAsTelescope = isVideoSource && (values?.sgSendAsTelescope ?? false) // MARK: Swiftgram
+        options.sgSendAsTelescope = isVideoSource && (values?.sgSendAsTelescope ?? false) // MARK: AyuGram
 
         switch source {
         case let .photo(identifier, pixelSize, thumbnail):

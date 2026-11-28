@@ -1499,7 +1499,7 @@ public protocol SharedAccountContext: AnyObject {
     var automaticMediaDownloadSettings: Signal<MediaAutoDownloadSettings, NoError> { get }
     var currentAutodownloadSettings: Atomic<AutodownloadSettings> { get }
     var immediateExperimentalUISettings: ExperimentalUISettings { get }
-    // MARK: Swiftgram
+    // MARK: AyuGram
     var immediateSGStatus: SGStatus { get }
     func makeSGUpdateIOSController() -> ViewController
 

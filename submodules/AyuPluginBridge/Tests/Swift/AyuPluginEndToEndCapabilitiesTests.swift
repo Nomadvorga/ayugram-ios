@@ -17,9 +17,15 @@ final class AyuPluginEndToEndCapabilitiesTests: XCTestCase {
         XCTAssertNotNil(capabilities["proxy_interfaces"].object?["org.telegram.messenger.NotificationCenter$NotificationCenterDelegate"])
         XCTAssertEqual(Set(capabilities["members"]["classes"].object?.keys.map { $0 } ?? []), classes, "The member table covers every declared class")
         if let path = ProcessInfo.processInfo.environment["AYU_PLUGIN_TEST_CAPABILITIES_OUT"] {
+            // The app always binds its theme and language, and members that need them are
+            // declared only while they are bound: the dump is of the app's state.
+            stack.application.presentation.bind(palette: { AyuPluginThemePalette(isDark: false, isNight: false, colors: [:]) },
+                                                language: { AyuPluginLanguage(code: "en", baseCode: nil) })
+            defer { stack.application.presentation.bind(palette: nil, language: nil) }
+            let bound = try await AyuEndToEnd.capabilities(of: stack.service.host)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-            try encoder.encode(capabilities).write(to: URL(fileURLWithPath: path), options: .atomic)
+            try encoder.encode(bound).write(to: URL(fileURLWithPath: path), options: .atomic)
         }
     }
 

@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import TelegramUIPreferences
 import SGSimpleSettings
 import SGStrings // MARK: AyuGram
@@ -445,7 +445,7 @@ private final class StoryContainerScreenComponent: Component {
         
         private var pendingNavigationToItemId: EngineStoryId?
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         private let storiesWarning = ComponentView<Empty>()
         private var displayStoriesWarningDisposable: Disposable?
         private var isDisplayingStoriesWarning: Bool = false
@@ -1105,7 +1105,7 @@ private final class StoryContainerScreenComponent: Component {
                     guard let self else {
                         return
                     }
-                    if !value && !self.isDisplayingInteractionGuide && !self.isDisplayingStoriesWarning { // MARK: Swiftgram
+                    if !value && !self.isDisplayingInteractionGuide && !self.isDisplayingStoriesWarning { // MARK: AyuGram
                         if let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let currentItemView = itemSetView.view.view as? StoryItemSetContainerComponent.View {
                             currentItemView.maybeDisplayReactionTooltip()
                         }
@@ -1226,7 +1226,7 @@ private final class StoryContainerScreenComponent: Component {
         
         private var previousBackNavigationTime: Double?
         private func navigate(direction: StoryItemSetContainerComponent.NavigationDirection) {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             guard !self.isDisplayingStoriesWarning else {
                 return
             }
@@ -1291,7 +1291,7 @@ private final class StoryContainerScreenComponent: Component {
             guard let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else {
                 return false
             }
-            if self.isDisplayingInteractionGuide || self.isDisplayingStoriesWarning || self.itemSetPanState != nil { // MARK: Swiftgram
+            if self.isDisplayingInteractionGuide || self.isDisplayingStoriesWarning || self.itemSetPanState != nil { // MARK: AyuGram
                 return false
             }
             if !itemSetComponentView.allowsInteractiveGestures() || !itemSetComponentView.storyAccessibilityCanNavigate() {
@@ -1332,7 +1332,7 @@ private final class StoryContainerScreenComponent: Component {
         
         func accessibilityFocusShownStory() {
             Queue.mainQueue().after(0.5, { [weak self] in
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 guard let self, !self.isDisplayingStoriesWarning else {
                     return
                 }
@@ -1341,7 +1341,7 @@ private final class StoryContainerScreenComponent: Component {
                     return
                 }
                 //
-                guard let slice = self.stateValue?.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else { // MARK: Swiftgram
+                guard let slice = self.stateValue?.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else { // MARK: AyuGram
                     return
                 }
                 UIAccessibility.post(notification: .layoutChanged, argument: itemSetComponentView.storyAccessibilityFocusElement())
@@ -1430,7 +1430,7 @@ private final class StoryContainerScreenComponent: Component {
                     }
                 })
                 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if SGSimpleSettings.shared.warnOnStoriesOpen {
                     self.isDisplayingStoriesWarning = true
                     if update {
@@ -1525,7 +1525,7 @@ private final class StoryContainerScreenComponent: Component {
                         if case .file = slice.item.storyItem.media {
                             isVideo = true
                         }
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         // TODO(swiftgram): Show warning on each new peerId story
                         /* if SGSimpleSettings.shared.warnOnStoriesOpen, let previousSlice = stateValue?.previousSlice, previousSlice.peer.id != slice.peer.id {
                             self.isDisplayingStoriesWarning = SGSimpleSettings.shared.warnOnStoriesOpen
@@ -2034,7 +2034,7 @@ private final class StoryContainerScreenComponent: Component {
                             itemSetView.isHidden = isItemSetsContainerBand && self.isAnimatingOut && i != focusedIndex
                             // VoiceOver reads only the focused peer's stories: the neighbours kept for the cube
                             // transition are not on screen.
-                            itemSetView.accessibilityElementsHidden = i != focusedIndex || self.isDisplayingStoriesWarning // MARK: Swiftgram
+                            itemSetView.accessibilityElementsHidden = i != focusedIndex || self.isDisplayingStoriesWarning // MARK: AyuGram
                             if itemSetComponentView.superview == nil {
                                 itemSetView.tintLayer.isDoubleSided = false
                                 itemSetComponentView.layer.isDoubleSided = false
@@ -2205,7 +2205,7 @@ private final class StoryContainerScreenComponent: Component {
                 controller.presentationContext.containerLayoutUpdated(subLayout, transition: transition.containedViewLayoutTransition)
             }
             
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if self.isDisplayingStoriesWarning && !self.ayuIsAskingForGhostMode { // MARK: AyuGram
                 let _ = self.storiesWarning.update(
                     transition: .immediate,
@@ -2289,7 +2289,7 @@ private final class StoryContainerScreenComponent: Component {
                     view.removeFromSuperview()
                 })
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             // Keep the guide's lifecycle, but let the warning take precedence until acknowledged.
             self.interactionGuide.view?.isHidden = self.isDisplayingStoriesWarning
             self.interactionGuide.view?.accessibilityElementsHidden = self.isDisplayingStoriesWarning

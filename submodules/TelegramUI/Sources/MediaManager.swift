@@ -15,6 +15,7 @@ import DeviceProximity
 import MediaResources
 import PhotoResources
 import PeerMessagesMediaPlaylist
+import SGSimpleSettings
 
 enum SharedMediaPlayerGroup: Int {
     case music = 0
@@ -186,6 +187,8 @@ public final class MediaManagerImpl: NSObject, MediaManager {
     private let globalControlsArtwork = Promise<(Account, SharedMediaPlaybackAlbumArt)?>(nil)
     private let globalControlsStatusDisposable = MetaDisposable()
     private let globalAudioSessionForegroundDisposable = MetaDisposable()
+    // MARK: AyuGram
+    private let pauseOnMinimizeDisposable = MetaDisposable()
 
     private var musicListenTracker: MusicListenTracker?
     private let musicListenTrackingDisposable = MetaDisposable()
@@ -446,6 +449,45 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                 strongSelf.audioSession.dropAll()
             }
         }))
+
+        // MARK: AyuGram
+        // exteraGram "Auto-Pause" (pauseOnMinimizeVoice / pauseOnMinimizeRound): while the app is in the
+        // background (home, another app, device lock), a playing voice or round message is paused and is
+        // not resumed on return. Covers both Android callers of pauseInBackgroundIfNeeded: the app being
+        // paused, and playback (re)starting while it is not resumed. Music and files are never affected.
+        self.pauseOnMinimizeDisposable.set((combineLatest(queue: Queue.mainQueue(), inForeground, self.voiceMediaPlayerState)
+        |> map { inForeground, accountAndState -> SharedMediaPlaybackDataType? in
+            guard !inForeground, let (_, stateOrLoading) = accountAndState, case let .state(state) = stateOrLoading else {
+                return nil
+            }
+            switch state.status.status {
+                case .playing:
+                    break
+                case let .buffering(_, whilePlaying, _, _):
+                    if !whilePlaying {
+                        return nil
+                    }
+                default:
+                    return nil
+            }
+            return state.item.playbackData?.type
+        }).startStrict(next: { [weak self] playingType in
+            guard let playingType else {
+                return
+            }
+            let shouldPause: Bool
+            switch playingType {
+                case .voice:
+                    shouldPause = ExteraSettings.shared.pauseOnMinimizeVoice
+                case .instantVideo:
+                    shouldPause = ExteraSettings.shared.pauseOnMinimizeRound
+                case .music:
+                    shouldPause = false
+            }
+            if shouldPause {
+                self?.playlistControl(.playback(.pause), type: .voice)
+            }
+        }))
     }
     
     deinit {
@@ -457,6 +499,7 @@ public final class MediaManagerImpl: NSObject, MediaManager {
         self.musicListenTrackingDisposable.dispose()
         self.globalAudioSessionForegroundDisposable.dispose()
         self.voiceMediaPlayerStateDisposable.dispose()
+        self.pauseOnMinimizeDisposable.dispose() // MARK: AyuGram
     }
     
     public func audioRecorder(

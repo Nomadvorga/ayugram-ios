@@ -623,7 +623,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var translationStateDisposable: Disposable?
     var premiumGiftSuggestionDisposable: Disposable?
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var sgShowHiddenPinnedMessagesObserver: NSObjectProtocol?
     public var overlayTitle: String? {
          var title: String?
@@ -4658,7 +4658,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         default:
                             break
                         }
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         switch SGSimpleSettings.shared.translationBackendEnum {
                         case .system:
                             if #available(iOS 18.0, *) {
@@ -7229,7 +7229,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
         }
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgShowHiddenPinnedMessagesObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("SGShowHiddenPinnedMessages"),
             object: nil,
@@ -7308,7 +7308,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     deinit {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let observer = sgShowHiddenPinnedMessagesObserver { NotificationCenter.default.removeObserver(observer) }
         let _ = ChatControllerCount.modify { value in
             return value - 1
@@ -10514,7 +10514,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func displayMediaRecordingTooltip() {
-        if ({ return true })() { return } // MARK: Swiftgram
+        if ({ return true })() { return } // MARK: AyuGram
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return
         }
