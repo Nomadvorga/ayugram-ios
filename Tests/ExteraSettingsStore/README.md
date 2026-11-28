@@ -9,8 +9,8 @@ Run from the repository root on macOS with Xcode's Swift toolchain:
 ```sh
 OUT="$(mktemp -d)"
 xcrun swiftc -parse-as-library -warnings-as-errors -g -sanitize=thread \
-  Swiftgram/SGSimpleSettings/Sources/RWLock.swift \
-  Swiftgram/SGSimpleSettings/Sources/UserDefaultsWrapper.swift \
+  AyuGram/SGSimpleSettings/Sources/RWLock.swift \
+  AyuGram/SGSimpleSettings/Sources/UserDefaultsWrapper.swift \
   Tests/ExteraSettingsStore/ExteraSettingsStoreTests.swift \
   -o "$OUT/ExteraSettingsStoreTests"
 TSAN_OPTIONS=halt_on_error=1 "$OUT/ExteraSettingsStoreTests"

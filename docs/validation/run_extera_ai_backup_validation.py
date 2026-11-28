@@ -19,7 +19,7 @@ from run_extera_backup_validation import declaration
 
 
 def make_harness(repo):
-    sources = repo / "Swiftgram/SGSimpleSettings/Sources"
+    sources = repo / "AyuGram/SGSimpleSettings/Sources"
     ai = (sources / "ExteraAISettings.swift").read_text(encoding="utf-8")
     ai = ai.replace("import Security\n", "")
     ai = ai[:ai.index("    public func apiKey(")] + ai[ai.index("    private func historyKey("):]

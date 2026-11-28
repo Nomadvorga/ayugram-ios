@@ -14,6 +14,8 @@
 @property (nonatomic, strong) UIFont *textFont;
 @property (nonatomic, strong) UIFont *italicFont;
 @property (nonatomic, strong) UIFont *mediumFont;
+/// Colours by Prism token name, used instead of the built-in palette.
+@property (nonatomic, copy) NSDictionary<NSString *, UIColor *> *colors;
 -(id)initWithDark:(BOOL)dark textColor:(UIColor *)textColor textFont:(UIFont *)textFont italicFont:(UIFont *)italicFont mediumFont:(UIFont *) mediumFont;
 @end
 

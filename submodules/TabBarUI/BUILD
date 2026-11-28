@@ -1,12 +1,12 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 sgdeps = [
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
 ]
 
 sgsrc = [
-    "//Swiftgram/SGChatListSimpleSettingsSignal:SGSimpleSettingsBoolSignal", # MARK: Swiftgram
-    "//Swiftgram/SGTabBarHeightModifier:SGTabBarHeightModifier"
+    "//AyuGram/SGChatListSimpleSettingsSignal:SGSimpleSettingsBoolSignal", # MARK: AyuGram
+    "//AyuGram/SGTabBarHeightModifier:SGTabBarHeightModifier"
 ]
 
 swift_library(
@@ -19,6 +19,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = sgdeps + [
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
     	"//submodules/SSignalKit/SwiftSignalKit",

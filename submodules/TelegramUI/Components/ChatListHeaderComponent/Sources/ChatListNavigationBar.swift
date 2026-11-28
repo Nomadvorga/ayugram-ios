@@ -38,12 +38,15 @@ public final class ChatListNavigationBar: Component {
         public var placeholder: String?
         public var displayGlassBackgroundWhenInactive: Bool
         public var alignPlaceholderToLeftWhenInactive: Bool
+        // MARK: AyuGram — the field takes no room and is not shown until a search starts; the screen offers its own way in.
+        public var isHiddenWhenInactive: Bool
 
-        public init(isEnabled: Bool, placeholder: String? = nil, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false) {
+        public init(isEnabled: Bool, placeholder: String? = nil, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false, isHiddenWhenInactive: Bool = false) {
             self.isEnabled = isEnabled
             self.placeholder = placeholder
             self.displayGlassBackgroundWhenInactive = displayGlassBackgroundWhenInactive
             self.alignPlaceholderToLeftWhenInactive = alignPlaceholderToLeftWhenInactive
+            self.isHiddenWhenInactive = isHiddenWhenInactive
         }
     }
     
@@ -466,7 +469,7 @@ public final class ChatListNavigationBar: Component {
             let searchOffsetDistance: CGFloat = ChatListNavigationBar.searchScrollHeight
             
             let minContentOffset: CGFloat
-            if component.search != nil {
+            if let search = component.search, !search.isHiddenWhenInactive { // MARK: AyuGram
                 minContentOffset = ChatListNavigationBar.searchScrollHeight
             } else {
                 minContentOffset = 0.0
@@ -569,8 +572,16 @@ public final class ChatListNavigationBar: Component {
                 if let activeSearch = component.activeSearch, activeSearch.isExternal {
                     searchAlpha = 0.0
                 }
+                // MARK: AyuGram
+                let isHiddenSearch = search.isHiddenWhenInactive && component.activeSearch == nil
+                if isHiddenSearch {
+                    searchAlpha = 0.0
+                    embeddedSearchBarExpansionHeight = 0.0
+                }
+                //
                 transition.setAlpha(view: searchContentNode.view, alpha: searchAlpha)
-                searchContentNode.isUserInteractionEnabled = search.isEnabled
+                searchContentNode.isUserInteractionEnabled = search.isEnabled && !isHiddenSearch
+                searchContentNode.view.accessibilityElementsHidden = isHiddenSearch
             } else {
                 if let searchContentNode = self.searchContentNode {
                     self.searchContentNode = nil
@@ -959,7 +970,7 @@ public final class ChatListNavigationBar: Component {
                 contentHeight += 44.0
                 contentHeight += 9.0
                 
-                if component.search != nil {
+                if let search = component.search, !search.isHiddenWhenInactive { // MARK: AyuGram
                     contentHeight += navigationBarSearchContentHeight + 2.0
                 }
             }

@@ -212,8 +212,9 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     }
     
     public let openMessage: (EngineRawMessage, OpenMessageParams) -> Bool
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public let sgStartMessageEdit: (EngineRawMessage) -> Void
+    public let ayuPerformDoubleTapAction: (EngineRawMessage, Int) -> Void
     public let sgGetChatPredictedLang: () -> String?
     //
     public let openPeer: (EnginePeer, ChatControllerInteractionNavigateToPeer, MessageReference?, OpenPeerSource) -> Void
@@ -411,9 +412,10 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     
     public init(
         openMessage: @escaping (EngineRawMessage, OpenMessageParams) -> Bool,
-        // MARK: Swiftgram
+        // MARK: AyuGram
         sgGetChatPredictedLang: @escaping () -> String? = { return nil },
         sgStartMessageEdit: @escaping (EngineRawMessage) -> Void = { _ in },
+        ayuPerformDoubleTapAction: @escaping (EngineRawMessage, Int) -> Void = { _, _ in },
         //
         openPeer: @escaping (EnginePeer, ChatControllerInteractionNavigateToPeer, MessageReference?, OpenPeerSource) -> Void,
         openPeerMention: @escaping (String, Promise<Bool>?) -> Void,
@@ -549,9 +551,10 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         presentationContext: ChatPresentationContext
     ) {
         self.openMessage = openMessage
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgGetChatPredictedLang = sgGetChatPredictedLang
         self.sgStartMessageEdit = sgStartMessageEdit
+        self.ayuPerformDoubleTapAction = ayuPerformDoubleTapAction
         //
         self.openPeer = openPeer
         self.openPeerMention = openPeerMention

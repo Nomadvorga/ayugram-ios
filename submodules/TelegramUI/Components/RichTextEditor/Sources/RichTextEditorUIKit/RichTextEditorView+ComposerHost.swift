@@ -89,7 +89,7 @@ public extension RichTextEditorView {
     /// Re-arm the pre-selection so the next focus re-applies `initialInputPrimaryLanguage`.
     func resetInputPrimaryLanguage() { self.canvas.resetInitialPrimaryLanguage() }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     /// The return-key appearance exposed by the canvas's `UITextInputTraits` conformance.
     var composerReturnKeyType: UIReturnKeyType {
         get { self.canvas.returnKeyType }

@@ -760,7 +760,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         self.adBlockNavigationGeneration &+= 1
         self.webView.reload()
     }
-    
+
     func navigateBack() {
         self.adBlockNavigationGeneration &+= 1
         self.webView.goBack()

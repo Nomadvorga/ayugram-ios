@@ -65,16 +65,16 @@ package_group(
     ],
 )
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgsrc = [
-    "//Swiftgram/SGPostboxLocalPeerSearch:SGPostboxLocalPeerSearch"
+    "//AyuGram/SGPostboxLocalPeerSearch:SGPostboxLocalPeerSearch"
 ]
 #
 
 swift_library(
     name = "Postbox",
     module_name = "Postbox",
-    srcs = sgsrc + glob([ # MARK: Swiftgram
+    srcs = sgsrc + glob([ # MARK: AyuGram
         "Sources/**/*.swift",
     ]),
     copts = [

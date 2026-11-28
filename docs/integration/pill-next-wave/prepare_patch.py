@@ -40,7 +40,7 @@ def add(name, payload):
     changes[name] = (HERE / payload).read_text(encoding="utf-8")
 
 
-model = "Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift"
+model = "AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift"
 provider = "submodules/ChatListUI/Sources/ExteraPillBuiltinProvider.swift"
 view = "submodules/ChatListUI/Sources/ExteraPillStackView.swift"
 editor = "submodules/ChatListUI/Sources/ExteraPillStackController.swift"
@@ -48,7 +48,7 @@ core = "submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraAccount
 ghost = "submodules/TelegramCore/Sources/Network/AyuGhostRequestFilter.swift"
 presence = "submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift"
 
-add("Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift", "ExteraPillParity.swift")
+add("AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift", "ExteraPillParity.swift")
 add("submodules/ChatListUI/Sources/ExteraPillWeatherSettingsController.swift", "ExteraPillWeatherSettingsController.swift")
 add("submodules/ChatListUI/Sources/ExteraPillStorageRing.swift", "ExteraPillStorageRing.swift")
 add("submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraPresenceBarrier.swift", "ExteraPresenceBarrier.swift")
@@ -66,7 +66,7 @@ for i in range(struct.unpack_from("<I", phone)[0]):
 rates = (APK / "sources/com/exteragram/messenger/utils/network/ExchangeRates.java").read_text(encoding="utf-8")
 fiat = re.findall(r'"([A-Z]{3})"', rates.split("Arrays.asList(", 1)[1].split(");", 1)[0])
 exponents = json.loads((APK / "resources/assets/currencies.json").read_text(encoding="utf-8"))
-parity = "Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift"
+parity = "AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift"
 def swift_dictionary(value):
     return "[" + json.dumps(value, separators=(",", ":"))[1:-1] + "]"
 

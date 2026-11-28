@@ -10,8 +10,8 @@ Run on a Swift host (macOS recommended):
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/ExteraAdminSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraAdminSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift \
   Tests/ExteraAdmin/ExteraAdminSettingsTests.swift \
   Tests/ExteraAdmin/ExteraAdminHeaderPolicyTests.swift
 ```

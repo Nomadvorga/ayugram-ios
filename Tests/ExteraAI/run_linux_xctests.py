@@ -26,9 +26,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = [
-    ROOT / "Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
-    ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraAISettings.swift",
-    ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraAIClient.swift",
+    ROOT / "AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
+    ROOT / "AyuGram/SGSimpleSettings/Sources/ExteraAISettings.swift",
+    ROOT / "AyuGram/SGSimpleSettings/Sources/ExteraAIClient.swift",
     ROOT / "Tests/ExteraAI/ExteraAIClientTests.swift",
 ]
 

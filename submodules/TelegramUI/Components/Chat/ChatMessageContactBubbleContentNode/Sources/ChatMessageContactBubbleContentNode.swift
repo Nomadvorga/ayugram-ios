@@ -14,6 +14,7 @@ import ChatMessageItemCommon
 import ChatMessageAttachedContentButtonNode
 import ChatControllerInteraction
 import MessageInlineBlockBackgroundView
+import SGSimpleSettings // MARK: AyuGram
 
 private let avatarFont = avatarPlaceholderFont(size: 16.0)
 
@@ -500,7 +501,7 @@ public class ChatMessageContactBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                             
                             var pattern: MessageInlineBlockBackgroundView.Pattern?
-                            if let contactPeer, let backgroundEmojiId = contactPeer.backgroundEmojiId {
+                            if ExteraSettings.shared.replyEmoji, let contactPeer, let backgroundEmojiId = contactPeer.backgroundEmojiId { // MARK: AyuGram: exteraGram's "Reply Emoji"
                                 pattern = MessageInlineBlockBackgroundView.Pattern(
                                     context: item.context,
                                     fileId: backgroundEmojiId,

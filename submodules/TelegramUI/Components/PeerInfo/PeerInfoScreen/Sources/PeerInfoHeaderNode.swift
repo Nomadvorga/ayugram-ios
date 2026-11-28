@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -163,6 +163,25 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let usernameNodeRawContainer: ASDisplayNode
     let usernameNode: MultiScaleTextNode
     var actionButtonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderActionButtonNode] = [:]
+    private var atmosphericVisible = false
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.refreshAtmosphericSurfaces()
+    }
+
+    private func refreshAtmosphericSurfaces() {
+        self.avatarListNode.avatarContainerNode.updateAtmosphericForegroundAlpha(self.avatarOverlayNode.atmosphericForegroundAlpha)
+        self.avatarListNode.avatarContainerNode.updateAtmosphericVisibility(self.atmosphericVisible)
+        let backgroundVisible = !self.buttonsBackgroundNode.isHidden && self.buttonsBackgroundNode.alpha > 0.05
+            && !self.buttonsMaskView.isHidden && self.buttonsMaskView.alpha > 0.05
+        for button in self.buttonNodes.values {
+            button.updateAtmosphericVisibility(self.atmosphericVisible, backgroundVisible: backgroundVisible)
+        }
+        for button in self.actionButtonNodes.values {
+            button.updateAtmosphericVisibility(self.atmosphericVisible)
+        }
+    }
     var buttonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderButtonNode] = [:]
     /// The action buttons in their on-screen order.
     var orderedButtonNodes: [PeerInfoHeaderButtonNode] {
@@ -384,6 +403,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.animationRenderer = context.animationRenderer
         
         super.init()
+
+        self.avatarOverlayNode.atmosphericForegroundUpdated = { [weak self] in
+            guard let self else { return }
+            self.avatarListNode.avatarContainerNode.updateAtmosphericForegroundAlpha(self.avatarOverlayNode.atmosphericForegroundAlpha)
+        }
                 
         requestUpdateLayoutImpl = { [weak self] in
             self?.requestUpdateLayout?(false)
@@ -717,7 +741,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 credibilityIcon = .fake
             } else if peer.isScam {
                 credibilityIcon = .scam
-            } else if let emojiStatus = peer.emojiStatus {
+            } else if let emojiStatus = peer.emojiStatus ?? ayuExteraBadgeEmojiStatus(for: peer) { // MARK: AyuGram
                 statusIcon = .emojiStatus(emojiStatus)
             } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !ayuHidesPremiumStatuses() /* MARK: AyuGram */ && (peer.id != self.context.account.peerId || self.isSettings || self.isMyProfile) {
                 credibilityIcon = .premium
@@ -1298,7 +1322,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if title.replacingOccurrences(of: "\u{fe0e}", with: "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 title = "" //"\u{00A0}"
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if title.isEmpty {
                 if case let .user(user) = peer, let phone = user.phone, !SGSimpleSettings.shared.hidePhoneInSettings {
                     title = formatPhoneNumber(context: self.context, number: phone)
@@ -1315,7 +1339,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
             
             if self.isSettings, case let .user(user) = peer {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 var formattedPhone = formatPhoneNumber(context: self.context, number: user.phone ?? "")
                 if !formattedPhone.isEmpty && SGSimpleSettings.shared.hidePhoneInSettings {
                     formattedPhone = ""
@@ -2301,6 +2325,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if !actionButtonKeys.contains(key) {
                 if let buttonNode = self.actionButtonNodes[key] {
                     self.actionButtonNodes.removeValue(forKey: key)
+                    buttonNode.removeAtmosphericSurface()
                     transition.updateAlpha(node: buttonNode, alpha: 0.0) { [weak buttonNode] _ in
                         buttonNode?.removeFromSupernode()
                     }
@@ -2356,7 +2381,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 buttonIcon = .message
             case .discussion:
                 buttonText = presentationData.strings.PeerInfo_ButtonDiscuss
-                buttonIcon = .discussion // MARK: Swiftgram
+                buttonIcon = .discussion // MARK: AyuGram
             case .call:
                 buttonText = presentationData.strings.PeerInfo_ButtonCall
                 buttonIcon = .call
@@ -2428,6 +2453,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if !buttonKeys.contains(key) {
                 if let buttonNode = self.buttonNodes[key] {
                     self.buttonNodes.removeValue(forKey: key)
+                    buttonNode.removeAtmosphericSurface()
                     transition.updateAlpha(layer: buttonNode.backgroundContainerView.layer, alpha: 0.0)
                     transition.updateAlpha(node: buttonNode, alpha: 0.0) { [weak buttonNode] _ in
                         buttonNode?.backgroundContainerView.removeFromSuperview()
@@ -2857,6 +2883,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.updateAvatarMask(transition: .immediate)
         }
         
+        self.refreshAtmosphericSurfaces()
         return resolvedHeight
     }
     

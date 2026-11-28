@@ -4,7 +4,7 @@ import SGWebSettingsScheme
 import SGGHSettingsScheme
 
 public struct AppConfiguration: Codable, Equatable {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public var sgWebSettings: SGWebSettings
     public var sgGHSettings: SGGHSettings
     
@@ -15,7 +15,7 @@ public struct AppConfiguration: Codable, Equatable {
         return AppConfiguration(sgWebSettings: SGWebSettings.defaultValue, sgGHSettings: SGGHSettings.defaultValue, data: nil, hash: 0)
     }
     
-    init(sgWebSettings: SGWebSettings = .defaultValue, sgGHSettings: SGGHSettings = .defaultValue, data: JSON?, hash: Int32) { // MARK: Swiftgram
+    init(sgWebSettings: SGWebSettings = .defaultValue, sgGHSettings: SGGHSettings = .defaultValue, data: JSON?, hash: Int32) { // MARK: AyuGram
         self.sgWebSettings = sgWebSettings
         self.sgGHSettings = sgGHSettings
         self.data = data

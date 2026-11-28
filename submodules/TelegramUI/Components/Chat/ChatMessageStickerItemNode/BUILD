@@ -3,14 +3,14 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 swift_library(
     name = "ChatMessageStickerItemNode",
     module_name = "ChatMessageStickerItemNode",
-    srcs = glob([
+    srcs = ["//AyuGram/SGDoubleTapMessageAction:SGDoubleTapMessageAction"] + glob([
         "Sources/**/*.swift",
     ]),
     copts = [
         "-warnings-as-errors",
     ],
     deps = [
-        "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
         "//submodules/TelegramUI/Components/StaticGlassBackground",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",

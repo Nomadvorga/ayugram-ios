@@ -25,7 +25,7 @@ def emit(base):
     for p in [settings, core, native / 'include', tests]:
         p.mkdir(parents=True, exist_ok=True)
     for name in ['AyuSettingsStore', 'ExteraTranslationSettings', 'ExteraSpeechSettings', 'ExteraVoskSettings']:
-        shutil.copyfile(ROOT / f'Swiftgram/SGSimpleSettings/Sources/{name}.swift', settings / f'{name}.swift')
+        shutil.copyfile(ROOT / f'AyuGram/SGSimpleSettings/Sources/{name}.swift', settings / f'{name}.swift')
     (settings / 'HostEnvironment.swift').write_text('''import Foundation
 let APP_GROUP_IDENTIFIER = "org.ayugram.tests.vosk." + UUID().uuidString
 final class SGSimpleSettings: @unchecked Sendable {

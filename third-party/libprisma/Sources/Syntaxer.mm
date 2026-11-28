@@ -144,7 +144,9 @@ Brush *makeBrush(std::string alias, std::string type, SyntaxterTheme * theme, Br
     
     
     NSDictionary<NSString *, UIColor *> *colors;
-    if (theme.dark) {
+    if (theme.colors != nil) {
+        colors = theme.colors;
+    } else if (theme.dark) {
         colors = dark;
     } else {
         colors = light;

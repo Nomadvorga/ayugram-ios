@@ -6,7 +6,7 @@ On a Swift host:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
   Tests/ExteraOther/ExteraOtherSettingsModelTests.swift
 ```
 

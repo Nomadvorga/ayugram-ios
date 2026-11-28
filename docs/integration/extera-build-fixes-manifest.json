@@ -2,15 +2,15 @@
   "run": 45692107515,
   "runUrl": "https://github.com/Nomadvorga/ayugram-ios/actions/runs/45692107515",
   "failedHead": "030f9549d29daedcc94c5b03fbc23b2c2104c8d6",
-  "failedTarget": "//Swiftgram/SGSettingsUI:SGSettingsUI",
+  "failedTarget": "//AyuGram/SGSettingsUI:SGSettingsUI",
   "appliedSourceFiles": [
-    "Swiftgram/SGSettingsUI/Sources/ExteraAppIconController.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraFeedPostItem.swift",
-    "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift"
+    "AyuGram/SGSettingsUI/Sources/ExteraAppIconController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraFeedPostItem.swift",
+    "AyuGram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift"
   ],
   "unappliedProposalTargets": [
-    "Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift"
+    "AyuGram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift"
   ],
   "supportFiles": [
     "docs/integration/extera-build-fixes.patch",

@@ -556,6 +556,6 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     }
     
     public var showAppBadge: Bool {
-        return self.sgShowAppBadge // MARK: Swiftgram
+        return self.sgShowAppBadge // MARK: AyuGram
     }
 }

@@ -51,7 +51,7 @@ read using `git show HEAD:…` in `C:\Users\PC\exteragram-reference`.
 
 ## API and storage contract for root integration
 
-Model: `Swiftgram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift`.
+Model: `AyuGram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift`.
 
 ```swift
 ExteraNavigationSettings.shared.configuration
@@ -101,7 +101,7 @@ SGSettingsUI already depends
 on AccountContext, SGSimpleSettings, SGStrings, Display and TelegramPresentationData;
 TelegramUI already depends on SGSettingsUI, ChatListUI, SettingsUI, QrCodeUI and
 TabBarUI. One new explicit edge was added to **NewsScreen/BUILD**:
-`//Swiftgram/SGSimpleSettings:SGSimpleSettings`, for search-dismissal visibility restoration.
+`//AyuGram/SGSimpleSettings:SGSimpleSettings`, for search-dismissal visibility restoration.
 No SGSettingsUI/BUILD edits were made. AccountContext never imports SGSettingsUI or TelegramUI. New source files
 are picked up by the existing source globs.
 
@@ -163,7 +163,7 @@ Run these **exact** production/model sources on a Swift host:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift \
   Tests/ExteraNavigation/ExteraNavigationSettingsTests.swift
 ```
 

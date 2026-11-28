@@ -766,6 +766,31 @@ public func asyncUpdateMessageSyntaxHighlight(engine: TelegramEngine, messageId:
     |> runOn(messageSyntaxHighlightQueue)
 }
 
+/// The coloured runs of `text` (UTF-16 ranges) under a palette of the caller's own, keyed by Prism
+/// token name. Runs no name of the palette covers are left out; so is everything when the engine
+/// has no grammar for `language` or does not give the text back whole.
+public func asyncStandaloneSyntaxHighlight(text: String, language: String, palette: [String: UIColor]) -> Signal<[(range: Range<Int>, color: UIColor)], NoError> {
+    return Signal { subscriber in
+        var runs: [(range: Range<Int>, color: UIColor)] = []
+        let plain = UIColor.clear
+        let theme = SyntaxterTheme(dark: false, textColor: plain, textFont: internalFixedCodeFont, italicFont: internalFixedCodeFont, mediumFont: internalFixedCodeFont)
+        theme?.colors = palette
+        let expectedLength = (text as NSString).length
+        if let syntaxHighlighter, let theme, let highlighted = syntaxHighlighter.syntax(text, language: normalizedCodeBlockLanguage(language) ?? language, theme: theme), highlighted.length == expectedLength {
+            highlighted.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: expectedLength), using: { value, subRange, _ in
+                if let value = value as? UIColor, value !== plain {
+                    runs.append((subRange.lowerBound ..< subRange.upperBound, value))
+                }
+            })
+        }
+        subscriber.putNext(runs)
+        subscriber.putCompletion()
+        
+        return EmptyDisposable
+    }
+    |> runOn(messageSyntaxHighlightQueue)
+}
+
 public func asyncStanaloneSyntaxHighlight(current: CachedMessageSyntaxHighlight?, specs: [CachedMessageSyntaxHighlight.Spec]) -> Signal<CachedMessageSyntaxHighlight, NoError> {
     if let current {
         var hasMissingOrInvalidSpec = false

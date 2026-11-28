@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 NEO = "submodules/Camera/CameraNeo/Sources/CameraNeo.swift"
 FILES = [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraMediaSettings.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraMediaSettings.swift",
     "submodules/Camera/Sources/CameraZoom.swift",
     "submodules/Camera/Sources/Camera.swift",
     "submodules/Camera/CameraLegacy/Sources/CameraDevice.swift",

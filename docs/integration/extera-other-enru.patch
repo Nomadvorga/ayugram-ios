@@ -1,6 +1,6 @@
-diff --git a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
---- a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
-+++ b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+diff --git a/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+--- a/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
++++ b/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
 @@ -1 +1,26 @@
 +"Extera.Other.Support" = "Support";
 +"Extera.Other.SupportInfo" = "Support development. Available supporter rewards and their terms are described by each project on its payment page.";
@@ -28,9 +28,9 @@ diff --git a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/Swiftg
 +// Firebase collection is not linked in this build; no opt-in is persisted.
 +
  "Telescope.PaidMediaConflict" = "Round videos cannot be sold as paid media. Turn off “Send as Round Video” or remove the media price, then try again.";
-diff --git a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
---- a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
-+++ b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+diff --git a/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings b/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+--- a/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
++++ b/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
 @@ -1 +1,26 @@
 +"Extera.Other.Support" = "Поддержка";
 +"Extera.Other.SupportInfo" = "Поддержите разработку. Доступные награды для спонсоров и их условия каждый проект описывает на своей платёжной странице.";

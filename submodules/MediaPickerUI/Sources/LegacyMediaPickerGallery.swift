@@ -204,7 +204,7 @@ func presentLegacyMediaPickerGallery(
             recipientName = peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
         }
     }
-    let currentAppConfiguration = context.currentAppConfiguration.with { $0 } // MARK: Swiftgram
+    let currentAppConfiguration = context.currentAppConfiguration.with { $0 } // MARK: AyuGram
     let model = TGMediaPickerGalleryModel(
         context: legacyController.context,
         items: items,
@@ -221,7 +221,7 @@ func presentLegacyMediaPickerGallery(
         recipientName: recipientName,
         isScheduledMessages: isScheduledMessages,
         isActionButtonDone: isActionButtonDone,
-        // MARK: Swiftgram
+        // MARK: AyuGram
         canShowTelescope: currentAppConfiguration.sgWebSettings.global.canShowTelescope,
         canSendTelescope: currentAppConfiguration.sgWebSettings.user.canSendTelescope,
         //

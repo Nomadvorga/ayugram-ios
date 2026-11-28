@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGStrings
 import SGSimpleSettings
 //
@@ -1014,7 +1014,7 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func requestCall(peerId: EnginePeer.Id, isVideo: Bool, completion: @escaping () -> Void) {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let makeCall = { [weak self] in
         guard let self else {
             return
@@ -1087,7 +1087,7 @@ public final class AccountContextImpl: AccountContext {
         } else {
             completion()
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         }
         if SGSimpleSettings.shared.confirmCalls {
             let presentationData = self.sharedContext.currentPresentationData.with { $0 }

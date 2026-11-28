@@ -61,7 +61,7 @@ def main():
         assert sha(SOURCES / name) == metadata['sha256']
     for name, metadata in json.loads((SOURCES / 'third-party-notices.json').read_text()).items():
         assert sha(SOURCES / name) == metadata['sha256']
-    for path in ['Swiftgram/SGSimpleSettings/BUILD', 'Swiftgram/SGSettingsUI/BUILD', 'submodules/TelegramPresentationData/BUILD']:
+    for path in ['AyuGram/SGSimpleSettings/BUILD', 'AyuGram/SGSettingsUI/BUILD', 'submodules/TelegramPresentationData/BUILD']:
         assert 'Sources/**/*.swift' in (ROOT / path).read_text()
     assert 'Images.xcassets/**' in (ROOT / 'submodules/TelegramUI/BUILD').read_text()
     menus = (ROOT / 'submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift').read_text()

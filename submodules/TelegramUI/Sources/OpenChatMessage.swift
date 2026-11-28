@@ -1,7 +1,9 @@
 import Foundation
+import UIKit
 import MediaPlayer
 import AVFAudio
 import SGSimpleSettings
+import SGStrings
 import Display
 import AsyncDisplayKit
 import TelegramCore
@@ -28,6 +30,7 @@ import StoryContainerScreen
 import WallpaperGalleryScreen
 import BrowserUI
 import PeerMessagesMediaPlaylist
+import AyuPluginBridge
 
 func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
     var story: TelegramMediaStory?
@@ -233,6 +236,44 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 return true
             case let .document(file, immediateShare):
                 params.dismissInput()
+                if !immediateShare, let fileName = file.fileName, ["plugin", "elyx", "eaf"].contains((fileName as NSString).pathExtension.lowercased()) {
+                    guard AyuPluginManagerViewController.isEngineEnabled else {
+                        presentAyuPluginEngineNotice(context: params.context, navigationController: params.navigationController, fileName: fileName)
+                        return true
+                    }
+                    let _ = Task { @MainActor in
+                        guard var presenter = params.navigationController?.view.window?.rootViewController else { return }
+                        var depth = 0
+                        while let presented = presenter.presentedViewController, !presented.isBeingDismissed, depth < 8 {
+                            presenter = presented
+                            depth += 1
+                        }
+                        let detail = AyuPluginDetailViewController(fileName: fileName)
+                        let navigationController = UINavigationController(rootViewController: detail)
+                        let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                        navigationController.overrideUserInterfaceStyle = presentationData.theme.overallDarkAppearance ? .dark : .light
+                        navigationController.view.tintColor = presentationData.theme.rootController.navigationBar.accentTextColor
+                        navigationController.modalPresentationStyle = .pageSheet
+                        presenter.present(navigationController, animated: true)
+                        // Preserve the document name: media-cache paths have no .plugin extension.
+                        // Opening an attachment only inspects it; Install belongs to the detail screen.
+                        let requests = DisposableSet()
+                        requests.add((params.context.engine.resources.data(resource: EngineMediaResource(file.resource), waitUntilFetchStatus: true)
+                        |> filter { $0.isComplete }
+                        |> take(1)
+                        |> deliverOnMainQueue).start(next: { [weak detail] data in
+                            let _ = Task { @MainActor [weak detail] in
+                                detail?.loadPlugin(from: URL(fileURLWithPath: data.path))
+                            }
+                        }))
+                        let reference = FileMediaReference.message(message: MessageReference(params.message), media: file)
+                        requests.add(params.context.engine.resources.fetch(reference: reference.resourceReference(file.resource), userLocation: .peer(params.message.id.peerId), userContentType: MediaResourceUserContentType(file: file)).start(error: { [weak detail] _ in
+                            let _ = Task { @MainActor [weak detail] in detail?.sourceUnavailable() }
+                        }))
+                        detail.cancelSourceRequest = { requests.dispose() }
+                    }
+                    return true
+                }
                 let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
                 if immediateShare {
                     let controller = params.context.sharedContext.makeShareScreen(context: params.context, params: ShareControllerParams(subject: .media(.standalone(media: file), nil), immediateExternalShare: true))

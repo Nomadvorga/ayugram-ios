@@ -461,7 +461,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
         default:
             break
         }
-        chatTranslationAvailable = true; translateButtonAvailable = true // MARK: Swiftgram
+        chatTranslationAvailable = true; translateButtonAvailable = true // MARK: AyuGram
         let previousState = Atomic<LocalizationListState?>(value: nil)
         let previousEntriesHolder = Atomic<([LanguageListEntry], PresentationTheme, PresentationStrings)?>(value: nil)
         self.listDisposable = combineLatest(
@@ -478,7 +478,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                 return
             }
             
-            // MARK: Swiftgram
+            // MARK: AyuGram
             let isPremium = peer?.isPremium ?? false
                         
             var entries: [LanguageListEntry] = []
@@ -785,7 +785,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                 
                     self?.context.engine.messages.refreshAttachMenuBots()
                     
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     // TODO(swiftgram): consider moving to downloadAndApplyLocalization for an app-wide strings update
                     if let baseLanguageCode = info.baseLanguageCode {
                         SGLocalizationManager.shared.downloadLocale(baseLanguageCode)

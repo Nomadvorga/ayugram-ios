@@ -579,7 +579,7 @@ public final class EntityKeyboardComponent: Component {
             
             let emojiContentItemIdUpdated = ActionSlot<(AnyHashable, AnyHashable?, ComponentTransition)>()
             if let emojiContent = component.emojiContent {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if SGSimpleSettings.shared.defaultEmojisFirst {
                     emojiContent.panelItemGroups = sgPatchEmojiKeyboardItems(emojiContent.panelItemGroups)
                     emojiContent.contentItemGroups = sgPatchEmojiKeyboardItems(emojiContent.contentItemGroups)

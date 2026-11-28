@@ -13,8 +13,8 @@ import tree_sitter_swift
 ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 FILES = [
-    *sorted((ROOT / "Swiftgram/SGSettingsUI/Sources").glob("ExteraAI*.swift")),
-    *sorted((ROOT / "Swiftgram/SGSimpleSettings/Sources").glob("ExteraAI*.swift")),
+    *sorted((ROOT / "AyuGram/SGSettingsUI/Sources").glob("ExteraAI*.swift")),
+    *sorted((ROOT / "AyuGram/SGSimpleSettings/Sources").glob("ExteraAI*.swift")),
     ROOT / "Tests/ExteraAI/ExteraAIClientTests.swift",
     ROOT / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift",
     ROOT / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ExteraAISummaryBridge.swift",

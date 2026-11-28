@@ -12,8 +12,8 @@ it does not claim Vosk packaging, those 24 languages, or immediate physical dele
 Speech sources are a single checkpoint: **six new source files**, plus two existing
 source edits. Include them together; no incomplete symbol references are intended.
 
-- `Swiftgram/SGSimpleSettings/Sources/ExteraSpeechSettings.swift`
-- `Swiftgram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift`
+- `AyuGram/SGSimpleSettings/Sources/ExteraSpeechSettings.swift`
+- `AyuGram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift`
 - `submodules/Media/LocalAudioTranscription/Sources/ExteraSpeechPolicy.swift`
 - `submodules/Media/LocalAudioTranscription/Sources/ExteraSpeechModelManager.swift`
 - `submodules/Media/LocalAudioTranscription/Sources/AppleSpeechAssetInventory.swift`
@@ -25,7 +25,7 @@ source edits. Include them together; no incomplete symbol references are intende
 Root owns BUILD, settings entry wiring, strings and backup. They were not edited by
 this worker. **Required dependency:** add
 `//submodules/Media/LocalAudioTranscription:LocalAudioTranscription` to
-`Swiftgram/SGSettingsUI/BUILD` because the new controller imports that module. Both
+`AyuGram/SGSettingsUI/BUILD` because the new controller imports that module. Both
 source modules already use `Sources/**/*.swift` globs. No external binary/library,
 model archive, credentials, checksum entry, or new build target is required.
 LocalAudioTranscription already depends on SGSimpleSettings and SwiftSignalKit.

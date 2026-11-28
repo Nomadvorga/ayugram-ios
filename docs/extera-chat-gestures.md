@@ -1,7 +1,7 @@
 # Chat gestures and composer port
 
-Implementation is in `Swiftgram/SGSimpleSettings/Sources/ExteraChatSettings.swift`,
-`Swiftgram/SGDoubleTapMessageAction/Sources/SGDoubleTapMessageAction.swift`,
+Implementation is in `AyuGram/SGSimpleSettings/Sources/ExteraChatSettings.swift`,
+`AyuGram/SGDoubleTapMessageAction/Sources/SGDoubleTapMessageAction.swift`,
 `submodules/TelegramUI/Sources/Chat/ChatControllerExteraGestures.swift`, and the existing
 `ChatController`, display-node loader, and mention-panel integration points.
 

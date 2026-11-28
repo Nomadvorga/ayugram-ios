@@ -592,6 +592,19 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
             return (strings.Presence_online, true)
         } else {
             let difference = timestamp - statusTimestamp
+            // MARK: AyuGram
+            // "Relative Last Seen": within the last 24 hours the exact time ("today at"/"yesterday at") becomes
+            // minutes or hours ago, in the expanded (profile) form too. Older than that keeps the stock text.
+            if difference < 24 * 60 * 60, ExteraSettings.shared.relativeLastSeen {
+                if difference < 60 {
+                    return (strings.LastSeen_JustNow, false)
+                } else if difference < 60 * 60 {
+                    return (strings.LastSeen_MinutesAgo(difference / 60), false)
+                } else {
+                    return (strings.LastSeen_HoursAgo(difference / (60 * 60)), false)
+                }
+            }
+            //
             if difference < 60 {
                 return (strings.LastSeen_JustNow, false)
             } else if difference < 60 * 60 && !expanded {
@@ -614,9 +627,7 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
                 if dayDifference == 0 || dayDifference == -1 {
                     let day: RelativeTimestampFormatDay
                     if dayDifference == 0 {
-                        // MARK: AyuGram
-                        // "Relative last seen": always show "5 hours ago" instead of "today at 09:20".
-                        if expanded && !ExteraSettings.shared.relativeLastSeen {
+                        if expanded {
                             day = .today
                         } else {
                             let minutes = difference / (60 * 60)

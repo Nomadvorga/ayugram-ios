@@ -7,9 +7,9 @@ import tree_sitter_swift
 ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 FILES = [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraOtherSupportContext.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraOtherSettingsController.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraOtherSupportContext.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraOtherSettingsController.swift",
     "Tests/ExteraOther/ExteraOtherSettingsModelTests.swift",
 ]
 failed = False

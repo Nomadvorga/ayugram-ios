@@ -1,4 +1,4 @@
-import SGInputToolbar // MARK: Swiftgram
+import SGInputToolbar // MARK: AyuGram
 import SwiftUI
 import SGSimpleSettings
 
@@ -328,7 +328,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     private let hapticFeedback = HapticFeedback()
     
     //    private var toolbarHostingController: UIViewController? //Any? //  UIHostingController<ChatToolbarView>?
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var toolbarNode: ASDisplayNode?
     private var sgToolbarFormatting = false
     //
@@ -622,7 +622,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
         )
         self.inputMediaInteraction?.forceTheme = presentationInterfaceState.theme
         
-        self.initToolbarIfNeeded(context: context) // MARK: Swiftgram
+        self.initToolbarIfNeeded(context: context) // MARK: AyuGram
     }
 
     public var sendPressed: ((NSAttributedString?) -> Void)?
@@ -899,7 +899,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     }
 
     public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, keyboardHeight: CGFloat, additionalSideInsets: UIEdgeInsets, textFieldMaxHeight: CGFloat, availableHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
-        self.toolbarNode?.view.overrideUserInterfaceStyle = interfaceState.theme.overallDarkAppearance ? .dark : .light // MARK: Swiftgram
+        self.toolbarNode?.view.overrideUserInterfaceStyle = interfaceState.theme.overallDarkAppearance ? .dark : .light // MARK: AyuGram
         let hadLayout = self.validLayout != nil
         let previousLayout = self.validLayout
         self.validLayout = (width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, keyboardHeight: keyboardHeight, additionalSideInsets: additionalSideInsets, textFieldMaxHeight: textFieldMaxHeight, availableHeight: availableHeight, metrics: metrics, isSecondary: isSecondary)
@@ -2183,21 +2183,21 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     @objc func formatAttributesBold(_ sender: Any) {
         self.inputMenu.back()
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.bold, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.bold, value: nil), inputMode) // MARK: AyuGram
         }
     }
 
     @objc func formatAttributesItalic(_ sender: Any) {
         self.inputMenu.back()
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.italic, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.italic, value: nil), inputMode) // MARK: AyuGram
         }
     }
 
     @objc func formatAttributesMonospace(_ sender: Any) {
         self.inputMenu.back()
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.monospace, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.monospace, value: nil), inputMode) // MARK: AyuGram
         }
     }
 
@@ -2213,14 +2213,14 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     @objc func formatAttributesStrikethrough(_ sender: Any) {
         self.inputMenu.back()
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.strikethrough, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.strikethrough, value: nil), inputMode) // MARK: AyuGram
         }
     }
 
     @objc func formatAttributesUnderline(_ sender: Any) {
         self.inputMenu.back()
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.underline, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.underline, value: nil), inputMode) // MARK: AyuGram
         }
     }
 
@@ -2237,7 +2237,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
         }
 
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.spoiler, value: nil), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.spoiler, value: nil), inputMode) // MARK: AyuGram
         }
 
         self.updateSpoilersRevealed(animated: animated)
@@ -2247,7 +2247,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
         self.inputMenu.back()
 
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.block, value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false)), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.block, value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false)), inputMode) // MARK: AyuGram
         }
     }
 
@@ -2255,7 +2255,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
         self.inputMenu.back()
 
         self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.block, value: ChatTextInputTextQuoteAttribute(kind: .code(language: nil), isCollapsed: false)), inputMode) // MARK: Swiftgram
+            return (chatTextInputAddFormattingAttribute(self.sgToolbarFormatting ? sgChatTextInputStateSelectingLastWordIfIdle(current) : current, attribute: ChatTextInputAttributes.block, value: ChatTextInputTextQuoteAttribute(kind: .code(language: nil), isCollapsed: false)), inputMode) // MARK: AyuGram
         }
     }
 
@@ -2426,7 +2426,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension AttachmentTextInputPanelNode {
     
     func initToolbarIfNeeded(context: AccountContext) {

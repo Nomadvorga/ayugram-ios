@@ -33,7 +33,7 @@ public class PeerNameColors: Equatable {
         private let _main: UIColor
         private let _secondary: UIColor?
         private let _tertiary: UIColor?
-        // MARK: Swiftgram
+        // MARK: AyuGram
         public var main: UIColor {
             let currentSaturation = SGSimpleSettings.shared.accountColorsSaturation
             if currentSaturation == 0 || currentSaturation == 100 { // MARK: AyuGram: 100% is the color as is
@@ -391,7 +391,7 @@ public extension PeerCollectibleColor {
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension UIColor {
     func withReducedSaturation(_ factor: CGFloat) -> UIColor {
         var hue: CGFloat = 0

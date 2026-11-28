@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--emit-only", action="store_true")
     args = parser.parse_args()
-    source = (args.repo / "Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift").read_text(encoding="utf-8")
+    source = (args.repo / "AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift").read_text(encoding="utf-8")
     suite = "extera.store.validation." + uuid.uuid4().hex
     harness = "import Foundation\nimport Dispatch\nlet APP_GROUP_IDENTIFIER = " + json.dumps(suite) + "\n" + source + r'''
 

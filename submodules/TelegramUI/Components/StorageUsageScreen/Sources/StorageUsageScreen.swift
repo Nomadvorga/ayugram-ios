@@ -2020,7 +2020,7 @@ final class StorageUsageScreenComponent: Component {
                             guard let self, let component = self.component else {
                                 return
                             }
-                            // MARK: Swiftgram
+                            // MARK: AyuGram
                             // let value = max(5, value)
                             let _ = updateCacheStorageSettingsInteractively(accountManager: component.context.sharedContext.accountManager, { current in
                                 var current = current
@@ -3258,7 +3258,7 @@ final class StorageUsageScreenComponent: Component {
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                 
                 var presetValues: [Int32]
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if case .stories = mappedCategory {
                     presetValues = [
                         7 * 24 * 60 * 60,

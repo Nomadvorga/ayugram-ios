@@ -91,7 +91,7 @@ new three-choice preference is authoritative for recordings and defaults to syst
 
 Root owns all BUILD, localization, backup and workflow edits. Required handoff:
 
-- Add `//submodules/TelegramAudio:TelegramAudio` to `Swiftgram/SGSettingsUI/BUILD` dependencies.
+- Add `//submodules/TelegramAudio:TelegramAudio` to `AyuGram/SGSettingsUI/BUILD` dependencies.
   TelegramAudio already depends on SGSimpleSettings; the source/test BUILD globs already include
   the new adapter and native test file. No other dependency is added by this implementation.
 - Add `ExteraChatAppearanceSettings.microphoneKey` to backup validation/import/export with allowed

@@ -8,8 +8,8 @@ upper bounds, Low Power Mode at Never, accessibility, and preservation of choice
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraEnergySettings.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraEnergySettings.swift \
   Tests/ExteraEnergy/ExteraEnergySettingsTests.swift
 ```
 

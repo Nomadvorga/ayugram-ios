@@ -33,6 +33,19 @@ import ShimmeringMask
 import StreamingTextReveal
 import WalletContext
 
+// MARK: AyuGram: exteraGram's "Reply Background" off draws quote blocks with their line only (code blocks keep their fill).
+private func exteraQuoteBlocksWithoutBackground(_ text: NSAttributedString) -> NSAttributedString {
+    let key = NSAttributedString.Key(rawValue: "Attribute__Blockquote")
+    let result = NSMutableAttributedString(attributedString: text)
+    text.enumerateAttribute(key, in: NSRange(location: 0, length: text.length), options: [], using: { value, range, _ in
+        guard let data = value as? TextNodeBlockQuoteData, case .quote = data.kind else {
+            return
+        }
+        result.addAttribute(key, value: TextNodeBlockQuoteData(kind: data.kind, title: data.title, color: data.color, secondaryColor: data.secondaryColor, tertiaryColor: data.tertiaryColor, backgroundColor: .clear, fillColor: .clear, isCollapsible: data.isCollapsible), range: range)
+    })
+    return result
+}
+
 private final class CachedChatMessageText {
     let text: String
     let inputEntities: [MessageTextEntity]?
@@ -587,6 +600,17 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         }
                     }
                     
+                    // MARK: AyuGram: exteraGram's "Reply Elements" (ReplyMessageLine.check, TYPE_QUOTE); code blocks keep their colours.
+                    var exteraQuoteColor = mainColor
+                    var exteraQuoteSecondaryColor = secondaryColor
+                    var exteraQuoteTertiaryColor = tertiaryColor
+                    if !ExteraSettings.shared.replyColors {
+                        exteraQuoteColor = messageTheme.accentTextColor
+                        exteraQuoteSecondaryColor = nil
+                        exteraQuoteTertiaryColor = nil
+                    }
+                    //
+                    
                     codeHighlightSpecs = extractMessageSyntaxHighlightSpecs(text: rawText, entities: entities)
                     
                     if !codeHighlightSpecs.isEmpty {
@@ -599,7 +623,13 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         }
                     }
                     
-                    attributedText = stringWithAppliedEntities(rawText, entities: entities, strings: item.presentationData.strings, dateTimeFormat: item.presentationData.dateTimeFormat, baseColor: messageTheme.primaryTextColor, linkColor: messageTheme.linkTextColor, baseQuoteTintColor: mainColor, baseQuoteSecondaryTintColor: secondaryColor, baseQuoteTertiaryTintColor: tertiaryColor, codeBlockTitleColor: codeBlockTitleColor, codeBlockAccentColor: codeBlockAccentColor, codeBlockBackgroundColor: codeBlockBackgroundColor, codeBlockFillColor: codeBlockFillColor, baseFont: textFont, linkFont: textFont, boldFont: messageBodyFonts.body.bold, italicFont: messageBodyFonts.body.italic, boldItalicFont: messageBodyFonts.body.boldItalic, fixedFont: item.presentationData.messageFixedFont, blockQuoteFont: item.presentationData.messageBlockQuoteFont, blockFonts: messageBodyFonts.blockFonts, underlineLinks: underlineLinks, message: item.message, adjustQuoteFontSize: true, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight)
+                    // MARK: AyuGram: quote colours and fill follow exteraGram's "Reply Elements" (the fill only in incoming messages).
+                    let exteraAppliedText = stringWithAppliedEntities(rawText, entities: entities, strings: item.presentationData.strings, dateTimeFormat: item.presentationData.dateTimeFormat, baseColor: messageTheme.primaryTextColor, linkColor: messageTheme.linkTextColor, baseQuoteTintColor: exteraQuoteColor, baseQuoteSecondaryTintColor: exteraQuoteSecondaryColor, baseQuoteTertiaryTintColor: exteraQuoteTertiaryColor, codeBlockTitleColor: codeBlockTitleColor, codeBlockAccentColor: codeBlockAccentColor, codeBlockBackgroundColor: codeBlockBackgroundColor, codeBlockFillColor: codeBlockFillColor, baseFont: textFont, linkFont: textFont, boldFont: messageBodyFonts.body.bold, italicFont: messageBodyFonts.body.italic, boldItalicFont: messageBodyFonts.body.boldItalic, fixedFont: item.presentationData.messageFixedFont, blockQuoteFont: item.presentationData.messageBlockQuoteFont, blockFonts: messageBodyFonts.blockFonts, underlineLinks: underlineLinks, message: item.message, adjustQuoteFontSize: true, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight)
+                    if incoming && !ExteraSettings.shared.replyBackground {
+                        attributedText = exteraQuoteBlocksWithoutBackground(exteraAppliedText)
+                    } else {
+                        attributedText = exteraAppliedText
+                    }
                 } else if !rawText.isEmpty {
                     attributedText = NSAttributedString(string: rawText, font: textFont, textColor: messageTheme.primaryTextColor)
                 } else {

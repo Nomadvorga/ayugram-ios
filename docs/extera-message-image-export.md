@@ -1,7 +1,7 @@
 # Visible message image export helper
 
 The helper is internal to TelegramUI, compiled by the existing
-`Swiftgram/SGTelegramUIExtensions` source filegroup. No BUILD change is required.
+`AyuGram/SGTelegramUIExtensions` source filegroup. No BUILD change is required.
 
 ```swift
 enum ExteraMessageImageExport {

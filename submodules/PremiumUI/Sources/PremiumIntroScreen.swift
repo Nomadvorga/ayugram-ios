@@ -1,4 +1,4 @@
-import SGStrings // MARK: Swiftgram
+import SGStrings // MARK: AyuGram
 import Foundation
 import Foundation
 import UIKit
@@ -2265,7 +2265,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                             }
 
                             let isPremium = state?.isPremium == true
-                            var buttonText: String = "" // MARK: Swiftgram
+                            var buttonText: String = "" // MARK: AyuGram
                             if isPremium {
                                 buttonText = strings.Common_OK
                             } else {
@@ -2276,7 +2276,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                 } else {
                                     buttonText = strings.Premium_SubscribeFor(state?.price ?? "–").string
                                 }
-                                buttonText = i18n("Common.OpenTelegram", strings.baseLanguageCode) // MARK: Swiftgram
+                                buttonText = i18n("Common.OpenTelegram", strings.baseLanguageCode) // MARK: AyuGram
                             }
                             
                             var dismissImpl: (() -> Void)?
@@ -3273,7 +3273,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             
             let presentationData = self.screenContext.presentationData
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if let context = self.screenContext.context {
                 let alertController = textAlertController(context: context, title: i18n("Common.OpenTelegram", presentationData.strings.baseLanguageCode), text: i18n("Common.UseTelegramForPremium", presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
                 self.present(alertController)
@@ -3902,7 +3902,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             }
             
             if !buttonIsHidden {
-                var buttonTitle: String = "" // MARK: Swiftgram
+                var buttonTitle: String = "" // MARK: AyuGram
                 var buttonSubtitle: String?
                 if state.purchasePending {
                     buttonTitle = environment.strings.Premium_Purchase_Pending
@@ -3919,7 +3919,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                 } else if isUnusedGift {
                     buttonTitle = environment.strings.Premium_Gift_ApplyLink
                 } else if state.isPremium == true && state.canUpgrade {
-                    buttonTitle = i18n("Common.OpenTelegram", environment.strings.baseLanguageCode) // MARK: Swiftgram
+                    buttonTitle = i18n("Common.OpenTelegram", environment.strings.baseLanguageCode) // MARK: AyuGram
                 } else {
                     if state.isAnnual {
                         buttonTitle = environment.strings.Premium_SubscribeForAnnual(state.price ?? "—").string
@@ -3928,7 +3928,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     } else {
                         buttonTitle = environment.strings.Premium_SubscribeFor(state.price ?? "–").string
                     }
-                    buttonTitle = i18n("Common.OpenTelegram", environment.strings.baseLanguageCode) // MARK: Swiftgram
+                    buttonTitle = i18n("Common.OpenTelegram", environment.strings.baseLanguageCode) // MARK: AyuGram
                 }
                 
                 let controller = environment.controller

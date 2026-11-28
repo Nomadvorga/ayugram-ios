@@ -53,7 +53,11 @@ extension ChatControllerImpl {
     /// Returns false only for the normal quick-reaction path. Explicit picker reactions
     /// never call this method, so changing double tap cannot intercept a picker selection.
     func performExteraDoubleTapAction(_ message: EngineRawMessage) -> Bool {
-        let action = ExteraChatSettings.shared.effectiveDoubleTapAction(incoming: message.effectivelyIncoming(self.context.account.peerId))
+        return self.performExteraMessageAction(ExteraChatSettings.shared.effectiveDoubleTapAction(incoming: message.effectivelyIncoming(self.context.account.peerId)), message: message)
+    }
+
+    /// One implementation of the actions for both gestures: double tap and the swipe actions.
+    func performExteraMessageAction(_ action: ExteraChatSettings.DoubleTapAction, message: EngineRawMessage) -> Bool {
         switch action {
         case .inherit, .reaction:
             return false

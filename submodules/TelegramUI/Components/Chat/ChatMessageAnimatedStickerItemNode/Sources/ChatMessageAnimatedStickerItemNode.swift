@@ -48,7 +48,7 @@ import ChatMessageTransitionNode
 import ChatMessageSuggestedPostInfoNode
 import TelegramStringFormatting
 import StaticGlassBackground
-import SGSimpleSettings
+import SGSimpleSettings // MARK: AyuGram
 
 private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
@@ -150,8 +150,44 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     private let disposable = MetaDisposable()
     private let disposables = DisposableSet()
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public var sizeCoefficient: Float = 1.0
+    
+    // MARK: AyuGram
+    // Sticker Shape: rounds video stickers (the image node is larger than the sticker by its insets).
+    private var stickerShapeMaskLayer: CALayer?
+    private func updateStickerShape(radius: CGFloat, contentRect: CGRect) {
+        let radius = min(radius, min(contentRect.width, contentRect.height) / 2.0)
+        if radius > 0.0 {
+            let maskLayer: CALayer
+            if let current = self.stickerShapeMaskLayer {
+                maskLayer = current
+            } else {
+                maskLayer = CALayer()
+                maskLayer.backgroundColor = UIColor.black.cgColor
+                maskLayer.cornerCurve = .continuous
+                self.stickerShapeMaskLayer = maskLayer
+                self.imageNode.layer.mask = maskLayer
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            maskLayer.frame = contentRect
+            maskLayer.cornerRadius = radius
+            CATransaction.commit()
+            if let animationNode = self.animationNode {
+                animationNode.layer.cornerRadius = radius
+                animationNode.layer.cornerCurve = .continuous
+                animationNode.layer.masksToBounds = true
+            }
+        } else if self.stickerShapeMaskLayer != nil {
+            self.stickerShapeMaskLayer = nil
+            self.imageNode.layer.mask = nil
+            if let animationNode = self.animationNode {
+                animationNode.layer.cornerRadius = 0.0
+                animationNode.layer.masksToBounds = false
+            }
+        }
+    }
 
     private var viaBotNode: TextNode?
     public let dateAndStatusNode: ChatMessageDateAndStatusNode
@@ -383,7 +419,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     return false
                 }
                 
-                let action = item.controllerInteraction.canSetupReply(item.message)
+                let action = ayuSwipeMessageAction(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message)) // MARK: AyuGram
                 strongSelf.currentSwipeAction = action
                 if case .none = action {
                     return false
@@ -1795,6 +1831,20 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     
                     animation.animator.updateFrame(layer: strongSelf.imageNode.layer, frame: updatedContentFrame, completion: nil)
                     
+                    // MARK: AyuGram
+                    var stickerShapeRadius: CGFloat = 0.0
+                    if let telegramFile, telegramFile.isVideoSticker, !isEmoji {
+                        switch ExteraSettings.shared.stickerShape {
+                        case .default:
+                            break
+                        case .rounded:
+                            stickerShapeRadius = 6.0
+                        case .roundedAsMessage:
+                            stickerShapeRadius = item.presentationData.chatBubbleCorners.mainRadius
+                        }
+                    }
+                    strongSelf.updateStickerShape(radius: stickerShapeRadius, contentRect: CGRect(origin: CGPoint(), size: updatedContentFrame.size).insetBy(dx: imageInset, dy: imageInset))
+                    
                     strongSelf.contextSourceNode.contentRect = contextContentFrame
                     strongSelf.containerNode.targetNodeForActivationProgressContentRect = strongSelf.contextSourceNode.contentRect
                     
@@ -2244,18 +2294,30 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     case let .optionalAction(f):
                         f()
                     case let .openContextMenu(openContextMenu):
+                        // MARK: AyuGram
+                        sgHandleDoubleTapMessageAction(incoming: item.message.effectivelyIncoming(item.context.account.peerId), message: item.message, editAction: {
+                            item.controllerInteraction.sgStartMessageEdit(item.message)
+                        }, defaultAction: {
                         if canAddMessageReactions(message: EngineMessage(item.message)) {
                             item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                         } else {
                             item.controllerInteraction.openMessageContextMenu(openContextMenu.tapMessage, openContextMenu.selectAll, self, openContextMenu.subFrame, nil, nil)
                         }
+                        })
+                        //
                     }
                 } else if case .tap = gesture {
                     item.controllerInteraction.clickThroughMessage(self.view, location)
                 } else if case .doubleTap = gesture {
+                    // MARK: AyuGram
+                    sgHandleDoubleTapMessageAction(incoming: item.message.effectivelyIncoming(item.context.account.peerId), message: item.message, editAction: {
+                        item.controllerInteraction.sgStartMessageEdit(item.message)
+                    }, defaultAction: {
                     if canAddMessageReactions(message: EngineMessage(item.message)) {
                         item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                     }
+                    })
+                    //
                 }
             }
         default:
@@ -2839,6 +2901,8 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     }
     
     private var playedSwipeToReplyHaptic = false
+    
+    private var ayuSwipeCarousel: AyuSwipeActionsCarouselDriver? // MARK: AyuGram
     @objc private func swipeToReplyGesture(_ recognizer: ChatSwipeToReplyRecognizer) {
         var offset: CGFloat = 0.0
         var leftOffset: CGFloat = 0.0
@@ -2885,7 +2949,13 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 }
             
                 if let item = self.item, self.swipeToReplyNode == nil {
-                    let swipeToReplyNode = ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: ChatMessageSwipeToReplyNode.Action(self.currentSwipeAction))
+                    // MARK: AyuGram
+                    let makeSwipeToReplyNode: (ChatMessageSwipeToReplyNode.Action) -> ChatMessageSwipeToReplyNode = { action in
+                        return ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: action)
+                    }
+                    let ayuSwipeCarousel = AyuSwipeActionsCarouselDriver(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message), makeNode: makeSwipeToReplyNode)
+                    self.ayuSwipeCarousel = ayuSwipeCarousel
+                    let swipeToReplyNode = makeSwipeToReplyNode(ayuSwipeCarousel.primaryNodeAction)
                     self.swipeToReplyNode = swipeToReplyNode
                     self.insertSubnode(swipeToReplyNode, at: 0)
                 }
@@ -2914,6 +2984,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     
                     let progress = abs(translation.x) / swipeOffset
                     swipeToReplyNode.updateProgress(progress)
+                    self.ayuSwipeCarousel?.update(itemNode: self, primaryNode: swipeToReplyNode, recognizer: recognizer, translationX: translation.x, trigger: swipeOffset, progress: progress) // MARK: AyuGram
                     
                     if progress > 1.0 - .ulpOfOne && !self.playedSwipeToReplyHaptic {
                         self.playedSwipeToReplyHaptic = true
@@ -2939,7 +3010,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                             case .none:
                                 break
                             case .reply:
-                                item.controllerInteraction.setupReply(item.message.id)
+                                ayuPerformSwipeMessageAction(message: item.message, controllerInteraction: item.controllerInteraction, action: self.ayuSwipeCarousel?.selectedAction) // MARK: AyuGram
                             }
                         }
                     }
@@ -2952,6 +3023,9 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
 
                 self.updateAttachedAvatarNodeOffset(offset: 0.0, transition: .animated(duration: 0.3, curve: .spring))
 
+                // MARK: AyuGram
+                self.ayuSwipeCarousel?.finish()
+                self.ayuSwipeCarousel = nil
                 if let swipeToReplyNode = self.swipeToReplyNode {
                     self.swipeToReplyNode = nil
                     swipeToReplyNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak swipeToReplyNode] _ in

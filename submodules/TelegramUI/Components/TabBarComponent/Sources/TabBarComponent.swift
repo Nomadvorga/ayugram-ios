@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -15,6 +15,8 @@ import AppBundle
 import SearchBarNode
 import TabSelectionRecognizer
 import TabBarLayout
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 /// The items VoiceOver may reach: while search is active every item but the selected one is faded out.
 func tabBarAccessibleItemIds<Id: Hashable>(ids: [Id], selectedId: Id?, isSearchActive: Bool) -> [Id] {
@@ -74,12 +76,20 @@ public final class NavigationSearchView: UIView {
     private var close: (background: GlassBackgroundView, icon: UIImageView)?
 
     private var params: Params?
+    private var atmosphericVisible = true
+
+    public func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        self.backgroundView.atmosphericOwnerVisible = visible
+        self.close?.background.atmosphericOwnerVisible = visible
+    }
     
     public init(action: @escaping () -> Void, closeAction: @escaping () -> Void) {
         self.action = action
         self.closeAction = closeAction
 
         self.backgroundView = GlassBackgroundView()
+        self.backgroundView.atmosphericRole = .search
         self.backgroundView.contentView.clipsToBounds = true
         self.iconView = UIImageView()
 
@@ -247,6 +257,8 @@ public final class NavigationSearchView: UIView {
             } else {
                 closeTransition = closeTransition.withAnimation(.none)
                 close = (GlassBackgroundView(), UIImageView())
+                close.background.atmosphericRole = .actionBar
+                close.background.atmosphericOwnerVisible = self.atmosphericVisible
                 self.close = close
                 
                 close.icon.image = generateImage(CGSize(width: 40.0, height: 40.0), contextGenerator: { size, context in
@@ -573,6 +585,15 @@ public final class TabBarComponent: Component {
         private let backgroundContainer: GlassBackgroundContainerView
         private let liquidLensView: LiquidLensView
         private let contextGestureContainerView: ContextControllerSourceView
+        private var atmosphericHost: AtmosphericSurfaceHostView?
+        private weak var atmosphericContainer: UIView?
+        private var atmosphericVisible = false
+
+        public func updateAtmosphericVisibility(_ visible: Bool) {
+            self.atmosphericVisible = visible
+            self.atmosphericHost?.setOwnerVisible(visible)
+            self.searchView?.updateAtmosphericVisibility(visible)
+        }
         
         private var measureItemViews: [AnyHashable: ComponentView<Empty>] = [:]
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
@@ -599,6 +620,7 @@ public final class TabBarComponent: Component {
         public override init(frame: CGRect) {
             self.backgroundContainer = GlassBackgroundContainerView()
             self.liquidLensView = LiquidLensView(kind: .externalContainer, backgroundTintColor: GlassBackgroundView.TintColor(kind: .untinted))
+            self.liquidLensView.suppressAtmosphericGlassDecoration()
             
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
@@ -877,8 +899,8 @@ public final class TabBarComponent: Component {
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 4.0
             let isSystemLayout = component.axis == .horizontal && !component.isCompact && component.usesSystemLayout
-            var availableSize = CGSize(width: (isSystemLayout || component.fillsAvailableWidth) ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: Swiftgram
-            // MARK: Swiftgram
+            var availableSize = CGSize(width: (isSystemLayout || component.fillsAvailableWidth) ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height) // MARK: AyuGram
+            // MARK: AyuGram
             let sgUnreducedAvailableWidth = availableSize.width
             // Compact layouts already size the bar for the visible items and search button.
             if component.axis == .horizontal && !component.isCompact && !component.fillsAvailableWidth && !(SGSimpleSettings.shared.wideTabBar || component.search?.isActive ?? false) {
@@ -897,7 +919,7 @@ public final class TabBarComponent: Component {
                     widthReducer = 1.0
                 }
                 availableSize.width = availableSize.width / widthReducer
-                if component.search == nil { // MARK: Swiftgram
+                if component.search == nil { // MARK: AyuGram
                     availableSize.width -= 48.0
                     availableSize.width -= innerInset * 2.0
                 }
@@ -921,15 +943,15 @@ public final class TabBarComponent: Component {
             
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
 
-            let sgShowsTitle = !component.isCompact && component.showsLabels // MARK: Swiftgram
+            let sgShowsTitle = !component.isCompact && component.showsLabels // MARK: AyuGram
             // The search button is as tall as the bar.
             let barHeight: CGFloat
             if isSystemLayout {
-                barHeight = sgShowsTitle ? tabBarSystemBarThickness : tabBarCompactBarThickness // MARK: Swiftgram
+                barHeight = sgShowsTitle ? tabBarSystemBarThickness : tabBarCompactBarThickness // MARK: AyuGram
             } else if component.isCompact {
                 barHeight = tabBarCompactBarThickness
             } else {
-                barHeight = (sgShowsTitle ? 56.0 : 40.0) + innerInset * 2.0 // MARK: Swiftgram
+                barHeight = (sgShowsTitle ? 56.0 : 40.0) + innerInset * 2.0 // MARK: AyuGram
             }
 
             // Each item's title width at the unselected font, as `-[_UITabButton sizeThatFits:]` measures it.
@@ -960,12 +982,12 @@ public final class TabBarComponent: Component {
                         isUnconstrained: true
                     )),
                     environment: {},
-                    containerSize: CGSize(width: 200.0, height: sgShowsTitle ? 56.0 : 40.0) // MARK: Swiftgram
+                    containerSize: CGSize(width: 200.0, height: sgShowsTitle ? 56.0 : 40.0) // MARK: AyuGram
                 )
                 titleWidths.append(itemSize.width)
             }
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if isSystemLayout && (1 ... 3).contains(component.items.count) && !SGSimpleSettings.shared.wideTabBar && search?.isActive != true {
                 // Keep the compact width, but never squeeze the tabs below Telegram's content-fitting width.
                 let searchWidth: CGFloat = search == nil ? 0.0 : barHeight + 8.0
@@ -978,13 +1000,13 @@ public final class TabBarComponent: Component {
             if search != nil {
                 availableLength -= barHeight + 8.0
             }
-            var itemsLayout: TabBarItemsLayout // MARK: Swiftgram
+            var itemsLayout: TabBarItemsLayout // MARK: AyuGram
             if isSystemLayout {
-                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar || component.fillsAvailableWidth /* MARK: Swiftgram */)
+                itemsLayout = tabBarSystemItemsLayout(fittedItemWidths: titleWidths, availableLength: availableLength, hasAccessory: search != nil || SGSimpleSettings.shared.wideTabBar || component.fillsAvailableWidth /* MARK: AyuGram */)
             } else {
                 itemsLayout = tabBarItemsLayout(axis: component.axis, isCompact: component.isCompact && !component.fillsAvailableWidth, unboundItemWidths: titleWidths.map { $0 + 10.0 * 2.0 }, availableLength: availableLength)
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if component.axis == .horizontal && !sgShowsTitle {
                 itemsLayout.size.height = barHeight
                 for index in itemsLayout.itemFrames.indices {
@@ -1033,7 +1055,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isSearchActive: search?.isActive == true,
-                        showsTitle: sgShowsTitle, // MARK: Swiftgram
+                        showsTitle: sgShowsTitle, // MARK: AyuGram
                         isSelected: false,
                         tintSelectedItem: component.tintSelectedItem,
                         isSystemLayout: isSystemLayout,
@@ -1048,7 +1070,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isSearchActive: search?.isActive == true,
-                        showsTitle: sgShowsTitle, // MARK: Swiftgram
+                        showsTitle: sgShowsTitle, // MARK: AyuGram
                         isSelected: true,
                         tintSelectedItem: component.tintSelectedItem,
                         isSystemLayout: isSystemLayout,
@@ -1145,6 +1167,27 @@ public final class TabBarComponent: Component {
             
             self.liquidLensView.update(size: lensSize, cornerRadius: component.axis == .vertical ? lensSize.width * 0.5 : nil, selectionOrigin: lensSelectionFrame.origin, selectionSize: lensSelectionFrame.size, inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil && component.isLiftedStateEnabled, isCollapsed: isLensCollapsed, transition: transition)
 
+            self.liquidLensView.suppressAtmosphericGlassDecoration()
+            let atmosphericContainer = self.liquidLensView.atmosphericContainerView
+            let atmosphericHost: AtmosphericSurfaceHostView
+            if let current = self.atmosphericHost, self.atmosphericContainer === atmosphericContainer {
+                atmosphericHost = current
+            } else {
+                self.atmosphericHost?.removeFromSuperview()
+                atmosphericHost = AtmosphericSurfaceHostView(container: atmosphericContainer, role: .navbar)
+                self.atmosphericHost = atmosphericHost
+                self.atmosphericContainer = atmosphericContainer
+                atmosphericContainer.addSubview(atmosphericHost)
+            }
+            atmosphericHost.setOwnerVisible(self.atmosphericVisible)
+            atmosphericHost.update(geometry: AtmosphericHostGeometry(
+                rect: CGRect(origin: .zero, size: lensSize),
+                cornerRadius: min(lensSize.width, lensSize.height) * 0.5,
+                selectedTabRect: selectedItemFrame != nil || self.selectionGestureState != nil ? lensSelectionFrame.insetBy(dx: 4.0, dy: 4.0) : nil,
+                backgroundInsertionIndex: self.liquidLensView.atmosphericBackgroundInsertionIndex,
+                isDarkTheme: component.theme.overallDarkAppearance
+            ))
+
             var size = tabsSize
 
             if let search {
@@ -1185,6 +1228,7 @@ public final class TabBarComponent: Component {
                     searchView.frame = CGRect(origin: CGPoint(x: availableSize.width + 50.0, y: 0.0), size: searchSize)
                 }
                 searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, transition: searchViewTransition)
+                searchView.updateAtmosphericVisibility(self.atmosphericVisible)
                 transition.setFrame(view: searchView, frame: searchFrame)
             } else {
                 if let searchView = self.searchView {

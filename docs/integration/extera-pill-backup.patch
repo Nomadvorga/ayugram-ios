@@ -1,6 +1,6 @@
-diff --git a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
---- a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
-+++ b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+diff --git a/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift b/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+--- a/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
++++ b/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
 @@ -67,13 +67,18 @@
          case integerSet(Set<Int>)
          case string(Set<String>)

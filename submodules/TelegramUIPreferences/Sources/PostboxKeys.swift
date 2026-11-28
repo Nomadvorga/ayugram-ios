@@ -45,7 +45,7 @@ public struct ApplicationSpecificPreferencesKeys {
 }
 
 private enum ApplicationSpecificSharedDataKeyValues: Int32 {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     case sgStatus = 999
     case inAppNotificationSettings = 0
     case presentationPasscodeSettings = 1
@@ -74,7 +74,7 @@ private enum ApplicationSpecificSharedDataKeyValues: Int32 {
 }
 
 public struct ApplicationSpecificSharedDataKeys {
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public static let sgStatus: EngineDataBuffer = applicationSpecificSharedDataKey(ApplicationSpecificSharedDataKeyValues.sgStatus.rawValue)
     public static let inAppNotificationSettings: EngineDataBuffer = applicationSpecificSharedDataKey(ApplicationSpecificSharedDataKeyValues.inAppNotificationSettings.rawValue)
     public static let presentationPasscodeSettings: EngineDataBuffer = applicationSpecificSharedDataKey(ApplicationSpecificSharedDataKeyValues.presentationPasscodeSettings.rawValue)

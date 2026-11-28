@@ -11,9 +11,9 @@ import tree_sitter_swift
 ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 FILES = [
-    *sorted((ROOT / "Swiftgram/SGSettingsUI/Sources").glob("ExteraFeed*.swift")),
-    ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift",
-    ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraFeedHistoryPolicy.swift",
+    *sorted((ROOT / "AyuGram/SGSettingsUI/Sources").glob("ExteraFeed*.swift")),
+    ROOT / "AyuGram/SGSimpleSettings/Sources/ExteraFeedSettings.swift",
+    ROOT / "AyuGram/SGSimpleSettings/Sources/ExteraFeedHistoryPolicy.swift",
     ROOT / "submodules/AccountContext/Sources/AccountContext.swift",
     ROOT / "submodules/TelegramUI/Sources/SharedAccountContext.swift",
     ROOT / "submodules/TelegramUI/Sources/SharedAccountContextExteraFeed.swift",

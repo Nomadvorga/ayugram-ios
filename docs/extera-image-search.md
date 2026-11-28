@@ -53,7 +53,7 @@ notice and the reference repository's LICENSE / ADDITIONAL_TERMS.md.
 ## Build integration
 
 GalleryUI already globs `Sources/**/*.swift`; add direct dependency
-`//Swiftgram/SGStrings:SGStrings` because the new controller imports SGStrings.
+`//AyuGram/SGStrings:SGStrings` because the new controller imports SGStrings.
 Foundation/UIKit/SafariServices are already used. ImageIO and CryptoKit are Apple SDK
 modules; deployment must support CryptoKit (iOS 13+). No new Postbox access or import
 was added. New code obtains cache bytes through TelegramEngine.Resources.

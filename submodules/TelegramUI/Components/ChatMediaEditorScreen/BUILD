@@ -12,7 +12,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
-        "//Swiftgram/SGStrings:SGStrings", # MARK: Swiftgram
+        "//AyuGram/SGStrings:SGStrings", # MARK: AyuGram
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/AccountContext",

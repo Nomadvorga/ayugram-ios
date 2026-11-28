@@ -127,6 +127,32 @@ public final class NavigationBarComponent: Component {
         private weak var state: EmptyComponentState?
         private var ayuTitleSettingsObserver: NSObjectProtocol?
         private var ayuCenterTitle = ExteraSettings.shared.centerTitle
+        private var atmosphericVisible = true
+
+        public func updateAtmosphericVisibility(_ visible: Bool) {
+            self.atmosphericVisible = visible
+            self.refreshAtmosphericSurfaces()
+        }
+
+        private func refreshAtmosphericSurfaces() {
+            let visible = self.atmosphericVisible && !self.isHidden && self.alpha > 0.05 && !self.plattersDetached
+            let containers = [self.leftButtonsBackgroundContainer, self.columnBackBackgroundContainer, self.columnButtonsBackgroundContainer, self.columnTrailingBackgroundContainer].compactMap { $0 } + self.rightBackgroundContainers
+            for container in containers {
+                container.atmosphericOwnerVisible = visible && !(self.isLeftCapsuleLent && container === self.leftButtonsBackgroundContainer)
+            }
+        }
+
+        override public var alpha: CGFloat {
+            didSet {
+                self.refreshAtmosphericSurfaces()
+            }
+        }
+
+        override public var isHidden: Bool {
+            didSet {
+                self.refreshAtmosphericSurfaces()
+            }
+        }
 
         public var interactiveTransitionMinimumMovement: CGFloat {
             return navigationBarTapMovement
@@ -410,6 +436,7 @@ public final class NavigationBarComponent: Component {
                     self.addSubview(container)
                 }
             }
+            self.refreshAtmosphericSurfaces()
         }
         /// iPhone Duo: the side column (back circle and capsule), laid out in its own bounds. The host adds it to
         /// its hierarchy and sets its frame.
@@ -618,6 +645,9 @@ public final class NavigationBarComponent: Component {
         }
 
         func update(component: NavigationBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            defer {
+                self.refreshAtmosphericSurfaces()
+            }
             let previousComponent = self.component
             self.component = component
             self.state = state
@@ -836,6 +866,7 @@ public final class NavigationBarComponent: Component {
                     isNewCapsule = true
                     leftButtonsBackgroundContainerTransition = leftButtonsBackgroundContainerTransition.withAnimation(.none)
                     leftButtonsBackgroundContainer = GlassContextExtractableContainer()
+                    leftButtonsBackgroundContainer.atmosphericRole = .actionBar
                     self.leftButtonsBackgroundContainer = leftButtonsBackgroundContainer
                     self.addSubview(leftButtonsBackgroundContainer)
                     leftButtonsBackgroundContainer.contentView.addSubview(self.leftButtonsContainer)
@@ -973,6 +1004,7 @@ public final class NavigationBarComponent: Component {
                     isNew = true
                     backgroundTransition = backgroundTransition.withAnimation(.none)
                     background = GlassContextExtractableContainer()
+                    background.atmosphericRole = .actionBar
                     pill.background = background
                     self.addSubview(background)
                     background.contentView.addSubview(pill.itemsContainer)
@@ -1062,6 +1094,9 @@ public final class NavigationBarComponent: Component {
         /// Lays out the side column from the contents' column layouts: crossfading contents (a forum
         /// opening inline) interpolate the capsule and share the back circle by `secondaryTransition`.
         private func updateSideColumn(component: NavigationBarComponent, transition: ComponentTransition) {
+            defer {
+                self.refreshAtmosphericSurfaces()
+            }
             var contents: [(view: NavigationBarContentView, weight: CGFloat)] = []
             if let primaryContentView = self.primaryContentView {
                 contents.append((primaryContentView, self.secondaryContentView == nil ? 1.0 : 1.0 - component.secondaryTransition))
@@ -1104,6 +1139,7 @@ public final class NavigationBarComponent: Component {
                 } else {
                     backTransition = backTransition.withAnimation(.none)
                     backBackgroundContainer = GlassContextExtractableContainer()
+                    backBackgroundContainer.atmosphericRole = .actionBar
                     self.columnBackBackgroundContainer = backBackgroundContainer
                     self.sideColumnView.addSubview(backBackgroundContainer)
                     backBackgroundContainer.contentView.addSubview(self.columnBackContainer)
@@ -1159,6 +1195,7 @@ public final class NavigationBarComponent: Component {
                 } else {
                     capsuleTransition = capsuleTransition.withAnimation(.none)
                     capsuleBackgroundContainer = GlassContextExtractableContainer()
+                    capsuleBackgroundContainer.atmosphericRole = .actionBar
                     self.columnButtonsBackgroundContainer = capsuleBackgroundContainer
                     self.sideColumnView.addSubview(capsuleBackgroundContainer)
                     capsuleBackgroundContainer.contentView.addSubview(self.columnButtonsContainer)
@@ -1207,6 +1244,7 @@ public final class NavigationBarComponent: Component {
                 } else {
                     trailingTransition = trailingTransition.withAnimation(.none)
                     trailingBackgroundContainer = GlassContextExtractableContainer()
+                    trailingBackgroundContainer.atmosphericRole = .actionBar
                     self.columnTrailingBackgroundContainer = trailingBackgroundContainer
                     self.sideColumnView.addSubview(trailingBackgroundContainer)
                     trailingBackgroundContainer.contentView.addSubview(self.columnTrailingContainer)

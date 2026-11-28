@@ -1,6 +1,6 @@
 # App icon picker: frames 20, 22 and 24
 
-Implemented in `Swiftgram/SGSettingsUI/Sources/ExteraAppIconController.swift`.
+Implemented in `AyuGram/SGSettingsUI/Sources/ExteraAppIconController.swift`.
 Public entry: `exteraAppIconController(context: AccountContext) -> ViewController`.
 The settings route is owned by the root task and must push that entry for `.appIcon`.
 
@@ -68,7 +68,7 @@ Original layers, author catalog, unmodified notices/licenses and a contact sheet
 
 The root overview controllers can directly use `UIImage(bundleImageName: "AyuOverviewIcon")` and `UIImage(bundleImageName: "ExteraOverviewIcon")`. Each imageset contains `Contents.json` and a universal PNG, picked up by the existing `SGUIAssets` glob:
 
-| Asset under `Swiftgram/SGSettingsUI/Images.xcassets/` | Original/copy source | PNG SHA-256 |
+| Asset under `AyuGram/SGSettingsUI/Images.xcassets/` | Original/copy source | PNG SHA-256 |
 | --- | --- | --- |
 | `AyuOverviewIcon.imageset` | Byte-for-byte copy of `Telegram/Telegram-iOS/Swiftgram.icon/Assets/AyuGram.png` | `a5d0540dd69fe9d8ecf26ceeda8875a0b992f7bf41dffd86c88bf9d8faeb5104` |
 | `ExteraOverviewIcon.imageset` | Copy of `Telegram/Telegram-iOS/ExteraDefault.alticon/ExteraDefault_1024x1024.png`, composited/resized from original Android default artwork | `796cea9a3e1f22a962bc935ddb226956c2e7de6c208252372e633828df9af829` |

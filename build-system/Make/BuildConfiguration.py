@@ -113,7 +113,7 @@ def decrypt_codesigning_directory_recursively(source_base_path, destination_base
 
 
 def load_codesigning_data_from_git(working_dir, repo_url, temp_key_path, branch, password, always_fetch):
-    # MARK: Swiftgram
+    # MARK: AyuGram
     branch = "master"
     if not os.path.exists(working_dir):
         os.makedirs(working_dir, exist_ok=True)

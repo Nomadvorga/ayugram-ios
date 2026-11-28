@@ -1,0 +1,270 @@
+{
+  "artifact": "static-source-settings-catalog",
+  "catalog_version": 1,
+  "source": {
+    "path": "/data/data/com.termux/files/home/downloads/atmospheric_snow.plugin",
+    "line_count": 4237,
+    "sha256_supplied": "bbda8727d253e02542c1c1f51dca1d39d235e2a310b4ba096e5e6305472a6763",
+    "sha256_recomputed_in_this_task": false,
+    "sha256_recomputed_by_parent": true,
+    "plugin_id": "atmospheric_snow",
+    "plugin_name": "NewYear Interface",
+    "plugin_version": "1.0.1",
+    "full_read_ranges": [[1, 1060], [1061, 1860], [1861, 2660], [2661, 3460], [3461, 4237]],
+    "executed_or_imported": false
+  },
+  "target_context_supplied_by_parent": {
+    "repository": "Nomadvorga/ayugram-ios",
+    "branch": "plugins-test",
+    "commit": "cc246f35559093e7bd645be367fb68f96b5b58f5",
+    "existing_bridge": "AyuPluginBridge",
+    "snow_effect_module_exists_at_pin": false,
+    "integration_compilation_visual_verification": "outside-this-inspection"
+  },
+  "user_setting_count": 15,
+  "internal_setting_count": 1,
+  "settings_cache": {
+    "source": "atmospheric_snow.plugin:L1053-L1082",
+    "poll_interval_seconds": 0.4,
+    "integer_validation": "int(value); TypeError/ValueError or index outside [0, choice_count) returns default, not endpoint clamping",
+    "boolean_validation": "Python bool(value), not textual true/false parsing",
+    "normal_change_handler": "_on_setting_change: forced settings sync and _refresh_screen",
+    "physics_change_handler": "_on_physics_change: forced settings sync only",
+    "handler_source": "atmospheric_snow.plugin:L4081-L4086"
+  },
+  "settings": [
+    {
+      "key": "snow_enabled", "type": "boolean", "default": true,
+      "label": "Включить снег", "cache_field": "_cfg_snow_enabled",
+      "on_change": "_on_setting_change",
+      "scope": "Falling snow only; profile backup runs before this gate",
+      "source": ["L1058", "L1163-L1175", "L4091-L4097"]
+    },
+    {
+      "key": "snow_area", "type": "integer-index", "default": 0,
+      "min_index": 0, "max_index": 2, "label": "Где показывать",
+      "cache_field": "_cfg_snow_area", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Везде", "fragment_simple_names": null},
+        {"index": 1, "label": "Только в чатах", "fragment_simple_names": ["ChatActivity"]},
+        {"index": 2, "label": "Список чатов и чаты", "fragment_simple_names": ["ChatActivity", "DialogsActivity"]}
+      ],
+      "scope": "Falling snow only; fragment result cache 0.25 seconds; exception allows drawing, missing fragment denies modes 1/2",
+      "source": ["L1059", "L1092-L1114", "L4098-L4104"]
+    },
+    {
+      "key": "navbar_festive_enabled", "type": "boolean", "default": true,
+      "label": "Нижняя панель", "cache_field": "_cfg_navbar_enabled",
+      "on_change": "_on_setting_change", "scope": "MainTabsLayout decoration and selected-tab glow",
+      "source": ["L1060", "L2249-L2353", "L4107-L4113"]
+    },
+    {
+      "key": "glass_pills_enabled", "type": "boolean", "default": true,
+      "label": "Кнопки, папки, ввод и шапка", "cache_field": "_cfg_glass_enabled",
+      "on_change": "_on_setting_change",
+      "scope": "Generic blurred drawables, action bar, filters, search, profile tabs, chat input; does not gate profile actions/avatar/section cards",
+      "source": ["L1061", "L2643-L2652", "L2978-L2982", "L4114-L4120"]
+    },
+    {
+      "key": "profile_festive_enabled", "type": "boolean", "default": true,
+      "label": "Профиль: кнопки, аватар и окна", "cache_field": "_cfg_profile_enabled",
+      "on_change": "_on_setting_change", "scope": "Profile actions, avatar, section cards and avatar backup",
+      "source": ["L1062", "L1163-L1168", "L2978-L2982", "L4121-L4127"]
+    },
+    {
+      "key": "navbar_style", "type": "integer-index", "default": 0,
+      "min_index": 0, "max_index": 3, "label": "Новогодний стиль кнопок и панели",
+      "cache_field": "_cfg_navbar_style", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Снежная шапка + гирлянда", "pill_features": ["rim", "snow_cap", "crest", "wire", "static_bulbs"], "avatar_features": ["cold_ring", "upper_arc", "snow_crescent", "circular_wire", "static_bulbs"]},
+        {"index": 1, "label": "Морозная (лёд и сосульки)", "pill_features": ["rim", "snow_cap", "crest", "icicles", "icicle_highlights"], "avatar_features": ["cold_ring", "upper_arc", "snow_crescent"]},
+        {"index": 2, "label": "Тёплая гирлянда", "pill_features": ["wire", "static_bulbs"], "avatar_features": ["cold_ring", "circular_wire", "static_bulbs"]},
+        {"index": 3, "label": "Северное сияние и искры", "pill_features": ["rim", "animated_sparkles"], "avatar_features": ["cold_ring", "upper_arc", "animated_sparkles"]}
+      ],
+      "scope": "Shared style for navbar, all glass pills, profile actions, avatar and cards; not falling-snow style; style 3 has no aurora-field renderer",
+      "source": ["L1063", "L1658-L1785", "L2040-L2135", "L2862-L2886", "L4128-L4139"]
+    },
+    {
+      "key": "navbar_garland_palette", "type": "integer-index", "default": 0,
+      "min_index": 0, "max_index": 2, "label": "Цвета гирлянды",
+      "cache_field": "_cfg_palette_idx", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Новогоднее ассорти", "rgb": [[255,208,88],[255,86,98],[82,232,152],[110,204,255]]},
+        {"index": 1, "label": "Тёплое золото", "rgb": [[255,214,102],[255,236,168],[255,184,78]]},
+        {"index": 2, "label": "Ледяной неон", "rgb": [[128,214,255],[235,248,255],[98,238,224]]}
+      ],
+      "scope": "Cyclic bulb colors in styles 0 and 2 only; palette is not forced to gold for style 2",
+      "source": ["L45-L52", "L1064", "L1787-L1850", "L4140-L4146"]
+    },
+    {
+      "key": "navbar_active_glow", "type": "boolean", "default": true,
+      "label": "Сияние и морозные искры", "cache_field": "_cfg_glow_on",
+      "on_change": "_on_setting_change",
+      "scope": "Selected-tab fill/rim/two sparkles and extra sparkles on non-thin glass pills; does not disable style-3 sparkles or avatar cold ring",
+      "source": ["L1065", "L1780-L1785", "L2277-L2286", "L2335-L2351", "L2884-L2886", "L4147-L4153"]
+    },
+    {
+      "key": "snow_density", "type": "integer-index", "default": 1,
+      "min_index": 0, "max_index": 2, "label": "Плотность снегопада",
+      "cache_field": "_cfg_density_idx", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Лёгкий", "particle_count": 26},
+        {"index": 1, "label": "Средний", "particle_count": 50},
+        {"index": 2, "label": "Сильный", "particle_count": 82}
+      ],
+      "scope": "Fixed count, not particles per area; count changes preserve existing particles when size reset is unnecessary",
+      "source": ["L26", "L1066", "L1116-L1122", "L1226-L1240", "L4156-L4162"]
+    },
+    {
+      "key": "snow_speed", "type": "integer-index", "default": 1,
+      "min_index": 0, "max_index": 2, "label": "Скорость падения",
+      "cache_field": "_cfg_speed_idx", "on_change": "_on_physics_change",
+      "choices": [
+        {"index": 0, "label": "Медленно", "vertical_speed_multiplier": 0.6},
+        {"index": 1, "label": "Обычно", "vertical_speed_multiplier": 1.0},
+        {"index": 2, "label": "Быстро", "vertical_speed_multiplier": 1.55}
+      ],
+      "scope": "Vertical motion only; does not multiply wind, sway or spin",
+      "source": ["L27", "L1067", "L1295-L1298", "L4163-L4169"]
+    },
+    {
+      "key": "snow_wind", "type": "integer-index", "default": 1,
+      "min_index": 0, "max_index": 2, "label": "Ветер",
+      "cache_field": "_cfg_wind_idx", "on_change": "_on_physics_change",
+      "choices": [
+        {"index": 0, "label": "Штиль", "base_dp_per_second": 0.0},
+        {"index": 1, "label": "Лёгкий бриз", "base_dp_per_second": 18.0},
+        {"index": 2, "label": "Метель", "base_dp_per_second": 48.0}
+      ],
+      "scope": "Base wind multiplied by Android density, gust and layer factor; calm still retains sway",
+      "source": ["L28", "L1068", "L1228", "L1244-L1246", "L1288-L1296", "L4170-L4176"]
+    },
+    {
+      "key": "snow_style", "type": "integer-index", "default": 2,
+      "min_index": 0, "max_index": 2, "label": "Стиль снежинок",
+      "cache_field": "_cfg_snow_style", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Боке (мягкое свечение)", "drawing": "layer 0 grain; layers 1/2 bokeh"},
+        {"index": 1, "label": "Снежинки", "drawing": "layer 0 grain; layers 1/2 crystals regardless of is_crystal"},
+        {"index": 2, "label": "Смешанный", "drawing": "is_crystal particles use crystals; all others grain, not bokeh"}
+      ],
+      "source": ["L1069", "L1267", "L1327-L1340", "L4179-L4185"]
+    },
+    {
+      "key": "snow_size", "type": "integer-index", "default": 0,
+      "min_index": 0, "max_index": 4, "label": "Размер частиц и снежинок",
+      "cache_field": "_cfg_snow_size", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Очень мелкий (45%)", "draw_size_multiplier": 0.45},
+        {"index": 1, "label": "Мелкий (70%)", "draw_size_multiplier": 0.70},
+        {"index": 2, "label": "Обычный (100%)", "draw_size_multiplier": 1.0},
+        {"index": 3, "label": "Крупный (135%)", "draw_size_multiplier": 1.35},
+        {"index": 4, "label": "Очень крупный (175%)", "draw_size_multiplier": 1.75}
+      ],
+      "scope": "Drawing radius only; scaled sprite diameter rounded to 4-pixel buckets and limited to 4..64 Android pixels",
+      "source": ["L29", "L1070", "L1274-L1284", "L1332-L1369", "L4186-L4198"]
+    },
+    {
+      "key": "snow_opacity", "type": "integer-index", "default": 4,
+      "min_index": 0, "max_index": 4, "label": "Прозрачность снега",
+      "cache_field": "_cfg_snow_opacity", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Едва заметный (25%)", "alpha_multiplier": 0.25},
+        {"index": 1, "label": "Полупрозрачный (50%)", "alpha_multiplier": 0.50},
+        {"index": 2, "label": "Мягкий (75%)", "alpha_multiplier": 0.75},
+        {"index": 3, "label": "Обычный (100%)", "alpha_multiplier": 1.0},
+        {"index": 4, "label": "Яркий (135%)", "alpha_multiplier": 1.35}
+      ],
+      "scope": "Brightness/alpha multiplier before saturation at 255 and eight paint-alpha buckets; not inverted transparency",
+      "source": ["L30", "L1071", "L1313-L1325", "L4199-L4211"]
+    },
+    {
+      "key": "snow_color", "type": "integer-index", "default": 0,
+      "min_index": 0, "max_index": 3, "label": "Цвет снега",
+      "cache_field": "_cfg_snow_color", "on_change": "_on_setting_change",
+      "choices": [
+        {"index": 0, "label": "Авто (по теме)", "rgb": null, "dark_rgb": [240,247,255], "light_rgb": [118,165,214]},
+        {"index": 1, "label": "Белый", "rgb": [255,255,255]},
+        {"index": 2, "label": "Ледяной голубой", "rgb": [188,226,255]},
+        {"index": 3, "label": "Тёплый новогодний", "rgb": [255,241,204]}
+      ],
+      "scope": "Falling-snow tint only; does not recolor frost rims, aurora sparkles or garland",
+      "source": ["L34-L42", "L1072", "L1124-L1139", "L1248-L1257", "L4212-L4223"]
+    }
+  ],
+  "migration": {
+    "key": "snow_defaults_v",
+    "type": "internal-integer-version",
+    "read_default": 0,
+    "current_written_version": 1,
+    "skip_if_version_at_least": 1,
+    "source": "atmospheric_snow.plugin:L384-L401",
+    "run_at": "on_plugin_load, before forced cache sync and graphics initialization",
+    "overwrites_existing_values_when_marker_missing_invalid_or_below_1": true,
+    "writes_in_order": [
+      {"key": "snow_density", "value": 1},
+      {"key": "snow_speed", "value": 1},
+      {"key": "snow_wind", "value": 1},
+      {"key": "snow_style", "value": 2},
+      {"key": "snow_size", "value": 0},
+      {"key": "snow_opacity", "value": 4},
+      {"key": "snow_color", "value": 0},
+      {"key": "snow_defaults_v", "value": 1}
+    ],
+    "failure_behavior": "Exceptions swallowed; not transactional; marker written last, subsequent load can retry",
+    "other_migration_versions_present": false
+  },
+  "post_migration_default_snapshot": {
+    "snow_enabled": true,
+    "snow_area": 0,
+    "navbar_festive_enabled": true,
+    "glass_pills_enabled": true,
+    "profile_festive_enabled": true,
+    "navbar_style": 0,
+    "navbar_garland_palette": 0,
+    "navbar_active_glow": true,
+    "snow_density": 1,
+    "snow_speed": 1,
+    "snow_wind": 1,
+    "snow_style": 2,
+    "snow_size": 0,
+    "snow_opacity": 4,
+    "snow_color": 0,
+    "snow_defaults_v": 1
+  },
+  "renderer_dependencies": {
+    "snow": ["snow_enabled", "snow_area", "snow_density", "snow_speed", "snow_wind", "snow_style", "snow_size", "snow_opacity", "snow_color"],
+    "navbar": ["navbar_festive_enabled", "navbar_style", "navbar_garland_palette", "navbar_active_glow"],
+    "glass": ["glass_pills_enabled", "navbar_style", "navbar_garland_palette", "navbar_active_glow"],
+    "profile_actions_and_cards": ["profile_festive_enabled", "navbar_style", "navbar_garland_palette", "navbar_active_glow"],
+    "profile_avatar": ["profile_festive_enabled", "navbar_style", "navbar_garland_palette"],
+    "separate_intensity_setting": false,
+    "separate_glass_style_setting": false,
+    "separate_profile_style_setting": false,
+    "notes": "navbar_active_glow gates extra standard-pill sparkles and scheduling, not style-3 sparkles; thin profile controls have no extra glow sparkles"
+  },
+  "dynamic_inputs_not_persisted_settings": {
+    "common": ["_density_px", "_is_dark_theme", "_elapsed", "dt", "width", "height", "view.getAlpha()", "view.getVisibility()", "view.isAttachedToWindow()", "view.isShown()", "view.getScaleX()", "view.getScaleY()", "canvas clip"],
+    "navbar": ["selected child isTabSelected()", "child bounds", "child.getTranslationX()", "child.getTranslationY()"],
+    "drawable": ["getAlpha()", "getPaddedBounds()", "getBounds()", "getPath()", "getCallback()"],
+    "actionbar_fields": {"glassOnlyBack": false, "doNotDrawGlassMenu": false, "backButtonImageView": null, "glassDrawable": null, "glassDrawableBack": null, "glassDrawableMenu": null},
+    "filters_fields": ["background", "blurredBackgroundDrawable"],
+    "search_fields": ["blurredBackgroundDrawable", "bg", "view padding"],
+    "tabs_fields": ["background", "blurredBackgroundDrawable"],
+    "chatinput_fields": {"drawInputBackground": true, "blurredBackgroundDrawable": null},
+    "profile_avatar_fields": {"progressToExpand": 0.0, "hasStories": false, "progressToInsets": 1.0, "foregroundAlpha": 0.0},
+    "profile_actions_fields": ["isVisible", "visible", "alpha", "showAlpha", "buttonsAlpha", "actionsAlpha", "glass", "paint", "backgroundPaint", "clipHeight", "ypadding", "top", "currentHeight", "targetHeight", "actions", "getRoundRadius()"],
+    "profile_action_fields": ["isDeleted", "rect", "getScale()", "getAlpha()", "alpha", "textAlpha"],
+    "profile_fragment_fields": ["listView", "avatarBig", "avatarImage", "actionsView", "fragmentsArr", "fragment"],
+    "section_fields": ["isSectionView", "bitmapSectionsItemDecoration", "sectionsItemDecoration", "isSectionItem", "sectionRadius", "emptyView", "child.getTag()", "child bounds/alpha/translation"],
+    "formula_and_gate_specification": "atmospheric-spec.md, sections 3-9; source L1092-L1114, L2225-L2286, L2643-L2725, L2834-L3029, L3034-L3584, L3586-L4023"
+  },
+  "reset_clear": {
+    "reset_settings_action_in_source": false,
+    "clear_persisted_settings_action_in_source": false,
+    "unload_clears_persisted_settings": false,
+    "source": ["L403-L449", "L4088-L4237"],
+    "native_expectation_if_host_adds_reset": "Reset only these 15 owned settings to catalog defaults, retain/write snow_defaults_v=1, refresh typed snapshot and visible native overlays; host addition, not a source UI feature",
+    "native_expectation_if_host_adds_clear": "Clear only this plugin namespace after revocation/unload; missing migration marker reruns seven-value v1 migration on next explicit load; never clear global Ayu settings"
+  }
+}

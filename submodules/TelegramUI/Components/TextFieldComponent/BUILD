@@ -1,8 +1,8 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgdeps = [
-    "//Swiftgram/SGInputToolbar:SGInputToolbar",
+    "//AyuGram/SGInputToolbar:SGInputToolbar",
 ]
 #
 

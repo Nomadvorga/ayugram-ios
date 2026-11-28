@@ -7,6 +7,8 @@ import UIKitRuntimeUtils
 import CoreImage
 import AppBundle
 import SGSimpleSettings
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -52,6 +54,32 @@ private final class ContentContainer: UIView {
 }
 
 public class GlassBackgroundView: UIView {
+    /// One decoration route per real glass background. Owner-handled surfaces never also use the generic wash.
+    public enum AtmosphericRole: Equatable {
+        case genericBackground
+        case actionBar
+        case folders
+        case search
+        case profileTabs
+        case chatInput
+        case disabled
+    }
+
+    public var atmosphericRole: AtmosphericRole = .genericBackground {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    public var atmosphericOwnerVisible = true {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+    private var atmosphericSize: CGSize?
+
     public protocol ContentView: UIView {
         var tintMask: UIView { get }
     }
@@ -966,6 +994,74 @@ public class GlassBackgroundView: UIView {
             }
             nativeView.backgroundColor = glassAllowed || !isVisible ? .clear : tintColor.fallbackColor(isDark: isDark)
         }
+        self.atmosphericSize = size
+        self.refreshAtmosphericSurface()
+    }
+
+    /// Uses the typed shape, background visibility and Telegram theme from update(), not view-class discovery.
+    public func refreshAtmosphericSurface() {
+        guard self.atmosphericRole != .disabled else {
+            self.atmosphericHost?.removeFromSuperview()
+            self.atmosphericHost = nil
+            return
+        }
+        guard let size = self.atmosphericSize, let params = self.params else {
+            return
+        }
+        let radii = params.shape.cornerRadii(for: size)
+        // The facade represents a uniform radius. Do not invent a different perimeter for an asymmetric capsule.
+        let hasUniformRadius = radii.topLeft == radii.topRight && radii.topLeft == radii.bottomLeft && radii.topLeft == radii.bottomRight
+        let allowsTallGlass = self.atmosphericRole == .chatInput
+        let maximumWidth: CGFloat = self.atmosphericRole == .genericBackground ? 650.0 : 1200.0
+        let eligible = hasUniformRadius && size.width >= 24.0 && size.width <= maximumWidth && size.height >= 22.0 && size.height <= (allowsTallGlass ? 520.0 : 88.0)
+        let host: AtmosphericSurfaceHostView
+        if let current = self.atmosphericHost {
+            host = current
+        } else {
+            guard eligible else {
+                return
+            }
+            host = AtmosphericSurfaceHostView(container: self, role: .glassPill)
+            self.atmosphericHost = host
+            self.addSubview(host)
+        }
+        var geometry = AtmosphericHostGeometry(
+            rect: CGRect(origin: .zero, size: size),
+            cornerRadius: radii.topLeft,
+            visible: eligible && params.isVisible && self.atmosphericOwnerVisible && !self.isHidden && self.alpha > 0.05,
+            allowsTallGlass: allowsTallGlass,
+            isDarkTheme: params.isDark
+        )
+        // View/hierarchy alpha is already inherited by the overlay in this background's container.
+        geometry.glassDrawsFrostWash = self.atmosphericRole == .genericBackground
+        host.update(geometry: geometry)
+    }
+
+    override public var alpha: CGFloat {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override public var isHidden: Bool {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override public func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        self.refreshAtmosphericSurface()
+    }
+
+    override public func didMoveToWindow() {
+        super.didMoveToWindow()
+        self.refreshAtmosphericSurface()
+    }
+
+    override public func layoutSubviews() {
+        super.layoutSubviews()
+        self.refreshAtmosphericSurface()
     }
     
     private func updateExteraOutline(size: CGSize, shape: Shape, isDark: Bool, isVisible: Bool, transition: ComponentTransition) {
@@ -1710,6 +1806,7 @@ public final class GlassBackgroundComponent: Component {
     private let tintColor: GlassBackgroundView.TintColor
     private let isInteractive: Bool
     private let isVisible: Bool
+    private let atmosphericRole: GlassBackgroundView.AtmosphericRole
     
     public init(
         size: CGSize,
@@ -1717,7 +1814,8 @@ public final class GlassBackgroundComponent: Component {
         isDark: Bool,
         tintColor: GlassBackgroundView.TintColor,
         isInteractive: Bool = false,
-        isVisible: Bool = true
+        isVisible: Bool = true,
+        atmosphericRole: GlassBackgroundView.AtmosphericRole = .genericBackground
     ) {
         self.size = size
         self.shape = .roundedRect(cornerRadius: cornerRadius)
@@ -1725,6 +1823,7 @@ public final class GlassBackgroundComponent: Component {
         self.tintColor = tintColor
         self.isInteractive = isInteractive
         self.isVisible = isVisible
+        self.atmosphericRole = atmosphericRole
     }
 
     public init(
@@ -1733,7 +1832,8 @@ public final class GlassBackgroundComponent: Component {
         isDark: Bool,
         tintColor: GlassBackgroundView.TintColor,
         isInteractive: Bool = false,
-        isVisible: Bool = true
+        isVisible: Bool = true,
+        atmosphericRole: GlassBackgroundView.AtmosphericRole = .genericBackground
     ) {
         self.size = size
         self.shape = .customRoundedRect(cornerRadii: cornerRadii)
@@ -1741,6 +1841,7 @@ public final class GlassBackgroundComponent: Component {
         self.tintColor = tintColor
         self.isInteractive = isInteractive
         self.isVisible = isVisible
+        self.atmosphericRole = atmosphericRole
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
@@ -1762,11 +1863,15 @@ public final class GlassBackgroundComponent: Component {
         if lhs.isVisible != rhs.isVisible {
             return false
         }
+        if lhs.atmosphericRole != rhs.atmosphericRole {
+            return false
+        }
         return true
     }
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.atmosphericRole = component.atmosphericRole
             self.update(size: component.size, shape: component.shape, isDark: component.isDark, tintColor: component.tintColor, isInteractive: component.isInteractive, isVisible: component.isVisible, transition: transition)
             
             return component.size
@@ -1829,6 +1934,43 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
     }
     
     private let glassView: GlassBackgroundView
+
+    public var atmosphericRole: GlassBackgroundView.AtmosphericRole {
+        get {
+            return self.glassView.atmosphericRole
+        }
+        set {
+            self.glassView.atmosphericRole = newValue
+        }
+    }
+
+    public var atmosphericOwnerVisible = true {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    public func refreshAtmosphericSurface() {
+        let isNormal: Bool
+        if case .normal = self.state {
+            isNormal = true
+        } else {
+            isNormal = false
+        }
+        self.glassView.atmosphericOwnerVisible = self.atmosphericOwnerVisible && isNormal && !self.isHidden && self.alpha > 0.05
+    }
+
+    override public var alpha: CGFloat {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override public var isHidden: Bool {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
 
     public var nativeBlurRadius: CGFloat? {
         get {
@@ -1923,6 +2065,7 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
         var normalParams = NormalParams(size: size, cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isVisible: isVisible)
         normalParams.bottomCornerRadius = bottomCornerRadius
         self.normalParams = normalParams
+        self.refreshAtmosphericSurface()
         
         if case .normal = self.state {
             self.applyState(previousState: self.state, transition: .transition(transition.containedViewLayoutTransition), completion: nil)
@@ -1934,6 +2077,7 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
         self.reclaimGlass()
         let previousState = self.state
         self.state = state
+        self.refreshAtmosphericSurface()
         self.applyState(previousState: previousState, transition: transition, completion: completion)
     }
     

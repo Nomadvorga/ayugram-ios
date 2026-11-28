@@ -335,7 +335,7 @@ private final class ItemNode: ASDisplayNode {
     }
     
     func updateLayout(height: CGFloat, transition: ContainedViewLayoutTransition) -> (width: CGFloat, shortWidth: CGFloat) {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         var height = height
         if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             height = 46.0
@@ -386,7 +386,7 @@ private final class ItemNode: ASDisplayNode {
     }
     
     func updateArea(size: CGSize, sideInset: CGFloat, useShortTitle: Bool, transition: ContainedViewLayoutTransition) {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         var size = size
         if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             size.height = 46.0
@@ -545,7 +545,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         }
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public let inline: Bool
     private var backgroundNode: NavigationBackgroundNode? = nil
     
@@ -553,7 +553,11 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.context = context
         
         self.backgroundContainerView = GlassBackgroundContainerView()
-        self.backgroundView = GlassBackgroundView()
+        self.backgroundView = MainActor.assumeIsolated {
+            let view = GlassBackgroundView()
+            view.atmosphericRole = .folders
+            return view
+        }
         self.backgroundContainerView.contentView.addSubview(self.backgroundView)
         
         self.scrollNode = ASScrollNode()
@@ -562,7 +566,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.selectedBackgroundNode.displaysAsynchronously = false
         self.selectedBackgroundNode.displayWithoutProcessing = true
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.inline = inline
         if self.inline {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }

@@ -12,15 +12,15 @@ from this investigation.
 - Metadata: `status=completed`, `conclusion=failure`, title `Build IPA`.
 - Evidence: `gh run view 45689872902 --log-failed` and
   `gh run view 45689872902 --json headSha,status,conclusion,url,displayTitle`.
-- Failed action: compiling `//Swiftgram/SGSettingsUI:SGSettingsUI`, reported at
-  `Swiftgram/SGSettingsUI/BUILD:9:14`, 2026-11-25 21:13:24 UTC.
+- Failed action: compiling `//AyuGram/SGSettingsUI:SGSettingsUI`, reported at
+  `AyuGram/SGSettingsUI/BUILD:9:14`, 2026-11-25 21:13:24 UTC.
 - Build invocation: `--ios_multi_cpus=sim_arm64`, `-c dbg`, disk cache
   `debug_sim_arm64`. Bazel reported elapsed time `4405.309s` and target
   `//Telegram:Swiftgram` failed.
 
 The full failed log contains 13 source diagnostic occurrences at four unique
 locations. Repeated module-emission/compilation diagnostics are counted once
-per location below. Paths are relative to `Swiftgram/SGSettingsUI/Sources/`.
+per location below. Paths are relative to `AyuGram/SGSettingsUI/Sources/`.
 
 | Location in failed head | Exact compiler diagnostics | Relation to existing fixes |
 | --- | --- | --- |

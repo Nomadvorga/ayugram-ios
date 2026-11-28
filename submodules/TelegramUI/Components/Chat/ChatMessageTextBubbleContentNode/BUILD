@@ -11,7 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/TelegramPresentationData:TelegramPresentationData",
-        "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+        "//AyuGram/SGSimpleSettings:SGSimpleSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/TelegramCore",

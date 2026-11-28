@@ -512,7 +512,7 @@ private func chatMediaSendRenderedMessages(items: [ChatMediaSendItem], global: C
                 }
                 let survivors = survivorIndices.map { updatedItems[$0] }
 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 let plan = chatMediaSendPlan(items: survivors.map { item in
                     var options = item.options
                     options.sgSendAsTelescope = item.values?.sgSendAsTelescope == true

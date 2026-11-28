@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 
 import Foundation
 import WebProxyTransport
@@ -552,7 +552,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             apiEnvironment.disableUpdates = supplementary
             apiEnvironment = apiEnvironment.withUpdatedLangPackCode(languageCode ?? "en")
             
-            if let effectiveActiveServer = proxySettings?.effectiveActiveServer {
+            if let effectiveActiveServer = proxySettings?.ayuEffectiveActiveServer { // MARK: AyuGram
                 apiEnvironment = apiEnvironment.withUpdatedSocksProxySettings(effectiveActiveServer.mtProxySettings)
             }
             
@@ -578,7 +578,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             
             let useTempAuthKeys: Bool = true
             
-            let context = MTContext(serialization: serialization, encryptionProvider: arguments.encryptionProvider, apiEnvironment: apiEnvironment, isTestingEnvironment: testingEnvironment, useTempAuthKeys: useTempAuthKeys, forceLocalDNS: SGSimpleSettings.shared.localDNSForProxyHost) // MARK: Swiftgram
+            let context = MTContext(serialization: serialization, encryptionProvider: arguments.encryptionProvider, apiEnvironment: apiEnvironment, isTestingEnvironment: testingEnvironment, useTempAuthKeys: useTempAuthKeys, forceLocalDNS: SGSimpleSettings.shared.localDNSForProxyHost) // MARK: AyuGram
             context.refreshesTemporaryKeys = !supplementary
             
             if let networkSettings = networkSettings {
@@ -602,7 +602,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
 
             let baseTcpConnectionInterfaceFactory = context.makeTcpConnectionInterface
             let isAppExtension = Bundle.main.bundlePath.hasSuffix(".appex")
-            let initialActiveServer = proxySettings?.effectiveActiveServer
+            let initialActiveServer = proxySettings?.ayuEffectiveActiveServer // MARK: AyuGram
             let initialWebProxyConfiguration = initialActiveServer?.webProxyConfiguration
             WebProxyTransport.shared.apply(configuration: isAppExtension ? nil : initialWebProxyConfiguration)
             if initialActiveServer?.isWebProxy == true {
@@ -1011,7 +1011,10 @@ public final class Network: NSObject {
         self.rustEngineDisabled = Atomic(value: rustEngineDisabled)
         self.rustEngineWaitsForWebProxy = Atomic(value: rustEngineWaitsForWebProxy)
         self.mainSession = mainSession
-        self.requestService = mainSession.requestService
+        // MARK: AyuGram
+        let ayuPluginRequestService = AyuPluginHookedRequestService(mainSession.requestService)
+        self.requestService = ayuPluginRequestService
+        //
         self.mainSessionDelegate = mainSessionDelegate
         self.telemetry = telemetry
         self._connectionStatus = _connectionStatus
@@ -1027,6 +1030,9 @@ public final class Network: NSObject {
         super.init()
         
         mainSessionDelegate.network = self
+        // MARK: AyuGram
+        ayuPluginRequestService.network = self
+        //
         
         let _contextProxyId = self._contextProxyId
         let networkHelper = NetworkHelper(requestPublicKeys: { [weak self] id in
@@ -1636,7 +1642,7 @@ extension Network {
     /// queue. Set `Logger.setSharedLogger` first: that pause is logged, and `Logger.shared` asserts
     /// when no logger is set.
     static func makeForTesting(engine: NetworkEngine, basePath: String, encryptionProvider: EncryptionProvider, datacenterId: Int = 2) -> Network {
-        let context = MTContext(serialization: Serialization(), encryptionProvider: encryptionProvider, apiEnvironment: MTApiEnvironment(deviceModelName: nil), isTestingEnvironment: true, useTempAuthKeys: true, forceLocalDNS: false) // MARK: Swiftgram
+        let context = MTContext(serialization: Serialization(), encryptionProvider: encryptionProvider, apiEnvironment: MTApiEnvironment(deviceModelName: nil), isTestingEnvironment: true, useTempAuthKeys: true, forceLocalDNS: false) // MARK: AyuGram
         engine.activate()
         let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)
         let mainSessionDelegate = NetworkMainSessionDelegate(connectionStatus: connectionStatus)

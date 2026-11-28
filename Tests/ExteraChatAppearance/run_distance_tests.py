@@ -42,7 +42,7 @@ def main():
         for destination in [settings, presentation, formatting, tests]:
             destination.mkdir(parents=True)
         for filename in ["AyuSettingsStore.swift", "ExteraChatAppearanceSettings.swift"]:
-            shutil.copyfile(root / "Swiftgram/SGSimpleSettings/Sources" / filename, settings / filename)
+            shutil.copyfile(root / "AyuGram/SGSimpleSettings/Sources" / filename, settings / filename)
         (settings / "AppGroup.swift").write_text(
             f'public let APP_GROUP_IDENTIFIER = "ExteraDistanceTests.{uuid.uuid4()}"\n', encoding="utf-8"
         )

@@ -28,7 +28,7 @@ class MediaIntegrationTests(unittest.TestCase):
         cls.neo = read("submodules/Camera/CameraNeo/Sources/CameraNeo.swift")
 
     def test_settings_have_runtime_consumers_and_registered_defaults(self):
-        settings = read("Swiftgram/SGSimpleSettings/Sources/ExteraMediaSettings.swift")
+        settings = read("AyuGram/SGSimpleSettings/Sources/ExteraMediaSettings.swift")
         for name, default, consumer in [("zoomSlider", "true", self.screen), ("staticZoom", "false", self.screen), ("unmuteWithVolumeButtons", "false", self.gallery)]:
             self.assertIn(f'"extera.media.{name}": {default}', settings)
             self.assertIn(f"public var {name}: Bool", settings)

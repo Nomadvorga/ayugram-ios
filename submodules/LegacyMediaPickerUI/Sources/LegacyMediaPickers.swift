@@ -888,7 +888,7 @@ public func legacyAssetPickerEnqueueMessages(
                             if asAnimation {
                                 preset = TGMediaVideoConversionPresetAnimation
                             }
-                            // MARK: Swiftgram
+                            // MARK: AyuGram
                             // TODO(swiftgram): Nice thumbnail
                             var asTelescope = false
                             if let strongAdjustments = adjustments, strongAdjustments.sendAsTelescope {
@@ -1038,7 +1038,7 @@ public func legacyAssetPickerEnqueueMessages(
                                 attributes.append(EmbeddedMediaStickersMessageAttribute(files: stickerFiles))
                                 fileAttributes.append(.HasLinkedStickers)
                             }
-                            // MARK: Swiftgram
+                            // MARK: AyuGram
                             if asTelescope {
                                 fileAttributes = [.FileName(fileName: "video.mp4"), .Video(duration: finalDuration, size: PixelDimensions(finalDimensions), flags: [.instantRoundVideo], preloadSize: nil, coverTime: nil, videoCodec: nil)]
                             }

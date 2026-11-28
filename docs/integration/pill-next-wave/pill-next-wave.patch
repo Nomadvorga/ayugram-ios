@@ -1,5 +1,5 @@
 --- /dev/null
-+++ b/Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift
++++ b/AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift
 @@ -0,0 +1,103 @@
 +import CoreFoundation
 +import Foundation
@@ -370,8 +370,8 @@
 +        return ActionDisposable { _ = cancelled.swap(true); requests.dispose() }
 +    }
 +}
---- a/Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
-+++ b/Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
+--- a/AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
++++ b/AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift
 @@ -143,6 +143,30 @@
      public func setCurrency(_ currency: String, account: Int64) {
          guard currency.count == 3, currency.unicodeScalars.allSatisfy({ (65 ... 90).contains(Int($0.value)) }) else { return }

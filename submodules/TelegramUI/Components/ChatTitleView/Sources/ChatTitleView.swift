@@ -312,7 +312,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleCredibilityIcon = .fake
                                     } else if peer.isScam {
                                         titleCredibilityIcon = .scam
-                                    } else if !hidePeerStatus, let emojiStatus = peer.emojiStatus {
+                                    } else if !hidePeerStatus, let emojiStatus = peer.emojiStatus ?? ayuExteraBadgeEmojiStatus(for: peer) { // MARK: AyuGram
                                         titleStatusIcon = .emojiStatus(emojiStatus)
                                     } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !ayuHidesPremiumStatuses() { // MARK: AyuGram
                                         titleCredibilityIcon = .premium
@@ -801,6 +801,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         self.contentContainer = ASDisplayNode()
         
         self.backgroundView = GlassBackgroundView()
+        self.backgroundView.atmosphericRole = .actionBar
         
         self.titleContainerView = PortalSourceView()
         self.titleTextNode = ImmediateAnimatedCountLabelNode()

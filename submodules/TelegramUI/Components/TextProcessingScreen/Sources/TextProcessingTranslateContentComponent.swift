@@ -422,12 +422,12 @@ final class TextProcessingTranslateContentComponent: Component {
             if component.externalState.result == nil {
                 switch component.mode {
                 case let .translate(ignoredLanguages):
-                    var baseLang = component.strings.baseLanguageCode
+                    var baseLang = ayuTranslationTargetLanguage(appLanguage: component.strings.baseLanguageCode) // MARK: AyuGram
                     let rawSuffix = "-raw"
                     if baseLang.hasSuffix(rawSuffix) {
                         baseLang = String(baseLang.dropLast(rawSuffix.count))
                     }
-                    baseLang = normalizeTranslationLanguage(baseLang) // MARK: Swiftgram
+                    baseLang = normalizeTranslationLanguage(baseLang) // MARK: AyuGram
                     var toLanguage = component.externalState.initialTargetLanguage ?? defaultTranslationTargetLanguage(component.strings.baseLanguageCode)
                     
                     let fromLanguage = component.externalState.sourceLanguage ?? ""

@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import SGSettingsUI
 import SGStrings
 import PeerInfoUI
@@ -481,7 +481,7 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
                 actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
                     return generateTintedImage(image: ExteraUIIconProvider.current.image(for: .forward, fallback: UIImage(bundleImageName: "Chat/Context Menu/Forward")), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
-                    interfaceInteraction.forwardMessages([replacementMessage], nil) // MARK: Swiftgram
+                    interfaceInteraction.forwardMessages([replacementMessage], nil) // MARK: AyuGram
                     f(.dismissWithoutContent)
                 })))
             }
@@ -528,7 +528,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     if case .standard(.embedded) = chatPresentationInterfaceState.mode {
         isEmbeddedMode = true
     }
-    let canReveal = sgCanRevealContent(messages: messages, context: context, copyProtectionEnabled: chatPresentationInterfaceState.copyProtectionEnabled) // MARK: Swiftgram
+    let canReveal = sgCanRevealContent(messages: messages, context: context, copyProtectionEnabled: chatPresentationInterfaceState.copyProtectionEnabled) // MARK: AyuGram
 
     if case let .customChatContents(customChatContents) = chatPresentationInterfaceState.subject, case .hashTagSearch = customChatContents.kind {
         isEmbeddedMode = true
@@ -1220,7 +1220,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     })
                 })
             })))
-            if !SGSimpleSettings.shared.contextShowReply { sgActions.append(actions.removeLast()) } // MARK: Swiftgram
+            if !SGSimpleSettings.shared.contextShowReply { sgActions.append(actions.removeLast()) } // MARK: AyuGram
         }
         
         if data.messageActions.options.contains(.sendGift), !message.id.peerId.isTelegramNotifications {
@@ -1530,7 +1530,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     })
                     f(.default)
                 })))
-                if !SGSimpleSettings.shared.contextShowSaveMedia { sgActions.append(actions.removeLast()) } // MARK: Swiftgram
+                if !SGSimpleSettings.shared.contextShowSaveMedia { sgActions.append(actions.removeLast()) } // MARK: AyuGram
             }
         }
         
@@ -1658,7 +1658,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     controllerInteraction.openMessageReplies(messages[0].id, true, true)
                 })
             })))
-            if !SGSimpleSettings.shared.contextShowMessageReplies { sgActions.append(actions.removeLast()) } // MARK: Swiftgram
+            if !SGSimpleSettings.shared.contextShowMessageReplies { sgActions.append(actions.removeLast()) } // MARK: AyuGram
         }
         
         let isMigrated: Bool
@@ -1809,7 +1809,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.pinMessage(messages[0].id, c)
                 })))
             }
-            if !SGSimpleSettings.shared.contextShowPin { sgActions.append(actions.removeLast()) } // MARK: Swiftgram
+            if !SGSimpleSettings.shared.contextShowPin { sgActions.append(actions.removeLast()) } // MARK: AyuGram
         }
         
         if let activePoll, messages[0].forwardInfo == nil {
@@ -2009,12 +2009,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], nil)
                     f(.dismissWithoutContent)
                 })))
-                if ExteraMenuSettings.shared.showSaveMessageButton, message.id.peerId != context.account.peerId, !message.containsSecretMedia {
-                    actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SavedMessages, icon: { theme in
-                        return generateTintedImage(image: ExteraUIIconProvider.current.image(for: .download, fallback: UIImage(bundleImageName: "Chat/Context Menu/Save")), color: theme.contextMenu.primaryColor)
-                    }, action: { _, dismiss in
+                // MARK: AyuGram
+                if ExteraSettings.shared.value(.showSaveMessageButton), chatPresentationInterfaceState.chatLocation.peerId != context.account.peerId {
+                    actions.append(.action(ContextMenuActionItem(text: i18n("Extera.SaveMessage", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                        // The bookmark is a 30 pt asset, the menu's icons are 24 pt.
+                        return generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: "Item List/Icons/SavedMessages"), color: theme.actionSheet.primaryTextColor), size: CGSize(width: 24.0, height: 24.0), opaque: false)
+                    }, action: { _, f in
                         interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message], "forwardMessagesToCloud")
-                        dismiss(.dismissWithoutContent)
+                        f(.dismissWithoutContent)
                     })))
                 }
             }
@@ -2035,7 +2037,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }, action: { controller, f in
                 interfaceInteraction.reportMessages(messages, controller)
             })))
-            if !SGSimpleSettings.shared.contextShowReport { sgActions.append(actions.removeLast()) } // MARK: Swiftgram
+            if !SGSimpleSettings.shared.contextShowReport { sgActions.append(actions.removeLast()) } // MARK: AyuGram
         } else if message.id.peerId.isReplies {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuBlock, textColor: .destructive, icon: { theme in
                 return generateTintedImage(image: ExteraUIIconProvider.current.image(for: .restrict, fallback: UIImage(bundleImageName: "Chat/Context Menu/Restrict")), color: theme.actionSheet.destructiveActionTextColor)
@@ -2063,7 +2065,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             
             if let user = message.author as? TelegramUser {
                 if (user.id != context.account.peerId) && hasRestrictPermission {
-                    let banDisposables = DisposableDict<EnginePeer.Id>() // MARK: Swiftgram
+                    let banDisposables = DisposableDict<EnginePeer.Id>() // MARK: AyuGram
                     // TODO(swiftgram): Check is user an admin?
                     let action: ContextMenuItem = .action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuBan, icon: { theme in
                         return generateTintedImage(image: ExteraUIIconProvider.current.image(for: .restrict, fallback: UIImage(bundleImageName: "Chat/Context Menu/Restrict")), color: theme.actionSheet.primaryTextColor)
@@ -2082,7 +2084,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                             }), forKey: user.id)
                         f(.dismissWithoutContent)
                     }))
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     if SGSimpleSettings.shared.contextShowRestrict {
                         actions.append(action)
                     } else {
@@ -2296,7 +2298,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             canViewStats = canViewReadStats(message: message, participantCount: infoSummaryData.participantCount, isMessageRead: isMessageRead, isPremium: isPremium, appConfig: appConfig)
         }
 
-        sgInsertContextMenu(actions: &actions, sgActions: &sgActions, index: sgActionsIndex, chatPresentationInterfaceState: chatPresentationInterfaceState) // MARK: Swiftgram
+        sgInsertContextMenu(actions: &actions, sgActions: &sgActions, index: sgActionsIndex, chatPresentationInterfaceState: chatPresentationInterfaceState) // MARK: AyuGram
         
         var reactionCount = 0
         for reaction in mergedMessageReactionsAndPeers(accountPeerId: context.account.peerId, accountPeer: nil, message: message).reactions {

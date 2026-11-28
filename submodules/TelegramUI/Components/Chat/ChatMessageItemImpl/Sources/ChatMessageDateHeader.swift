@@ -21,7 +21,12 @@ import ComponentFlow
 import EmojiStatusComponent
 import AppBundle
 import GlassBackgroundComponent
+// MARK: AyuGram
 import SGSimpleSettings
+import PeerOnlineMarkerNode
+
+// The sender's online dot is drawn by `onlineMarkerLayer`; the node-based variant stays off so an avatar never shows two.
+private let ayuDrawsSenderOnlineDot = false
 
 private let timezoneOffset: Int32 = {
     let nowTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
@@ -1128,6 +1133,15 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     private var onlinePresenceVisible = false
     private var usesCustomLetters = false
     
+    // MARK: AyuGram
+    private var ayuOnlineNode: PeerOnlineMarkerNode?
+    private let ayuPresenceDisposable = MetaDisposable()
+    private var ayuIsObservingPresence: Bool = false
+    private var ayuDidReceivePresence: Bool = false
+    private var ayuPresence: EnginePeer.Presence?
+    private var ayuOnlineTimer: SwiftSignalKit.Timer?
+    private var ayuIsOnline: Bool = false
+    
     private var trackingIsInHierarchy: Bool = false {
         didSet {
             if self.trackingIsInHierarchy != oldValue {
@@ -1193,6 +1207,9 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         }
 
         self.updateSelectionState(animated: false)
+        
+        // MARK: AyuGram
+        self.ayuUpdateOnlineObservation()
     }
     
     deinit {
@@ -1200,6 +1217,9 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         self.onlinePresenceDisposable.dispose()
         self.onlinePresenceTimer?.invalidate()
         if let observer = self.onlineSettingsObserver { NotificationCenter.default.removeObserver(observer) }
+        // MARK: AyuGram
+        self.ayuPresenceDisposable.dispose()
+        self.ayuOnlineTimer?.invalidate()
     }
 
     override public func didEnterHierarchy() {
@@ -1248,6 +1268,80 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
             self.onlinePresenceTimer = timer
             timer.start()
         }))
+    }
+    
+    // MARK: AyuGram
+    // exteraGram "Show Online Indicator": the chat list's online dot on the avatar of a sender who is online.
+    private func ayuUpdateOnlineObservation() {
+        var isEligible = false
+        if ayuDrawsSenderOnlineDot, ExteraSettings.shared.showOnlineStatus, !self.presentationData.isPreview, self.adMessageId == nil, case let .user(user) = self.peer, user.botInfo == nil, !user.flags.contains(.isSupport), !isServicePeer(user), user.id != self.context.account.peerId {
+            isEligible = true
+        }
+        if isEligible == self.ayuIsObservingPresence {
+            return
+        }
+        self.ayuIsObservingPresence = isEligible
+        
+        if isEligible {
+            self.ayuDidReceivePresence = false
+            self.ayuPresenceDisposable.set((self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Presence(id: self.peerId))
+            |> deliverOnMainQueue).startStrict(next: { [weak self] presence in
+                guard let self else {
+                    return
+                }
+                // As on Android, the dot is simply there with the avatar and animates only on later changes.
+                let animated = self.ayuDidReceivePresence
+                self.ayuDidReceivePresence = true
+                self.ayuPresence = presence
+                self.ayuUpdateIsOnline(animated: animated)
+            }))
+        } else {
+            self.ayuPresenceDisposable.set(nil)
+            self.ayuPresence = nil
+            self.ayuUpdateIsOnline(animated: true)
+        }
+    }
+    
+    private func ayuUpdateIsOnline(animated: Bool) {
+        self.ayuOnlineTimer?.invalidate()
+        self.ayuOnlineTimer = nil
+        
+        var isOnline = false
+        if let presence = self.ayuPresence, case let .present(until) = presence.status {
+            // The same clock and comparison as the chat list's dot.
+            let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+            if until >= timestamp {
+                isOnline = true
+                // No update arrives when "online until" runs out.
+                let timer = SwiftSignalKit.Timer(timeout: Double(until) - Double(timestamp) + 1.0, repeat: false, completion: { [weak self] in
+                    self?.ayuUpdateIsOnline(animated: true)
+                }, queue: Queue.mainQueue())
+                self.ayuOnlineTimer = timer
+                timer.start()
+            }
+        }
+        if isOnline == self.ayuIsOnline {
+            return
+        }
+        self.ayuIsOnline = isOnline
+        
+        let onlineNode: PeerOnlineMarkerNode
+        if let current = self.ayuOnlineNode {
+            onlineNode = current
+        } else {
+            onlineNode = PeerOnlineMarkerNode()
+            onlineNode.setImage(PresentationResourcesChatList.recentStatusOnlineIcon(self.presentationData.theme.theme, state: .regular), color: nil, transition: .immediate)
+            self.ayuOnlineNode = onlineNode
+            self.avatarNode.addSubnode(onlineNode)
+        }
+        let (onlineSize, onlineApply) = onlineNode.asyncLayout()(isOnline, false)
+        // Android's proportions: the dot with its ring is 16/54 of the avatar, centred 6dp from the right and 8dp from the bottom of a 42dp avatar.
+        let avatarSize = avatarHeaderSize()
+        let onlineScale = (avatarSize * 16.0 / 54.0) / onlineSize.width
+        onlineNode.bounds = CGRect(origin: CGPoint(), size: onlineSize)
+        onlineNode.position = CGPoint(x: avatarSize * (1.0 - 6.0 / 42.0), y: avatarSize * (1.0 - 8.0 / 42.0))
+        onlineNode.transform = CATransform3DMakeScale(onlineScale, onlineScale, 1.0)
+        onlineApply(animated)
     }
 
     public func setCustomLetters(context: AccountContext, theme: PresentationTheme, synchronousLoad: Bool, letters: [String], emptyColor: UIColor) {
@@ -1432,6 +1526,9 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
             self.presentationData = presentationData
             self.setNeedsLayout()
         }
+        // MARK: AyuGram
+        self.ayuOnlineNode?.setImage(PresentationResourcesChatList.recentStatusOnlineIcon(presentationData.theme.theme, state: .regular), color: nil, transition: .immediate)
+        self.ayuUpdateOnlineObservation()
     }
 
     override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {

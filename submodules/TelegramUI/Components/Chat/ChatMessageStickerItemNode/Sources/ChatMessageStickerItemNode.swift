@@ -29,7 +29,7 @@ import ChatMessageReactionsFooterContentNode
 import ChatSwipeToReplyRecognizer
 import ChatMessageSuggestedPostInfoNode
 import StaticGlassBackground
-import SGSimpleSettings
+import SGSimpleSettings // MARK: AyuGram
 
 private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
@@ -90,10 +90,12 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     /// Without bubbles: the author's name and time over the first sticker of a run.
     private var bubblelessHeaderNode: ChatMessageBubblelessHeaderNode?
     private var exteraImageMask: CAShapeLayer?
-    public var sizeCoefficient: Float = 1.0 // MARK: Swiftgram
+    /// Whether the time is hidden because the sticker has no bubble, so that it comes back with bubbles.
+    private var hidesStatusWithoutBubbles = false
+    public var sizeCoefficient: Float = 1.0 // MARK: AyuGram
     
     private var viaBotNode: TextNode?
-    public let dateAndStatusNode: ChatMessageDateAndStatusNode // MARK: Swiftgram
+    public let dateAndStatusNode: ChatMessageDateAndStatusNode // MARK: AyuGram
     private var threadInfoNode: ChatMessageThreadInfoNode?
     private var replyInfoNode: ChatMessageReplyInfoNode?
     private var replyBackgroundContent: WallpaperBubbleBackgroundNode?
@@ -315,7 +317,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     return false
                 }
                 
-                let action = item.controllerInteraction.canSetupReply(item.message)
+                let action = ayuSwipeMessageAction(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message)) // MARK: AyuGram
                 strongSelf.currentSwipeAction = action
                 if case .none = action {
                     return false
@@ -441,7 +443,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     }
     
     override public func asyncLayout() -> (_ item: ChatMessageItem, _ params: ListViewItemLayoutParams, _ mergedTop: ChatMessageMerge, _ mergedBottom: ChatMessageMerge, _ dateHeaderAtBottom: ChatMessageHeaderSpec) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation, ListViewItemApply, Bool) -> Void) {
-        let displaySize = CGSize(width: 184.0 * CGFloat(self.sizeCoefficient), height: 184.0 * CGFloat(self.sizeCoefficient)) // MARK: Swiftgram
+        let displaySize = CGSize(width: 184.0 * CGFloat(self.sizeCoefficient), height: 184.0 * CGFloat(self.sizeCoefficient)) // MARK: AyuGram
         let telegramFile = self.telegramFile
         let layoutConstants = self.layoutConstants
         let imageLayout = self.imageNode.asyncLayout()
@@ -1652,11 +1654,17 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     case let .optionalAction(f):
                         f()
                     case let .openContextMenu(openContextMenu):
+                        // MARK: AyuGram
+                        sgHandleDoubleTapMessageAction(incoming: openContextMenu.tapMessage.effectivelyIncoming(item.context.account.peerId), message: openContextMenu.tapMessage, editAction: {
+                            item.controllerInteraction.sgStartMessageEdit(openContextMenu.tapMessage)
+                        }, defaultAction: {
                         if canAddMessageReactions(message: EngineMessage(item.message)) {
                             item.controllerInteraction.updateMessageReaction(openContextMenu.tapMessage, .default, false, nil)
                         } else {
                             item.controllerInteraction.openMessageContextMenu(openContextMenu.tapMessage, openContextMenu.selectAll, self, openContextMenu.subFrame, nil, nil)
                         }
+                        })
+                        //
                     }
                 } else if case .tap = gesture {
                     self.item?.controllerInteraction.clickThroughMessage(self.view, location)
@@ -1799,6 +1807,8 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     }
     
     private var playedSwipeToReplyHaptic = false
+    
+    private var ayuSwipeCarousel: AyuSwipeActionsCarouselDriver? // MARK: AyuGram
     @objc private func swipeToReplyGesture(_ recognizer: ChatSwipeToReplyRecognizer) {
         var offset: CGFloat = 0.0
         var leftOffset: CGFloat = 0.0
@@ -1845,7 +1855,13 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                 }
             
                 if let item = self.item, self.swipeToReplyNode == nil {
-                    let swipeToReplyNode = ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: ChatMessageSwipeToReplyNode.Action(self.currentSwipeAction))
+                    // MARK: AyuGram
+                    let makeSwipeToReplyNode: (ChatMessageSwipeToReplyNode.Action) -> ChatMessageSwipeToReplyNode = { action in
+                        return ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: action)
+                    }
+                    let ayuSwipeCarousel = AyuSwipeActionsCarouselDriver(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message), makeNode: makeSwipeToReplyNode)
+                    self.ayuSwipeCarousel = ayuSwipeCarousel
+                    let swipeToReplyNode = makeSwipeToReplyNode(ayuSwipeCarousel.primaryNodeAction)
                     self.swipeToReplyNode = swipeToReplyNode
                     self.insertSubnode(swipeToReplyNode, at: 0)
                 }
@@ -1874,6 +1890,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     
                     let progress = abs(translation.x) / swipeOffset
                     swipeToReplyNode.updateProgress(progress)
+                    self.ayuSwipeCarousel?.update(itemNode: self, primaryNode: swipeToReplyNode, recognizer: recognizer, translationX: translation.x, trigger: swipeOffset, progress: progress) // MARK: AyuGram
                     
                     if progress > 1.0 - .ulpOfOne && !self.playedSwipeToReplyHaptic {
                         self.playedSwipeToReplyHaptic = true
@@ -1897,7 +1914,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                             case .none:
                                 break
                             case .reply:
-                                item.controllerInteraction.setupReply(item.message.id)
+                                ayuPerformSwipeMessageAction(message: item.message, controllerInteraction: item.controllerInteraction, action: self.ayuSwipeCarousel?.selectedAction) // MARK: AyuGram
                             }
                         }
                     }
@@ -1910,6 +1927,9 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
 
                 self.updateAttachedAvatarNodeOffset(offset: 0.0, transition: .animated(duration: 0.3, curve: .spring))
 
+                // MARK: AyuGram
+                self.ayuSwipeCarousel?.finish()
+                self.ayuSwipeCarousel = nil
                 if let swipeToReplyNode = self.swipeToReplyNode {
                     self.swipeToReplyNode = nil
                     swipeToReplyNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak swipeToReplyNode] _ in

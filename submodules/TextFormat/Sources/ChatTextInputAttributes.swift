@@ -5,6 +5,7 @@ import AsyncDisplayKit
 import TelegramCore
 import TelegramPresentationData
 import Emoji
+import SGSimpleSettings // MARK: AyuGram
 
 private let alphanumericCharacters = CharacterSet.alphanumerics
 
@@ -1177,7 +1178,15 @@ public func breakChatInputText(_ text: NSAttributedString) -> [NSAttributedStrin
 private let markdownRegexFormat = "(^|\\s|\\n)(````?)([\\s\\S]+?)(````?)([\\s\\n\\.,:?!;]|$)|(^|\\s)(`|\\*\\*|__|~~|\\|\\|)([^\\n]+?)\\7([\\s\\.,:?!;]|$)|@(\\d+)\\s*\\((.+?)\\)"
 private let markdownRegex = try? NSRegularExpression(pattern: markdownRegexFormat, options: [.caseInsensitive, .anchorsMatchLines])
 
-public func convertMarkdownToAttributes(_ text: NSAttributedString) -> NSAttributedString {
+public func convertMarkdownToAttributes(_ text: NSAttributedString, isUserInput: Bool = true) -> NSAttributedString {
+    // MARK: AyuGram
+    // "Disable Markdown" (exteraGram): typed `code`, ```pre```, **bold**, __italic__, ~~strike~~ and ||spoiler||
+    // markers are sent literally. Attributes set through the formatting menu are untouched: they are already
+    // attributes of `text`. `isUserInput: false` is for app strings that use these markers as their format.
+    if isUserInput && ExteraSettings.shared.disableMarkdown {
+        return text
+    }
+    //
     var string = text.string as NSString
     
     var offsetRanges:[(NSRange, Int)] = []

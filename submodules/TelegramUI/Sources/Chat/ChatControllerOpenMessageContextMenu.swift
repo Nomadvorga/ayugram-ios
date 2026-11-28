@@ -77,6 +77,11 @@ extension ChatControllerImpl {
                         allowedReactions = nil
                     }
                 }
+                // MARK: AyuGram
+                // exteraGram hide-reactions toggles: no reaction picker above the menu either (Saved Messages tags stay)
+                if allowedReactions != nil, !topMessage.areReactionsTags(accountPeerId: self.context.account.peerId), ayuHidesReactions(inChatWith: topMessage.peers[topMessage.id.peerId] ?? self.presentationInterfaceState.renderedPeer?.peer) {
+                    allowedReactions = nil
+                }
 
                 var tip: ContextController.Tip?
                 
@@ -219,6 +224,18 @@ extension ChatControllerImpl {
                 
                 var disableTransitionAnimations = false
                 var actionsSignal: Signal<ContextController.Items, NoError> = .single(actions)
+                var ayuMenuInvocation: AyuPluginMessageMenuInvocation?
+                if let peerID = self.chatLocation.peerId,
+                   peerID == message.id.peerId,
+                   let dialogID = AyuPluginMessageMenuInvocation.dialogID(for: peerID) {
+                    let messageID = Int64(message.id.id)
+                    if messageID > 0, message.id.namespace == Namespaces.Message.Cloud,
+                       let pluginContext = AyuTelegramPluginApplicationBinding.current?.pluginMenuContext(accountID: self.context.account.id, peerID: peerID, messageID: messageID),
+                       pluginContext.dialogID == dialogID {
+                        let invocation = AyuPluginMessageMenuInvocation(chatController: self, context: pluginContext, peerID: peerID, accountID: self.context.account.id)
+                        ayuMenuInvocation = invocation
+                    }
+                }
                 var emojiFileIds: [Int64] = []
                 if let entitiesAttribute = message.textEntitiesAttribute {
                     for entity in entitiesAttribute.entities {
@@ -336,12 +353,16 @@ extension ChatControllerImpl {
                 }
                 
                 let isSecret = self.presentationInterfaceState.copyProtectionEnabled || self.presentationInterfaceState.myCopyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
+                if let ayuMenuInvocation {
+                    actionsSignal = AyuPluginMessageContextMenu.appending(to: actionsSignal, invocation: ayuMenuInvocation)
+                }
                 let styledActions = actionsSignal |> map { items -> ContextController.Items in
                     var items = items
                     items.exteraStyleIsMessageMenu = true
                     return items
                 }
                 let controller = makeContextController(presentationData: self.presentationData, source: source, items: styledActions, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret, hideReactionPanelTail: hideReactionPanelTail)
+                ayuMenuInvocation?.contextController = controller
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }

@@ -1,6 +1,6 @@
-import SGStrings // MARK: Swiftgram
-import SGSimpleSettings // MARK: Swiftgram
-import TranslateUI // MARK: Swiftgram
+import SGStrings // MARK: AyuGram
+import SGSimpleSettings // MARK: AyuGram
+import TranslateUI // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -150,7 +150,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
     
     outer: for (message, itemAttributes) in item.content {
         for attribute in message.attributes {
-            if let attribute = attribute as? RestrictedContentMessageAttribute, attribute.platformText(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }, chatId: message.author?.id.id._internalGetInt64Value()) != nil { // MARK: Swiftgram
+            if let attribute = attribute as? RestrictedContentMessageAttribute, attribute.platformText(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }, chatId: message.author?.id.id._internalGetInt64Value()) != nil { // MARK: AyuGram
                 result.append((message, ChatMessageRestrictedBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                 needReactions = false
                 break outer
@@ -384,7 +384,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                     }
                     
                     
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     var message = message
                     if message.canRevealContent(contentSettings: item.context.currentContentSettings.with { $0 }) {
                         let originalTextLength = message.text.count
@@ -928,7 +928,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     private weak var summaryDialog: UIAlertController?
     private var shareButtonNode: ChatMessageShareButton?
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var quickTranslateButtonNode: ChatMessageShareButton?
     public var needsQuickTranslateButton: Bool = false /* SGSimpleSettings.defaultValues[SGSimpleSettings.Keys.quickTranslateButton.rawValue] as! Bool*/
     //
@@ -1512,7 +1512,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 if let shareButtonNode = strongSelf.shareButtonNode, shareButtonNode.frame.contains(point) {
                     return .fail
                 }
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if let quickTranslateButtonNode = strongSelf.quickTranslateButtonNode, quickTranslateButtonNode.frame.contains(point) {
                     return .fail
                 }
@@ -1697,7 +1697,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     return false
                 }
                 
-                let action = item.controllerInteraction.canSetupReply(item.message)
+                let action = ayuSwipeMessageAction(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message)) // MARK: AyuGram
                 strongSelf.currentSwipeAction = action
                 if case .none = action {
                     return false
@@ -2126,7 +2126,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         // depends only on `item`, so hoisting it is safe.
         let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions, isUnsupportedContent) = contentNodeMessagesAndClassesForItem(item)
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         var sgLocalNeedsQuickTranslateButton = false /* SGSimpleSettings.defaultValues[SGSimpleSettings.Keys.quickTranslateButton.rawValue] as! Bool*/
         if let strongSelf = selfReference.value {
             if strongSelf.needsQuickTranslateButton {
@@ -2138,7 +2138,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         //
         
         var needsShareButton = false
-        var mayHaveSeparateCommentsButton = false // MARK: Swiftgram
+        var mayHaveSeparateCommentsButton = false // MARK: AyuGram
         var needsSummarizeButton = false
     
         if incoming, case let .customChatContents(contents) = item.associatedData.subject, case .hashTagSearch = contents.kind {
@@ -2153,7 +2153,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         } else if case let .replyThread(replyThreadMessage) = item.chatLocation, replyThreadMessage.effectiveTopId == item.message.id {
             needsShareButton = false
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if !sgLocalNeedsQuickTranslateButton {
                 allowFullWidth = true
             }
@@ -2199,7 +2199,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     needsShareButton = true
                 }
             }
-            // var mayHaveSeparateCommentsButton = false // MARK: Swiftgram
+            // var mayHaveSeparateCommentsButton = false // MARK: AyuGram
             if !needsShareButton {
                 loop: for media in item.message.media {
                     if media is TelegramMediaGame || media is TelegramMediaInvoice {
@@ -2251,7 +2251,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             needsShareButton = true
         }
         for attribute in item.content.firstMessage.attributes {
-            if let attribute = attribute as? RestrictedContentMessageAttribute, attribute.platformText(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }, chatId: item.content.firstMessage.author?.id.id._internalGetInt64Value()) != nil { // MARK: Swiftgram
+            if let attribute = attribute as? RestrictedContentMessageAttribute, attribute.platformText(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }, chatId: item.content.firstMessage.author?.id.id._internalGetInt64Value()) != nil { // MARK: AyuGram
                 needsShareButton = false
                 needsSummarizeButton = false
             }
@@ -2294,14 +2294,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
-            if (needsShareButton && !isSidePanelOpen) || isAd || sgLocalNeedsQuickTranslateButton { // MARK: Swiftgram
+            if (needsShareButton && !isSidePanelOpen) || isAd || sgLocalNeedsQuickTranslateButton { // MARK: AyuGram
                 tmpWidth -= 45.0
             } else {
                 tmpWidth -= 3.0
             }
         } else {
             tmpWidth = layoutConstants.bubble.maximumWidthFill.widthFor(baseWidth)
-            if ((needsShareButton && !isSidePanelOpen) || isAd || sgLocalNeedsQuickTranslateButton) && tmpWidth + 32.0 > baseWidth { // MARK: Swiftgram
+            if ((needsShareButton && !isSidePanelOpen) || isAd || sgLocalNeedsQuickTranslateButton) && tmpWidth + 32.0 > baseWidth { // MARK: AyuGram
                 tmpWidth = baseWidth - 32.0
             }
         }
@@ -2314,7 +2314,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         tmpWidth -= deliveryFailedInset
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let renderWideChannelPosts: Bool
         if let channel = item.message.peers[item.message.id.peerId] as? TelegramChannel, case .broadcast = channel.info, SGSimpleSettings.shared.wideChannelPosts, !(mayHaveSeparateCommentsButton && hasCommentButton(item: item)) {
             renderWideChannelPosts = true
@@ -2328,7 +2328,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         //
         
         var maximumContentWidth = floor(tmpWidth - layoutConstants.bubble.edgeInset * 3.0 - layoutConstants.bubble.contentInsets.left - layoutConstants.bubble.contentInsets.right - avatarInset)
-        if (needsShareButton && !isSidePanelOpen) || sgLocalNeedsQuickTranslateButton { // MARK: Swiftgram
+        if (needsShareButton && !isSidePanelOpen) || sgLocalNeedsQuickTranslateButton { // MARK: AyuGram
             maximumContentWidth -= 10.0
         }
         
@@ -2988,7 +2988,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var mosaicStatusSizeAndApply: (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageDateAndStatusNode)?
         
         if let mosaicRange = mosaicRange {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             var maxDimensions = layoutConstants.image.maxDimensions
             if renderWideChannelPosts {
                 maxDimensions.width = maximumContentWidth
@@ -3000,7 +3000,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
                 return size
             }/*, TODO(swiftgram): fillWidth: SGSimpleSettings.shared.wideChannelPosts */)
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if innerSize.height > maxSize.height, maxDimensions.width != layoutConstants.image.maxDimensions.width {
                 maxDimensions.width = max(round(maxDimensions.width * maxSize.height / innerSize.height), layoutConstants.image.maxDimensions.width)
                 maxSize = maxDimensions.fittedToWidthOrSmaller(maximumContentWidth - layoutConstants.image.bubbleInsets.left - layoutConstants.image.bubbleInsets.right)
@@ -6262,7 +6262,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             strongSelf.bubblelessSelectionCheckCenterY = bubblelessSelectionCheckCenterY
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         // TODO(swiftgram): Move business-logic up to hierarchy
         if strongSelf.needsQuickTranslateButton && incoming && !item.message.text.isEmpty && item.message.adAttribute == nil {
             if strongSelf.quickTranslateButtonNode == nil {
@@ -6526,7 +6526,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 animation.animator.updateAlpha(layer: shareButtonNode.layer, alpha: (isCurrentlyPlayingMedia || isSidePanelOpen) ? 0.0 : 1.0, completion: nil)
                 animation.animator.updateScale(layer: shareButtonNode.layer, scale: (isCurrentlyPlayingMedia || isSidePanelOpen) ? 0.001 : 1.0, completion: nil)
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if let quickTranslateButtonNode = strongSelf.quickTranslateButtonNode {
                 let currentBackgroundFrame = strongSelf.backgroundNode.frame
                 let buttonSize = quickTranslateButtonNode.update(hasTranslation: false /*item.message.attributes.first(where: { $0 is QuickTranslationMessageAttribute }) as? QuickTranslationMessageAttribute != nil*/, presentationData: item.presentationData, controllerInteraction: item.controllerInteraction, chatLocation: item.chatLocation, subject: item.associatedData.subject, message: EngineMessage(item.message), accountPeerId: item.context.account.peerId, disableComments: disablesComments)
@@ -6609,7 +6609,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 animation.animator.updateScale(layer: shareButtonNode.layer, scale: (isCurrentlyPlayingMedia || isSidePanelOpen) ? 0.001 : 1.0, completion: nil)
             }
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if let quickTranslateButtonNode = strongSelf.quickTranslateButtonNode {
                 let buttonSize = quickTranslateButtonNode.update(hasTranslation: false /*item.message.attributes.first(where: { $0 is QuickTranslationMessageAttribute }) as? QuickTranslationMessageAttribute != nil*/, presentationData: item.presentationData, controllerInteraction: item.controllerInteraction, chatLocation: item.chatLocation, subject: item.associatedData.subject, message: EngineMessage(item.message), accountPeerId: item.context.account.peerId, disableComments: disablesComments)
                 
@@ -6820,7 +6820,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     case let .optionalAction(f):
                         f()
                     case let .openContextMenu(openContextMenu):
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         sgHandleDoubleTapMessageAction(incoming: openContextMenu.tapMessage.effectivelyIncoming(item.context.account.peerId), message: openContextMenu.tapMessage, editAction: {
                             item.controllerInteraction.sgStartMessageEdit(openContextMenu.tapMessage)
                         }, defaultAction: {
@@ -6835,7 +6835,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 } else if case .tap = gesture {
                     item.controllerInteraction.clickThroughMessage(self.view, location)
                 } else if case .doubleTap = gesture {
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     sgHandleDoubleTapMessageAction(incoming: item.message.effectivelyIncoming(item.context.account.peerId), message: item.message, editAction: {
                         item.controllerInteraction.sgStartMessageEdit(item.message)
                     }, defaultAction: {
@@ -7694,7 +7694,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if let shareButtonNode = self.shareButtonNode, shareButtonNode.frame.contains(point) {
             return shareButtonNode.view.hitTest(self.view.convert(point, to: shareButtonNode.view), with: event)
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let quickTranslateButtonNode = self.quickTranslateButtonNode, quickTranslateButtonNode.frame.contains(point) {
             return quickTranslateButtonNode.view.hitTest(self.view.convert(point, to: quickTranslateButtonNode.view), with: event)
         }
@@ -8175,7 +8175,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private func updateParentMessageIsTranslating(_ isTranslating: Bool) {
         for contentNode in self.contentNodes {
             if let contentNode = contentNode as? ChatMessageTextBubbleContentNode {
@@ -8370,6 +8370,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private var playedSwipeToReplyHaptic = false
+    
+    private var ayuSwipeCarousel: AyuSwipeActionsCarouselDriver? // MARK: AyuGram
     /// A secondary click at `point`: the bubble's own recognizer's, or one a content node took itself
     /// (`ChatMessageBubbleContentNode.secondaryTap`).
     private func secondaryTapped(at point: CGPoint, recognizer: TapLongTapOrDoubleTapGestureRecognizer?) {
@@ -8438,7 +8440,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
             
                 if let item = self.item, self.swipeToReplyNode == nil {
-                    let swipeToReplyNode = ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: ChatMessageSwipeToReplyNode.Action(self.currentSwipeAction))
+                    // MARK: AyuGram
+                    let makeSwipeToReplyNode: (ChatMessageSwipeToReplyNode.Action) -> ChatMessageSwipeToReplyNode = { action in
+                        return ChatMessageSwipeToReplyNode(fillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), foregroundColor: bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.shareButtonForegroundColor, wallpaper: item.presentationData.theme.wallpaper), backgroundNode: item.controllerInteraction.presentationContext.backgroundNode, action: action)
+                    }
+                    let ayuSwipeCarousel = AyuSwipeActionsCarouselDriver(message: item.message, canSetupReply: item.controllerInteraction.canSetupReply(item.message), makeNode: makeSwipeToReplyNode)
+                    self.ayuSwipeCarousel = ayuSwipeCarousel
+                    let swipeToReplyNode = makeSwipeToReplyNode(ayuSwipeCarousel.primaryNodeAction)
                     self.swipeToReplyNode = swipeToReplyNode
                     self.insertSubnode(swipeToReplyNode, at: 0)
                 }
@@ -8469,6 +8477,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     
                     let progress = abs(translation.x) / swipeOffset
                     swipeToReplyNode.updateProgress(progress)
+                    self.ayuSwipeCarousel?.update(itemNode: self, primaryNode: swipeToReplyNode, recognizer: recognizer, translationX: translation.x, trigger: swipeOffset, progress: progress) // MARK: AyuGram
                     
                     if progress > 1.0 - .ulpOfOne && !self.playedSwipeToReplyHaptic {
                         self.playedSwipeToReplyHaptic = true
@@ -8492,7 +8501,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                             case .none:
                                 break
                             case .reply:
-                                item.controllerInteraction.setupReply(item.message.id)
+                                ayuPerformSwipeMessageAction(message: item.message, controllerInteraction: item.controllerInteraction, action: self.ayuSwipeCarousel?.selectedAction) // MARK: AyuGram
                             }
                         }
                     }
@@ -8510,6 +8519,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 self.updateAttachedAvatarNodeOffset(offset: 0.0, transition: .animated(duration: 0.3, curve: .spring))
 
                 self.shadowNode.layer.animateBounds(from: previousShadowBounds, to: shadowBounds, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
+                // MARK: AyuGram
+                self.ayuSwipeCarousel?.finish()
+                self.ayuSwipeCarousel = nil
                 if let swipeToReplyNode = self.swipeToReplyNode {
                     self.swipeToReplyNode = nil
                     swipeToReplyNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak swipeToReplyNode] _ in
@@ -8625,7 +8637,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             shareButtonNode.updateAbsoluteRect(shareButtonNodeFrame, within: containerSize)
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let quickTranslateButtonNode = self.quickTranslateButtonNode {
             var quickTranslateButtonNodeFrame = quickTranslateButtonNode.frame
             quickTranslateButtonNodeFrame.origin.x += rect.minX

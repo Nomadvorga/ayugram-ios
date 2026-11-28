@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 //
 import Foundation
@@ -7,6 +7,7 @@ import UserNotifications
 import AsyncDisplayKit
 import TelegramCore
 import SwiftSignalKit
+import AyuPluginTelegramAdapter
 import WebProxyTransport
 import Display
 import ComponentFlow
@@ -315,7 +316,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     private var experimentalUISettingsDisposable: Disposable?
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var immediateSGStatusValue = Atomic<SGStatus>(value: SGStatus.default)
     public var immediateSGStatus: SGStatus {
         return self.immediateSGStatusValue.with { $0 }
@@ -582,7 +583,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 MediaEditorVideoExport.forceLegacyChatWriter = settings.chatLegacyVideoWriter
             }
         })
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let immediateSGStatusValue = self.immediateSGStatusValue
         self.sgStatusDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.sgStatus])
         |> deliverOnMainQueue).start(next: { sharedData in
@@ -1189,10 +1190,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.callPeerDisposable?.dispose()
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     var didPerformSGUISettingsMigration = false
     //
-    // MARK: Swiftgram
+    // MARK: AyuGram
     func sgPrimaryAccountContextForMigration() -> AccountContext? {
         return self.activeAccountsValue?.primary
     }
@@ -1200,7 +1201,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private var didPerformAccountSettingsImport = false
     
     private func performAccountSettingsImportIfNecessary() {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.performSGUISettingsMigrationIfNecessary()
         //
         if self.didPerformAccountSettingsImport {
@@ -1850,12 +1851,15 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         #endif
         
         let settings = self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])
-        |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool) in
+        |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool, ayuMutedAccountUserIds: Set<Int64>) in
             let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.inAppNotificationSettings]?.get(InAppNotificationSettings.self) ?? InAppNotificationSettings.defaultSettings
-            return (settings.displayNotificationsFromAllAccounts, false)
+            return (settings.displayNotificationsFromAllAccounts, false, settings.ayuMutedAccountUserIds)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             if lhs.allAccounts != rhs.allAccounts {
+                return false
+            }
+            if lhs.ayuMutedAccountUserIds != rhs.ayuMutedAccountUserIds {
                 return false
             }
             if lhs.includeMuted != rhs.includeMuted {
@@ -1894,6 +1898,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     activeProductionUserIds = []
                     activeTestingUserIds = []
                 }
+            } else if !settings.ayuMutedAccountUserIds.isEmpty {
+                // MARK: AyuGram
+                // An account switched off in "Show notifications for" gives up its token like the others do
+                // when all accounts are off; the current account always keeps it.
+                let primaryUserId = primary?.account.peerId.id
+                let notifies: (EnginePeer.Id.Id) -> Bool = { id in
+                    return id == primaryUserId || !settings.ayuMutedAccountUserIds.contains(id._internalGetInt64Value())
+                }
+                activeProductionUserIds = activeProductionUserIds.filter(notifies)
+                activeTestingUserIds = activeTestingUserIds.filter(notifies)
             }
             
             for (_, account, _) in activeAccounts {
@@ -2381,7 +2395,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func openExternalUrl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
-        openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+        // Plugins that hook Android's `Browser.openUrl` see the URL first: they may replace it or cancel the opening.
+        // Without such a hook the completion runs at once.
+        AyuPluginTelegramAdapter.shared.applyURLOpenHooks(url: url, systemBrowser: forceExternal) { url in
+            guard let url else { return }
+            openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+        }
     }
     
     public func chatAvailableMessageActions(engine: TelegramEngine, accountPeerId: EnginePeer.Id, messageIds: Set<EngineMessage.Id>, keepUpdated: Bool) -> Signal<ChatAvailableMessageActions, NoError> {
@@ -5009,7 +5028,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func makeShareScreen(context: AccountContext, params: ShareControllerParams) -> ViewController {
-        if params.immediateExternalShare || SGSimpleSettings.shared.forceSystemSharing { // MARK: Swiftgram
+        if params.immediateExternalShare || SGSimpleSettings.shared.forceSystemSharing { // MARK: AyuGram
             return self.makeShareController(context: context, params: params)
         }
         func mapSubject(_ subject: ShareControllerSubject) -> (ShareScreenSubject, ShareControllerSubject.MediaParameters?) {
@@ -5439,7 +5458,7 @@ private func useFlatModalCallsPresentation(context: AccountContext) -> Bool {
 
 
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension SharedAccountContextImpl {
     public func makeSGUpdateIOSController() -> ViewController {
         let presentationData = self.currentPresentationData.with { $0 }

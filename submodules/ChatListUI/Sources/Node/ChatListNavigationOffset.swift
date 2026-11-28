@@ -9,7 +9,7 @@ import ChatListHeaderComponent
 // on, and a list matched to a current one that is past it goes there, not further: further would leave its first chat
 // under the collapsed header.
 enum ChatListNavigationOffset {
-    private static let collapsedOffset: CGFloat = ChatListNavigationBar.searchScrollHeight
+    private static let collapsedOffset: CGFloat = AyuChatListSearchBar.scrollHeight // MARK: AyuGram
 
     static func isNavigationHidden(_ offset: ListViewVisibleContentOffset) -> Bool {
         switch offset {

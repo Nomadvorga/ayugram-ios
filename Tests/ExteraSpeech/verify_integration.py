@@ -16,7 +16,7 @@ def main():
     legacy = (RUNTIME / "LocalAudioTranscription.swift").read_text(encoding="utf-8")
     manager = (RUNTIME / "ExteraSpeechModelManager.swift").read_text(encoding="utf-8")
     adapter = (RUNTIME / "AppleSpeechAssetInventory.swift").read_text(encoding="utf-8")
-    ui = (ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift").read_text(encoding="utf-8")
+    ui = (ROOT / "AyuGram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift").read_text(encoding="utf-8")
     consumer = (ROOT / "submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift").read_text(encoding="utf-8")
     check(entry.index("return Signal { subscriber in") < entry.index("let configuration =") < entry.index("guard configuration.isEnabled"), "configuration and disabled check occur at subscription")
     check(entry.count("try checkSpeechConfiguration(configuration)") >= 4 and "configuration != ExteraSpeechSettings.shared.configuration { task.cancel() }" in entry, "managed lifecycle rechecks preferences and cancels on change")

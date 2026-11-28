@@ -4,10 +4,10 @@ load("@build_bazel_rules_apple//apple/testing/default_runner:ios_test_runner.bzl
 
 sgdeps = [
     "//submodules/AyuSnowEffect:AyuSnowEffect",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
 ]
 sgsrcs = [
-    "//Swiftgram/SGChatListSimpleSettingsSignal:SGChatListSimpleSettingsSignal",
+    "//AyuGram/SGChatListSimpleSettingsSignal:SGChatListSimpleSettingsSignal",
 ]
 
 swift_library(
@@ -102,6 +102,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SideColumnLayout",
         "//submodules/TelegramUI/Components/ChatListTitleView",
         "//submodules/AvatarNode:AvatarNode",
+        "//submodules/AyuDialogCards:AyuDialogCards",
         "//submodules/AvatarVideoNode:AvatarVideoNode",
         "//submodules/InviteLinksUI",
         "//submodules/TelegramUI/Components/ChatFolderLinkPreviewScreen",

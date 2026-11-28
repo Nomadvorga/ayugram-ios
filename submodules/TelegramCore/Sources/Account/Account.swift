@@ -237,6 +237,7 @@ public class UnauthorizedAccount {
         |> map { sharedData -> ProxyServerSettings? in
             return sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self)?.effectiveActiveServer
         }
+        |> ayuProxyAutoDisabled // MARK: AyuGram
         |> distinctUntilChanged).start(next: { [weak network] activeServer in
             network?.updateProxySettings(activeServer)
         }))
@@ -1607,6 +1608,7 @@ public class Account {
                 return nil
             }
         }
+        |> ayuProxyAutoDisabled // MARK: AyuGram
         |> distinctUntilChanged).start(next: { activeServer in
             network.updateProxySettings(activeServer)
         }))

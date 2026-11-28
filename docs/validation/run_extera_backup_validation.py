@@ -30,7 +30,7 @@ def main():
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--emit-only", action="store_true")
     args = parser.parse_args()
-    sources = args.repo / "Swiftgram/SGSimpleSettings/Sources"
+    sources = args.repo / "AyuGram/SGSimpleSettings/Sources"
     backup = (sources / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
     browser = (sources / "ExteraBrowserSettings.swift").read_text(encoding="utf-8")
     navigation = (sources / "ExteraNavigationSettings.swift").read_text(encoding="utf-8")

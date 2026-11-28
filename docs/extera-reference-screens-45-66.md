@@ -6,23 +6,23 @@
 
 ## Как читать сверку
 
-Основной файл UI далее обозначен **C**: [`Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift`](../Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift). Номера строк относятся к прочитанному состоянию рабочего дерева и могут сдвинуться при дальнейших правках.
+Основной файл UI далее обозначен **C**: [`AyuGram/SGSettingsUI/Sources/SGSettingsController.swift`](../AyuGram/SGSettingsUI/Sources/SGSettingsController.swift). Номера строк относятся к прочитанному состоянию рабочего дерева и могут сдвинуться при дальнейших правках.
 
 Основные модели:
 
 | Обозначение | Файл |
 |---|---|
-| Settings | [`ExteraSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraSettings.swift) |
-| Math | [`ExteraMathSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraMathSettings.swift) |
-| Chat | [`ExteraChatSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraChatSettings.swift) |
-| Message | [`ExteraMessageSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraMessageSettings.swift) |
-| Menu | [`ExteraMenuSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraMenuSettings.swift) |
-| Media | [`ExteraMediaSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraMediaSettings.swift) |
-| Translation | [`ExteraTranslationSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraTranslationSettings.swift) |
-| AI | [`ExteraAISettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraAISettings.swift) |
-| Feed | [`ExteraFeedSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift) |
-| Backup | [`ExteraSettingsBackup.swift`](../Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift) |
-| Simple | [`SimpleSettings.swift`](../Swiftgram/SGSimpleSettings/Sources/SimpleSettings.swift) |
+| Settings | [`ExteraSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraSettings.swift) |
+| Math | [`ExteraMathSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraMathSettings.swift) |
+| Chat | [`ExteraChatSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraChatSettings.swift) |
+| Message | [`ExteraMessageSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraMessageSettings.swift) |
+| Menu | [`ExteraMenuSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraMenuSettings.swift) |
+| Media | [`ExteraMediaSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraMediaSettings.swift) |
+| Translation | [`ExteraTranslationSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraTranslationSettings.swift) |
+| AI | [`ExteraAISettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraAISettings.swift) |
+| Feed | [`ExteraFeedSettings.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraFeedSettings.swift) |
+| Backup | [`ExteraSettingsBackup.swift`](../AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift) |
+| Simple | [`SimpleSettings.swift`](../AyuGram/SGSimpleSettings/Sources/SimpleSettings.swift) |
 
 «Нет в проверяемом слое» означает отсутствие соответствующей строки в C и свойства в проверенных `Extera*.swift`; это не утверждение об отсутствии любой похожей функции во всём Telegram iOS. Особенно это относится к штатным настройкам темы, обоев и размера текста. Наличие свойства и setter подтверждает только модель/привязку UI. Runtime-потребители в TelegramUI здесь не проверялись.
 
@@ -423,7 +423,7 @@ Layout: между поддержкой двух проектов и Google бо
 
 **Сверка.** C:599–615 в «Другое» содержит блок AyuGram, data pills, takeout, notice модифицированной версии, upstream-source, уведомления, профили и stories; **блоков двух поддержек, Boosty/Universal/Tonkeeper, Crashlytics/Analytics и соответствующих пояснений нет**. В проверенных `Extera*.swift` нет соответствующих preference-полей телеметрии. Нельзя автоматически исключать эти строки как Android-only: ссылки поддержки и пользовательские настройки телеметрии сами по себе переносимы; решение о составе iOS-интеграций требует отдельного обоснования. Обещание мгновенного удаления отправленных данных — текст Android-референса, здесь оно не подтверждается и не должно выдаваться за выполненное поведение iOS.
 
-Экспорт уже имеет место реализации, но через дополнительный переход: C:590–591 → `.settingsBackup`; C:1265–1266 → [`ExteraBackupController.swift`](../Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift):51–56 с действием `exportSettings`, импортом и сбросом. В 97–127 создаётся JSON `exteragram-settings.json` и вызывается share sheet; Backup:189 и далее задаёт явный allowlist, включая настройки сообщений/меню/медиа/калькулятора. Это статическое подтверждение существования пути экспорта. На кадре 66 экспорт — прямая строка страницы «Другое»; текущий уровень вложенности UI отличается. Совместимость формата экспортируемого JSON с Android-файлом и успешный экспорт на устройстве не проверены.
+Экспорт уже имеет место реализации, но через дополнительный переход: C:590–591 → `.settingsBackup`; C:1265–1266 → [`ExteraBackupController.swift`](../AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift):51–56 с действием `exportSettings`, импортом и сбросом. В 97–127 создаётся JSON `exteragram-settings.json` и вызывается share sheet; Backup:189 и далее задаёт явный allowlist, включая настройки сообщений/меню/медиа/калькулятора. Это статическое подтверждение существования пути экспорта. На кадре 66 экспорт — прямая строка страницы «Другое»; текущий уровень вложенности UI отличается. Совместимость формата экспортируемого JSON с Android-файлом и успешный экспорт на устройстве не проверены.
 
 ## Подтверждённые пробелы и места следующей реализации
 

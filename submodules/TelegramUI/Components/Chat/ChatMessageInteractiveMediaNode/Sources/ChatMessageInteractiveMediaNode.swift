@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -965,7 +965,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
             var isSticker = false
             var maxDimensions = layoutConstants.image.maxDimensions
             var maxHeight = layoutConstants.image.maxDimensions.height
-            var imageOriginalMaxDimensions: CGSize? // MARK: Swiftgram
+            var imageOriginalMaxDimensions: CGSize? // MARK: AyuGram
             var isStory = false
             var isGift = false
             
@@ -988,7 +988,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                 }
             } else if let image = media as? TelegramMediaImage, let dimensions = largestImageRepresentation(image.representations)?.dimensions {
                 unboundSize = CGSize(width: max(10.0, floor(dimensions.cgSize.width * 0.5)), height: max(10.0, floor(dimensions.cgSize.height * 0.5)))
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info, SGSimpleSettings.shared.wideChannelPosts {
                     imageOriginalMaxDimensions = maxDimensions
                     switch sizeCalculation {
@@ -1231,7 +1231,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                                 }
                                 
                                 boundingSize = CGSize(width: boundingWidth, height: filledSize.height).cropped(CGSize(width: CGFloat.greatestFiniteMagnitude, height: maxHeight))
-                                // MARK: Swiftgram
+                                // MARK: AyuGram
                                 if let imageOriginalMaxDimensions = imageOriginalMaxDimensions {
                                     boundingSize.height = min(boundingSize.height, nativeSize.aspectFitted(imageOriginalMaxDimensions).height)
                                 }

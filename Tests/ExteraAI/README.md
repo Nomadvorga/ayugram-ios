@@ -4,9 +4,9 @@ Run on a macOS host with Xcode's Swift toolchain:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraAISettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraAIClient.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraAISettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraAIClient.swift \
   Tests/ExteraAI/ExteraAIClientTests.swift
 ```
 

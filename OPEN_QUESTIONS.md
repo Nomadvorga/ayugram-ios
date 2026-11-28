@@ -1,0 +1,21 @@
+# Open questions
+
+## Plugin port — 2026-11-25, refreshed 2026-11-26
+
+- Native validation: the current checkout is a Mac with Command Line Tools only (no iOS SDK). Full compilation, Swift tests and recorded simulator/device frames require full Xcode; no native success has been asserted, and three Swift edits (see `HANDOFF.md`) have only been syntax-parsed.
+- Version policy (refreshed 2026-11-26): Python now evaluates `__min_version__`, `__app_version__` and `__sdk_version__` with Android comparison semantics against a hard-coded emulated SDK 1.4.6.5 / exteraGram 13.2.2. **Owner decision pending:** keep this emulated policy, or block version-constrained plugins until the application supplies its own policy? Also open: compiling the Swift change that defers to the Python result.
+- `add_autoupdater_task` (**owner decision pending**): it is a logged no-op on iOS (nothing auto-updates); 11 plugins call it. Accept, or make it a blocker?
+- `Build.VERSION.SDK_INT` (**owner decision pending**): the Python-local `Build` reports 36 (with `MANUFACTURER` "Apple"). Is that the right value for plugins that branch on the Android API level?
+- Member-level preflight: preflight checks classes and operations but not members; a curated list of 21 host members is blocked under `sdk.unprovided_member`. A review found 12 of 20 passes false before that gating, and false passes may remain among the current 9. Should `runtime.capabilities` publish per-class members so preflight can check them?
+- Remaining native contracts: the Swift work for `Python/protocol-telegram.md` (19 operations: requests, hooks, send/edit, peers/messages, screen/navigation, files, player, `menus.add`, `plugins.list`/`plugins.settings`, `ui.layout_params`, `resources.resolve`). None is implemented; in which order, by corpus reach (`OPERATION` blocks 425 of 485 plugins; with all of them declared 47 would pass preflight)? No blanket Android/Xposed/DEX equivalence is available on iOS.
+- Xposed targets: 277 of 485 plugins call `hook_method*` on 369 distinct targets, none in more than 7 plugins. Should the most-used targets be hand-mapped to explicit host hook points, and where is the cut-off? No mapping exists today.
+- Unbundled pip packages: which to ship? Declared in `__requirements__` and unsatisfied: mutagen 5 plugins; cachetools, tinydb, websocket-client, yt-dlp 2 each; babel, certifi, exteragram-alib, humanize, mpmath, nowfy, pysocks, yandex-music, yt-dlp-ejs 1 each. Imported without a bundled module (top): PIL 17, audioop 6, mutagen 4, yaml 3, bs4 2, cachetools 2, packaging.version 2, plugins_manager 2.
+- PIL: 17 plugins import it. Pillow needs a binary extension in a signed framework; ship that, or map the used calls to a native image service?
+- Package formats: `.elyx`/`.eaf` loading exists in Python only. The Swift side must call `preflight_package_json(path, filename)` and `load_package(path, filename, id)`, accept both extensions on import and delete `AyuPluginFiles/plugins/ElyxPlugins/<id>` on removal. Packages with `.pyc` bytecode (3), DEX or native binaries stay blocked; signed iOS binary compatibility is unresolved.
+- Thread model, device checks: do plugin threads actually run between native jobs; are pump callbacks delivered (a full 64-job queue drops them); is up to 2 s latency for a worker's first call after idle acceptable; what happens at unload with a thread that ignores the stop event?
+- TL layouts: 96 TL classes absent from `swift_scheme.tl` use a layout parsed heuristically from Android Java; only `TL_channels_getMessages` is byte-tested. Verify or drop the rest?
+- UI degradations: alert cancel/back listeners now raise `UnsupportedAPI` (the host reports no outside-tap dismissal), red buttons are not rendered (`make_button_red` only logs), and `EditText` `mask` / `max_length` other than 256 raise. Which of these should the native UI implement?
+- `AppEvent.value`: the bridge keeps `"START"` where Android has `"app_start"` because a test pins it. Switch to the Android value?
+- `find_class`: raises for an unknown class, where Android returns `None`. Match Android (plugins that probe classes would then continue) or keep the explicit failure?
+
+Every item above is static or portable-test evidence only: nothing was compiled or run on a device, and a static preflight pass is not proof that a plugin works.

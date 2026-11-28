@@ -1,5 +1,5 @@
 import AyuSnowEffect
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -55,6 +55,10 @@ public enum ChatListContainerNodeFilter: Equatable {
         }
     }
 }
+
+// "Open Archive on Pull" is handled by ChatListNode.revealScrollHiddenItem, which opens the archive when the pull
+// passes the threshold; opening it again when the finger lifts would push it twice.
+private let ayuOpensArchiveOnRelease = false
 
 // MARK: AyuGram
 // exteraGram's "Tab title style": folder tabs keep the title's text, its custom emoji icons, or only the icons.
@@ -627,8 +631,8 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         
         self.applyItemNodeAsCurrent(id: .all, itemNode: itemNode)
         
-        let panRecognizer = InteractiveTransitionGestureRecognizer(target: self, action: #selector(self.panGesture(_:)), allowedDirections: { [weak self] _ in // MARK: Swiftgram
-            guard let self, self.availableFilters.count > 1 || (self.controller?.isStoryPostingAvailable == true && !(self.context.sharedContext.callManager?.hasActiveCall ?? false) && !SGSimpleSettings.shared.disableSwipeToRecordStory) else { // MARK: Swiftgram
+        let panRecognizer = InteractiveTransitionGestureRecognizer(target: self, action: #selector(self.panGesture(_:)), allowedDirections: { [weak self] _ in // MARK: AyuGram
+            guard let self, self.availableFilters.count > 1 || (self.controller?.isStoryPostingAvailable == true && !(self.context.sharedContext.callManager?.hasActiveCall ?? false) && !SGSimpleSettings.shared.disableSwipeToRecordStory) else { // MARK: AyuGram
                 return []
             }
             guard case .chatList(.root) = self.location else {
@@ -657,7 +661,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
             } else {
                 return [.rightEdge]
             }
-        }, edgeWidth: SGSimpleSettings.shared.disableChatSwipeOptions ? .widthMultiplier(factor: 1.0 / 6.0, min: 0.0, max: 0.0) : .widthMultiplier(factor: 1.0 / 6.0, min: 22.0, max: 80.0)) // MARK: Swiftgram
+        }, edgeWidth: SGSimpleSettings.shared.disableChatSwipeOptions ? .widthMultiplier(factor: 1.0 / 6.0, min: 0.0, max: 0.0) : .widthMultiplier(factor: 1.0 / 6.0, min: 22.0, max: 80.0)) // MARK: AyuGram
         panRecognizer.delegate = self.wrappedGestureRecognizerDelegate
         panRecognizer.delaysTouchesBegan = false
         panRecognizer.cancelsTouchesInView = true
@@ -686,7 +690,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
     }
     
     @objc private func panGesture(_ recognizer: InteractiveTransitionGestureRecognizer) {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         var _availableFilters = self.availableFilters
         if SGSimpleSettings.shared.allChatsHidden {
             _availableFilters.removeAll { $0 == .all }
@@ -700,7 +704,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
             && !recognizer.currentAllowedDirections.intersection(.right).isEmpty
             && self.controller?.isStoryPostingAvailable == true
             && !(self.context.sharedContext.callManager?.hasActiveCall ?? false)
-            && !SGSimpleSettings.shared.disableSwipeToRecordStory // MARK: Swiftgram
+            && !SGSimpleSettings.shared.disableSwipeToRecordStory // MARK: AyuGram
         let hasLiveStream = canOpenStoryCamera && self.controller?.chatListHeaderView()?.storyPeerListView()?.isLiveStreaming == true
         
         switch recognizer.state {
@@ -742,7 +746,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                 }
             }
         case .changed:
-            if let (layout, navigationBarHeight, visualNavigationHeight, originalNavigationHeight: originalNavigationHeight, cleanNavigationBarHeight, insets, isReorderingFilters, isEditing, inlineNavigationLocation, inlineNavigationTransitionFraction, storiesInset) = self.validLayout, let selectedIndex = _availableFilters.firstIndex(where: { $0.id == self.selectedId }) { // MARK: Swiftgram
+            if let (layout, navigationBarHeight, visualNavigationHeight, originalNavigationHeight: originalNavigationHeight, cleanNavigationBarHeight, insets, isReorderingFilters, isEditing, inlineNavigationLocation, inlineNavigationTransitionFraction, storiesInset) = self.validLayout, let selectedIndex = _availableFilters.firstIndex(where: { $0.id == self.selectedId }) { // MARK: AyuGram
                 let translation = recognizer.translation(in: self.view)
                 var transitionFraction = translation.x / layout.size.width
                 
@@ -820,7 +824,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                 self.pinnedHeaderDisplayFractionUpdated?(transition)
             }
         case .cancelled, .ended:
-            if let (layout, navigationBarHeight, visualNavigationHeight, originalNavigationHeight: originalNavigationHeight, cleanNavigationBarHeight, insets, isReorderingFilters, isEditing, inlineNavigationLocation, inlineNavigationTransitionFraction, storiesInset) = self.validLayout, let selectedIndex = _availableFilters.firstIndex(where: { $0.id == self.selectedId }) { // MARK: Swiftgram
+            if let (layout, navigationBarHeight, visualNavigationHeight, originalNavigationHeight: originalNavigationHeight, cleanNavigationBarHeight, insets, isReorderingFilters, isEditing, inlineNavigationLocation, inlineNavigationTransitionFraction, storiesInset) = self.validLayout, let selectedIndex = _availableFilters.firstIndex(where: { $0.id == self.selectedId }) { // MARK: AyuGram
                 let translation = recognizer.translation(in: self.view)
                 let velocity = recognizer.velocity(in: self.view)
                 var directionIsToRight: Bool?
@@ -869,7 +873,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                     } else {
                         updatedIndex = max(updatedIndex - 1, 0)
                     }
-                    let switchToId = _availableFilters[updatedIndex].id // MARK: Swiftgram
+                    let switchToId = _availableFilters[updatedIndex].id // MARK: AyuGram
                     if switchToId != self.selectedId, let itemNode = self.itemNodes[switchToId] {
                         // It may have loaded or reloaded after the last change of the swipe.
                         self.scrollToNavigationBarOffset(itemNode: itemNode)
@@ -1297,7 +1301,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     }()
     private var exteraPillSearchAccessibility: ExteraPillSearchAccessibilityElement?
     private var exteraPillsInSearch: Bool {
-        if case .chatList(.root) = self.location { return self.exteraPillStack.hasItems }
+        if case .chatList(.root) = self.location { return self.exteraPillStack.hasItems && !AyuChatListSearchBar.isHidden }
         return false
     }
     private func updateExteraPillVisibility(transition: ContainedViewLayoutTransition = .immediate) {
@@ -1316,7 +1320,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             self.exteraPillSearchAccessibility?.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: max(0, stack.frame.minX), height: placeholder.bounds.height)
         }
         stack.isUserInteractionEnabled = progress > 0.99 && !stack.isHidden
-        stack.hostVisible = self.exteraPillHostVisible && !stack.isHidden && progress > 0.77 && !ExteraSettings.shared.hideDialogsSearchBar && (search?.alpha ?? 0) > 0.01
+        stack.hostVisible = self.exteraPillHostVisible && !stack.isHidden && progress > 0.77 && !AyuChatListSearchBar.isHidden && (search?.alpha ?? 0) > 0.01
     }
     private let ayuHeaderSnowView = AyuSnowView(style: .header)
     var ayuSnowIsActive = false {
@@ -1349,7 +1353,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var tapRecognizer: UITapGestureRecognizer?
     var navigationBar: NavigationBar?
     let navigationBarView = ComponentView<Empty>()
-    let sgFoldersView = ComponentView<Empty>() // MARK: Swiftgram
+    let sgFoldersView = ComponentView<Empty>() // MARK: AyuGram
     weak var controller: ChatListControllerImpl?
     
     private var toolbar: ComponentView<Empty>?
@@ -1374,6 +1378,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     
     private var allowOverscrollItemExpansion: Bool = false
     private var currentOverscrollItemExpansionTimestamp: Double?
+    
+    // MARK: AyuGram
+    private var ayuArchiveOnPullPending: Bool = false
     
     private var containerLayout: (layout: ContainerViewLayout, navigationBarHeight: CGFloat, visualNavigationHeight: CGFloat, cleanNavigationBarHeight: CGFloat, storiesInset: CGFloat)?
     
@@ -1616,7 +1623,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.searchDisplayController?.updatePresentationData(presentationData)
     }
     
-    private func updateNavigationBar(layout: ContainerViewLayout, deferScrollApplication: Bool, transition: ComponentTransition) -> (tabs: AnyComponent<Empty>?, navigationHeight: CGFloat, storiesInset: CGFloat) { // MARK: Swiftgram
+    private func updateNavigationBar(layout: ContainerViewLayout, deferScrollApplication: Bool, transition: ComponentTransition) -> (tabs: AnyComponent<Empty>?, navigationHeight: CGFloat, storiesInset: CGFloat) { // MARK: AyuGram
         let headerContent = self.controller?.updateHeaderContent()
         
         var panels: [HeaderPanelContainerComponent.Panel] = []
@@ -1720,7 +1727,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         
         var navigationHeaderPanels: AnyComponent<Empty>?
-        var tabs: AnyComponent<Empty>? // MARK: Swiftgram
+        var tabs: AnyComponent<Empty>? // MARK: AyuGram
         if self.controller?.tabContainerData != nil || !panels.isEmpty {
             if let tabContainerData = self.controller?.tabContainerData, tabContainerData.0.count > 1 {
                 let folderFilterIndex: (ChatListFilterTabEntryId, [ChatListFilterTabEntry]) -> Int? = { id, entries in
@@ -1765,7 +1772,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                         switch entry {
                         case .all:
                             id = Int32.min
-                            title = HorizontalTabsComponent.Tab.Title(text: sgUseShortAllChatsTitle(true) ? self.presentationData.strings.ChatList_Tabs_All : self.presentationData.strings.ChatList_Tabs_AllChats /* MARK: Swiftgram */, entities: [], enableAnimations: false)
+                            title = HorizontalTabsComponent.Tab.Title(text: sgUseShortAllChatsTitle(true) ? self.presentationData.strings.ChatList_Tabs_All : self.presentationData.strings.ChatList_Tabs_AllChats /* MARK: AyuGram */, entities: [], enableAnimations: false)
                             isMainTab = true
                         case let .filter(idValue, text, unread, folderColor):
                             id = AnyHashable(idValue)
@@ -1858,7 +1865,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                     }
                                 }
                                 
-                                self.controller?.tabContextGesture(id: mappedId, sourceNode: nil, sourceView: sourceView, gesture: gesture, /* MARK: Swiftgram */ sourceActionsPosition: tabContainerData.1 ? .top : .bottom, sourceKeepInPlace: !tabContainerData.1, /* MARK: Swiftgram */ keepInPlace: false, isDisabled: isDisabled)
+                                self.controller?.tabContextGesture(id: mappedId, sourceNode: nil, sourceView: sourceView, gesture: gesture, /* MARK: AyuGram */ sourceActionsPosition: tabContainerData.1 ? .top : .bottom, sourceKeepInPlace: !tabContainerData.1, /* MARK: AyuGram */ keepInPlace: false, isDisabled: isDisabled)
                             },
                             deleteAction: (!isEditing || isMainTab) ? nil : { [weak self] in
                                 guard let self else {
@@ -1881,7 +1888,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 
             navigationHeaderPanels = AnyComponent(HeaderPanelContainerComponent(
                 theme: self.presentationData.theme,
-                tabs: (self.controller?.tabContainerData?.1 ?? false) ? nil : tabs, // MARK: Swiftgram
+                tabs: (self.controller?.tabContainerData?.1 ?? false) ? nil : tabs, // MARK: AyuGram
                 panels: panels
             ))
         }
@@ -1919,7 +1926,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 leftInset: layout.safeInsets.left,
                 rightInset: layout.safeInsets.right,
                 trailingButtonsInset: layout.navigationBarTrailingButtonsInset,
-                search: ExteraSettings.shared.hideDialogsSearchBar ? nil : ChatListNavigationBar.Search(isEnabled: true, alignPlaceholderToLeftWhenInactive: self.exteraPillsInSearch), // MARK: AyuGram
+                search: ChatListNavigationBar.Search(isEnabled: true, alignPlaceholderToLeftWhenInactive: self.exteraPillsInSearch, isHiddenWhenInactive: AyuChatListSearchBar.isHidden), // MARK: AyuGram
                 activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,
                 secondaryContent: headerContent?.secondaryContent,
@@ -2024,9 +2031,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             self.ayuHeaderSnowView.frame = CGRect(x: layout.safeInsets.left, y: 0.0, width: max(0.0, navigationBarSize.width - layout.safeInsets.left - layout.safeInsets.right), height: min(navigationBarSize.height, (layout.navigationBarStatusBarHeight ?? 0.0) + 56.0))
             self.ayuHeaderSnowView.isActive = self.ayuSnowIsActive && self.isSearchDisplayControllerActive == nil
             
-            return (tabs, navigationBarSize.height, 0.0) // MARK: Swiftgram
+            return (tabs, navigationBarSize.height, 0.0) // MARK: AyuGram
         } else {
-            return (tabs, 0.0, 0.0) // MARK: Swiftgram
+            return (tabs, 0.0, 0.0) // MARK: AyuGram
         }
     }
     
@@ -2040,7 +2047,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         self.mainContainerNode.updateScrollingOffset(navigationHeight: navigationHeight, offset: mainOffset, transition: transition)
         
-        mainOffset = min(mainOffset, ChatListNavigationBar.searchScrollHeight)
+        mainOffset = min(mainOffset, AyuChatListSearchBar.scrollHeight)
         if abs(mainOffset) < 0.1 {
             mainOffset = 0.0
         }
@@ -2057,7 +2064,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             } else {
                 inlineOffset = navigationHeight
             }
-            inlineOffset = min(inlineOffset, ChatListNavigationBar.searchScrollHeight)
+            inlineOffset = min(inlineOffset, AyuChatListSearchBar.scrollHeight)
             if abs(inlineOffset) < 0.1 {
                 inlineOffset = 0.0
             }
@@ -2131,7 +2138,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         let navigationBarLayout = self.updateNavigationBar(layout: layout, deferScrollApplication: true, transition: ComponentTransition(transition))
         // The chat side list opens with its search shown, not scrolled under the header.
-        self.mainContainerNode.initialScrollingOffset = ((self.controller?.isSideList ?? false) ? 0.0 : ChatListNavigationBar.searchScrollHeight) + navigationBarLayout.storiesInset
+        self.mainContainerNode.initialScrollingOffset = ((self.controller?.isSideList ?? false) ? 0.0 : AyuChatListSearchBar.scrollHeight) + navigationBarLayout.storiesInset
         
         navigationBarHeight = navigationBarLayout.navigationHeight
         visualNavigationHeight = navigationBarLayout.navigationHeight
@@ -2140,7 +2147,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         self.containerLayout = (layout, navigationBarHeight, visualNavigationHeight, cleanNavigationBarHeight, storiesInset)
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgComponentTransition = ComponentTransition(transition)
         let sgDisplayTabsAtBottom = self.controller?.tabContainerData?.1 ?? false
         let sgShouldDisplayBottomFolders = sgDisplayTabsAtBottom && self.isSearchDisplayControllerActive == nil
@@ -2277,7 +2284,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             }
         }
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if sgShouldDisplayBottomFolders && sgFoldersSize.height > 0.0 {
             insets.bottom += sgFoldersSize.height + 16.0 + 8.0
         }
@@ -2348,7 +2355,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             navigationBarComponentView.applyCurrentScroll(transition: ComponentTransition(transition))
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let sgFoldersView = self.sgFoldersView.view as? HeaderPanelContainerComponent.View {
             if sgShouldDisplayBottomFolders && sgFoldersSize.height > 0.0 {
                 sgFoldersView.layer.removeAnimation(forKey: "opacity")
@@ -2603,6 +2610,10 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                 self.allowOverscrollItemExpansion = false
                                 
                                 if isPrimary {
+                                    // MARK: AyuGram
+                                    if self.ayuCanOpenArchiveOnPull() && self.ayuWillRevealHiddenArchive(listNode: self.mainContainerNode.currentItemNode) {
+                                        self.ayuArchiveOnPullPending = true
+                                    }
                                     self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
                                 } else {
                                     self.inlineStackContainerNode?.currentItemNode.revealScrollHiddenItem()
@@ -2631,7 +2642,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         if let clippedScrollOffset = navigationBarComponentView.clippedScrollOffset {
             let searchScrollOffset = clippedScrollOffset
-            if searchScrollOffset > 0.0 && searchScrollOffset < ChatListNavigationBar.searchScrollHeight {
+            if searchScrollOffset > 0.0 && searchScrollOffset < AyuChatListSearchBar.scrollHeight {
                 return true
             } else if clippedScrollOffset < 0.0 && clippedScrollOffset > -listView.tempTopInset {
                 return true
@@ -2648,14 +2659,54 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             } else {
                 self.allowOverscrollStoryExpansion = false
             }
+            // MARK: AyuGram
+            self.ayuArchiveOnPullPending = false
         }
         self.allowOverscrollItemExpansion = true
+    }
+    
+    // MARK: AyuGram
+    private func ayuCanOpenArchiveOnPull() -> Bool {
+        guard ayuOpensArchiveOnRelease, ExteraSettings.shared.archiveOnPull, let controller = self.controller else {
+            return false
+        }
+        guard controller.location == .chatList(groupId: .root), self.inlineStackContainerNode == nil else {
+            return false
+        }
+        if self.isEditing || self.searchDisplayController != nil || controller.isSearchActive {
+            return false
+        }
+        return !self.mainContainerNode.currentItemNode.currentState.editing
+    }
+    
+    // MARK: AyuGram
+    private func ayuWillRevealHiddenArchive(listNode: ChatListNode) -> Bool {
+        guard listNode.hasItemsToBeRevealed() else {
+            return false
+        }
+        var hasHiddenArchive = false
+        listNode.forEachItemNode { itemNode in
+            if let itemNode = itemNode as? ChatListItemNode, let item = itemNode.item, case let .groupReference(groupReference) = item.content, groupReference.hiddenByDefault {
+                hasHiddenArchive = true
+            }
+        }
+        return hasHiddenArchive
     }
     
     private func endedInteractiveDragging(listView: ListView, isPrimary: Bool) {
         if isPrimary {
             self.allowOverscrollStoryExpansion = false
             self.currentOverscrollStoryExpansionTimestamp = nil
+            // MARK: AyuGram
+            if self.ayuArchiveOnPullPending {
+                self.ayuArchiveOnPullPending = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                    guard let self, self.ayuCanOpenArchiveOnPull() else {
+                        return
+                    }
+                    self.mainContainerNode.groupSelected?(.archive)
+                }
+            }
         }
         self.allowOverscrollItemExpansion = false
         self.currentOverscrollItemExpansionTimestamp = nil
@@ -2673,11 +2724,11 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         
         if let clippedScrollOffset = navigationBarComponentView.clippedScrollOffset {
             let searchScrollOffset = clippedScrollOffset
-            if searchScrollOffset > 0.0 && searchScrollOffset < ChatListNavigationBar.searchScrollHeight {
-                if searchScrollOffset < ChatListNavigationBar.searchScrollHeight * 0.5 {
+            if searchScrollOffset > 0.0 && searchScrollOffset < AyuChatListSearchBar.scrollHeight {
+                if searchScrollOffset < AyuChatListSearchBar.scrollHeight * 0.5 {
                     let _ = listView.scrollToOffsetFromTop(0.0, animated: true)
                 } else {
-                    let _ = listView.scrollToOffsetFromTop(ChatListNavigationBar.searchScrollHeight, animated: true)
+                    let _ = listView.scrollToOffsetFromTop(AyuChatListSearchBar.scrollHeight, animated: true)
                 }
                 return true
             } else if clippedScrollOffset < 0.0 && clippedScrollOffset > -listView.tempTopInset {

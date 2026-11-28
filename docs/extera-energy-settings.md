@@ -126,7 +126,7 @@ The style owner should include its notifications in the refresh path after hando
 - Localization: 28 EN/RU pairs are ready in
   [`integration/extera-energy-strings.json`](integration/extera-energy-strings.json).
   Existing native title/options/video/GIF/back labels are reused.
-- Add `//Swiftgram/SGSimpleSettings:SGSimpleSettings` as a direct dependency to
+- Add `//AyuGram/SGSimpleSettings:SGSimpleSettings` as a direct dependency to
   InvisibleInkDustNode, EmojiTextAttachmentView and GlassBackgroundComponent.
 - Add `//submodules/TelegramPresentationData:TelegramPresentationData` as a direct
   dependency to ChatMessageTextBubbleContentNode, InteractiveTextComponent and

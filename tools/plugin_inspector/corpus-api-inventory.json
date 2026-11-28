@@ -1,0 +1,3514 @@
+{
+  "schema_version": 1,
+  "inspection": "bounded_static_ast_and_archive_metadata_only",
+  "inventory_python_version": "3.14.0",
+  "execution_verified": false,
+  "runtime_validation_required": true,
+  "corpus_sha256": "ebfb1b41c27a42dac13794dfe4fc8dfff63a505a2c3a37db9d87b4a24c56881a",
+  "statistics": {
+    "attachments": 514,
+    "attachment_types": {
+      ".eaf": 6,
+      ".elyx": 15,
+      ".plugin": 493
+    },
+    "source_units": 737,
+    "parsed_source_units": 737,
+    "attachments_with_parsed_source": 513,
+    "unique_source_units": 727,
+    "unique_plugin_sources": 493,
+    "parsed_source_lines": 797244,
+    "bytes_read": 70510904,
+    "archive_payload_attachments": {
+      "android_bytecode": 5,
+      "font": 1,
+      "image": 7,
+      "json_data": 7,
+      "native_binary": 2,
+      "other_data": 21,
+      "python_bytecode": 3,
+      "python_source": 20,
+      "text": 1,
+      "web_content": 1
+    },
+    "source_errors": {},
+    "static_status": {
+      "unknown": 733,
+      "unsupported": 4
+    },
+    "finding_categories": {
+      "bridge_call": 37393,
+      "declared_dependency": 12,
+      "dependency_import": 8135,
+      "feature": 32718,
+      "hook_target": 284,
+      "imported_symbol": 7850,
+      "java_call": 39770,
+      "java_class_import": 7354,
+      "java_class_lookup": 5087,
+      "java_member": 43890,
+      "java_namespace": 4,
+      "native_dependency": 42,
+      "platform_restriction": 12,
+      "reflection_target": 219
+    },
+    "archive_formats": {
+      ".eaf.zip": 6,
+      ".elyx.zip": 15
+    },
+    "archive_member_kinds": {
+      "android_bytecode": 6,
+      "font": 11,
+      "image": 54,
+      "json_data": 26,
+      "native_binary": 2,
+      "other_data": 95,
+      "python_bytecode": 99,
+      "python_source": 244,
+      "text": 1,
+      "web_content": 3
+    },
+    "archive_issues": {},
+    "source_units_by_attachment_type": {
+      ".eaf": 101,
+      ".elyx": 143,
+      ".plugin": 493
+    },
+    "parsed_lines_by_attachment_type": {
+      ".eaf": 45636,
+      ".elyx": 63031,
+      ".plugin": 688577
+    }
+  },
+  "sdk_comparison": {
+    "android": {
+      "available": true,
+      "source_files": 32,
+      "declaration_sha256": "fa38963a972e89e2e64090ce80026e1150f4bad4045c3aa482b1266cba4c7eee"
+    },
+    "bridge": {
+      "available": true,
+      "source_files": 26,
+      "declaration_sha256": "3fb8fba20652b553bb6e60d269447676e076196476ab20cfe87cc94dd02d888b"
+    }
+  },
+  "rank_limit": 50,
+  "requirements": {
+    "declared_dependency": {
+      "distinct_targets": 5,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "mutagen",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        },
+        {
+          "api": "<computed-or-redacted>",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 5
+        },
+        {
+          "api": "PySocks",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "certifi",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "requests",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        }
+      ]
+    },
+    "external_imports": {
+      "distinct_targets": 108,
+      "omitted_targets": 58,
+      "ranked": [
+        {
+          "api": "requests",
+          "files": 74,
+          "unique_sources": 86,
+          "occurrences": 105
+        },
+        {
+          "api": "PIL",
+          "files": 19,
+          "unique_sources": 19,
+          "occurrences": 36
+        },
+        {
+          "api": "elyx",
+          "files": 14,
+          "unique_sources": 60,
+          "occurrences": 72
+        },
+        {
+          "api": "android",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 13
+        },
+        {
+          "api": "audioop",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 6
+        },
+        {
+          "api": "mutagen",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 7
+        },
+        {
+          "api": "yaml",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 5
+        },
+        {
+          "api": "packaging.version",
+          "files": 3,
+          "unique_sources": 4,
+          "occurrences": 6
+        },
+        {
+          "api": "mutagen.id3",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 4
+        },
+        {
+          "api": "src.common",
+          "files": 2,
+          "unique_sources": 20,
+          "occurrences": 21
+        },
+        {
+          "api": "typing_extensions",
+          "files": 2,
+          "unique_sources": 4,
+          "occurrences": 4
+        },
+        {
+          "api": "_sdk_version",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 4
+        },
+        {
+          "api": "bs4",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "cachetools",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "cactuslib",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "mutagen.flac",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 4
+        },
+        {
+          "api": "mutagen.mp4",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 3
+        },
+        {
+          "api": "plugins_manager",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "quantahut",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 6
+        },
+        {
+          "api": "requests.adapters",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "requests.exceptions",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "src.settings_page",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "tinydb",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "websocket",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 3
+        },
+        {
+          "api": "yt_dlp",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 4
+        },
+        {
+          "api": "wave_addons.Diag",
+          "files": 1,
+          "unique_sources": 8,
+          "occurrences": 8
+        },
+        {
+          "api": "common",
+          "files": 1,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "wave_addons",
+          "files": 1,
+          "unique_sources": 7,
+          "occurrences": 13
+        },
+        {
+          "api": "src.apply_predicates",
+          "files": 1,
+          "unique_sources": 5,
+          "occurrences": 5
+        },
+        {
+          "api": "src.apply_core",
+          "files": 1,
+          "unique_sources": 3,
+          "occurrences": 3
+        },
+        {
+          "api": "hooks",
+          "files": 1,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "src.apply_zones",
+          "files": 1,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "src.peers",
+          "files": 1,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "wave_addons.Overlay",
+          "files": 1,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "PIL.Image",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 5
+        },
+        {
+          "api": "PIL.ImageDraw",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "alib",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "babel",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "certifi",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "debugpy",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "debugpy.adapter.sessions",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "editors",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "humanize",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "kpmplugin.src.decompiler.base64_extractor",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "lyrics",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        },
+        {
+          "api": "media",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "mpmath",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "mutagen.easymp4",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        },
+        {
+          "api": "mutagen.mp3",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "mutagen.ogg",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        }
+      ]
+    },
+    "features": {
+      "distinct_targets": 27,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "conditional_binding",
+          "files": 440,
+          "unique_sources": 549,
+          "occurrences": 6094
+        },
+        {
+          "api": "telegram_controllers",
+          "files": 427,
+          "unique_sources": 501,
+          "occurrences": 2510
+        },
+        {
+          "api": "dynamic_java_members",
+          "files": 425,
+          "unique_sources": 501,
+          "occurrences": 8865
+        },
+        {
+          "api": "reflection",
+          "files": 358,
+          "unique_sources": 416,
+          "occurrences": 5640
+        },
+        {
+          "api": "dynamic_attributes",
+          "files": 314,
+          "unique_sources": 411,
+          "occurrences": 5246
+        },
+        {
+          "api": "telegram_android_ui",
+          "files": 304,
+          "unique_sources": 359,
+          "occurrences": 1704
+        },
+        {
+          "api": "method_hooks",
+          "files": 294,
+          "unique_sources": 324,
+          "occurrences": 2416
+        },
+        {
+          "api": "android_views",
+          "files": 254,
+          "unique_sources": 285,
+          "occurrences": 2445
+        },
+        {
+          "api": "unresolved_hook_target",
+          "files": 201,
+          "unique_sources": 212,
+          "occurrences": 717
+        },
+        {
+          "api": "dynamic_proxy",
+          "files": 195,
+          "unique_sources": 223,
+          "occurrences": 801
+        },
+        {
+          "api": "android_graphics",
+          "files": 190,
+          "unique_sources": 218,
+          "occurrences": 1188
+        },
+        {
+          "api": "plugin_threads",
+          "files": 175,
+          "unique_sources": 204,
+          "occurrences": 261
+        },
+        {
+          "api": "computed_reflection",
+          "files": 175,
+          "unique_sources": 196,
+          "occurrences": 888
+        },
+        {
+          "api": "enumerated_reflection",
+          "files": 168,
+          "unique_sources": 178,
+          "occurrences": 479
+        },
+        {
+          "api": "telegram_tl_objects",
+          "files": 145,
+          "unique_sources": 153,
+          "occurrences": 287
+        },
+        {
+          "api": "restricted_android_api",
+          "files": 111,
+          "unique_sources": 111,
+          "occurrences": 135
+        },
+        {
+          "api": "computed_hook",
+          "files": 93,
+          "unique_sources": 101,
+          "occurrences": 219
+        },
+        {
+          "api": "scope_mutation",
+          "files": 84,
+          "unique_sources": 108,
+          "occurrences": 302
+        },
+        {
+          "api": "android_media",
+          "files": 59,
+          "unique_sources": 59,
+          "occurrences": 171
+        },
+        {
+          "api": "java_subclassing",
+          "files": 20,
+          "unique_sources": 22,
+          "occurrences": 135
+        },
+        {
+          "api": "dynamic_code",
+          "files": 16,
+          "unique_sources": 18,
+          "occurrences": 30
+        },
+        {
+          "api": "elyx_package_runtime",
+          "files": 14,
+          "unique_sources": 60,
+          "occurrences": 74
+        },
+        {
+          "api": "relative_import",
+          "files": 10,
+          "unique_sources": 162,
+          "occurrences": 1446
+        },
+        {
+          "api": "native_ffi",
+          "files": 10,
+          "unique_sources": 11,
+          "occurrences": 14
+        },
+        {
+          "api": "dynamic_dependency",
+          "files": 10,
+          "unique_sources": 10,
+          "occurrences": 10
+        },
+        {
+          "api": "android_hardware",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 7
+        },
+        {
+          "api": "wildcard_import",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        }
+      ]
+    },
+    "imports": {
+      "distinct_targets": 351,
+      "omitted_targets": 301,
+      "ranked": [
+        {
+          "api": "base_plugin",
+          "files": 511,
+          "unique_sources": 540,
+          "occurrences": 584
+        },
+        {
+          "api": "android_utils",
+          "files": 395,
+          "unique_sources": 456,
+          "occurrences": 654
+        },
+        {
+          "api": "ui.settings",
+          "files": 395,
+          "unique_sources": 401,
+          "occurrences": 437
+        },
+        {
+          "api": "client_utils",
+          "files": 357,
+          "unique_sources": 419,
+          "occurrences": 608
+        },
+        {
+          "api": "org.telegram.messenger",
+          "files": 328,
+          "unique_sources": 392,
+          "occurrences": 945
+        },
+        {
+          "api": "java",
+          "files": 325,
+          "unique_sources": 384,
+          "occurrences": 669
+        },
+        {
+          "api": "hook_utils",
+          "files": 312,
+          "unique_sources": 361,
+          "occurrences": 455
+        },
+        {
+          "api": "ui.bulletin",
+          "files": 284,
+          "unique_sources": 309,
+          "occurrences": 372
+        },
+        {
+          "api": "time",
+          "files": 239,
+          "unique_sources": 278,
+          "occurrences": 312
+        },
+        {
+          "api": "typing",
+          "files": 206,
+          "unique_sources": 238,
+          "occurrences": 238
+        },
+        {
+          "api": "java.lang",
+          "files": 175,
+          "unique_sources": 195,
+          "occurrences": 288
+        },
+        {
+          "api": "threading",
+          "files": 174,
+          "unique_sources": 203,
+          "occurrences": 245
+        },
+        {
+          "api": "ui.alert",
+          "files": 172,
+          "unique_sources": 179,
+          "occurrences": 218
+        },
+        {
+          "api": "os",
+          "files": 170,
+          "unique_sources": 213,
+          "occurrences": 248
+        },
+        {
+          "api": "android.view",
+          "files": 165,
+          "unique_sources": 188,
+          "occurrences": 352
+        },
+        {
+          "api": "java.util",
+          "files": 157,
+          "unique_sources": 164,
+          "occurrences": 198
+        },
+        {
+          "api": "json",
+          "files": 151,
+          "unique_sources": 182,
+          "occurrences": 191
+        },
+        {
+          "api": "android.widget",
+          "files": 150,
+          "unique_sources": 170,
+          "occurrences": 375
+        },
+        {
+          "api": "traceback",
+          "files": 141,
+          "unique_sources": 168,
+          "occurrences": 212
+        },
+        {
+          "api": "org.telegram.ui.ActionBar",
+          "files": 137,
+          "unique_sources": 165,
+          "occurrences": 285
+        },
+        {
+          "api": "re",
+          "files": 136,
+          "unique_sources": 162,
+          "occurrences": 177
+        },
+        {
+          "api": "android.graphics",
+          "files": 126,
+          "unique_sources": 140,
+          "occurrences": 242
+        },
+        {
+          "api": "org.telegram.tgnet",
+          "files": 116,
+          "unique_sources": 124,
+          "occurrences": 164
+        },
+        {
+          "api": "android.graphics.drawable",
+          "files": 99,
+          "unique_sources": 115,
+          "occurrences": 200
+        },
+        {
+          "api": "android.content",
+          "files": 98,
+          "unique_sources": 102,
+          "occurrences": 175
+        },
+        {
+          "api": "org.telegram.ui.Components",
+          "files": 94,
+          "unique_sources": 114,
+          "occurrences": 207
+        },
+        {
+          "api": "base64",
+          "files": 93,
+          "unique_sources": 100,
+          "occurrences": 103
+        },
+        {
+          "api": "android.os",
+          "files": 89,
+          "unique_sources": 94,
+          "occurrences": 143
+        },
+        {
+          "api": "requests",
+          "files": 74,
+          "unique_sources": 86,
+          "occurrences": 105
+        },
+        {
+          "api": "random",
+          "files": 68,
+          "unique_sources": 82,
+          "occurrences": 94
+        },
+        {
+          "api": "java.io",
+          "files": 65,
+          "unique_sources": 71,
+          "occurrences": 110
+        },
+        {
+          "api": "org.telegram.ui",
+          "files": 65,
+          "unique_sources": 65,
+          "occurrences": 84
+        },
+        {
+          "api": "math",
+          "files": 60,
+          "unique_sources": 64,
+          "occurrences": 65
+        },
+        {
+          "api": "hashlib",
+          "files": 57,
+          "unique_sources": 66,
+          "occurrences": 67
+        },
+        {
+          "api": "android.net",
+          "files": 57,
+          "unique_sources": 59,
+          "occurrences": 79
+        },
+        {
+          "api": "datetime",
+          "files": 56,
+          "unique_sources": 58,
+          "occurrences": 63
+        },
+        {
+          "api": "android.text",
+          "files": 52,
+          "unique_sources": 59,
+          "occurrences": 87
+        },
+        {
+          "api": "android.util",
+          "files": 49,
+          "unique_sources": 60,
+          "occurrences": 89
+        },
+        {
+          "api": "urllib.parse",
+          "files": 49,
+          "unique_sources": 56,
+          "occurrences": 66
+        },
+        {
+          "api": "zlib",
+          "files": 48,
+          "unique_sources": 53,
+          "occurrences": 53
+        },
+        {
+          "api": "android.app",
+          "files": 45,
+          "unique_sources": 47,
+          "occurrences": 57
+        },
+        {
+          "api": "java.nio",
+          "files": 44,
+          "unique_sources": 44,
+          "occurrences": 46
+        },
+        {
+          "api": "com.exteragram.messenger.plugins",
+          "files": 43,
+          "unique_sources": 58,
+          "occurrences": 82
+        },
+        {
+          "api": "dalvik.system",
+          "files": 41,
+          "unique_sources": 41,
+          "occurrences": 42
+        },
+        {
+          "api": "file_utils",
+          "files": 41,
+          "unique_sources": 41,
+          "occurrences": 53
+        },
+        {
+          "api": "android.media",
+          "files": 39,
+          "unique_sources": 39,
+          "occurrences": 57
+        },
+        {
+          "api": "shutil",
+          "files": 35,
+          "unique_sources": 37,
+          "occurrences": 48
+        },
+        {
+          "api": "org.telegram.messenger.browser",
+          "files": 32,
+          "unique_sources": 32,
+          "occurrences": 37
+        },
+        {
+          "api": "uuid",
+          "files": 31,
+          "unique_sources": 31,
+          "occurrences": 37
+        },
+        {
+          "api": "collections",
+          "files": 30,
+          "unique_sources": 33,
+          "occurrences": 33
+        }
+      ]
+    },
+    "java_classes": {
+      "distinct_targets": 952,
+      "omitted_targets": 902,
+      "ranked": [
+        {
+          "api": "org.telegram.messenger.ApplicationLoader",
+          "files": 238,
+          "unique_sources": 258,
+          "occurrences": 396
+        },
+        {
+          "api": "org.telegram.messenger.AndroidUtilities",
+          "files": 229,
+          "unique_sources": 256,
+          "occurrences": 446
+        },
+        {
+          "api": "org.telegram.ui.ActionBar.Theme",
+          "files": 160,
+          "unique_sources": 187,
+          "occurrences": 315
+        },
+        {
+          "api": "android.widget.LinearLayout",
+          "files": 158,
+          "unique_sources": 181,
+          "occurrences": 317
+        },
+        {
+          "api": "android.widget.TextView",
+          "files": 155,
+          "unique_sources": 174,
+          "occurrences": 292
+        },
+        {
+          "api": "android.view.View",
+          "files": 153,
+          "unique_sources": 169,
+          "occurrences": 257
+        },
+        {
+          "api": "android.view.Gravity",
+          "files": 144,
+          "unique_sources": 165,
+          "occurrences": 266
+        },
+        {
+          "api": "org.telegram.messenger.UserConfig",
+          "files": 143,
+          "unique_sources": 153,
+          "occurrences": 242
+        },
+        {
+          "api": "org.telegram.messenger.LocaleController",
+          "files": 130,
+          "unique_sources": 137,
+          "occurrences": 159
+        },
+        {
+          "api": "android.widget.FrameLayout",
+          "files": 128,
+          "unique_sources": 142,
+          "occurrences": 208
+        },
+        {
+          "api": "org.telegram.tgnet.TLRPC",
+          "files": 120,
+          "unique_sources": 128,
+          "occurrences": 158
+        },
+        {
+          "api": "android.graphics.drawable.GradientDrawable",
+          "files": 113,
+          "unique_sources": 124,
+          "occurrences": 209
+        },
+        {
+          "api": "java.util.ArrayList",
+          "files": 112,
+          "unique_sources": 119,
+          "occurrences": 155
+        },
+        {
+          "api": "java.lang.Integer",
+          "files": 110,
+          "unique_sources": 115,
+          "occurrences": 200
+        },
+        {
+          "api": "java.util.Locale",
+          "files": 97,
+          "unique_sources": 98,
+          "occurrences": 103
+        },
+        {
+          "api": "java.lang.Boolean",
+          "files": 94,
+          "unique_sources": 101,
+          "occurrences": 180
+        },
+        {
+          "api": "org.telegram.messenger.MessagesController",
+          "files": 93,
+          "unique_sources": 99,
+          "occurrences": 173
+        },
+        {
+          "api": "android.content.Intent",
+          "files": 93,
+          "unique_sources": 97,
+          "occurrences": 160
+        },
+        {
+          "api": "android.graphics.Color",
+          "files": 90,
+          "unique_sources": 91,
+          "occurrences": 108
+        },
+        {
+          "api": "android.widget.ImageView",
+          "files": 82,
+          "unique_sources": 92,
+          "occurrences": 135
+        },
+        {
+          "api": "java.lang.Runnable",
+          "files": 82,
+          "unique_sources": 89,
+          "occurrences": 107
+        },
+        {
+          "api": "org.telegram.messenger.R",
+          "files": 78,
+          "unique_sources": 94,
+          "occurrences": 132
+        },
+        {
+          "api": "android.widget.ScrollView",
+          "files": 78,
+          "unique_sources": 81,
+          "occurrences": 101
+        },
+        {
+          "api": "android.graphics.Typeface",
+          "files": 77,
+          "unique_sources": 81,
+          "occurrences": 100
+        },
+        {
+          "api": "android.net.Uri",
+          "files": 76,
+          "unique_sources": 80,
+          "occurrences": 100
+        },
+        {
+          "api": "java.nio.ByteBuffer",
+          "files": 74,
+          "unique_sources": 74,
+          "occurrences": 82
+        },
+        {
+          "api": "java.lang.Class",
+          "files": 73,
+          "unique_sources": 74,
+          "occurrences": 113
+        },
+        {
+          "api": "org.telegram.ui.ChatActivity",
+          "files": 73,
+          "unique_sources": 73,
+          "occurrences": 96
+        },
+        {
+          "api": "android.content.Context",
+          "files": 71,
+          "unique_sources": 73,
+          "occurrences": 94
+        },
+        {
+          "api": "java.lang.String",
+          "files": 69,
+          "unique_sources": 72,
+          "occurrences": 91
+        },
+        {
+          "api": "org.telegram.messenger.FileLoader",
+          "files": 69,
+          "unique_sources": 70,
+          "occurrences": 94
+        },
+        {
+          "api": "dalvik.system.InMemoryDexClassLoader",
+          "files": 67,
+          "unique_sources": 67,
+          "occurrences": 70
+        },
+        {
+          "api": "com.exteragram.messenger.plugins.PluginsController",
+          "files": 66,
+          "unique_sources": 83,
+          "occurrences": 117
+        },
+        {
+          "api": "android.view.ViewGroup",
+          "files": 66,
+          "unique_sources": 71,
+          "occurrences": 89
+        },
+        {
+          "api": "java.io.File",
+          "files": 65,
+          "unique_sources": 73,
+          "occurrences": 108
+        },
+        {
+          "api": "org.telegram.messenger.MessageObject",
+          "files": 65,
+          "unique_sources": 68,
+          "occurrences": 81
+        },
+        {
+          "api": "java.lang.System",
+          "files": 65,
+          "unique_sources": 67,
+          "occurrences": 79
+        },
+        {
+          "api": "android.widget.EditText",
+          "files": 65,
+          "unique_sources": 66,
+          "occurrences": 76
+        },
+        {
+          "api": "java.lang.Long",
+          "files": 64,
+          "unique_sources": 69,
+          "occurrences": 93
+        },
+        {
+          "api": "org.telegram.ui.LaunchActivity",
+          "files": 64,
+          "unique_sources": 68,
+          "occurrences": 92
+        },
+        {
+          "api": "android.view.MotionEvent",
+          "files": 61,
+          "unique_sources": 63,
+          "occurrences": 75
+        },
+        {
+          "api": "android.graphics.Bitmap",
+          "files": 57,
+          "unique_sources": 58,
+          "occurrences": 76
+        },
+        {
+          "api": "org.telegram.messenger.NotificationCenter",
+          "files": 54,
+          "unique_sources": 58,
+          "occurrences": 79
+        },
+        {
+          "api": "org.telegram.messenger.browser.Browser",
+          "files": 54,
+          "unique_sources": 54,
+          "occurrences": 63
+        },
+        {
+          "api": "org.telegram.ui.Components.LayoutHelper",
+          "files": 51,
+          "unique_sources": 64,
+          "occurrences": 111
+        },
+        {
+          "api": "android.os.Build",
+          "files": 50,
+          "unique_sources": 51,
+          "occurrences": 75
+        },
+        {
+          "api": "android.util.TypedValue",
+          "files": 47,
+          "unique_sources": 58,
+          "occurrences": 93
+        },
+        {
+          "api": "android.graphics.BitmapFactory",
+          "files": 47,
+          "unique_sources": 48,
+          "occurrences": 70
+        },
+        {
+          "api": "org.telegram.messenger.MediaController",
+          "files": 46,
+          "unique_sources": 47,
+          "occurrences": 70
+        },
+        {
+          "api": "java.lang.Object",
+          "files": 46,
+          "unique_sources": 46,
+          "occurrences": 60
+        }
+      ]
+    },
+    "java_members": {
+      "distinct_targets": 3556,
+      "omitted_targets": 3506,
+      "ranked": [
+        {
+          "api": "org.telegram.messenger.ApplicationLoader.applicationContext",
+          "files": 220,
+          "unique_sources": 237,
+          "occurrences": 558
+        },
+        {
+          "api": "org.telegram.messenger.AndroidUtilities.dp",
+          "files": 177,
+          "unique_sources": 198,
+          "occurrences": 3338
+        },
+        {
+          "api": "android.widget.LinearLayout.setOrientation",
+          "files": 142,
+          "unique_sources": 163,
+          "occurrences": 907
+        },
+        {
+          "api": "android.widget.LinearLayout.addView",
+          "files": 140,
+          "unique_sources": 161,
+          "occurrences": 2201
+        },
+        {
+          "api": "android.widget.TextView.setTextSize",
+          "files": 134,
+          "unique_sources": 151,
+          "occurrences": 948
+        },
+        {
+          "api": "org.telegram.ui.ActionBar.Theme.getColor",
+          "files": 131,
+          "unique_sources": 146,
+          "occurrences": 1193
+        },
+        {
+          "api": "android.widget.LinearLayout.setPadding",
+          "files": 130,
+          "unique_sources": 143,
+          "occurrences": 542
+        },
+        {
+          "api": "android.widget.TextView.setText",
+          "files": 127,
+          "unique_sources": 144,
+          "occurrences": 1017
+        },
+        {
+          "api": "android.widget.TextView.setTextColor",
+          "files": 125,
+          "unique_sources": 141,
+          "occurrences": 940
+        },
+        {
+          "api": "android.widget.LinearLayout.VERTICAL",
+          "files": 114,
+          "unique_sources": 131,
+          "occurrences": 538
+        },
+        {
+          "api": "org.telegram.messenger.UserConfig.selectedAccount",
+          "files": 110,
+          "unique_sources": 120,
+          "occurrences": 308
+        },
+        {
+          "api": "android.widget.TextView.setGravity",
+          "files": 108,
+          "unique_sources": 122,
+          "occurrences": 464
+        },
+        {
+          "api": "android.view.Gravity.CENTER",
+          "files": 106,
+          "unique_sources": 118,
+          "occurrences": 643
+        },
+        {
+          "api": "org.telegram.messenger.LocaleController.getInstance",
+          "files": 103,
+          "unique_sources": 104,
+          "occurrences": 117
+        },
+        {
+          "api": "android.widget.LinearLayout.LayoutParams",
+          "files": 102,
+          "unique_sources": 114,
+          "occurrences": 1515
+        },
+        {
+          "api": "android.widget.LinearLayout.setGravity",
+          "files": 98,
+          "unique_sources": 114,
+          "occurrences": 376
+        },
+        {
+          "api": "android.graphics.drawable.GradientDrawable.setColor",
+          "files": 96,
+          "unique_sources": 106,
+          "occurrences": 405
+        },
+        {
+          "api": "android.widget.FrameLayout.addView",
+          "files": 94,
+          "unique_sources": 103,
+          "occurrences": 426
+        },
+        {
+          "api": "android.graphics.drawable.GradientDrawable.setCornerRadius",
+          "files": 93,
+          "unique_sources": 103,
+          "occurrences": 342
+        },
+        {
+          "api": "android.widget.TextView.setPadding",
+          "files": 92,
+          "unique_sources": 102,
+          "occurrences": 362
+        },
+        {
+          "api": "android.widget.TextView.setTypeface",
+          "files": 91,
+          "unique_sources": 104,
+          "occurrences": 366
+        },
+        {
+          "api": "java.util.Locale.getDefault",
+          "files": 86,
+          "unique_sources": 87,
+          "occurrences": 122
+        },
+        {
+          "api": "android.widget.LinearLayout.HORIZONTAL",
+          "files": 85,
+          "unique_sources": 95,
+          "occurrences": 305
+        },
+        {
+          "api": "android.widget.FrameLayout.LayoutParams",
+          "files": 85,
+          "unique_sources": 91,
+          "occurrences": 551
+        },
+        {
+          "api": "android.widget.TextView.setOnClickListener",
+          "files": 76,
+          "unique_sources": 83,
+          "occurrences": 196
+        },
+        {
+          "api": "android.view.Gravity.CENTER_VERTICAL",
+          "files": 75,
+          "unique_sources": 88,
+          "occurrences": 383
+        },
+        {
+          "api": "org.telegram.messenger.MessagesController.getInstance",
+          "files": 71,
+          "unique_sources": 77,
+          "occurrences": 209
+        },
+        {
+          "api": "java.util.ArrayList.add",
+          "files": 68,
+          "unique_sources": 70,
+          "occurrences": 143
+        },
+        {
+          "api": "android.net.Uri.parse",
+          "files": 68,
+          "unique_sources": 69,
+          "occurrences": 102
+        },
+        {
+          "api": "android.widget.ScrollView.addView",
+          "files": 67,
+          "unique_sources": 69,
+          "occurrences": 118
+        },
+        {
+          "api": "java.nio.ByteBuffer.wrap",
+          "files": 66,
+          "unique_sources": 66,
+          "occurrences": 68
+        },
+        {
+          "api": "java.lang.Class.forName",
+          "files": 64,
+          "unique_sources": 65,
+          "occurrences": 199
+        },
+        {
+          "api": "android.widget.TextView.setBackground",
+          "files": 61,
+          "unique_sources": 70,
+          "occurrences": 167
+        },
+        {
+          "api": "java.lang.Integer.TYPE",
+          "files": 61,
+          "unique_sources": 61,
+          "occurrences": 140
+        },
+        {
+          "api": "org.telegram.messenger.UserConfig.getInstance",
+          "files": 61,
+          "unique_sources": 61,
+          "occurrences": 110
+        },
+        {
+          "api": "android.view.Gravity.TOP",
+          "files": 60,
+          "unique_sources": 66,
+          "occurrences": 207
+        },
+        {
+          "api": "android.view.View.VISIBLE",
+          "files": 60,
+          "unique_sources": 62,
+          "occurrences": 223
+        },
+        {
+          "api": "java.lang.Boolean.TYPE",
+          "files": 59,
+          "unique_sources": 61,
+          "occurrences": 158
+        },
+        {
+          "api": "android.view.Gravity.CENTER_HORIZONTAL",
+          "files": 58,
+          "unique_sources": 66,
+          "occurrences": 178
+        },
+        {
+          "api": "android.view.View.GONE",
+          "files": 57,
+          "unique_sources": 61,
+          "occurrences": 240
+        },
+        {
+          "api": "com.exteragram.messenger.plugins.PluginsController.getInstance",
+          "files": 56,
+          "unique_sources": 67,
+          "occurrences": 138
+        },
+        {
+          "api": "android.graphics.drawable.GradientDrawable.setStroke",
+          "files": 56,
+          "unique_sources": 63,
+          "occurrences": 121
+        },
+        {
+          "api": "android.graphics.drawable.GradientDrawable.setShape",
+          "files": 55,
+          "unique_sources": 61,
+          "occurrences": 129
+        },
+        {
+          "api": "org.telegram.messenger.FileLoader.getInstance",
+          "files": 54,
+          "unique_sources": 55,
+          "occurrences": 81
+        },
+        {
+          "api": "org.telegram.ui.ActionBar.Theme.key_dialogTextBlack",
+          "files": 53,
+          "unique_sources": 59,
+          "occurrences": 236
+        },
+        {
+          "api": "org.telegram.messenger.browser.Browser.openUrl",
+          "files": 50,
+          "unique_sources": 50,
+          "occurrences": 62
+        },
+        {
+          "api": "android.widget.LinearLayout.setBackground",
+          "files": 49,
+          "unique_sources": 57,
+          "occurrences": 166
+        },
+        {
+          "api": "android.content.Intent.ACTION_VIEW",
+          "files": 48,
+          "unique_sources": 48,
+          "occurrences": 62
+        },
+        {
+          "api": "android.widget.EditText.setHint",
+          "files": 48,
+          "unique_sources": 48,
+          "occurrences": 71
+        },
+        {
+          "api": "org.telegram.ui.ActionBar.Theme.key_windowBackgroundWhiteBlackText",
+          "files": 45,
+          "unique_sources": 54,
+          "occurrences": 149
+        }
+      ]
+    },
+    "java_namespaces": {
+      "distinct_targets": 116,
+      "omitted_targets": 66,
+      "ranked": [
+        {
+          "api": "org.telegram.messenger",
+          "files": 328,
+          "unique_sources": 392,
+          "occurrences": 945
+        },
+        {
+          "api": "java.lang",
+          "files": 175,
+          "unique_sources": 195,
+          "occurrences": 288
+        },
+        {
+          "api": "android.view",
+          "files": 165,
+          "unique_sources": 188,
+          "occurrences": 352
+        },
+        {
+          "api": "java.util",
+          "files": 157,
+          "unique_sources": 164,
+          "occurrences": 198
+        },
+        {
+          "api": "android.widget",
+          "files": 150,
+          "unique_sources": 170,
+          "occurrences": 375
+        },
+        {
+          "api": "org.telegram.ui.ActionBar",
+          "files": 137,
+          "unique_sources": 165,
+          "occurrences": 285
+        },
+        {
+          "api": "android.graphics",
+          "files": 126,
+          "unique_sources": 140,
+          "occurrences": 242
+        },
+        {
+          "api": "org.telegram.tgnet",
+          "files": 116,
+          "unique_sources": 124,
+          "occurrences": 164
+        },
+        {
+          "api": "android.graphics.drawable",
+          "files": 99,
+          "unique_sources": 115,
+          "occurrences": 200
+        },
+        {
+          "api": "android.content",
+          "files": 98,
+          "unique_sources": 102,
+          "occurrences": 175
+        },
+        {
+          "api": "org.telegram.ui.Components",
+          "files": 94,
+          "unique_sources": 114,
+          "occurrences": 207
+        },
+        {
+          "api": "android.os",
+          "files": 89,
+          "unique_sources": 94,
+          "occurrences": 143
+        },
+        {
+          "api": "java.io",
+          "files": 65,
+          "unique_sources": 71,
+          "occurrences": 110
+        },
+        {
+          "api": "org.telegram.ui",
+          "files": 65,
+          "unique_sources": 65,
+          "occurrences": 84
+        },
+        {
+          "api": "android.net",
+          "files": 57,
+          "unique_sources": 59,
+          "occurrences": 79
+        },
+        {
+          "api": "android.text",
+          "files": 52,
+          "unique_sources": 59,
+          "occurrences": 87
+        },
+        {
+          "api": "android.util",
+          "files": 49,
+          "unique_sources": 60,
+          "occurrences": 89
+        },
+        {
+          "api": "android.app",
+          "files": 45,
+          "unique_sources": 47,
+          "occurrences": 57
+        },
+        {
+          "api": "java.nio",
+          "files": 44,
+          "unique_sources": 44,
+          "occurrences": 46
+        },
+        {
+          "api": "com.exteragram.messenger.plugins",
+          "files": 43,
+          "unique_sources": 58,
+          "occurrences": 82
+        },
+        {
+          "api": "dalvik.system",
+          "files": 41,
+          "unique_sources": 41,
+          "occurrences": 42
+        },
+        {
+          "api": "android.media",
+          "files": 39,
+          "unique_sources": 39,
+          "occurrences": 57
+        },
+        {
+          "api": "org.telegram.messenger.browser",
+          "files": 32,
+          "unique_sources": 32,
+          "occurrences": 37
+        },
+        {
+          "api": "com.exteragram.messenger.plugins.ui",
+          "files": 25,
+          "unique_sources": 26,
+          "occurrences": 26
+        },
+        {
+          "api": "android.content.res",
+          "files": 23,
+          "unique_sources": 23,
+          "occurrences": 35
+        },
+        {
+          "api": "android.view.animation",
+          "files": 22,
+          "unique_sources": 22,
+          "occurrences": 31
+        },
+        {
+          "api": "android.animation",
+          "files": 18,
+          "unique_sources": 18,
+          "occurrences": 28
+        },
+        {
+          "api": "android.text.style",
+          "files": 17,
+          "unique_sources": 20,
+          "occurrences": 24
+        },
+        {
+          "api": "java.lang.reflect",
+          "files": 16,
+          "unique_sources": 17,
+          "occurrences": 26
+        },
+        {
+          "api": "org.telegram.ui.Cells",
+          "files": 16,
+          "unique_sources": 17,
+          "occurrences": 20
+        },
+        {
+          "api": "android.provider",
+          "files": 16,
+          "unique_sources": 16,
+          "occurrences": 19
+        },
+        {
+          "api": "android.webkit",
+          "files": 15,
+          "unique_sources": 15,
+          "occurrences": 19
+        },
+        {
+          "api": "org.telegram.tgnet.tl",
+          "files": 14,
+          "unique_sources": 14,
+          "occurrences": 14
+        },
+        {
+          "api": "java.lang.ref",
+          "files": 11,
+          "unique_sources": 11,
+          "occurrences": 12
+        },
+        {
+          "api": "com.exteragram.messenger.plugins.models",
+          "files": 10,
+          "unique_sources": 10,
+          "occurrences": 10
+        },
+        {
+          "api": "androidx.core.content",
+          "files": 9,
+          "unique_sources": 11,
+          "occurrences": 16
+        },
+        {
+          "api": "com.exteragram.messenger",
+          "files": 9,
+          "unique_sources": 9,
+          "occurrences": 10
+        },
+        {
+          "api": "java.net",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 10
+        },
+        {
+          "api": "com.radolyn.ayugram",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 7
+        },
+        {
+          "api": "org.telegram.ui.Components.Premium",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 6
+        },
+        {
+          "api": "java.chaquopy",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 5
+        },
+        {
+          "api": "java.util.concurrent",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 5
+        },
+        {
+          "api": "org.telegram.ui.Components.Paint",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 10
+        },
+        {
+          "api": "android.text.method",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 5
+        },
+        {
+          "api": "com.exteragram.messenger.preferences.components",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        },
+        {
+          "api": "java.text",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 6
+        },
+        {
+          "api": "org.telegram.ui.Stars",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        },
+        {
+          "api": "androidx.core.widget",
+          "files": 3,
+          "unique_sources": 8,
+          "occurrences": 13
+        },
+        {
+          "api": "com.exteragram.messenger.plugins.ui.components.templates",
+          "files": 3,
+          "unique_sources": 4,
+          "occurrences": 6
+        },
+        {
+          "api": "android.graphics.drawable.shapes",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 3
+        }
+      ]
+    },
+    "lifecycle_overrides": {
+      "distinct_targets": 9,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "on_plugin_load",
+          "files": 512,
+          "unique_sources": 512,
+          "occurrences": 515
+        },
+        {
+          "api": "create_settings",
+          "files": 397,
+          "unique_sources": 398,
+          "occurrences": 400
+        },
+        {
+          "api": "on_plugin_unload",
+          "files": 362,
+          "unique_sources": 362,
+          "occurrences": 364
+        },
+        {
+          "api": "on_send_message_hook",
+          "files": 132,
+          "unique_sources": 132,
+          "occurrences": 132
+        },
+        {
+          "api": "on_app_event",
+          "files": 26,
+          "unique_sources": 26,
+          "occurrences": 26
+        },
+        {
+          "api": "on_update_hook",
+          "files": 19,
+          "unique_sources": 19,
+          "occurrences": 19
+        },
+        {
+          "api": "pre_request_hook",
+          "files": 12,
+          "unique_sources": 12,
+          "occurrences": 12
+        },
+        {
+          "api": "on_updates_hook",
+          "files": 11,
+          "unique_sources": 11,
+          "occurrences": 11
+        },
+        {
+          "api": "post_request_hook",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 7
+        }
+      ]
+    },
+    "native_dependency": {
+      "distinct_targets": 1,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "PIL",
+          "files": 19,
+          "unique_sources": 19,
+          "occurrences": 42
+        }
+      ]
+    },
+    "platform_restriction": {
+      "distinct_targets": 3,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "subprocess",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        },
+        {
+          "api": "subprocess.run",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 6
+        },
+        {
+          "api": "subprocess.Popen",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        }
+      ]
+    },
+    "sdk_calls": {
+      "distinct_targets": 590,
+      "omitted_targets": 540,
+      "ranked": [
+        {
+          "api": "ui.settings.Header",
+          "files": 343,
+          "unique_sources": 344,
+          "occurrences": 1233,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.get_setting",
+          "files": 337,
+          "unique_sources": 337,
+          "occurrences": 3409,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.run_on_ui_thread",
+          "files": 315,
+          "unique_sources": 355,
+          "occurrences": 2838,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_last_fragment",
+          "files": 299,
+          "unique_sources": 330,
+          "occurrences": 1310,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Switch",
+          "files": 281,
+          "unique_sources": 282,
+          "occurrences": 1182,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Divider",
+          "files": 277,
+          "unique_sources": 278,
+          "occurrences": 1091,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.find_class",
+          "files": 263,
+          "unique_sources": 301,
+          "occurrences": 2203,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Text",
+          "files": 251,
+          "unique_sources": 253,
+          "occurrences": 1297,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.set_setting",
+          "files": 208,
+          "unique_sources": 208,
+          "occurrences": 1222,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.dynamic_proxy",
+          "files": 195,
+          "unique_sources": 223,
+          "occurrences": 801,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_error",
+          "files": 189,
+          "unique_sources": 204,
+          "occurrences": 1123,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.log",
+          "files": 189,
+          "unique_sources": 201,
+          "occurrences": 2443,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.log",
+          "files": 182,
+          "unique_sources": 182,
+          "occurrences": 1638,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.hook_method",
+          "files": 175,
+          "unique_sources": 175,
+          "occurrences": 601,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jclass",
+          "files": 173,
+          "unique_sources": 193,
+          "occurrences": 2884,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Input",
+          "files": 172,
+          "unique_sources": 172,
+          "occurrences": 726,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_info",
+          "files": 169,
+          "unique_sources": 175,
+          "occurrences": 617,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.alert.AlertDialogBuilder",
+          "files": 162,
+          "unique_sources": 169,
+          "occurrences": 541,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Selector",
+          "files": 156,
+          "unique_sources": 156,
+          "occurrences": 455,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.HookResult",
+          "files": 149,
+          "unique_sources": 151,
+          "occurrences": 988,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.MenuItemData",
+          "files": 149,
+          "unique_sources": 149,
+          "occurrences": 226,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.add_menu_item",
+          "files": 147,
+          "unique_sources": 147,
+          "occurrences": 217,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.hook_all_methods",
+          "files": 138,
+          "unique_sources": 138,
+          "occurrences": 397,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_success",
+          "files": 131,
+          "unique_sources": 142,
+          "occurrences": 467,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.get_private_field",
+          "files": 128,
+          "unique_sources": 140,
+          "occurrences": 1088,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.add_on_send_message_hook",
+          "files": 126,
+          "unique_sources": 126,
+          "occurrences": 126,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.unhook_method",
+          "files": 111,
+          "unique_sources": 111,
+          "occurrences": 171,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.run_on_queue",
+          "files": 100,
+          "unique_sources": 122,
+          "occurrences": 337,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.OnClickListener",
+          "files": 91,
+          "unique_sources": 106,
+          "occurrences": 417,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jarray",
+          "files": 87,
+          "unique_sources": 92,
+          "occurrences": 301,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.remove_menu_item",
+          "files": 69,
+          "unique_sources": 69,
+          "occurrences": 107,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_messages_controller",
+          "files": 68,
+          "unique_sources": 70,
+          "occurrences": 228,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jint",
+          "files": 65,
+          "unique_sources": 76,
+          "occurrences": 569,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.send_request",
+          "files": 60,
+          "unique_sources": 61,
+          "occurrences": 169,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.send_message",
+          "files": 48,
+          "unique_sources": 49,
+          "occurrences": 121,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_user_config",
+          "files": 38,
+          "unique_sources": 38,
+          "occurrences": 105,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.set_private_field",
+          "files": 37,
+          "unique_sources": 43,
+          "occurrences": 154,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jlong",
+          "files": 36,
+          "unique_sources": 39,
+          "occurrences": 189,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.copy_to_clipboard",
+          "files": 36,
+          "unique_sources": 37,
+          "occurrences": 53,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Custom",
+          "files": 34,
+          "unique_sources": 36,
+          "occurrences": 63,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_with_button",
+          "files": 31,
+          "unique_sources": 31,
+          "occurrences": 41,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.add_hook",
+          "files": 27,
+          "unique_sources": 27,
+          "occurrences": 38,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.hook_all_constructors",
+          "files": 27,
+          "unique_sources": 27,
+          "occurrences": 31,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_send_messages_helper",
+          "files": 27,
+          "unique_sources": 27,
+          "occurrences": 33,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "markdown_utils.parse_markdown",
+          "files": 26,
+          "unique_sources": 26,
+          "occurrences": 48,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.RequestCallback",
+          "files": 25,
+          "unique_sources": 25,
+          "occurrences": 58,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.cast",
+          "files": 20,
+          "unique_sources": 24,
+          "occurrences": 85,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "extera_utils.classes.java_subclass",
+          "files": 20,
+          "unique_sources": 22,
+          "occurrences": 60,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.R",
+          "files": 20,
+          "unique_sources": 20,
+          "occurrences": 62,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.BasePlugin.logger.exception",
+          "files": 19,
+          "unique_sources": 19,
+          "occurrences": 270,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        }
+      ]
+    },
+    "sdk_imports": {
+      "distinct_targets": 32,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "base_plugin",
+          "files": 511,
+          "unique_sources": 540,
+          "occurrences": 584,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils",
+          "files": 395,
+          "unique_sources": 456,
+          "occurrences": 654,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings",
+          "files": 395,
+          "unique_sources": 401,
+          "occurrences": 437,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils",
+          "files": 357,
+          "unique_sources": 419,
+          "occurrences": 608,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java",
+          "files": 325,
+          "unique_sources": 384,
+          "occurrences": 669,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils",
+          "files": 312,
+          "unique_sources": 361,
+          "occurrences": 455,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin",
+          "files": 284,
+          "unique_sources": 309,
+          "occurrences": 372,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.alert",
+          "files": 172,
+          "unique_sources": 179,
+          "occurrences": 218,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "file_utils",
+          "files": 41,
+          "unique_sources": 41,
+          "occurrences": 53,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "markdown_utils",
+          "files": 26,
+          "unique_sources": 26,
+          "occurrences": 26,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "extera_utils.classes",
+          "files": 23,
+          "unique_sources": 25,
+          "occurrences": 27,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "zwylib",
+          "files": 13,
+          "unique_sources": 17,
+          "occurrences": 28,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "extera_utils",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 3,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "jarray",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 5,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "plugin_settings",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 3,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "extera_utils.text_formatting",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "elyxcore",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2,
+          "android_declaration": "declared",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "extera_utils.lifecycle",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 3,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.dialogs",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "ui.quanta",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.autoupdate.updater",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.commands.manager",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.core",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.core.lifecycle",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.core.meta",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.prefs.entries",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.prefs.page",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.ui.plugin_cells",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.utils.async_tools",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.utils.hooks",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.utils.logs",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "zwylib.src.utils.traces",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        }
+      ]
+    },
+    "sdk_symbols": {
+      "distinct_targets": 235,
+      "omitted_targets": 185,
+      "ranked": [
+        {
+          "api": "base_plugin.BasePlugin",
+          "files": 510,
+          "unique_sources": 511,
+          "occurrences": 512,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Header",
+          "files": 364,
+          "unique_sources": 365,
+          "occurrences": 371,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.run_on_ui_thread",
+          "files": 333,
+          "unique_sources": 380,
+          "occurrences": 473,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Switch",
+          "files": 314,
+          "unique_sources": 315,
+          "occurrences": 320,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_last_fragment",
+          "files": 310,
+          "unique_sources": 345,
+          "occurrences": 435,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Divider",
+          "files": 305,
+          "unique_sources": 306,
+          "occurrences": 311,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper",
+          "files": 284,
+          "unique_sources": 309,
+          "occurrences": 372,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.find_class",
+          "files": 281,
+          "unique_sources": 321,
+          "occurrences": 382,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Text",
+          "files": 277,
+          "unique_sources": 279,
+          "occurrences": 285,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.MethodHook",
+          "files": 254,
+          "unique_sources": 272,
+          "occurrences": 280,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.log",
+          "files": 211,
+          "unique_sources": 232,
+          "occurrences": 233,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.dynamic_proxy",
+          "files": 205,
+          "unique_sources": 237,
+          "occurrences": 318,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Input",
+          "files": 194,
+          "unique_sources": 194,
+          "occurrences": 201,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jclass",
+          "files": 187,
+          "unique_sources": 209,
+          "occurrences": 314,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.settings.Selector",
+          "files": 183,
+          "unique_sources": 183,
+          "occurrences": 188,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "ui.alert.AlertDialogBuilder",
+          "files": 172,
+          "unique_sources": 179,
+          "occurrences": 218,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.HookResult",
+          "files": 161,
+          "unique_sources": 163,
+          "occurrences": 164,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.MenuItemData",
+          "files": 158,
+          "unique_sources": 158,
+          "occurrences": 158,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.MenuItemType",
+          "files": 158,
+          "unique_sources": 158,
+          "occurrences": 158,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "base_plugin.HookStrategy",
+          "files": 148,
+          "unique_sources": 150,
+          "occurrences": 154,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.get_private_field",
+          "files": 143,
+          "unique_sources": 156,
+          "occurrences": 171,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.run_on_queue",
+          "files": 107,
+          "unique_sources": 131,
+          "occurrences": 138,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jint",
+          "files": 100,
+          "unique_sources": 115,
+          "occurrences": 136,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "android_utils.OnClickListener",
+          "files": 98,
+          "unique_sources": 115,
+          "occurrences": 149,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.util.ArrayList",
+          "files": 95,
+          "unique_sources": 98,
+          "occurrences": 111,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.jarray",
+          "files": 94,
+          "unique_sources": 103,
+          "occurrences": 133,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.util.Locale",
+          "files": 77,
+          "unique_sources": 78,
+          "occurrences": 80,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.lang.Integer",
+          "files": 74,
+          "unique_sources": 78,
+          "occurrences": 92,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "client_utils.get_messages_controller",
+          "files": 71,
+          "unique_sources": 74,
+          "occurrences": 82,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.lang.Boolean",
+          "files": 66,
+          "unique_sources": 72,
+          "occurrences": 77,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "client_utils.send_request",
+          "files": 66,
+          "unique_sources": 67,
+          "occurrences": 73,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.send_message",
+          "files": 53,
+          "unique_sources": 55,
+          "occurrences": 59,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.io.File",
+          "files": 50,
+          "unique_sources": 56,
+          "occurrences": 78,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "ui.settings.Custom",
+          "files": 45,
+          "unique_sources": 48,
+          "occurrences": 49,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "hook_utils.set_private_field",
+          "files": 44,
+          "unique_sources": 50,
+          "occurrences": 51,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.lang.Runnable",
+          "files": 44,
+          "unique_sources": 44,
+          "occurrences": 44,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.lang.Long",
+          "files": 43,
+          "unique_sources": 48,
+          "occurrences": 53,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.nio.ByteBuffer",
+          "files": 43,
+          "unique_sources": 43,
+          "occurrences": 45,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.jlong",
+          "files": 40,
+          "unique_sources": 44,
+          "occurrences": 49,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.lang.String",
+          "files": 39,
+          "unique_sources": 40,
+          "occurrences": 43,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "java.lang.System",
+          "files": 38,
+          "unique_sources": 40,
+          "occurrences": 45,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "android_utils.copy_to_clipboard",
+          "files": 38,
+          "unique_sources": 39,
+          "occurrences": 42,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.lang.Class",
+          "files": 38,
+          "unique_sources": 38,
+          "occurrences": 45,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "client_utils.get_user_config",
+          "files": 37,
+          "unique_sources": 37,
+          "occurrences": 39,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jbyte",
+          "files": 31,
+          "unique_sources": 32,
+          "occurrences": 38,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.jfloat",
+          "files": 31,
+          "unique_sources": 31,
+          "occurrences": 32,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "client_utils.get_send_messages_helper",
+          "files": 27,
+          "unique_sources": 27,
+          "occurrences": 33,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.io.FileOutputStream",
+          "files": 27,
+          "unique_sources": 27,
+          "occurrences": 35,
+          "android_declaration": "absent",
+          "bridge_declaration": "absent"
+        },
+        {
+          "api": "markdown_utils.parse_markdown",
+          "files": 25,
+          "unique_sources": 25,
+          "occurrences": 25,
+          "android_declaration": "declared",
+          "bridge_declaration": "declared"
+        },
+        {
+          "api": "java.cast",
+          "files": 23,
+          "unique_sources": 27,
+          "occurrences": 36,
+          "android_declaration": "absent",
+          "bridge_declaration": "declared"
+        }
+      ]
+    },
+    "stdlib_imports": {
+      "distinct_targets": 95,
+      "omitted_targets": 45,
+      "ranked": [
+        {
+          "api": "time",
+          "files": 239,
+          "unique_sources": 278,
+          "occurrences": 312
+        },
+        {
+          "api": "typing",
+          "files": 206,
+          "unique_sources": 238,
+          "occurrences": 238
+        },
+        {
+          "api": "threading",
+          "files": 174,
+          "unique_sources": 203,
+          "occurrences": 245
+        },
+        {
+          "api": "os",
+          "files": 170,
+          "unique_sources": 213,
+          "occurrences": 248
+        },
+        {
+          "api": "json",
+          "files": 151,
+          "unique_sources": 182,
+          "occurrences": 191
+        },
+        {
+          "api": "traceback",
+          "files": 141,
+          "unique_sources": 168,
+          "occurrences": 212
+        },
+        {
+          "api": "re",
+          "files": 136,
+          "unique_sources": 162,
+          "occurrences": 177
+        },
+        {
+          "api": "base64",
+          "files": 93,
+          "unique_sources": 100,
+          "occurrences": 103
+        },
+        {
+          "api": "random",
+          "files": 68,
+          "unique_sources": 82,
+          "occurrences": 94
+        },
+        {
+          "api": "math",
+          "files": 60,
+          "unique_sources": 64,
+          "occurrences": 65
+        },
+        {
+          "api": "hashlib",
+          "files": 57,
+          "unique_sources": 66,
+          "occurrences": 67
+        },
+        {
+          "api": "datetime",
+          "files": 56,
+          "unique_sources": 58,
+          "occurrences": 63
+        },
+        {
+          "api": "urllib.parse",
+          "files": 49,
+          "unique_sources": 56,
+          "occurrences": 66
+        },
+        {
+          "api": "zlib",
+          "files": 48,
+          "unique_sources": 53,
+          "occurrences": 53
+        },
+        {
+          "api": "shutil",
+          "files": 35,
+          "unique_sources": 37,
+          "occurrences": 48
+        },
+        {
+          "api": "uuid",
+          "files": 31,
+          "unique_sources": 31,
+          "occurrences": 37
+        },
+        {
+          "api": "collections",
+          "files": 30,
+          "unique_sources": 33,
+          "occurrences": 33
+        },
+        {
+          "api": "urllib.request",
+          "files": 26,
+          "unique_sources": 27,
+          "occurrences": 34
+        },
+        {
+          "api": "weakref",
+          "files": 22,
+          "unique_sources": 37,
+          "occurrences": 41
+        },
+        {
+          "api": "struct",
+          "files": 22,
+          "unique_sources": 31,
+          "occurrences": 31
+        },
+        {
+          "api": "sys",
+          "files": 21,
+          "unique_sources": 25,
+          "occurrences": 26
+        },
+        {
+          "api": "html",
+          "files": 20,
+          "unique_sources": 20,
+          "occurrences": 20
+        },
+        {
+          "api": "tempfile",
+          "files": 20,
+          "unique_sources": 20,
+          "occurrences": 23
+        },
+        {
+          "api": "io",
+          "files": 18,
+          "unique_sources": 28,
+          "occurrences": 30
+        },
+        {
+          "api": "concurrent.futures",
+          "files": 16,
+          "unique_sources": 16,
+          "occurrences": 16
+        },
+        {
+          "api": "zipfile",
+          "files": 15,
+          "unique_sources": 23,
+          "occurrences": 27
+        },
+        {
+          "api": "dataclasses",
+          "files": 12,
+          "unique_sources": 16,
+          "occurrences": 16
+        },
+        {
+          "api": "socket",
+          "files": 12,
+          "unique_sources": 12,
+          "occurrences": 13
+        },
+        {
+          "api": "colorsys",
+          "files": 11,
+          "unique_sources": 11,
+          "occurrences": 11
+        },
+        {
+          "api": "ast",
+          "files": 10,
+          "unique_sources": 18,
+          "occurrences": 18
+        },
+        {
+          "api": "ctypes",
+          "files": 10,
+          "unique_sources": 11,
+          "occurrences": 14
+        },
+        {
+          "api": "xml.etree.ElementTree",
+          "files": 10,
+          "unique_sources": 10,
+          "occurrences": 10
+        },
+        {
+          "api": "__future__",
+          "files": 9,
+          "unique_sources": 32,
+          "occurrences": 32
+        },
+        {
+          "api": "types",
+          "files": 9,
+          "unique_sources": 10,
+          "occurrences": 11
+        },
+        {
+          "api": "array",
+          "files": 9,
+          "unique_sources": 9,
+          "occurrences": 9
+        },
+        {
+          "api": "gc",
+          "files": 8,
+          "unique_sources": 12,
+          "occurrences": 12
+        },
+        {
+          "api": "lzma",
+          "files": 8,
+          "unique_sources": 9,
+          "occurrences": 9
+        },
+        {
+          "api": "sqlite3",
+          "files": 8,
+          "unique_sources": 8,
+          "occurrences": 8
+        },
+        {
+          "api": "logging",
+          "files": 7,
+          "unique_sources": 9,
+          "occurrences": 9
+        },
+        {
+          "api": "contextlib",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "queue",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "ssl",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "urllib.error",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "os.path",
+          "files": 6,
+          "unique_sources": 10,
+          "occurrences": 10
+        },
+        {
+          "api": "functools",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 7
+        },
+        {
+          "api": "pathlib",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 6
+        },
+        {
+          "api": "unicodedata",
+          "files": 6,
+          "unique_sources": 6,
+          "occurrences": 6
+        },
+        {
+          "api": "bisect",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 5
+        },
+        {
+          "api": "binascii",
+          "files": 4,
+          "unique_sources": 7,
+          "occurrences": 7
+        },
+        {
+          "api": "builtins",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 4
+        }
+      ]
+    },
+    "unresolved_java_calls": {
+      "distinct_targets": 25,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "java.util.Locale",
+          "files": 83,
+          "unique_sources": 84,
+          "occurrences": 119
+        },
+        {
+          "api": "java.lang.Class",
+          "files": 32,
+          "unique_sources": 32,
+          "occurrences": 114
+        },
+        {
+          "api": "java.lang.Thread",
+          "files": 19,
+          "unique_sources": 19,
+          "occurrences": 25
+        },
+        {
+          "api": "java.net.URL",
+          "files": 7,
+          "unique_sources": 7,
+          "occurrences": 54
+        },
+        {
+          "api": "java.io.File",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 6
+        },
+        {
+          "api": "java.lang.reflect.Array",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 14
+        },
+        {
+          "api": "java.nio.ByteBuffer",
+          "files": 5,
+          "unique_sources": 5,
+          "occurrences": 10
+        },
+        {
+          "api": "java.io.FileOutputStream",
+          "files": 4,
+          "unique_sources": 4,
+          "occurrences": 8
+        },
+        {
+          "api": "java.io.FileInputStream",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 6
+        },
+        {
+          "api": "java.lang.Runtime",
+          "files": 3,
+          "unique_sources": 3,
+          "occurrences": 3
+        },
+        {
+          "api": "java.util.ArrayList",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "java.util.Calendar",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 4
+        },
+        {
+          "api": "java.util.TimeZone",
+          "files": 2,
+          "unique_sources": 2,
+          "occurrences": 2
+        },
+        {
+          "api": "java.io.ByteArrayOutputStream",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "java.lang.ref.WeakReference",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        },
+        {
+          "api": "java.lang.reflect.Field",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        },
+        {
+          "api": "java.security.KeyFactory",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "java.security.KeyStore",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "java.security.Signature",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 3
+        },
+        {
+          "api": "java.time.ZoneId",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 3
+        },
+        {
+          "api": "java.time.ZonedDateTime",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 4
+        },
+        {
+          "api": "java.util.Collections",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 7
+        },
+        {
+          "api": "java.util.Scanner",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        },
+        {
+          "api": "java.util.zip.ZipFile",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 1
+        },
+        {
+          "api": "java.util.zip.ZipInputStream",
+          "files": 1,
+          "unique_sources": 1,
+          "occurrences": 2
+        }
+      ]
+    },
+    "android_declared_bridge_absent": {
+      "distinct_targets": 7,
+      "omitted_targets": 0,
+      "ranked": [
+        {
+          "api": "ui.bulletin.BulletinHelper.show_undo",
+          "files": 4,
+          "unique_sources": 4
+        },
+        {
+          "api": "base_plugin.PluginsController",
+          "files": 2,
+          "unique_sources": 2
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_file_saved_to_downloads",
+          "files": 2,
+          "unique_sources": 2
+        },
+        {
+          "api": "base_plugin.PluginsConstants",
+          "files": 1,
+          "unique_sources": 1
+        },
+        {
+          "api": "elyxcore.Runnable",
+          "files": 1,
+          "unique_sources": 1
+        },
+        {
+          "api": "elyxcore.get_environment",
+          "files": 1,
+          "unique_sources": 1
+        },
+        {
+          "api": "ui.bulletin.BulletinHelper.show_file_saved_to_gallery",
+          "files": 1,
+          "unique_sources": 1
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Counts describe attachment reach, not compatible plugins or complete feature coverage.",
+    "Duplicate source bytes count in files; unique_sources deduplicates bytes, not plugin identities or versions.",
+    "Archive source is parsed in memory; assets are classified by extension without extraction or validation.",
+    "SDK declaration presence is not implementation, semantic parity, runtime support or a positive support manifest.",
+    "Standard-library grouping uses the inventory interpreter's module-name list, not embedded iOS availability.",
+    "All branches and function bodies contribute; dynamic names, inherited members and external modules are not resolved.",
+    "Reported targets are bounded API identifiers; source, arbitrary literals, member paths and input paths are omitted."
+  ]
+}

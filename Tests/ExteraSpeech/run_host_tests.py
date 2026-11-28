@@ -11,9 +11,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = [
-    "Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraTranslationSettings.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraSpeechSettings.swift",
+    "AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraTranslationSettings.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraSpeechSettings.swift",
     "submodules/Media/LocalAudioTranscription/Sources/ExteraSpeechPolicy.swift",
     "submodules/Media/LocalAudioTranscription/Sources/ExteraSpeechModelManager.swift",
     "Tests/ExteraSpeech/SpeechTests.swift",

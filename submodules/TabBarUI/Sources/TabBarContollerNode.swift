@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 import SwiftSignalKit
 //
@@ -89,7 +89,7 @@ final class TabBarControllerNode: ASDisplayNode {
 
     private weak var currentController: ViewController?
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var sgSearchEnabled: Bool = SGSimpleSettings.shared.tabBarSearchEnabled
     private let sgSearchEnabledDisposable = MetaDisposable()
     //
@@ -98,6 +98,14 @@ final class TabBarControllerNode: ASDisplayNode {
     private var appliedPlacement: TabBarAppliedPlacement?
     private var isUpdateRequested: Bool = false
     private var isChangingSelectedIndex: Bool = false
+    private var atmosphericVisible = false
+
+    func updateAtmosphericVisibility(_ visible: Bool) {
+        self.atmosphericVisible = visible
+        MainActor.assumeIsolated {
+            (self.tabBarView.view as? TabBarComponent.View)?.updateAtmosphericVisibility(visible && !self.tabBarHidden && self.layoutResult?.params.toolbar == nil)
+        }
+    }
     
     func setCurrentController(_ controller: ViewController?) -> () -> Void {
         guard controller !== self.currentController else {
@@ -168,7 +176,7 @@ final class TabBarControllerNode: ASDisplayNode {
         
         //self.addSubnode(self.tabBarNode)
         //self.addSubnode(self.disabledOverlayNode)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgSearchEnabledDisposable.set((sgSimpleSettingsBoolSignal(.tabBarSearchEnabled, defaultValue: true)
         |> deliverOnMainQueue).start(next: { [weak self] enabled in
             guard let self, self.sgSearchEnabled != enabled else {
@@ -183,7 +191,7 @@ final class TabBarControllerNode: ASDisplayNode {
         //
     }
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     deinit {
         self.sgSearchEnabledDisposable.dispose()
     }
@@ -213,7 +221,7 @@ final class TabBarControllerNode: ASDisplayNode {
         transition.updateAlpha(node: self.disabledOverlayNode, alpha: value ? 0.0 : 1.0)
     }
     
-    var tabBarHidden = ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: Swiftgram
+    var tabBarHidden = ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: AyuGram
         didSet {
             if self.tabBarHidden != oldValue {
                 self.requestUpdate()
@@ -358,7 +366,7 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 search: (sidePlacement != nil || (!self.sgSearchEnabled && self.currentController?.tabBarSearchState?.isActive != true)) ? nil : TabBarComponent.Search(
                     isActive: self.currentController?.tabBarSearchState?.isActive ?? false,
                     activate: { [weak self] in
@@ -426,6 +434,9 @@ final class TabBarControllerNode: ASDisplayNode {
             transition.updateAlpha(layer: tabBarComponentView.layer, alpha: tabBarAlpha)
             // A hidden bar is moved below the screen, not removed: VoiceOver must not reach it there.
             tabBarComponentView.accessibilityElementsHidden = self.tabBarHidden
+            MainActor.assumeIsolated {
+                (tabBarComponentView as? TabBarComponent.View)?.updateAtmosphericVisibility(self.atmosphericVisible && !self.tabBarHidden && params.toolbar == nil)
+            }
         }
         
         tabBarFrameTransition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)

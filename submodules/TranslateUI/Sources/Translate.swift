@@ -1,5 +1,5 @@
-import SGSimpleSettings // MARK: Swiftgram
-import SGLogging // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
+import SGLogging // MARK: AyuGram
 import SGGTranslate
 import Foundation
 import UIKit
@@ -142,13 +142,23 @@ public var popularTranslationLanguages = [
     "uk"
 ]
 
+@available(iOS 12.0, *)
+private let languageRecognizer = NLLanguageRecognizer()
+
+// MARK: AyuGram
+// The language translations go to: exteraGram's target language, else the app language.
+public func ayuTranslationTargetLanguage(appLanguage: String) -> String {
+    return defaultTranslationTargetLanguage(appLanguage)
+}
+//
+
 public func effectiveIgnoredTranslationLanguages(context: AccountContext, ignoredLanguages: [String]?) -> Set<String> {
-    var baseLang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+    var baseLang = ayuTranslationTargetLanguage(appLanguage: context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode) // MARK: AyuGram
     let rawSuffix = "-raw"
     if baseLang.hasSuffix(rawSuffix) {
         baseLang = String(baseLang.dropLast(rawSuffix.count))
     }
-    baseLang = normalizeTranslationLanguage(baseLang) // MARK: Swiftgram
+    baseLang = normalizeTranslationLanguage(baseLang) // MARK: AyuGram
     
     var dontTranslateLanguages = Set<String>()
     if let ignoredLanguages = ignoredLanguages {
@@ -176,7 +186,7 @@ public func canTranslateChats(context: AccountContext) -> Bool {
     default:
         break
     }
-    return chatTranslationAvailable || true // MARK: Swiftgram
+    return chatTranslationAvailable || true // MARK: AyuGram
 }
 
 public func canTranslateText(context: AccountContext, text: String, showTranslate: Bool, showTranslateIfTopical: Bool = false, ignoredLanguages: [String]?) -> (canTranslate: Bool, language: String?) {
@@ -196,7 +206,7 @@ public func canTranslateText(context: AccountContext, text: String, showTranslat
     default:
         break
     }
-    translateButtonAvailable = true // MARK: Swiftgram
+    translateButtonAvailable = true // MARK: AyuGram
     let showTranslate = showTranslate && translateButtonAvailable
         
     if #available(iOS 12.0, *) {
@@ -274,7 +284,7 @@ private struct TranslationViewImpl: View {
             }
             
             if let firstTaskLanguagePair {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if let configuration = self.configuration, (configuration.source?.languageCode?.identifier ?? "") == firstTaskLanguagePair.0, configuration.target?.languageCode?.identifier == firstTaskLanguagePair.1 {
                     self.configuration?.invalidate()
                 } else {
@@ -329,7 +339,7 @@ private struct TranslationViewImpl: View {
                     task.completion(resultMap)
                 }
             } catch let e {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if SGSimpleSettings.shared.translatorLogsEnabled {
                     SGLogger.shared.log("Translate", "[\(SGSimpleSettings.TranslationBackend.system.rawValue)] error translating \(task.texts.values.reduce(0) { $0 + $1.count }) chars\(task.fromLang.isEmpty ? "" : " from '\(task.fromLang)'") to '\(task.toLang)', error: \(e)")
                 }
@@ -349,7 +359,7 @@ private struct TranslationViewImpl: View {
             }
             
             if let firstTaskLanguagePair {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if let configuration = self.configuration, (configuration.source?.languageCode?.identifier ?? "") == firstTaskLanguagePair.0, configuration.target?.languageCode?.identifier == firstTaskLanguagePair.1 {
                     self.configuration?.invalidate()
                 } else {

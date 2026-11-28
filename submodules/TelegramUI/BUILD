@@ -1,6 +1,6 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 load(
     "@build_configuration//:variables.bzl",
     "telegram_bundle_id",
@@ -8,23 +8,23 @@ load(
 
 sgdeps = [
     "//submodules/AyuSnowEffect:AyuSnowEffect",
-    "//Swiftgram/SGSettingsUI:SGSettingsUI",
-    "//Swiftgram/SGMath:SGMath",
-    "//Swiftgram/SGConfig:SGConfig",
-    "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
-    "//Swiftgram/SGLogging:SGLogging",
-    "//Swiftgram/SGStrings:SGStrings",
-    "//Swiftgram/SGActionRequestHandlerSanitizer:SGActionRequestHandlerSanitizer",
-    "//Swiftgram/Wrap:Wrap",
-    "//Swiftgram/SGInputToolbar:SGInputToolbar",
+    "//AyuGram/SGSettingsUI:SGSettingsUI",
+    "//AyuGram/SGMath:SGMath",
+    "//AyuGram/SGConfig:SGConfig",
+    "//AyuGram/SGAppGroupIdentifier:SGAppGroupIdentifier",
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
+    "//AyuGram/SGLogging:SGLogging",
+    "//AyuGram/SGStrings:SGStrings",
+    "//AyuGram/SGActionRequestHandlerSanitizer:SGActionRequestHandlerSanitizer",
+    "//AyuGram/Wrap:Wrap",
+    "//AyuGram/SGInputToolbar:SGInputToolbar",
 ]
 
 sgsrcs = [
-    "//Swiftgram/SGDBReset:SGDBReset",
-    "//Swiftgram/ChatControllerImplExtension:ChatControllerImplExtension",
-    "//Swiftgram/SGSharedAccountContextMigration:SGSharedAccountContextMigration",
-    "//Swiftgram/SGTelegramUIExtensions:SGTelegramUIExtensions", # MARK: Swiftgram
+    "//AyuGram/SGDBReset:SGDBReset",
+    "//AyuGram/ChatControllerImplExtension:ChatControllerImplExtension",
+    "//AyuGram/SGSharedAccountContextMigration:SGSharedAccountContextMigration",
+    "//AyuGram/SGTelegramUIExtensions:SGTelegramUIExtensions", # MARK: AyuGram
 ]
 
 #
@@ -80,7 +80,7 @@ filegroup(
         "Sources/ExteraMathTimeZones.swift",
         "Sources/ExteraMathCurrencyRates.swift",
     ],
-    visibility = ["//Swiftgram/SGMath:__pkg__"],
+    visibility = ["//AyuGram/SGMath:__pkg__"],
 )
 
 swift_library(
@@ -108,7 +108,11 @@ swift_library(
         ],
         "//conditions:default": [],
     }),
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
+        "//submodules/AyuPluginBridge:AyuPluginBridge",
+        "//submodules/AyuPluginTelegramAdapter:AyuPluginTelegramAdapter",
+        "//submodules/AyuAtmosphericHost:AyuAtmosphericHost",
+        "//submodules/AyuAtmosphericUI:AyuAtmosphericUI",
         "//submodules/CrashReporting:CrashReporting",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

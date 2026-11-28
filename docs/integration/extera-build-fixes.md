@@ -3,7 +3,7 @@
 Failed device build: [run 45692107515](https://github.com/Nomadvorga/ayugram-ios/actions/runs/45692107515),
 head `030f9549d29daedcc94c5b03fbc23b2c2104c8d6`, Xcode 27.1 / iPhoneOS 27.1,
 arm64, deployment target iOS 15. The failed action was compiling
-`//Swiftgram/SGSettingsUI:SGSettingsUI` at 2026-11-25 20:56:23–24 UTC.
+`//AyuGram/SGSettingsUI:SGSettingsUI` at 2026-11-25 20:56:23–24 UTC.
 The full failed log was retrieved with `gh run view 45692107515 --log-failed`.
 It contains five distinct failing source locations; some diagnostics repeat
 during module emission and compilation. The preceding Objective-C availability

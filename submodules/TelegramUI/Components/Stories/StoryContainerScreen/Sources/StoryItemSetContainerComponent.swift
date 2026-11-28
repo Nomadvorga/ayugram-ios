@@ -595,7 +595,7 @@ public final class StoryItemSetContainerComponent: Component {
         /// picker, the keyboard or input panel, an expanded caption) or while the viewers sheet is fully expanded:
         /// escape closes those first. Evaluated when VoiceOver asks.
         func storyAccessibilityCanNavigate() -> Bool {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             // Reject stale actions from a story hidden by the warning or kept as a neighbouring item set.
             var ancestor: UIView? = self
             while let view = ancestor {

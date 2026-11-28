@@ -1,0 +1,1566 @@
+__id__ = "commands"
+__name__ = "Commands"
+__author__ = "@d1zzy412 • @d1zplug"
+__version__ = "2.4.0"
+__category__ = ["fun", "tools"]
+__description__ = """свои команды: ии, интернет, фото, сайты, магазин команд (.chelp - помощь)"""
+
+import ast
+import builtins
+import json
+import math
+import os
+import random
+import re
+import shutil
+import string
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import datetime as dt_module
+from datetime import datetime
+from base_plugin import BasePlugin, HookResult, HookStrategy
+
+__icon__ = "Konataizumi0_by_fStikBot/6"
+__min_version__ = "12.10.6"
+__app_version__ = ">=12.10.6"
+
+try:
+    from ui.settings import Header, Input, Divider, Text
+except Exception:
+    Header = Input = Divider = Text = None
+try:
+    from ui.settings import Switch
+except Exception:
+    Switch = None
+try:
+    from ui.bulletin import BulletinHelper
+except Exception:
+    BulletinHelper = None
+try:
+    from android_utils import run_on_ui_thread
+except Exception:
+    run_on_ui_thread = None
+
+
+                   
+
+LIST_SEP = ";;"
+RESERVED = {"chelp", "кхелп"}
+NAME_RE = r"[a-zа-яё]{1,20}"
+MAX_REPLIES = 60
+MAX_URLS = 30
+MAX_CODE = 8000
+
+AI_DEFAULT_URL = "https://openrouter.ai/api/v1/chat/completions"
+AI_DEFAULT_MODEL = "openai/gpt-4o-mini"
+
+
+class Outcome:
+    def __init__(self):
+        self.text = ""
+        self.photo = ""
+        self.file = ""
+        self.open_url = ""
+        self.args = ""
+        self.code = ""
+        self.ai_prompt = ""
+        self.web = False
+
+    def deferred(self):
+        return bool(self.code or self.ai_prompt or self.photo or self.file)
+
+
+def pick(items):
+    return random.choice(items)
+
+
+def clean_text(text, limit):
+    text = str(text).strip()
+    for bad in ("\u2014", "\u2013", "\u2192", "\u2190"):
+        text = text.replace(bad, "-")
+    return text[:limit]
+
+
+def clean_url(value):
+    value = str(value).strip()
+    if len(value) > 500 or not re.match(r"^https?://\S", value, re.I):
+        return None
+    return value
+
+
+def clean_urls(items):
+    if isinstance(items, str):
+        items = [items]
+    if not isinstance(items, list):
+        return []
+    result = []
+    for item in items:
+        url = clean_url(item) if isinstance(item, str) else None
+        if url and url not in result:
+            result.append(url)
+    return result[:MAX_URLS]
+
+
+def split_list(text):
+    return [part.strip() for part in str(text).split(LIST_SEP) if part.strip()]
+
+
+def join_list(items):
+    return (" " + LIST_SEP + " ").join(items)
+
+
+                                    
+                                                                   
+                                                                        
+
+FORBIDDEN_NODES = (ast.Import, ast.ImportFrom, ast.Global, ast.Nonlocal, ast.ClassDef,
+                   ast.AsyncFunctionDef, ast.Await, ast.With, ast.AsyncWith, ast.AsyncFor, ast.Yield, ast.YieldFrom)
+FORBIDDEN_NAMES = {
+    "exec", "eval", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr",
+    "vars", "dir", "input", "breakpoint", "type", "object", "super", "memoryview", "help",
+    "exit", "quit", "classmethod", "staticmethod", "property", "builtins", "sys", "os",
+}
+FORBIDDEN_ATTRS = {"format", "format_map", "mro", "gi_frame", "gi_code", "cr_frame", "f_globals", "f_locals"}
+SAFE_BUILTIN_NAMES = [
+    "abs", "all", "any", "bin", "bool", "chr", "dict", "divmod", "enumerate", "filter", "float",
+    "hex", "int", "isinstance", "len", "list", "map", "max", "min", "oct", "ord", "pow", "range",
+    "repr", "reversed", "round", "set", "slice", "sorted", "str", "sum", "tuple", "zip", "frozenset",
+    "True", "False", "None", "Exception", "ValueError", "TypeError", "IndexError", "KeyError",
+    "ZeroDivisionError", "OverflowError", "ArithmeticError",
+]
+SAFE_BUILTINS = {name: getattr(builtins, name) for name in SAFE_BUILTIN_NAMES if hasattr(builtins, name)}
+                                                                                                               
+SAFE_BUILTINS["__import__"] = builtins.__import__
+
+
+class CodeError(Exception):
+    pass
+
+
+def check_code(src):
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as error:
+        raise CodeError("ошибка в коде: " + str(error)[:80])
+    has_run = False
+    for node in ast.walk(tree):
+        if isinstance(node, FORBIDDEN_NODES):
+            raise CodeError("в коде нельзя: " + type(node).__name__)
+        if isinstance(node, ast.Attribute) and (node.attr.startswith("_") or node.attr in FORBIDDEN_ATTRS):
+            raise CodeError("в коде нельзя обращаться к ." + node.attr)
+        if isinstance(node, ast.Name) and (node.id.startswith("__") or node.id in FORBIDDEN_NAMES):
+            raise CodeError("в коде нельзя использовать " + node.id)
+        if isinstance(node, ast.FunctionDef) and node.name == "run":
+            has_run = True
+    if not has_run:
+        raise CodeError("в коде нет функции run(args)")
+
+
+def http_get(url, limit=300000):
+    url = str(url)
+    if not re.match(r"^https?://", url, re.I):
+        raise ValueError("только http и https")
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+    with urllib.request.urlopen(request, timeout=12) as response:
+        return response.read(limit).decode("utf-8", "replace")
+
+
+def http_get_json(url):
+    return json.loads(http_get(url))
+
+
+def exec_code(src, args, timeout=15):
+    check_code(src)
+    env = {
+        "__builtins__": SAFE_BUILTINS,
+        "math": math, "random": random, "re": re, "string": string, "json": json,
+        "datetime": dt_module, "get": http_get, "get_json": http_get_json,
+        "quote": urllib.parse.quote,
+    }
+    box = {}
+
+    def target():
+        counter = [0]
+
+        def tracer(frame, event, arg):
+            counter[0] += 1
+            if counter[0] > 3000000:
+                raise TimeoutError("код работает слишком долго")
+            return tracer
+        sys.settrace(tracer)
+        try:
+            exec(compile(src, "<command>", "exec"), env)
+            box["value"] = env["run"](args)
+        except BaseException as error:
+            box["error"] = error
+        finally:
+            sys.settrace(None)
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        raise TimeoutError("код работает слишком долго")
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
+                              
+
+def clean_spec(spec):
+    if not isinstance(spec, dict):
+        return None
+    name = str(spec.get("name", "")).strip().lower().lstrip(".")
+    if not re.fullmatch(NAME_RE, name):
+        return None
+    replies = spec.get("replies") or []
+    if isinstance(replies, str):
+        replies = [replies]
+    if not isinstance(replies, list):
+        replies = []
+    replies = [clean_text(r, 1000) for r in replies if isinstance(r, str) and r.strip()][:MAX_REPLIES]
+    links = clean_urls(spec.get("links") or [])
+    photos = clean_urls(spec.get("photos") or [])
+    files = clean_urls(spec.get("files") or [])
+    sites = clean_urls(spec.get("open") or [])
+    aliases = spec.get("aliases") or []
+    if not isinstance(aliases, list):
+        aliases = []
+    aliases = [str(a).strip().lower().lstrip(".") for a in aliases]
+    aliases = [a for a in aliases if re.fullmatch(NAME_RE, a) and a != name][:5]
+    ai_prompt = clean_text(spec.get("ai", "") or "", 1500)
+    code = spec.get("code", "") or ""
+    if isinstance(code, list):
+        code = "\n".join(str(line) for line in code)
+    code = str(code).strip("\n")[:MAX_CODE]
+    if code.strip():
+        try:
+            check_code(code)
+        except CodeError:
+            code = ""
+    else:
+        code = ""
+    if not (replies or links or photos or files or sites or ai_prompt or code):
+        return None
+    needs_args = bool(spec.get("needs_args", False))
+    for url in links + photos + files + sites:
+        if "{q}" in url or "{args}" in url:
+            needs_args = True
+    return {
+        "name": name,
+        "aliases": aliases,
+        "description": clean_text(spec.get("description", "") or "своя команда", 60),
+        "usage": clean_text(spec.get("usage", ""), 30),
+        "needs_args": needs_args,
+        "replies": replies,
+        "links": links,
+        "photos": photos,
+        "files": files,
+        "open": sites,
+        "ai": ai_prompt,
+        "web": bool(spec.get("web", False)) and bool(ai_prompt),
+        "code": code,
+    }
+
+
+def parse_spec(content):
+    text = str(content).strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        return clean_spec(json.loads(text[start:end + 1]))
+    except ValueError:
+        return None
+
+
+def render_text(text, args, url=False):
+    def rand_sub(match):
+        low, high = int(match.group(1)), int(match.group(2))
+        if low > high:
+            low, high = high, low
+        return str(random.randint(low, high))
+
+    def pick_sub(match):
+        options = [o.strip() for o in match.group(1).split("|") if o.strip()]
+        return pick(options) if options else ""
+
+    text = re.sub(r"\{rand:(\d+)-(\d+)\}", rand_sub, text)
+    text = re.sub(r"\{pick:([^{}]+)\}", pick_sub, text)
+    now = datetime.now()
+    text = text.replace("{time}", now.strftime("%H:%M")).replace("{date}", now.strftime("%d.%m.%Y"))
+    quoted = urllib.parse.quote(args, safe="")
+    text = text.replace("{q}", quoted)
+    text = text.replace("{args}", quoted if url else args)
+    if url:
+        text = text.replace(" ", "%20")
+    return text[:3500]
+
+
+CUSTOM = {}
+
+
+def find_spec(name):
+    spec = CUSTOM.get(name)
+    if spec is not None:
+        return spec
+    for item in CUSTOM.values():
+        if name in item["aliases"]:
+            return item
+    return None
+
+
+def name_taken(spec):
+    for name in [spec["name"]] + spec["aliases"]:
+        if name in RESERVED or find_spec(name) is not None:
+            return True
+    return False
+
+
+def usage_text(spec):
+    return "используй: ." + spec["name"] + (" " + spec["usage"] if spec["usage"] else "")
+
+
+def run_custom(spec, args):
+    args = args.strip()
+    out = Outcome()
+    if spec["needs_args"] and not args:
+        out.text = usage_text(spec)
+        return out
+    out.args = args
+    if spec["replies"]:
+        out.text = render_text(pick(spec["replies"]), args)
+    if spec["links"]:
+        link = render_text(pick(spec["links"]), args, url=True)
+        out.text = (out.text + "\n" + link) if out.text else link
+    if spec["photos"]:
+        out.photo = render_text(pick(spec["photos"]), args, url=True)
+    if spec["files"]:
+        out.file = render_text(pick(spec["files"]), args, url=True)
+    if spec["open"]:
+        out.open_url = render_text(pick(spec["open"]), args, url=True)
+    out.code = spec["code"]
+    out.ai_prompt = spec["ai"]
+    out.web = spec["web"]
+    return out
+
+
+def run_command(name, args):
+    spec = find_spec(name)
+    if spec is None:
+        return None
+    return run_custom(spec, args)
+
+
+HELP_TEXT = (
+    "📖 как пользоваться\n\n"
+    "1. зайди в настройки плагина Commands\n"
+    "2. нажми «магазин команд» и выбери команду - она сразу твоя\n"
+    "3. или нажми «создать через ии» и напиши словами, что хочешь. "
+    "например: команда g ищет в интернете то, что я напишу\n"
+    "4. в чате пиши точку и имя команды: .g погода в москве\n\n"
+    "хочешь поделиться командами или забрать чужие - «импорт и экспорт».\n\n"
+    "команда может: ответить, найти в интернете, прислать фото, открыть сайт, посчитать.\n\n"
+    "💡 для ии нужен ключ - это как пароль от сервиса openrouter.ai. "
+    "вставь его в «создать через ии».\n"
+    "команды из магазина без ии работают и без ключа."
+)
+
+
+def build_help():
+    if CUSTOM:
+        names = " ".join("." + name for name in sorted(CUSTOM))[:600]
+        return HELP_TEXT + "\n\nтвои команды: " + names
+    return HELP_TEXT + "\n\nтвоих команд пока нет"
+
+
+                                                  
+
+def notify(text, kind="info"):
+    if BulletinHelper is None or run_on_ui_thread is None:
+        return
+
+    def show():
+        try:
+            if kind == "error":
+                BulletinHelper.show_error(text)
+            elif kind == "success":
+                BulletinHelper.show_success(text)
+            else:
+                BulletinHelper.show_info(text)
+        except Exception:
+            pass
+    try:
+        run_on_ui_thread(show)
+    except Exception:
+        pass
+
+
+def open_site(url):
+    def go():
+        try:
+            from client_utils import get_last_fragment
+            from android.net import Uri
+            from org.telegram.messenger.browser import Browser
+            fragment = get_last_fragment()
+            activity = fragment.getParentActivity() if fragment is not None else None
+            if activity is not None:
+                Browser.openUrl(activity, Uri.parse(url))
+                return
+        except Exception:
+            pass
+        try:
+            from android.content import Intent
+            from android.net import Uri
+            from org.telegram.messenger import ApplicationLoader
+            intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ApplicationLoader.applicationContext.startActivity(intent)
+        except Exception as error:
+            notify("не удалось открыть сайт: " + str(error)[:80], "error")
+    if run_on_ui_thread is not None:
+        try:
+            run_on_ui_thread(go)
+            return
+        except Exception:
+            pass
+    go()
+
+
+MEDIA_EXT = {
+    "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+    "image/gif": ".gif", "application/pdf": ".pdf", "application/zip": ".zip",
+    "video/mp4": ".mp4", "audio/mpeg": ".mp3", "text/plain": ".txt",
+}
+USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+PHOTO_LIMIT = 15 * 1024 * 1024
+FILE_LIMIT = 50 * 1024 * 1024
+
+
+def media_dir():
+    try:
+        from org.telegram.messenger import ApplicationLoader
+        base = str(ApplicationLoader.applicationContext.getCacheDir().getAbsolutePath())
+    except Exception:
+        base = tempfile.gettempdir()
+    path = os.path.join(base, "commands_plugin")
+    os.makedirs(path, exist_ok=True)
+    try:
+        for entry in os.listdir(path):
+            full = os.path.join(path, entry)
+            if time.time() - os.path.getmtime(full) > 3600:
+                shutil.rmtree(full, ignore_errors=True)
+    except Exception:
+        pass
+    return path
+
+
+def fetch_media(url, kind):
+    limit = PHOTO_LIMIT if kind == "photo" else FILE_LIMIT
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        ctype = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        final_url = response.geturl()
+        data = response.read(limit + 1)
+    if len(data) > limit:
+        raise RuntimeError("файл слишком большой")
+    if not data:
+        raise RuntimeError("пустой ответ")
+    if kind == "photo" and not ctype.startswith("image/"):
+        raise RuntimeError("по ссылке не картинка")
+    if ctype in ("text/html", "application/xhtml+xml"):
+        raise RuntimeError("по ссылке страница, а не файл")
+    url_path = urllib.parse.urlparse(final_url).path
+    base = os.path.basename(urllib.parse.unquote(url_path)) or "file"
+    ext = MEDIA_EXT.get(ctype, "")
+    if not os.path.splitext(base)[1]:
+        base += ext or (".jpg" if kind == "photo" else "")
+    base = re.sub(r"[^\w.\- ]", "_", base)[:60] or "file"
+    folder = os.path.join(media_dir(), str(int(time.time() * 1000)) + str(random.randint(100, 999)))
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, base)
+    with open(path, "wb") as handle:
+        handle.write(data)
+    return path, ctype
+
+
+def send_media(peer, out):
+    from client_utils import send_photo, send_document, send_text
+    caption = (out.text or "")[:1024]
+    jobs = []
+    if out.photo:
+        jobs.append(("photo", out.photo))
+    if out.file:
+        jobs.append(("file", out.file))
+    for index, (kind, url) in enumerate(jobs):
+        kwargs = {"caption": caption} if (index == 0 and caption) else {}
+        try:
+            path, ctype = fetch_media(url, kind)
+            if kind == "photo" and ctype in ("image/jpeg", "image/jpg", "image/png"):
+                send_photo(peer, path, **kwargs)
+            else:
+                send_document(peer, path, **kwargs)
+        except Exception as error:
+            notify("не вышло скачать, отправил ссылкой: " + str(error)[:60], "error")
+            send_text(peer, (caption + "\n" if kwargs else "") + url)
+
+
+                
+
+def ai_chat(url, key, model, system, user, web=False, temperature=0.8, max_tokens=3500):
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if web and "openrouter" in url:
+        payload["plugins"] = [{"id": "web", "max_results": 5}]
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST", headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + key,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=120 if web else 90) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", "ignore")[:150]
+        raise RuntimeError("http " + str(error.code) + " " + detail)
+    return data["choices"][0]["message"]["content"]
+
+
+RUNTIME_RULES = (
+    " Пиши простым языком, без Markdown (без звёздочек, решёток и обратных кавычек), "
+    "не длиннее 1500 символов. Не используй длинное тире и стрелки."
+)
+
+
+def tidy_answer(text):
+    text = str(text).replace("**", "").replace("__", "").replace("`", "")
+    text = re.sub(r"(?m)^#{1,6}\s*", "", text)
+    for bad in ("\u2014", "\u2013", "\u2192", "\u2190"):
+        text = text.replace(bad, "-")
+    return text.strip()[:3500]
+
+
+AI_SYSTEM = (
+    "Ты генератор пользовательских команд для Telegram-плагина. У команды нет границ по теме: "
+    "она может отвечать, искать в интернете, считать что угодно, присылать фото и файлы, открывать сайты. "
+    "Определи, что просит пользователь, и создай ОДНУ готовую команду. "
+    "Верни строго один корректный JSON-объект без Markdown, комментариев и текста вокруг. "
+    "Формат: "
+    '{"name":"g","aliases":[],"description":"короткое описание","usage":"[запрос]","needs_args":true,'
+    '"replies":[],"links":[],"photos":[],"files":[],"open":[],"ai":"","web":false,"code":""}. '
+    "ИМЯ: name - только буквы (латиница или русские), строчные, от 1 до 20 знаков, без цифр, пробелов, "
+    "дефисов и точки (точку пользователь ставит в чате сам). Если пользователь назвал имя с точкой, убери точку. "
+    "Имена chelp и кхелп заняты. aliases - необязательные дополнительные имена по тем же правилам. "
+    "description до 60 символов. usage - короткая подсказка по аргументам или пустая строка. "
+    "needs_args=true только если без текста после команды она работать не может. "
+    "ВОЗМОЖНОСТИ (заполни то, что нужно, хотя бы одно поле): "
+    "replies - готовые тексты ответа, при нескольких бот берёт случайный. "
+    "links - ссылки, одна случайная добавляется к сообщению. "
+    "photos - ПРЯМЫЕ ссылки на картинки, одна случайная отправляется как фото, replies становятся подписью. "
+    "files - прямые ссылки на файлы, отправляются документом. "
+    "open - ссылки на сайты, одна случайная открывается на телефоне пользователя, в чат ничего не уходит. "
+    "ai - инструкция для ии, которая выполняется КАЖДЫЙ РАЗ при вызове команды; текст пользователя после команды "
+    "передаётся ему как вопрос. Используй для чего угодно, где нужен ум: ответы на вопросы, советы, перевод, "
+    "тексты, объяснения, анализ. web=true - ии перед ответом ищет информацию в интернете (для новостей, погоды, "
+    "курсов, фактов, поиска). Если web=true, ai обязателен. "
+    "code - программа на Python для точных вычислений и логики, там где ии ненадёжен: арифметика, текст "
+    "наоборот, коды, даты, пароли, игры, разбор аргументов, запросы к открытым API. "
+    "ПРАВИЛА КОДА: нужна функция def run(args): где args - строка с текстом пользователя. "
+    "Верни из неё строку (это ответ) либо словарь с ключами text, photo, file, open, link (значения - строки; "
+    "photo, file, open, link - только http/https ссылки). Можно писать код и вне функции (например словари). "
+    "Доступно без import: math, random, re, string, json, datetime (модуль), quote(текст) для ссылок, "
+    "get(url) - вернуть текст страницы, get_json(url) - вернуть разобранный json. "
+    "ЗАПРЕЩЕНО: import, классы, with, yield, open, eval, exec, getattr, type, любые имена и атрибуты с подчёркиванием, "
+    "метод .format (используй f-строки или +). Файлов и системы нет. Без бесконечных циклов. "
+    "Код записывай в поле code одной JSON-строкой (переносы строк как \\n). Не используй код, если хватает replies или ai. "
+    "ПОДСТАНОВКИ в replies, links, photos, files, open: {args} - текст после команды; {q} - он же, но для ссылок "
+    "(используй {q} внутри ссылок); {rand:1-100} - случайное целое; {pick:а|б|в} - случайный вариант; "
+    "{time} - время; {date} - дата. Если ответ приходит от code или ai, он добавляется к replies; "
+    "в replies можно поставить {result}, чтобы вставить его в нужное место. "
+    "СТИЛЬ: ответ - живое сообщение с короткой вводной под смысл команды и эмодзи, а не голое слово. "
+    "Для случайного ответа или игры делай 15-30 разных вариантов. Пиши строчными буквами. "
+    "Не используй длинное тире и стрелки, вместо них дефис. "
+    "ССЫЛКИ: если пользователь дал ссылку, используй её без изменений. Шаблоны поиска: "
+    "google https://www.google.com/search?q={q} ; яндекс https://yandex.ru/search/?text={q} ; "
+    "youtube https://www.youtube.com/results?search_query={q} ; википедия https://ru.wikipedia.org/wiki/Special:Search?search={q} ; "
+    "карты https://yandex.ru/maps/?text={q} ; телеграм-профиль https://t.me/{q}. "
+    "Надёжные адреса случайных картинок: https://picsum.photos/800/600 (любое фото), https://cataas.com/cat (кошки), "
+    "https://cataas.com/cat/says/{q} (кот с надписью), https://loremflickr.com/800/600/{q} (фото по слову). "
+    "Не выдумывай адреса, которых не знаешь. "
+    "ПРИМЕРЫ: "
+    "'g ищет в интернете и отвечает' -> "
+    '{"name":"g","aliases":["г"],"description":"поиск в интернете через ии","usage":"[запрос]","needs_args":true,'
+    '"replies":["🔎 {args}"],"links":[],"photos":[],"files":[],"open":[],'
+    '"ai":"Найди в интернете актуальную информацию по запросу и ответь коротко и по делу. В конце одной строкой назови источники.",'
+    '"web":true,"code":""}. '
+    "'cat присылает случайного кота' -> "
+    '{"name":"cat","aliases":[],"description":"случайный кот","usage":"","needs_args":false,"replies":["🐱 держи кота"],'
+    '"links":[],"photos":["https://cataas.com/cat"],"files":[],"open":[],"ai":"","web":false,"code":""}. '
+    "'rev пишет мой текст задом наперёд' -> "
+    '{"name":"rev","aliases":[],"description":"текст наоборот","usage":"[текст]","needs_args":true,'
+    '"replies":["🔁 {result}"],"links":[],"photos":[],"files":[],"open":[],"ai":"","web":false,'
+    '"code":"def run(args):\\n    return args[::-1]"}. '
+    "Только JSON, без пояснений."
+)
+
+
+                            
+
+def build_morse_code():
+    table = {
+        "A": ".-", "B": "-...", "C": "-.-.", "D": "-..", "E": ".", "F": "..-.", "G": "--.", "H": "....",
+        "I": "..", "J": ".---", "K": "-.-", "L": ".-..", "M": "--", "N": "-.", "O": "---", "P": ".--.",
+        "Q": "--.-", "R": ".-.", "S": "...", "T": "-", "U": "..-", "V": "...-", "W": ".--", "X": "-..-",
+        "Y": "-.--", "Z": "--..", "0": "-----", "1": ".----", "2": "..---", "3": "...--", "4": "....-",
+        "5": ".....", "6": "-....", "7": "--...", "8": "---..", "9": "----.", " ": "/",
+        "А": ".-", "Б": "-...", "В": ".--", "Г": "--.", "Д": "-..", "Е": ".", "Ж": "...-", "З": "--..",
+        "И": "..", "Й": ".---", "К": "-.-", "Л": ".-..", "М": "--", "Н": "-.", "О": "---", "П": ".--.",
+        "Р": ".-.", "С": "...", "Т": "-", "У": "..-", "Ф": "..-.", "Х": "....", "Ц": "-.-.", "Ч": "---.",
+        "Ш": "----", "Щ": "--.-", "Ъ": ".--.-", "Ы": "-.--", "Ь": "-..-", "Э": "..-..", "Ю": "..--", "Я": ".-.-",
+        ".": ".-.-.-", ",": "--..--", "?": "..--..", "!": "-.-.--", "-": "-....-", ":": "---...",
+        ";": "-.-.-.", "'": ".----.", "\"": ".-..-.", "(": "-.--.", ")": "-.--.-", "/": "-..-.",
+    }
+    return "M = " + repr(table) + "\n"
+
+
+UPSIDE_MAP = {
+    "a": "ɐ", "b": "q", "c": "ɔ", "d": "p", "e": "ǝ", "f": "ɟ", "g": "ƃ", "h": "ɥ", "i": "ᴉ",
+    "j": "ɾ", "k": "ʞ", "m": "ɯ", "n": "u", "p": "d", "q": "b", "r": "ɹ", "t": "ʇ", "u": "n",
+    "v": "ʌ", "w": "ʍ", "y": "ʎ",
+    "а": "ɐ", "б": "ƍ", "в": "ʚ", "г": "ɹ", "д": "ɓ", "е": "ǝ", "з": "ε", "й": "ņ", "к": "ʞ",
+    "л": "ʌ", "м": "w", "п": "u", "р": "d", "с": "ɔ", "т": "ʟ", "у": "ʎ", "ц": "ǹ", "ч": "Һ",
+    "ш": "m", "щ": "ɯ", "ъ": "q", "ы": "ıq", "ь": "q", "э": "є", "ю": "oı", "я": "ʁ",
+    "1": "Ɩ", "2": "ᄅ", "3": "Ɛ", "4": "ㄣ", "5": "ϛ", "6": "9", "7": "ㄥ", "9": "6",
+    ".": "˙", ",": "'", "'": ",", "?": "¿", "!": "¡", "(": ")", ")": "(", "[": "]", "]": "[",
+    "&": "⅋", "_": "‾",
+}
+
+
+CODE_SLOTS = r'''def run(args):
+    symbols = ["🍒", "🍋", "🍇", "💎", "⭐"]
+    row = [random.choice(symbols) for _ in range(3)]
+    if row[0] == row[1] == row[2]:
+        end = "🎉 победа! все три совпали"
+    else:
+        end = "не повезло, попробуй ещё раз"
+    return "🎰 " + " | ".join(row) + "\n\n" + end
+'''
+
+CODE_PICK = r'''def run(args):
+    items = [x.strip() for x in args.split(",") if x.strip()]
+    if len(items) < 2:
+        return "напиши варианты через запятую. пример: .pick пицца, суши, бургер"
+    return "🎯 я выбираю: " + random.choice(items)
+'''
+
+CODE_RNG = r'''def run(args):
+    parts = args.replace(",", " ").split()
+    try:
+        a = int(parts[0])
+        b = int(parts[1])
+    except Exception:
+        return "напиши два числа. пример: .rng 1 100"
+    if a > b:
+        return "⚠️ первое число больше второго. пример: .rng 1 100"
+    return "🎲 от " + str(a) + " до " + str(b) + " выпало: " + str(random.randint(a, b))
+'''
+
+CODE_REVERSE = r'''def run(args):
+    return args[::-1]
+'''
+
+CODE_UPSIDE = r'''def run(args):
+    text = args.lower()
+    return "".join(UP.get(ch, ch) for ch in reversed(text))
+'''
+
+CODE_MORSE = r'''def run(args):
+    out = []
+    for ch in args.upper():
+        if ch in M:
+            out.append(M[ch])
+    if not out:
+        return "не нашёл знаков, которые можно перевести"
+    return " ".join(out)
+'''
+
+CODE_UNMORSE = r'''R = {}
+for k, v in M.items():
+    if v not in R:
+        R[v] = k
+
+def run(args):
+    words = args.strip().split(" / ") if " / " in args else args.replace("/", " / ").split(" / ")
+    res = []
+    bad = []
+    for word in words:
+        letters = ""
+        for code in word.split():
+            if code in R:
+                letters += R[code]
+            else:
+                bad.append(code)
+        res.append(letters)
+    text = " ".join(res).lower()
+    if bad:
+        return text + "\n\n❓ неизвестный код: " + ", ".join(bad)
+    return text
+'''
+
+CODE_WC = r'''def run(args):
+    return ("📊 символов с пробелами: " + str(len(args)) +
+            "\nсимволов без пробелов: " + str(len("".join(args.split()))) +
+            "\nслов: " + str(len(args.split())) +
+            "\nстрок: " + str(len(args.splitlines())))
+'''
+
+CODE_SQRT = r'''def run(args):
+    try:
+        x = float(args.replace(",", "."))
+        if x < 0:
+            return "⚠️ из отрицательного числа корень не достать"
+        r = math.sqrt(x)
+        shown = str(int(r)) if r == int(r) else str(round(r, 6))
+    except Exception:
+        return "⚠️ напиши число. пример: .sqrt 144"
+    return "√" + args.strip() + " = " + shown
+'''
+
+CODE_BINARY = r'''def run(args):
+    try:
+        n = int(args.strip())
+    except Exception:
+        return "⚠️ напиши целое число. пример: .binary 42"
+    return "💻 " + str(n) + " в двоичной системе: " + bin(n).replace("0b", "")
+'''
+
+CODE_ROMAN = r'''def run(args):
+    try:
+        n = int(args.strip())
+    except Exception:
+        return "⚠️ напиши целое число от 1 до 3999"
+    if n < 1 or n > 3999:
+        return "⚠️ можно числа от 1 до 3999"
+    table = [(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+             (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")]
+    left = n
+    res = ""
+    for value, sign in table:
+        while left >= value:
+            res += sign
+            left -= value
+    return "🏛️ " + str(n) + " римскими цифрами: " + res
+'''
+
+CODE_SPLIT = r'''def run(args):
+    parts = args.replace(",", ".").split()
+    try:
+        total = float(parts[0])
+        n = int(parts[1])
+    except Exception:
+        return "напиши сумму и сколько человек. пример: .split 1500 4"
+    if n <= 0 or total < 0:
+        return "⚠️ людей должно быть больше нуля, а сумма не меньше нуля"
+    return "💸 сумма " + str(round(total, 2)) + " на " + str(n) + " чел.\n\nс каждого: " + str(round(total / n, 2))
+'''
+
+CODE_BMI = r'''def run(args):
+    parts = args.replace(",", ".").split()
+    try:
+        weight = float(parts[0])
+        height = float(parts[1])
+    except Exception:
+        return "напиши вес в кг и рост в см. пример: .bmi 70 175"
+    if weight <= 0 or height <= 0:
+        return "⚠️ числа должны быть больше нуля"
+    value = weight / ((height / 100) ** 2)
+    return ("⚖️ индекс массы тела: " + str(round(value, 1)) +
+            "\n\nэто просто расчёт по формуле. для подростков эти нормы не подходят.")
+'''
+
+CODE_DAYS = r'''def run(args):
+    try:
+        parts = args.strip().split(".")
+        target = datetime.date(int(parts[2]), int(parts[1]), int(parts[0]))
+    except Exception:
+        return "напиши дату так: ДД.ММ.ГГГГ. пример: .days 31.12.2026"
+    delta = (target - datetime.date.today()).days
+    if delta > 0:
+        return "📅 до " + args.strip() + " осталось дней: " + str(delta)
+    if delta == 0:
+        return "📅 это сегодня!"
+    return "📅 с " + args.strip() + " прошло дней: " + str(-delta)
+'''
+
+CODE_PASS = r'''def run(args):
+    try:
+        size = int(args.strip()) if args.strip() else 12
+    except Exception:
+        return "напиши длину числом. пример: .pass 16"
+    if size < 6 or size > 64:
+        return "⚠️ длина от 6 до 64"
+    rnd = random.SystemRandom()
+    groups = [string.ascii_lowercase, string.ascii_uppercase, string.digits, "!@#$%^&*-_?"]
+    chars = [rnd.choice(g) for g in groups]
+    pool = "".join(groups)
+    while len(chars) < size:
+        chars.append(rnd.choice(pool))
+    rnd.shuffle(chars)
+    return "🔐 твой пароль:\n" + "".join(chars) + "\n\nя его нигде не сохраняю"
+'''
+
+
+def shop_item(group, name, description, **fields):
+    spec = {"name": name, "description": description}
+    spec.update(fields)
+    return (group, spec)
+
+
+SHOP = [
+    shop_item("ии и интернет", "g", "ищет в интернете и отвечает", aliases=["г"], usage="[запрос]", needs_args=True,
+              replies=["🔎 {args}"], web=True,
+              ai="Найди в интернете актуальную информацию по запросу и ответь коротко и по делу. В конце одной строкой назови источники."),
+    shop_item("ии и интернет", "ask", "задать вопрос ии", usage="[вопрос]", needs_args=True,
+              replies=["💬 {args}"], ai="Ответь на вопрос понятно и коротко."),
+    shop_item("ии и интернет", "tr", "перевод: русский и английский", usage="[текст]", needs_args=True,
+              ai="Если текст на русском, переведи на английский, иначе переведи на русский. Выдай только перевод."),
+    shop_item("фото и сайты", "photo", "случайное фото", replies=["🖼️ держи случайное фото"],
+              photos=["https://picsum.photos/800/600"]),
+    shop_item("фото и сайты", "cat", "случайный кот", replies=["🐱 держи кота"],
+              photos=["https://cataas.com/cat"]),
+    shop_item("фото и сайты", "yt", "открыть поиск в youtube", usage="[запрос]", needs_args=True,
+              open=["https://www.youtube.com/results?search_query={q}"]),
+    shop_item("фото и сайты", "wiki", "открыть википедию", usage="[запрос]", needs_args=True,
+              open=["https://ru.wikipedia.org/wiki/Special:Search?search={q}"]),
+    shop_item("игры", "flip", "орёл или решка",
+              replies=["🪙 подбрасываем монетку...\n\nвыпало: {pick:орёл|решка}"]),
+    shop_item("игры", "slots", "игровой автомат", code=CODE_SLOTS),
+    shop_item("игры", "pick", "случайный выбор из списка", usage="[а, б, в]", code=CODE_PICK),
+    shop_item("игры", "rng", "случайное число", usage="[от] [до]", code=CODE_RNG),
+    shop_item("игры", "ball", "магический шар", usage="[вопрос]", needs_args=True,
+              replies=["🔮 вопрос: {args}\n\nответ шара: {pick:да, определённо|без сомнений|скорее всего да|всё указывает на да|"
+                       "спроси позже|не могу предсказать|возможно|сосредоточься и спроси снова|шансы 50 на 50|"
+                       "не рассчитывай на это|мой ответ - нет|скорее всего нет|однозначно нет}"]),
+    shop_item("игры", "game", "случайный игровой эмодзи", replies=["{pick:🎲|🎰|🎯|🏀|🎳|⚽}"]),
+    shop_item("игры", "love", "как к тебе относится человек", usage="[имя]", needs_args=True,
+              replies=["💌 как {args} относится к тебе:\n\n{pick:❤️ любит. прямо с сердечками в глазах|"
+                       "💔 не любит. но это временно, наверное|🙈 тайно симпатизирует и боится сказать|"
+                       "🤔 пока не определился, дай ему время|😎 считает тебя классным другом|"
+                       "🔥 думает о тебе чаще, чем признаётся}"]),
+    shop_item("текст", "reverse", "текст задом наперёд", usage="[текст]", needs_args=True,
+              replies=["🔁 {result}"], code=CODE_REVERSE),
+    shop_item("текст", "upside", "текст вверх ногами", usage="[текст]", needs_args=True,
+              replies=["🙃 {result}"], code="UP = " + repr(UPSIDE_MAP) + "\n" + CODE_UPSIDE),
+    shop_item("текст", "morse", "текст в азбуку морзе", usage="[текст]", needs_args=True,
+              code=build_morse_code() + CODE_MORSE),
+    shop_item("текст", "unmorse", "азбука морзе в текст", usage="[код]", needs_args=True,
+              code=build_morse_code() + CODE_UNMORSE),
+    shop_item("текст", "wc", "считает слова и символы", usage="[текст]", needs_args=True, code=CODE_WC),
+    shop_item("числа и утилиты", "sqrt", "квадратный корень", usage="[число]", needs_args=True, code=CODE_SQRT),
+    shop_item("числа и утилиты", "binary", "число в двоичную систему", usage="[число]", needs_args=True,
+              code=CODE_BINARY),
+    shop_item("числа и утилиты", "roman", "число в римские цифры", usage="[число]", needs_args=True,
+              code=CODE_ROMAN),
+    shop_item("числа и утилиты", "split", "поделить сумму поровну", usage="[сумма] [людей]", needs_args=True,
+              code=CODE_SPLIT),
+    shop_item("числа и утилиты", "bmi", "индекс массы тела", usage="[вес] [рост]", needs_args=True, code=CODE_BMI),
+    shop_item("числа и утилиты", "days", "сколько дней до даты", usage="[дд.мм.гггг]", needs_args=True,
+              code=CODE_DAYS),
+    shop_item("числа и утилиты", "pass", "генератор пароля", usage="[длина]", code=CODE_PASS),
+]
+
+
+                       
+
+def custom_load(plugin):
+    CUSTOM.clear()
+    try:
+        for item in json.loads(plugin.get_setting("custom_commands", "[]")):
+            spec = clean_spec(item)
+            if spec and spec["name"] not in RESERVED:
+                CUSTOM[spec["name"]] = spec
+    except Exception as error:
+        plugin.log("commands: загрузка команд: " + str(error))
+
+
+def custom_save(plugin):
+    value = json.dumps(list(CUSTOM.values()), ensure_ascii=False)
+    try:
+        plugin.set_setting("custom_commands", value, reload_settings=True)
+    except TypeError:
+        plugin.set_setting("custom_commands", value)
+
+
+                              
+
+EXPORT_FORMAT = "commands-plugin"
+
+
+def export_text(specs):
+    return json.dumps({"format": EXPORT_FORMAT, "version": 1, "commands": specs}, ensure_ascii=False)
+
+
+def parse_import(text):
+    text = str(text or "").strip()
+    data = None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        for open_ch, close_ch in (("{", "}"), ("[", "]")):
+            start, end = text.find(open_ch), text.rfind(close_ch)
+            if start >= 0 and end > start:
+                try:
+                    data = json.loads(text[start:end + 1])
+                    break
+                except ValueError:
+                    continue
+    if isinstance(data, dict) and isinstance(data.get("commands"), list):
+        return data["commands"]
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def import_specs(items):
+    added, skipped, bad = [], 0, 0
+    for item in items:
+        spec = clean_spec(item)
+        if spec is None:
+            bad += 1
+        elif name_taken(spec):
+            skipped += 1
+        else:
+            CUSTOM[spec["name"]] = spec
+            added.append(spec["name"])
+    return added, skipped, bad
+
+
+def clipboard_set(text):
+    def go():
+        try:
+            from org.telegram.messenger import AndroidUtilities
+            AndroidUtilities.addToClipboard(text)
+            return
+        except Exception:
+            pass
+        from android.content import ClipData, Context
+        from org.telegram.messenger import ApplicationLoader
+        manager = ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE)
+        manager.setPrimaryClip(ClipData.newPlainText("commands", text))
+    if run_on_ui_thread is not None:
+        run_on_ui_thread(go)
+    else:
+        go()
+
+
+def clipboard_get():
+    from android.content import Context
+    from org.telegram.messenger import ApplicationLoader
+    context = ApplicationLoader.applicationContext
+    manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
+    clip = manager.getPrimaryClip()
+    if clip is None or clip.getItemCount() == 0:
+        return ""
+    return str(clip.getItemAt(0).coerceToText(context))
+
+
+def my_user_id():
+    from org.telegram.messenger import UserConfig
+    return int(UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId())
+
+
+def transfer_page(plugin):
+    return [
+        Header(text="импорт и экспорт"),
+        Divider(text="отдать свои команды"),
+        Text(text="скопировать все команды", subtext="потом вставь куда угодно: в чат, заметку, другу",
+             icon="msg_arrow_forward", on_click=lambda view: plugin.export_clipboard()),
+        Text(text="отправить файлом в избранное", subtext="файл с командами придёт в «избранное»",
+             icon="msg_arrow_forward", on_click=lambda view: plugin.export_file()),
+        Divider(text="забрать чужие команды (одинаковые имена пропускаются)"),
+        Text(text="импорт из буфера обмена", subtext="сначала скопируй код команд, потом нажми сюда",
+             icon="msg_add", accent=True, on_click=lambda view: plugin.import_clipboard()),
+        Input(key="import_url", text="ссылка на код команд", default="",
+              subtext="прямая ссылка на текстовый файл с кодом, например gist (raw)"),
+        Text(text="импорт по ссылке", icon="msg_add", accent=True,
+             on_click=lambda view: plugin.import_link()),
+        Text(text="чужие команды запускаются в защищённой оболочке, но ссылки и ии в них всё равно смотри глазами",
+             icon="msg_info"),
+    ]
+
+
+def ai_page(plugin):
+    return [
+        Header(text="создать через ии"),
+        Input(key="ai_api_key", text="ключ ии", default="",
+              subtext="пароль от сервиса openrouter.ai (или другого, похожего). без него ии не работает"),
+        Input(key="ai_base_url", text="адрес сервиса", default=AI_DEFAULT_URL, subtext="менять не нужно"),
+        Input(key="ai_model", text="модель", default=AI_DEFAULT_MODEL),
+        Input(key="ai_request", text="что должна делать команда", default="",
+              subtext="пример: команда g - ищет в интернете то, что я напишу. "
+                      "или: команда lin - присылает случайное фото"),
+        Text(text="создать команду", icon="msg_add", accent=True,
+             on_click=lambda view: plugin.start_generation()),
+    ]
+
+
+def manual_page(plugin):
+    items = [
+        Header(text="сделать самостоятельно"),
+        Input(key="man_name", text="имя команды", default="",
+              subtext="только буквы, без точки, до 20 знаков"),
+        Input(key="man_desc", text="описание", default=""),
+        Input(key="man_usage", text="что писать после команды", default="", subtext="например: [запрос]"),
+    ]
+    if Switch is not None:
+        items.append(Switch(key="man_needs", text="без текста не работает", default=False))
+    items.extend([
+        Divider(text="что делает команда (хватит одного поля, несколько значений - через ;;)"),
+        Input(key="man_replies", text="ответ", default="",
+              subtext="можно {args} {rand:1-100} {pick:а|б}"),
+        Input(key="man_links", text="ссылка в сообщение", default=""),
+        Input(key="man_photos", text="фото", default="", subtext="прямая ссылка на картинку"),
+        Input(key="man_files", text="файл", default="", subtext="прямая ссылка на файл"),
+        Input(key="man_open", text="открыть сайт", default="", subtext="например: https://www.google.com/search?q={q}"),
+        Input(key="man_ai", text="задание для ии", default="",
+              subtext="например: ответь на вопрос коротко. ии получит текст после команды"),
+    ])
+    if Switch is not None:
+        items.append(Switch(key="man_web", text="ии ищет в интернете", default=False))
+    items.extend([
+        Text(text="создать команду", icon="msg_add", accent=True,
+             on_click=lambda view: plugin.create_manual()),
+        Text(text="очистить поля", icon="msg_delete", red=True,
+             on_click=lambda view: plugin.clear_manual()),
+    ])
+    return items
+
+
+def shop_page(plugin):
+    items = [
+        Header(text="магазин команд"),
+        Text(text="установить все", subtext="добавить все команды из магазина", icon="msg_add", accent=True,
+             on_click=lambda view: plugin.install_all()),
+    ]
+    last_group = None
+    for group, spec in SHOP:
+        if group != last_group:
+            items.append(Divider(text=group))
+            last_group = group
+        installed = spec["name"] in CUSTOM
+        items.append(Text(
+            text="." + spec["name"] + ("  ✓" if installed else ""),
+            subtext=spec["description"],
+            icon="msg_info" if installed else "msg_add",
+            on_click=lambda view, n=spec["name"]: plugin.install_shop(n),
+        ))
+    return items
+
+
+def custom_command_page(plugin, name):
+    spec = CUSTOM.get(name)
+    if not spec:
+        return [Header(text="мои команды"), Text(text="команда не найдена", icon="msg_error")]
+
+    count = int(plugin.get_setting("custom_edit_count_" + name, len(spec["replies"])) or 0)
+    count = max(0, min(count, MAX_REPLIES))
+    items = [
+        Header(text="команда ." + name),
+        Input(key="custom_edit_description_" + name, text="описание", default=spec["description"]),
+        Input(key="custom_edit_usage_" + name, text="что писать после команды", default=spec["usage"]),
+    ]
+    if Switch is not None:
+        items.append(Switch(key="custom_edit_needs_" + name, text="без текста не работает", default=spec["needs_args"]))
+    items.extend([
+        Divider(text="ссылки (несколько - через ;;)"),
+        Input(key="custom_edit_links_" + name, text="ссылка в сообщение", default=join_list(spec["links"])),
+        Input(key="custom_edit_photos_" + name, text="фото", default=join_list(spec["photos"])),
+        Input(key="custom_edit_files_" + name, text="файл", default=join_list(spec["files"])),
+        Input(key="custom_edit_open_" + name, text="открыть сайт", default=join_list(spec["open"])),
+        Divider(text="ии"),
+        Input(key="custom_edit_ai_" + name, text="задание для ии", default=spec["ai"]),
+    ])
+    if Switch is not None:
+        items.append(Switch(key="custom_edit_web_" + name, text="ии ищет в интернете", default=spec["web"]))
+    if spec["code"]:
+        items.append(Text(text="у команды есть программа", icon="msg_info",
+                          subtext="она не меняется здесь. чтобы изменить, создай команду заново"))
+    items.append(Divider(text="тексты ответа (выбирается случайный)"))
+    for index in range(count):
+        default_reply = spec["replies"][index] if index < len(spec["replies"]) else ""
+        items.append(Input(key="custom_edit_reply_" + name + "_" + str(index),
+                           text="ответ " + str(index + 1), default=default_reply))
+        items.append(Text(text="удалить ответ " + str(index + 1), icon="msg_delete", red=True,
+                          on_click=lambda view, i=index: plugin.remove_custom_reply(name, i)))
+    items.extend([
+        Text(text="добавить ответ", icon="msg_add", accent=True,
+             on_click=lambda view: plugin.add_custom_reply(name)),
+        Text(text="сохранить изменения", icon="msg_save", accent=True,
+             on_click=lambda view: plugin.save_custom_edits(name)),
+        Text(text="скопировать команду", subtext="чтобы отправить другу", icon="msg_arrow_forward",
+             on_click=lambda view: plugin.export_clipboard(name)),
+        Text(text="удалить команду", icon="msg_delete", red=True,
+             on_click=lambda view: plugin.delete_custom(name)),
+    ])
+    return items
+
+
+def kinds_of(spec):
+    kinds = []
+    if spec["ai"]:
+        kinds.append("ии + интернет" if spec["web"] else "ии")
+    if spec["code"]:
+        kinds.append("программа")
+    if spec["replies"]:
+        kinds.append("текст")
+    if spec["links"]:
+        kinds.append("ссылка")
+    if spec["photos"]:
+        kinds.append("фото")
+    if spec["files"]:
+        kinds.append("файл")
+    if spec["open"]:
+        kinds.append("сайт")
+    return kinds
+
+
+def plugin_settings(plugin):
+    if Header is None:
+        return []
+    items = [
+        Header(text="свои команды"),
+        Text(text="создать через ии", subtext="опиши команду словами", icon="msg_bot",
+             on_click=lambda view: None, create_sub_fragment=lambda: ai_page(plugin)),
+        Text(text="сделать самостоятельно", subtext="заполни поля вручную", icon="msg_edit",
+             on_click=lambda view: None, create_sub_fragment=lambda: manual_page(plugin)),
+        Text(text="магазин команд", subtext="готовые команды: нажал и пользуйся", icon="msg_arrow_forward",
+             on_click=lambda view: None, create_sub_fragment=lambda: shop_page(plugin)),
+        Text(text="импорт и экспорт", subtext="поделиться командами или забрать чужие", icon="msg_arrow_forward",
+             on_click=lambda view: None, create_sub_fragment=lambda: transfer_page(plugin)),
+        Divider(text="мои команды: нажми, чтобы изменить"),
+    ]
+    if CUSTOM:
+        for name, spec in list(CUSTOM.items()):
+            items.append(Text(
+                text="." + name,
+                subtext=spec["description"] + " | " + ", ".join(kinds_of(spec)),
+                icon="msg_arrow_forward",
+                on_click=lambda view: None,
+                create_sub_fragment=lambda n=name: custom_command_page(plugin, n),
+            ))
+    else:
+        items.append(Text(text="пока нет команд", icon="msg_info"))
+    return items
+
+
+                    
+
+class CommandsPlugin(BasePlugin):
+
+    def on_plugin_load(self):
+        try:
+            custom_load(self)
+            self.add_on_send_message_hook()
+            self.log("commands " + __version__ + ": загружен")
+        except Exception as error:
+            self.log("commands: ошибка: " + str(error))
+
+    def create_settings(self):
+        return plugin_settings(self)
+
+    def _set_setting(self, key, value, reload_settings=True):
+        try:
+            self.set_setting(key, value, reload_settings=reload_settings)
+        except TypeError:
+            self.set_setting(key, value)
+
+    def _text(self, key, default=""):
+        return str(self.get_setting(key, default) or "").strip()
+
+    def ai_settings(self):
+        key = self._text("ai_api_key")
+        url = self._text("ai_base_url", AI_DEFAULT_URL) or AI_DEFAULT_URL
+        model = self._text("ai_model", AI_DEFAULT_MODEL) or AI_DEFAULT_MODEL
+        return url, key, model
+
+                               
+
+    def start_generation(self):
+        url, key, model = self.ai_settings()
+        request = self._text("ai_request")
+        if not key:
+            notify("впиши ключ ии", "error")
+            return
+        if not request:
+            notify("напиши, что должна делать команда", "error")
+            return
+        notify("ии делает команду...")
+        threading.Thread(target=self.generate_worker, args=(url, key, model, request), daemon=True).start()
+
+    def generate_worker(self, url, key, model, request):
+        try:
+            spec = parse_spec(ai_chat(url, key, model, AI_SYSTEM, request, temperature=0.7, max_tokens=4000))
+            if spec is None:
+                notify("ии ответил непонятно, попробуй ещё раз", "error")
+                return
+            if name_taken(spec):
+                retry_request = (
+                    request + "\n\nВАЖНО: имя ." + spec["name"] +
+                    " уже занято. придумай другое уникальное имя из букв, не используй существующие, "
+                    "и верни JSON в том же формате."
+                )
+                spec = parse_spec(ai_chat(url, key, model, AI_SYSTEM, retry_request, temperature=0.7, max_tokens=4000))
+                if spec is None or name_taken(spec):
+                    notify("имя команды занято. попроси ии придумать другое", "error")
+                    return
+            self.store_new(spec)
+            notify("команда ." + spec["name"] + " готова", "success")
+        except Exception as error:
+            self.log("commands: ии: " + str(error))
+            notify("ошибка: " + str(error)[:120], "error")
+
+                     
+
+    def create_manual(self):
+        name = self._text("man_name").lower().lstrip(".")
+        if not re.fullmatch(NAME_RE, name):
+            notify("имя: только буквы, без пробелов и цифр, до 20 знаков", "error")
+            return
+        spec = clean_spec({
+            "name": name,
+            "description": self._text("man_desc"),
+            "usage": self._text("man_usage"),
+            "needs_args": bool(self.get_setting("man_needs", False)),
+            "replies": split_list(self._text("man_replies")),
+            "links": split_list(self._text("man_links")),
+            "photos": split_list(self._text("man_photos")),
+            "files": split_list(self._text("man_files")),
+            "open": split_list(self._text("man_open")),
+            "ai": self._text("man_ai"),
+            "web": bool(self.get_setting("man_web", False)),
+        })
+        if spec is None:
+            notify("заполни хотя бы одно поле действия (ссылки начинаются с http)", "error")
+            return
+        if name_taken(spec):
+            notify("имя ." + name + " уже занято", "error")
+            return
+        self.clear_manual(reload_settings=False)
+        self.store_new(spec)
+        notify("команда ." + name + " создана", "success")
+
+    def clear_manual(self, reload_settings=True):
+        for key in ("man_name", "man_desc", "man_usage", "man_replies", "man_links",
+                    "man_photos", "man_files", "man_open", "man_ai"):
+            self._set_setting(key, "", False)
+        self._set_setting("man_web", False, False)
+        self._set_setting("man_needs", False, reload_settings)
+
+                     
+
+    def install_shop(self, name):
+        for _group, raw in SHOP:
+            if raw["name"] != name:
+                continue
+            spec = clean_spec(raw)
+            if spec is None:
+                notify("не удалось установить ." + name, "error")
+                return
+            if name_taken(spec):
+                notify("." + name + " уже установлена", "info")
+                return
+            self.store_new(spec)
+            notify("команда ." + name + " установлена", "success")
+            return
+
+    def install_all(self):
+        added = 0
+        for _group, raw in SHOP:
+            spec = clean_spec(raw)
+            if spec is None or name_taken(spec):
+                continue
+            CUSTOM[spec["name"]] = spec
+            self.sync_edit_keys(spec["name"], reload_settings=False)
+            added += 1
+        custom_save(self)
+        notify("установлено команд: " + str(added), "success" if added else "info")
+
+                                
+
+    def store_new(self, spec):
+        CUSTOM[spec["name"]] = spec
+        self.sync_edit_keys(spec["name"], reload_settings=False)
+        custom_save(self)
+
+    def sync_edit_keys(self, name, reload_settings=True):
+        spec = CUSTOM.get(name)
+        if not spec:
+            return
+        self._set_setting("custom_edit_description_" + name, spec["description"], False)
+        self._set_setting("custom_edit_usage_" + name, spec["usage"], False)
+        self._set_setting("custom_edit_needs_" + name, spec["needs_args"], False)
+        self._set_setting("custom_edit_links_" + name, join_list(spec["links"]), False)
+        self._set_setting("custom_edit_photos_" + name, join_list(spec["photos"]), False)
+        self._set_setting("custom_edit_files_" + name, join_list(spec["files"]), False)
+        self._set_setting("custom_edit_open_" + name, join_list(spec["open"]), False)
+        self._set_setting("custom_edit_ai_" + name, spec["ai"], False)
+        self._set_setting("custom_edit_web_" + name, spec["web"], False)
+        for index, reply in enumerate(spec["replies"]):
+            self._set_setting("custom_edit_reply_" + name + "_" + str(index), reply, False)
+        self._set_setting("custom_edit_count_" + name, len(spec["replies"]), reload_settings)
+
+    def _reply_count(self, name, spec):
+        return max(0, min(int(self.get_setting("custom_edit_count_" + name, len(spec["replies"])) or 0), MAX_REPLIES))
+
+    def _reply_values(self, name, spec, count):
+        return [
+            str(self.get_setting("custom_edit_reply_" + name + "_" + str(i),
+                                 spec["replies"][i] if i < len(spec["replies"]) else "") or "")
+            for i in range(count)
+        ]
+
+    def save_custom_edits(self, name):
+        spec = CUSTOM.get(name)
+        if not spec:
+            notify("команда не найдена", "error")
+            return
+        count = self._reply_count(name, spec)
+        replies = [r.strip() for r in self._reply_values(name, spec, count) if r.strip()]
+        updated = clean_spec({
+            "name": name,
+            "aliases": spec["aliases"],
+            "description": self.get_setting("custom_edit_description_" + name, spec["description"]),
+            "usage": self.get_setting("custom_edit_usage_" + name, spec["usage"]),
+            "needs_args": bool(self.get_setting("custom_edit_needs_" + name, spec["needs_args"])),
+            "replies": replies,
+            "links": split_list(self.get_setting("custom_edit_links_" + name, join_list(spec["links"]))),
+            "photos": split_list(self.get_setting("custom_edit_photos_" + name, join_list(spec["photos"]))),
+            "files": split_list(self.get_setting("custom_edit_files_" + name, join_list(spec["files"]))),
+            "open": split_list(self.get_setting("custom_edit_open_" + name, join_list(spec["open"]))),
+            "ai": self.get_setting("custom_edit_ai_" + name, spec["ai"]),
+            "web": bool(self.get_setting("custom_edit_web_" + name, spec["web"])),
+            "code": spec["code"],
+        })
+        if not updated:
+            notify("нужно хотя бы одно действие", "error")
+            return
+        CUSTOM[name] = updated
+        self.sync_edit_keys(name, reload_settings=False)
+        custom_save(self)
+        notify("команда ." + name + " обновлена", "success")
+
+    def add_custom_reply(self, name):
+        spec = CUSTOM.get(name)
+        if not spec:
+            return
+        count = self._reply_count(name, spec)
+        if count >= MAX_REPLIES:
+            notify("максимум " + str(MAX_REPLIES) + " ответов", "error")
+            return
+        self._set_setting("custom_edit_count_" + name, count + 1, True)
+
+    def remove_custom_reply(self, name, index):
+        spec = CUSTOM.get(name)
+        if not spec:
+            return
+        count = self._reply_count(name, spec)
+        values = self._reply_values(name, spec, count)
+        if 0 <= index < len(values):
+            values.pop(index)
+        for i, value in enumerate(values):
+            self._set_setting("custom_edit_reply_" + name + "_" + str(i), value, False)
+        self._set_setting("custom_edit_count_" + name, len(values), True)
+
+    def delete_custom(self, name):
+        if CUSTOM.pop(name, None) is not None:
+            custom_save(self)
+            notify("команда ." + name + " удалена", "success")
+
+                              
+
+    def export_clipboard(self, name=None):
+        specs = [CUSTOM[name]] if name else list(CUSTOM.values())
+        if not specs:
+            notify("пока нечего экспортировать", "error")
+            return
+        try:
+            clipboard_set(export_text(specs))
+            notify("скопировано команд: " + str(len(specs)), "success")
+        except Exception as error:
+            self.log("commands: буфер: " + str(error))
+            notify("не удалось скопировать: " + str(error)[:80], "error")
+
+    def export_file(self):
+        if not CUSTOM:
+            notify("пока нечего экспортировать", "error")
+            return
+        try:
+            from client_utils import send_document
+            folder = os.path.join(media_dir(), "export" + str(int(time.time())))
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, "commands_export.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(export_text(list(CUSTOM.values())))
+            send_document(my_user_id(), path, caption="📦 команды из плагина Commands: " + str(len(CUSTOM)))
+            notify("файл отправлен в избранное", "success")
+        except Exception as error:
+            self.log("commands: экспорт файла: " + str(error))
+            notify("не получилось отправить файл, попробуй «скопировать все команды»", "error")
+
+    def finish_import(self, items):
+        if not items:
+            notify("не нашёл команд в этом тексте", "error")
+            return
+        added, skipped, bad = import_specs(items)
+        for name in added:
+            self.sync_edit_keys(name, reload_settings=False)
+        if added:
+            custom_save(self)
+        parts = ["добавлено: " + str(len(added))]
+        if skipped:
+            parts.append("пропущено (имя занято): " + str(skipped))
+        if bad:
+            parts.append("не подошло: " + str(bad))
+        notify(", ".join(parts), "success" if added else "error")
+
+    def import_clipboard(self):
+        try:
+            text = clipboard_get()
+        except Exception as error:
+            self.log("commands: буфер: " + str(error))
+            notify("не удалось прочитать буфер обмена", "error")
+            return
+        if not text.strip():
+            notify("буфер обмена пуст", "error")
+            return
+        self.finish_import(parse_import(text))
+
+    def import_link(self):
+        url = clean_url(self._text("import_url"))
+        if not url:
+            notify("вставь ссылку, она должна начинаться с http", "error")
+            return
+
+        def worker():
+            try:
+                text = http_get(url, limit=1000000)
+                self.finish_import(parse_import(text))
+            except Exception as error:
+                notify("не удалось загрузить: " + str(error)[:80], "error")
+        threading.Thread(target=worker, daemon=True).start()
+
+                        
+
+    def process(self, peer, out):
+        from client_utils import send_text
+        try:
+            if out.code:
+                self.apply_code(out)
+            if out.open_url:
+                open_site(out.open_url)
+            if out.ai_prompt:
+                url, key, model = self.ai_settings()
+                if not key:
+                    notify("для этой команды нужен ключ ии (настройки → создать через ии)", "error")
+                    return
+                answer = tidy_answer(ai_chat(url, key, model, out.ai_prompt + RUNTIME_RULES, out.args or "привет",
+                                             web=out.web, temperature=0.6, max_tokens=1500))
+                if out.web and "openrouter" not in url:
+                    answer += "\n\n(поиск в интернете работает только через openrouter)"
+                out.text = (out.text + "\n\n" + answer) if out.text else answer
+            if out.photo or out.file:
+                send_media(peer, out)
+            elif out.text:
+                send_text(peer, out.text[:4000])
+        except Exception as error:
+            self.log("commands: выполнение: " + str(error))
+            notify("ошибка команды: " + str(error)[:100], "error")
+
+    def apply_code(self, out):
+        value = exec_code(out.code, out.args)
+        result = ""
+        if isinstance(value, dict):
+            result = str(value.get("text", "") or "")
+            photo = clean_url(value.get("photo", "") or "")
+            file = clean_url(value.get("file", "") or "")
+            site = clean_url(value.get("open", "") or "")
+            link = clean_url(value.get("link", "") or "")
+            if photo:
+                out.photo = photo
+            if file:
+                out.file = file
+            if site:
+                out.open_url = site
+            if link:
+                result = (result + "\n" + link) if result else link
+        elif value is not None:
+            result = str(value)
+        result = result.strip()[:3500]
+        if "{result}" in out.text:
+            out.text = out.text.replace("{result}", result)
+        elif out.text and result:
+            out.text = out.text + "\n\n" + result
+        elif result:
+            out.text = result
+
+    def on_send_message_hook(self, account, params):
+        try:
+            message = getattr(params, "message", None)
+            if not isinstance(message, str):
+                return HookResult()
+            text = message.strip()
+            if not text.startswith("."):
+                return HookResult()
+            parts = text[1:].split(maxsplit=1)
+            if not parts:
+                return HookResult()
+            name = parts[0].lower()
+            args = parts[1] if len(parts) > 1 else ""
+
+            if name in RESERVED:
+                params.message = build_help()
+                return HookResult(strategy=HookStrategy.MODIFY, params=params)
+
+            out = run_command(name, args)
+            if out is None:
+                return HookResult()
+
+            if not out.deferred():
+                if out.open_url:
+                    open_site(out.open_url)
+                if out.text:
+                    params.message = out.text
+                    return HookResult(strategy=HookStrategy.MODIFY, params=params)
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            try:
+                peer = int(getattr(params, "peer", 0) or 0)
+            except Exception:
+                peer = 0
+            if not peer:
+                if out.photo or out.file:
+                    params.message = ((out.text + "\n") if out.text else "") + (out.photo or out.file)
+                    return HookResult(strategy=HookStrategy.MODIFY, params=params)
+                notify("не получилось определить чат", "error")
+                return HookResult(strategy=HookStrategy.CANCEL)
+            if out.ai_prompt or out.code:
+                notify("думаю...")
+            threading.Thread(target=self.process, args=(peer, out), daemon=True).start()
+            return HookResult(strategy=HookStrategy.CANCEL)
+        except Exception as error:
+            self.log("commands: ошибка хука: " + str(error))
+            return HookResult()

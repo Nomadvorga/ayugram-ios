@@ -7,8 +7,8 @@ import tree_sitter_swift
 ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 FILES = [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraNavigationSettingsController.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraNavigationSettings.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraNavigationSettingsController.swift",
     "submodules/AccountContext/Sources/AccountContext.swift",
     "submodules/AccountContext/Sources/ExteraNavigationBridge.swift",
     "submodules/TelegramUI/Sources/SharedAccountContextExteraNavigation.swift",

@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -43,7 +43,7 @@ private final class HeaderContextReferenceContentSource: ContextReferenceContent
 
 public class ContactsController: ViewController {
     private let context: AccountContext
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let sgIsTabMode: Bool
     public var sgSwitchToChatsController: (() -> Void)?
     //
@@ -88,9 +88,9 @@ public class ContactsController: ViewController {
     
     /// The Contacts screen, pushed over Settings (Settings ▸ Contacts, `tg://contacts`): the header has a back button,
     /// Sort and Add.
-    public init(context: AccountContext, sgIsTabMode: Bool = false /* MARK: Swiftgram */) {
+    public init(context: AccountContext, sgIsTabMode: Bool = false /* MARK: AyuGram */) {
         self.context = context
-        self.sgIsTabMode = sgIsTabMode // MARK: Swiftgram
+        self.sgIsTabMode = sgIsTabMode // MARK: AyuGram
         
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         
@@ -99,7 +99,7 @@ public class ContactsController: ViewController {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.Contacts_Title
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgUpdateTabBarItem()
         self.uiIconObservation = ExteraUIIconObservation { [weak self] in self?.sgUpdateTabBarItem() }
         if sgIsTabMode {
@@ -120,11 +120,11 @@ public class ContactsController: ViewController {
             if let strongSelf = self {
                 let previousTheme = strongSelf.presentationData.theme
                 let previousStrings = strongSelf.presentationData.strings
-                let sgPreviousReduceMotion = strongSelf.presentationData.reduceMotion // MARK: Swiftgram
+                let sgPreviousReduceMotion = strongSelf.presentationData.reduceMotion // MARK: AyuGram
                 
                 strongSelf.presentationData = presentationData
                 
-                if previousTheme !== presentationData.theme || previousStrings !== presentationData.strings || sgPreviousReduceMotion != presentationData.reduceMotion { // MARK: Swiftgram
+                if previousTheme !== presentationData.theme || previousStrings !== presentationData.strings || sgPreviousReduceMotion != presentationData.reduceMotion { // MARK: AyuGram
                     strongSelf.updateThemeAndStrings()
                 }
             }
@@ -152,11 +152,11 @@ public class ContactsController: ViewController {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.Contacts_Title
-        self.sgUpdateTabBarItem() // MARK: Swiftgram
+        self.sgUpdateTabBarItem() // MARK: AyuGram
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private func sgUpdateTabBarItem() {
         guard self.sgIsTabMode else {
             return
@@ -205,7 +205,7 @@ public class ContactsController: ViewController {
                             strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: strongSelf.context, chatLocation: .peer(peer), purposefulAction: { [weak self] in
                                 if fromSearch {
                                     self?.deactivateSearch(animated: false)
-                                    // MARK: Swiftgram
+                                    // MARK: AyuGram
                                     if self?.sgIsTabMode == true {
                                         self?.sgSwitchToChatsController?()
                                     }
@@ -504,7 +504,7 @@ public class ContactsController: ViewController {
         // bar is laid out without the active search first (beside iPhone Duo's status island the active search's
         // placeholder is narrower), as the chat list does.
         let completion = self.contactsNode.deactivateSearch(placeholderNode: self.searchContentNode()?.placeholderNode, animated: animated)
-        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: .animated(duration: 0.5, curve: .spring)) // MARK: Swiftgram
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: .animated(duration: 0.5, curve: .spring)) // MARK: AyuGram
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
         completion?()
     }
@@ -671,7 +671,7 @@ public class ContactsController: ViewController {
         })
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     override public func tabBarItemContextAction(sourceView: ContextExtractedContentContainingView, gesture: ContextGesture) {
         guard self.sgIsTabMode else {
             return

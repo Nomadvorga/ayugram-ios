@@ -42,7 +42,7 @@ public func notificationMuteSettingsController(presentationData: PresentationDat
         updateSettings(muteInterval)
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     let options: [NotificationMuteOption] = [
         .enable,
         .interval(1 * 60 * 60),

@@ -1,6 +1,6 @@
 # Chat appearance settings: frames 68–81
 
-Public entry point in `Swiftgram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift`:
+Public entry point in `AyuGram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift`:
 
 ```swift
 (controller.navigationController as? NavigationController)?.pushViewController(
@@ -36,7 +36,7 @@ Media/chat preferences are observed through account-manager shared data. Present
 
 ## Swipe runtime and stored preferences
 
-The new model `Swiftgram/SGSimpleSettings/Sources/ExteraChatAppearanceSettings.swift` uses the existing cached app-group `AyuSettingsStore`:
+The new model `AyuGram/SGSimpleSettings/Sources/ExteraChatAppearanceSettings.swift` uses the existing cached app-group `AyuSettingsStore`:
 
 | Key | Values | Default |
 | --- | --- | --- |

@@ -8,7 +8,7 @@ or modification of root-owned localization, backup, app BUILD/workflow or
 `SGSettingsController` was performed. This wave adds only the direct `Emoji` dependency
 to `submodules/SettingsUI/BUILD` for the inline native theme carousel.
 
-The owned composition is `Swiftgram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift`.
+The owned composition is `AyuGram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift`.
 The complete 19-file Swift inventory and integration metadata are in
 [`Tests/ExteraNativeChat/owned-files.json`](../Tests/ExteraNativeChat/owned-files.json).
 `ManagedAudioSession.swift` has a playback-only hook alongside the previously committed

@@ -420,7 +420,7 @@
 
 | Область референса | Где проверено | Статический результат |
 | --- | --- | --- |
-| №01: пять пунктов перевода | `Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift:380`; `Swiftgram/SGSimpleSettings/Sources/ExteraSettings.swift:332`; `SimpleSettings.swift:254` | UI-строки есть; состояние Google/Albanian не проверено; секционные заголовки uppercased |
+| №01: пять пунктов перевода | `AyuGram/SGSettingsUI/Sources/SGSettingsController.swift:380`; `AyuGram/SGSimpleSettings/Sources/ExteraSettings.swift:332`; `SimpleSettings.swift:254` | UI-строки есть; состояние Google/Albanian не проверено; секционные заголовки uppercased |
 | №01: округление, секунды, вибрация, задержка, Zalgo | `SGSettingsController.swift:389`; `ExteraSettings.swift:109`, `:228`, `:260`; `SimpleSettings.swift:575` | Пункты и примеры есть; runtime-применение не проверено |
 | №02: шкала ускорения | `SGSettingsController.swift:398`, `:1203`; `SimpleSettings.swift:206` | Селектор вместо шкалы; «Среднее» вместо «Быстро», «Выключено» вместо «Откл.» |
 | №02–03: папка сохранения | `SGSettingsController.swift:404`, `:1182`; `ExteraSettings.swift:311` | Именованный альбом Фото — платформенная адаптация; Android-пути не переносятся буквально |
@@ -446,7 +446,7 @@
 | №16: главная exteraGram | `SGSettingsController.swift:359` | Другой состав категорий, дополнительные поиск и страницы; нет карточки ссылок/крупного брендинга; плагины исключены намеренно |
 | №20/22: иконка приложения | `SGSettingsController.swift:488`, `:1253` | Переход в штатные Themes; конкретная сетка, каталоги и превью не реализованы этим маршрутом |
 
-Помимо чтения относящихся к кадрам моделей выполнен поиск публичных параметров по всему `Swiftgram/SGSimpleSettings/Sources/Extera*.swift`. `ExteraChatSettings`, `ExteraMessageSettings`, `ExteraStickerSettings`, `ExteraMediaSettings`, `ExteraMathSettings`, `ExteraPlayerSettings`, `ExteraAISettings`, `ExteraBrowserSettings`/Filters и backup обслуживают другие области; наличие этих файлов не закрывает отсутствующие настройки внешнего вида. Детальные экраны чатов, AI, браузера, плеера и содержимого Pill Stack в кадрах 01–22 не показаны и по данному документу не считаются проверенными.
+Помимо чтения относящихся к кадрам моделей выполнен поиск публичных параметров по всему `AyuGram/SGSimpleSettings/Sources/Extera*.swift`. `ExteraChatSettings`, `ExteraMessageSettings`, `ExteraStickerSettings`, `ExteraMediaSettings`, `ExteraMathSettings`, `ExteraPlayerSettings`, `ExteraAISettings`, `ExteraBrowserSettings`/Filters и backup обслуживают другие области; наличие этих файлов не закрывает отсутствующие настройки внешнего вида. Детальные экраны чатов, AI, браузера, плеера и содержимого Pill Stack в кадрах 01–22 не показаны и по данному документу не считаются проверенными.
 
 ## Что нельзя объявлять исключённым или завершённым по этой проверке
 

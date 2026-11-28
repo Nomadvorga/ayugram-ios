@@ -1,4 +1,5 @@
 import Foundation
+import SGStrings
 import UIKit
 import SwiftSignalKit
 import TelegramCore
@@ -30,7 +31,7 @@ private enum ChatLinkReverseOpenTarget {
     func title(strings: PresentationStrings) -> String {
         switch self {
         case .inApp:
-            return strings.WebBrowser_Exception_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: Swiftgram */
+            return strings.WebBrowser_Exception_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: AyuGram */
         case .externalBrowser:
             return strings.WebBrowser_Exception_OpenInBrowser
         }
@@ -109,7 +110,7 @@ private func chatLinkContextMenuOpenMode(context: AccountContext, url: String) -
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 import ShareController
 
 extension ChatControllerImpl {
@@ -168,7 +169,7 @@ extension ChatControllerImpl {
 
                             let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.webBrowserSettings]?.get(WebBrowserSettings.self) ?? WebBrowserSettings.defaultSettings
                             var defaultWebBrowser = settings.defaultWebBrowser
-                            if defaultWebBrowser == nil || defaultWebBrowser == "inApp" /* MARK: Swiftgram */ || defaultWebBrowser == "inAppSafari" {
+                            if defaultWebBrowser == nil || defaultWebBrowser == "inApp" /* MARK: AyuGram */ || defaultWebBrowser == "inAppSafari" {
                                 defaultWebBrowser = "safari"
                             }
 
@@ -254,7 +255,7 @@ extension ChatControllerImpl {
                     }))
 
                     if let openMode {
-                        let reverseText = openMode.shouldOpenInApp ? self.presentationData.strings.Chat_ContextMenu_OpenInBrowser : self.presentationData.strings.Chat_ContextMenu_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: Swiftgram */
+                        let reverseText = openMode.shouldOpenInApp ? self.presentationData.strings.Chat_ContextMenu_OpenInBrowser : self.presentationData.strings.Chat_ContextMenu_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: AyuGram */
                         items.append(ActionSheetButtonItem(title: reverseText, color: .accent, action: { [weak self, weak actionSheet] in
                             actionSheet?.dismissAnimated()
                             guard let self else {
@@ -295,7 +296,15 @@ extension ChatControllerImpl {
                     }
                     self.present(UndoOverlayController(presentationData: self.presentationData, content: content, elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                 }))
-                // MARK: Swiftgram
+                // MARK: AyuGram
+                if let ipAddress = AyuIpAddressInfo.extractIpAddress(url) {
+                    items.append(ActionSheetButtonItem(title: i18n("Extera.IpInfo", self.presentationData.strings.baseLanguageCode), color: .accent, action: { [weak self, weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        self?.ayuPresentIpAddressInfo(ipAddress: ipAddress)
+                    }))
+                }
+                //
+                // MARK: AyuGram
             items.append(ActionSheetButtonItem(title: self.presentationData.strings.Conversation_ContextMenuForward, color: .accent, action: { [weak actionSheet, weak self] in
                 actionSheet?.dismissAnimated()
                 guard let self else {
@@ -384,7 +393,7 @@ extension ChatControllerImpl {
             )
 
             if let openMode {
-                let reverseText = openMode.shouldOpenInApp ? self.presentationData.strings.Chat_ContextMenu_OpenInBrowser : self.presentationData.strings.Chat_ContextMenu_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: Swiftgram */
+                let reverseText = openMode.shouldOpenInApp ? self.presentationData.strings.Chat_ContextMenu_OpenInBrowser : self.presentationData.strings.Chat_ContextMenu_OpenInApp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: AyuGram */
                 items.append(
                     .action(ContextMenuActionItem(text: reverseText, icon: { theme in return generateTintedImage(image: openMode.shouldOpenInApp ? UIImage(bundleImageName: "Chat/Context Menu/Globe") : UIImage(bundleImageName: "Chat/Context Menu/Browser"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                         f(.default)
@@ -415,7 +424,17 @@ extension ChatControllerImpl {
                 }))
             )
 
-            // MARK: Swiftgram
+            // MARK: AyuGram
+            if let ipAddress = AyuIpAddressInfo.extractIpAddress(url) {
+                items.append(
+                    .action(ContextMenuActionItem(text: i18n("Extera.IpInfo", self.presentationData.strings.baseLanguageCode), icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                        f(.default)
+                        self?.ayuPresentIpAddressInfo(ipAddress: ipAddress)
+                    }))
+                )
+            }
+            //
+            // MARK: AyuGram
         items.append(
             .action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuForward, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
                 f(.default)

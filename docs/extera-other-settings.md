@@ -77,7 +77,7 @@ UIKit action handlers use `exteraOtherAfterAlertAction` for confirmations **and*
 
 All imports are existing SGSettingsUI dependency edges; source globs include the three new production files. No BUILD change is required. No new persisted preferences means **no strict backup schema/default/reset additions**. Admin and optional-author files remain frozen and isolated.
 
-Exact SGSettingsUI imports used: AccountContext, Display, ItemListUI, SGItemListUI, SGSimpleSettings, SGStrings, SettingsUI, SwiftSignalKit, TelegramCore, TelegramPresentationData, plus system Foundation/UIKit. All ten module imports are already direct `Swiftgram/SGSettingsUI/BUILD` dependencies. The pure model imports only Foundation and is included by SGSimpleSettings's existing source glob.
+Exact SGSettingsUI imports used: AccountContext, Display, ItemListUI, SGItemListUI, SGSimpleSettings, SGStrings, SettingsUI, SwiftSignalKit, TelegramCore, TelegramPresentationData, plus system Foundation/UIKit. All ten module imports are already direct `AyuGram/SGSettingsUI/BUILD` dependencies. The pure model imports only Foundation and is included by SGSimpleSettings's existing source glob.
 
 ## Freeze manifest for root
 
@@ -85,9 +85,9 @@ Integrate these new files together with the two patches; no other current-wave f
 
 | Path | Role |
 | --- | --- |
-| `Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift` | Pure composition/capability/support parser and destination policy |
-| `Swiftgram/SGSettingsUI/Sources/ExteraOtherSupportContext.swift` | Pinned native Telegram support catalog loader |
-| `Swiftgram/SGSettingsUI/Sources/ExteraOtherSettingsController.swift` | Reference composition, real actions, confirmation and native deletion entry |
+| `AyuGram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift` | Pure composition/capability/support parser and destination policy |
+| `AyuGram/SGSettingsUI/Sources/ExteraOtherSupportContext.swift` | Pinned native Telegram support catalog loader |
+| `AyuGram/SGSettingsUI/Sources/ExteraOtherSettingsController.swift` | Reference composition, real actions, confirmation and native deletion entry |
 | `Tests/ExteraOther/ExteraOtherSettingsModelTests.swift` | 12 host test methods |
 | `Tests/ExteraOther/verify_swift_syntax.py` | Four-file syntax verification |
 | `Tests/ExteraOther/README.md` | Exact host/syntax commands and boundaries |
@@ -122,7 +122,7 @@ Exact host CI command (also included in the unapplied workflow patch):
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
   Tests/ExteraOther/ExteraOtherSettingsModelTests.swift
 ```
 

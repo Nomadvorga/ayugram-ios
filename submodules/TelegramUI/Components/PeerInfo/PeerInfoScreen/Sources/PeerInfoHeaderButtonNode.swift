@@ -7,6 +7,8 @@ import Display
 import TelegramPresentationData
 import ComponentFlow
 import LottieComponent
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 enum PeerInfoHeaderButtonKey: Hashable {
     case message
@@ -25,7 +27,7 @@ enum PeerInfoHeaderButtonKey: Hashable {
 
 enum PeerInfoHeaderButtonIcon {
     case message
-    case discussion // MARK: Swiftgram
+    case discussion // MARK: AyuGram
     case call
     case videoCall
     case voiceChat
@@ -58,6 +60,76 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
     
     let backgroundContainerView: UIView
     let backgroundView: UIView
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+    private var atmosphericVisible = false
+    private var atmosphericBackgroundVisible = false
+    private var atmosphericExpansionFraction: CGFloat = 0.0
+    private var atmosphericActionScale: CGFloat = 1.0
+    private var atmosphericExpandedSize: CGSize?
+
+    func updateAtmosphericVisibility(_ visible: Bool, backgroundVisible: Bool) {
+        self.atmosphericVisible = visible
+        self.atmosphericBackgroundVisible = backgroundVisible
+        self.refreshAtmosphericSurface()
+    }
+
+    func removeAtmosphericSurface() {
+        MainActor.assumeIsolated {
+            self.atmosphericVisible = false
+            self.atmosphericHost?.removeFromSuperview()
+            self.atmosphericHost = nil
+        }
+    }
+
+    private func refreshAtmosphericSurface() {
+        MainActor.assumeIsolated { self.refreshAtmosphericSurfaceOnMainActor() }
+    }
+
+    @MainActor private func refreshAtmosphericSurfaceOnMainActor() {
+        guard let theme = self.theme else {
+            return
+        }
+        // The backdrop is a shape in the shared blur mask, not a drawing container. Decorate its real foreground owner.
+        let container = self.referenceNode.view
+        let rect = self.backgroundView.frame
+        let backgroundVisible = self.atmosphericBackgroundVisible && self.backgroundView.superview === self.backgroundContainerView
+            && !self.backgroundView.isHidden && self.backgroundView.alpha > 0.05
+            && !self.backgroundContainerView.isHidden && self.backgroundContainerView.alpha > 0.05
+        let eligible = rect.width >= 24.0 && rect.height >= 32.0 && rect.height <= 120.0
+        let visible = self.atmosphericVisible && backgroundVisible && self.contentNode.alpha > 0.05
+            && !self.textNode.isHidden && self.textNode.alpha > 0.05 && self.atmosphericActionScale > 0.25
+            && AtmosphericSurfaceLayout.hierarchyAllowsDecoration(in: container)
+            && AtmosphericSurfaceLayout.actionHasVisibleArea(rect, in: container)
+        if self.atmosphericHost == nil && eligible && visible {
+            let host = AtmosphericSurfaceHostView(container: container, role: .profileAction)
+            self.atmosphericHost = host
+            container.addSubview(host)
+        }
+        var geometry = AtmosphericHostGeometry(
+            rect: rect,
+            cornerRadius: self.backgroundView.layer.cornerRadius,
+            visible: eligible && visible,
+            profileExpansionFraction: self.atmosphericExpansionFraction,
+            isDarkTheme: theme.overallDarkAppearance
+        )
+        // Button and header alpha are inherited here; text/mask alpha are guards, not duplicate opacity multipliers.
+        // The background rect already includes the content's collapse scale. Do not scale it twice.
+        geometry.profileActionScale = 1.0
+        geometry.expandedActionReferenceSize = self.atmosphericExpandedSize
+        self.atmosphericHost?.update(geometry: geometry)
+    }
+
+    override var alpha: CGFloat {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
+
+    override var isHidden: Bool {
+        didSet {
+            self.refreshAtmosphericSurface()
+        }
+    }
     
     init(key: PeerInfoHeaderButtonKey, action: @escaping (PeerInfoHeaderButtonNode, ContextGesture?) -> Void) {
         self.key = key
@@ -197,7 +269,7 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
                 switch icon {
                 case .message:
                     imageName = "Peer Info/ButtonMessage"
-                case .discussion: imageName = "Chat/Empty Chat/ChannelMessages" // MARK: Swiftgram
+                case .discussion: imageName = "Chat/Empty Chat/ChannelMessages" // MARK: AyuGram
                 case .call:
                     imageName = "Peer Info/ButtonCall"
                 case .videoCall:
@@ -219,7 +291,7 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
                 case .stop:
                     imageName = "Peer Info/ButtonStop"
                 }
-                if let imageName = imageName, let image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: .white, customSize: icon == .discussion ? CGSize(width: 26.0, height: 26.0) : nil /* MARK: Swiftgram */) {
+                if let imageName = imageName, let image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: .white, customSize: icon == .discussion ? CGSize(width: 26.0, height: 26.0) : nil /* MARK: AyuGram */) {
                     let imageRect = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0)), size: image.size)
                     context.clip(to: imageRect, mask: image.cgImage!)
                     context.fill(imageRect)
@@ -330,5 +402,17 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         
         self.referenceNode.frame = self.containerNode.bounds
         self.updateContextMenuBackground()
+        self.atmosphericExpansionFraction = max(0.0, min(1.0, fraction))
+        self.atmosphericActionScale = 1.0 * fraction + 0.001 * (1.0 - fraction)
+        if fraction > 0.97 {
+            if let reference = self.atmosphericExpandedSize {
+                if abs(reference.width - backgroundFrame.width) > 6.0 || abs(reference.height - backgroundFrame.height) > 6.0 {
+                    self.atmosphericExpandedSize = backgroundFrame.size
+                }
+            } else {
+                self.atmosphericExpandedSize = backgroundFrame.size
+            }
+        }
+        self.refreshAtmosphericSurface()
     }
 }

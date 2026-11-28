@@ -1,7 +1,8 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 
 import Foundation
 import UIKit
+import AyuDialogCards
 import Postbox
 import SwiftSignalKit
 import AsyncDisplayKit
@@ -421,7 +422,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     if !ExteraSettings.shared.hideFloatingButton { // MARK: AyuGram
                         self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
                             content: .icon(imageName: "Chat List/ComposeIcon"),
-                            // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
+                            // MARK: AyuGram — Compose is a neutral action, not an accented confirmation.
                             tint: .generic,
                             requiresOwnSection: true,
                             glassCornerRadius: ExteraStyleSettings.shared.controlStyle == .material ? 14.0 : nil,
@@ -480,24 +481,24 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     strongSelf.chatListDisplayNode.willScrollToTop()
                     strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.scrollToPosition(.top(adjustForTempInset: false))
                 case let .known(offset):
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     var mainContainerNode_availableFilters = strongSelf.chatListDisplayNode.mainContainerNode.availableFilters
                     if SGSimpleSettings.shared.allChatsHidden {
                         mainContainerNode_availableFilters.removeAll { $0 == .all }
                     }
                     //
-                    let isFirstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter == mainContainerNode_availableFilters.first?.filter // MARK: Swiftgram
+                    let isFirstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter == mainContainerNode_availableFilters.first?.filter // MARK: AyuGram
                     
-                    if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && strongSelf.chatListDisplayNode.inlineStackContainerNode != nil {
+                    if offset <= AyuChatListSearchBar.scrollHeight + 1.0 && strongSelf.chatListDisplayNode.inlineStackContainerNode != nil {
                         strongSelf.setInlineChatList(location: nil)
-                    } else if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && !isFirstFilter {
-                        // MARK: Swiftgram
+                    } else if offset <= AyuChatListSearchBar.scrollHeight + 1.0 && !isFirstFilter {
+                        // MARK: AyuGram
                         var effectiveContainerNode_availableFilters = strongSelf.chatListDisplayNode.mainContainerNode.availableFilters
                         if SGSimpleSettings.shared.allChatsHidden {
                             effectiveContainerNode_availableFilters.removeAll { $0 == .all }
                         }
                         //
-                        let firstFilter = effectiveContainerNode_availableFilters.first ?? .all // MARK: Swiftgram
+                        let firstFilter = effectiveContainerNode_availableFilters.first ?? .all // MARK: AyuGram
                         let targetTab: ChatListFilterTabEntryId
                         switch firstFilter {
                             case .all:
@@ -836,7 +837,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 if let navigationBarView = strongSelf.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View {
                     tabsView.updateTabSwitchFraction(fraction: fraction, isDragging: strongSelf.chatListDisplayNode.mainContainerNode.isSwitchingCurrentItemFilterByDragging, transition: ComponentTransition(transition))
                 }
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if strongSelf.tabContainerData?.1 == true {
                     if let headerPanelsView = strongSelf.chatListDisplayNode.sgFoldersView.view as? HeaderPanelContainerComponent.View {
                         if let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View {
@@ -898,7 +899,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         fatalError("init(coder:) has not been implemented")
     }
     
+    private var dialogCardsObserver: NSObjectProtocol?
+
     deinit {
+        if let dialogCardsObserver = self.dialogCardsObserver {
+            NotificationCenter.default.removeObserver(dialogCardsObserver)
+        }
         self.openMessageFromSearchDisposable.dispose()
         self.badgeDisposable?.dispose()
         self.badgeIconDisposable?.dispose()
@@ -1057,7 +1063,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.requestLayout(transition: .immediate)
     }
     
-    func tabContextGesture(id: Int32?, sourceNode: ContextExtractedContentContainingNode?, sourceView: ContextExtractedContentContainingView?, gesture: ContextGesture?, /* MARK: Swiftgram */ sourceActionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .bottom, sourceKeepInPlace: Bool = true, /* MARK: Swiftgram */ keepInPlace: Bool, isDisabled: Bool) {
+    func tabContextGesture(id: Int32?, sourceNode: ContextExtractedContentContainingNode?, sourceView: ContextExtractedContentContainingView?, gesture: ContextGesture?, /* MARK: AyuGram */ sourceActionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .bottom, sourceKeepInPlace: Bool = true, /* MARK: AyuGram */ keepInPlace: Bool, isDisabled: Bool) {
         let context = self.context
         let filterPeersAreMuted: Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> = self.context.engine.peers.currentChatListFilters()
         |> take(1)
@@ -1410,7 +1416,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 let controller = makeContextController(presentationData: self.presentationData, source: .extracted(ChatListHeaderBarContextExtractedContentSource(controller: self, sourceNode: sourceNode, sourceView: sourceView, keepInPlace: keepInPlace)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
                 self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
             } else if let sourceView {
-                let controller = makeContextController(presentationData: self.presentationData, source: .reference(ChatListHeaderBarContextReferenceContentSource(controller: self, /* MARK: Swiftgram */ actionsPosition: sourceActionsPosition, keepInPlace: sourceKeepInPlace, /* MARK: Swiftgram */ sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+                let controller = makeContextController(presentationData: self.presentationData, source: .reference(ChatListHeaderBarContextReferenceContentSource(controller: self, /* MARK: AyuGram */ actionsPosition: sourceActionsPosition, keepInPlace: sourceKeepInPlace, /* MARK: AyuGram */ sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
                 self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
             }
         })
@@ -1420,6 +1426,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.displayNode = ChatListControllerNode(context: self.context, location: self.location, previewing: self.previewing, controlsHistoryPreload: self.controlsHistoryPreload, presentationData: self.presentationData, animationCache: self.animationCache, animationRenderer: self.animationRenderer, controller: self)
         
         self.chatListDisplayNode.navigationBar = self.navigationBar
+
+        self.dialogCardsObserver = NotificationCenter.default.addObserver(forName: AyuDialogCardsState.didChange, object: nil, queue: .main) { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.chatListDisplayNode.mainContainerNode.currentItemNode.forEachItemNode { node in
+                (node as? ChatListItemNode)?.refreshAyuDialogCards()
+            }
+        }
         
         self.chatListDisplayNode.requestDeactivateSearch = { [weak self] in
             self?.deactivateSearch(animated: true)
@@ -2308,7 +2323,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.previewing {
                 self.storiesReady.set(.single(true))
             } else {
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 let hideStoriesSignal = sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false)
                 
                 self.storySubscriptionsDisposable = (combineLatest(self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive)), hideStoriesSignal)
@@ -2630,7 +2645,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             if hasPasscode {
                                 let _ = ApplicationSpecificNotice.setPasscodeLockTips(accountManager: strongSelf.context.sharedContext.accountManager).startStandalone()
                                 
-                                let tooltipController = TooltipController(content: .text(strongSelf.presentationData.strings.DialogList_PasscodeLockHelp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: Swiftgram */), baseFontSize: strongSelf.presentationData.listsFontSize.baseDisplaySize, dismissByTapOutside: true)
+                                let tooltipController = TooltipController(content: .text(strongSelf.presentationData.strings.DialogList_PasscodeLockHelp.replacingOccurrences(of: "Telegram", with: "AyuGram") /* MARK: AyuGram */), baseFontSize: strongSelf.presentationData.listsFontSize.baseDisplaySize, dismissByTapOutside: true)
                                 strongSelf.present(tooltipController, in: .window(.root), with: TooltipControllerPresentationArguments(sourceViewAndRect: { [weak self] in
                                     if let self, let componentView = self.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), let lockViewFrame = storyPeerListView.lockViewFrame() {
                                         return (storyPeerListView, lockViewFrame.offsetBy(dx: 4.0, dy: 14.0))
@@ -3759,7 +3774,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         if let layout = self.validLayout {
             self.updateLayout(layout: layout, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
@@ -3790,7 +3805,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 self.updateLayout(layout: layout, transition: .animated(duration: 0.2, curve: .easeInOut))
             }
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if ExteraNavigationSettings.shared.configuration.barMode == .hide {
             (self.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
@@ -4251,7 +4266,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         let filterItems = chatListFilterItems(context: self.context)
         var notifiedFirstUpdate = false
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let experimentalUISettingsKey: ValueBoxKey = ApplicationSpecificSharedDataKeys.experimentalUISettings
         let displayTabsAtBottomSignal = self.context.sharedContext.accountManager.sharedData(keys: Set([experimentalUISettingsKey]))
         |> map { sharedData -> Bool in
@@ -4262,12 +4277,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         //
         
         self.filterDisposable.set((combineLatest(queue: .mainQueue(),
-            displayTabsAtBottomSignal, // MARK: Swiftgram
+            displayTabsAtBottomSignal, // MARK: AyuGram
             filterItems,
             self.context.account.postbox.peerView(id: self.context.account.peerId),
             self.context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false))
         )
-        |> deliverOnMainQueue).startStrict(next: { [weak self] displayTabsAtBottom, /* MARK: Swiftgram */ countAndFilterItems, peerView, limits in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] displayTabsAtBottom, /* MARK: AyuGram */ countAndFilterItems, peerView, limits in
             guard let strongSelf = self else {
                 return
             }
@@ -4298,14 +4313,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             
             let firstItem = countAndFilterItems.1.first?.0 ?? .allChats
-            var firstItemEntryId: ChatListFilterTabEntryId // MARK: Swiftgram
+            var firstItemEntryId: ChatListFilterTabEntryId // MARK: AyuGram
             switch firstItem {
                 case .allChats:
                     firstItemEntryId = .all
                 case let .filter(id, _, _, _):
                     firstItemEntryId = .filter(id)
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if !strongSelf.initializedFilters && SGSimpleSettings.shared.rememberLastFolder {
                 if let lastFolder = SGSimpleSettings.shared.lastAccountFolders["\(strongSelf.context.account.peerId.id._internalGetInt64Value())"]{
                     firstItemEntryId = lastFolder == -1 ? .all : .filter(lastFolder)
@@ -4336,7 +4351,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
             }
             let filtersLimit = isPremium == false ? limits.maxFoldersCount : nil
-            strongSelf.tabContainerData = (resolvedItems, displayTabsAtBottom, filtersLimit) // MARK: Swiftgram
+            strongSelf.tabContainerData = (resolvedItems, displayTabsAtBottom, filtersLimit) // MARK: AyuGram
             var availableFilters: [ChatListContainerNodeFilter] = []
             var hasAllChats = false
             for item in items {
@@ -4934,7 +4949,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.activateSearch(filter: filter, query: query, skipScrolling: false, searchContentNode: searchContentNode)
     }
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public func activateSearchInternal(isFromTabBar: Bool, filter: ChatListSearchFilter, query: String? = nil) {
         var searchContentNode: NavigationBarSearchContentNode?
         if !isFromTabBar, let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View {
@@ -4984,7 +4999,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     // The chat side list searches one chat: no global tabs.
                     let displaySearchFilters = !self.isSideList
                     
-                    if let filterContainerNodeAndActivate = await self.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode?.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: self.hasDownloads, initialFilter: filter, navigationController: self.navigationController as? NavigationController, searchBarIsExternal: searchContentNode == nil) { // MARK: Swiftgram
+                    if let filterContainerNodeAndActivate = await self.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode?.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: self.hasDownloads, initialFilter: filter, navigationController: self.navigationController as? NavigationController, searchBarIsExternal: searchContentNode == nil) { // MARK: AyuGram
                         let activate = filterContainerNodeAndActivate
                         
                         activate(filter != .downloads)
@@ -4996,7 +5011,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
                     self.setDisplayNavigationBar(false, transition: transition)
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     if searchContentNode == nil {
                         self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: transition)
                         
@@ -5064,8 +5079,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         
         completion?()
         
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: transition) // MARK: Swiftgram
-        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: transition) // MARK: Swiftgram
+        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: transition) // MARK: AyuGram
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(ExteraNavigationSettings.shared.configuration.barMode == .hide, transition: transition) // MARK: AyuGram
         
         self.isSearchActive = false
         if let navigationController = self.navigationController as? NavigationController {
@@ -5081,7 +5096,70 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public func activateCompose() {
         self.composePressed()
     }
-    
+
+    /// Selects the next unread dialog in the current folder. Kept for the
+    /// keyboard shortcut; the Pull to Next Chat adapter uses the source-aware
+    /// overload below.
+    public func selectNextUnreadChat() {
+        self.chatListDisplayNode.effectiveContainerNode.currentItemNode.selectChat(.next(unread: true))
+    }
+
+    /// The folder the list is currently showing, for the Pull to Next Chat
+    /// preview on the chat screen. The chat screen uses the same predicate as
+    /// the real selection, so the stock overscroll control never previews one
+    /// dialog and then opens another.
+    public var ayuCurrentChatListFilterData: ChatListFilterData? {
+        guard case let .filter(_, _, _, data) = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter else {
+            return nil
+        }
+        return data
+    }
+
+    /// Source-faithful Pull to Next Chat selection: honours the target kind,
+    /// the strategy (first/most/least unread) and the source filters. Runs as a
+    /// single Postbox transaction so it does not depend on any chat list signal
+    /// having emitted — the archive feed is lazy, and waiting for it used to
+    /// leave the pull gesture doing nothing at all for groups.
+    public func selectNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int,
+                                     includeMuted: Bool, skipPinned: Bool,
+                                     searchOtherFolders: Bool, countMarkedUnread: Bool,
+                                     completion: @escaping (Bool) -> Void) {
+        guard !targetKinds.isEmpty else {
+            completion(false)
+            return
+        }
+        var currentFilterData: ChatListFilterData?
+        if let filter = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter,
+           case let .filter(_, _, _, data) = filter {
+            currentFilterData = data
+        }
+        let query = AyuNextUnreadQuery(
+            targetKinds: targetKinds,
+            currentPeerId: currentPeerId,
+            strategy: strategy,
+            includeMuted: includeMuted,
+            skipPinned: skipPinned,
+            otherFolders: searchOtherFolders,
+            countMarkedUnread: countMarkedUnread
+        )
+        let accountPeerId = self.context.account.peerId
+        let _ = (self.context.account.postbox.transaction { transaction -> AyuNextUnreadTarget? in
+            AyuNextUnreadSelection.resolve(
+                transaction: transaction,
+                accountPeerId: accountPeerId,
+                currentFilterData: currentFilterData,
+                query: query
+            )
+        } |> deliverOnMainQueue).startStandalone(next: { [weak self] target in
+            guard let self, let target = target else {
+                completion(false)
+                return
+            }
+            self.chatListDisplayNode.mainContainerNode.peerSelected?(target.peer, nil, true, false, nil)
+            completion(true)
+        })
+    }
+
     @objc fileprivate func composePressed() {
         guard !self.context.isFrozen else {
             let controller = self.context.sharedContext.makeAccountFreezeInfoScreen(context: self.context)
@@ -6676,7 +6754,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
 
     override public func tabBarActivateSearch() {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if SGSimpleSettings.shared.tabBarSearchEnabled {
             self.activateSearchInternal(isFromTabBar: true, filter: .chats, query: nil)
             return
@@ -6969,17 +7047,17 @@ private final class ChatListTabBarContextReferenceContentSource: ContextReferenc
 }
 
 private final class ChatListHeaderBarContextReferenceContentSource: ContextReferenceContentSource {
-    let keepInPlace: Bool // MARK: Swiftgram
+    let keepInPlace: Bool // MARK: AyuGram
     let actionsHorizontalAlignment: ContextActionsHorizontalAlignment = .center
     
     private let controller: ChatListController
     private let sourceView: ContextExtractedContentContainingView
-    private let actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition // MARK: Swiftgram
+    private let actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition // MARK: AyuGram
     
-    init(controller: ChatListController, /* MARK: Swiftgram */ actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .bottom, keepInPlace: Bool = true, /* MARK: Swiftgram */ sourceView: ContextExtractedContentContainingView) {
+    init(controller: ChatListController, /* MARK: AyuGram */ actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .bottom, keepInPlace: Bool = true, /* MARK: AyuGram */ sourceView: ContextExtractedContentContainingView) {
         self.controller = controller
         self.sourceView = sourceView
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.actionsPosition = actionsPosition
         self.keepInPlace = keepInPlace
         //
@@ -6989,7 +7067,7 @@ private final class ChatListHeaderBarContextReferenceContentSource: ContextRefer
         return ContextControllerReferenceViewInfo(
             referenceView: self.sourceView.contentView,
             contentAreaInScreenSpace: mainWindowScreenBounds,
-            actionsPosition: self.actionsPosition // MARK: Swiftgram
+            actionsPosition: self.actionsPosition // MARK: AyuGram
         )
     }
 }
@@ -7059,7 +7137,7 @@ private func chatListHeaderOverflowInfo(strings: PresentationStrings) -> [AnyHas
         "proxy": NavigationBarComponent.OverflowInfo(title: strings.SocksProxySetup_Title, iconName: "Chat List/ProxyShieldIcon", priority: 2),
         "story": NavigationBarComponent.OverflowInfo(title: strings.StoryFeed_AddStory, iconName: "Chat List/AddStoryIcon", priority: 1),
         "more": NavigationBarComponent.OverflowInfo(title: strings.Common_More, iconName: nil, priority: nil),
-        "settings": NavigationBarComponent.OverflowInfo(title: strings.Settings_Title, iconName: nil, priority: nil) // MARK: Swiftgram
+        "settings": NavigationBarComponent.OverflowInfo(title: strings.Settings_Title, iconName: nil, priority: nil) // MARK: AyuGram
     ]
 }
 
@@ -7080,13 +7158,14 @@ private final class ChatListLocationContext {
     
     var leftButton: NavigationBarComponent.Button?
     var rightButton: NavigationBarComponent.Button?
-    var settingsButton: NavigationBarComponent.Button? // MARK: Swiftgram
+    var settingsButton: NavigationBarComponent.Button? // MARK: AyuGram
+    var ayuHidesSearchButton = false // MARK: AyuGram
     var proxyButton: NavigationBarComponent.Button?
     var storyButton: NavigationBarComponent.Button?
     
     var rightButtons: [NavigationBarComponent.Button] {
         var result: [NavigationBarComponent.Button] = []
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let openMenu = self.parentController?.exteraOpenNavigationMenu, self.location == .chatList(groupId: .root) {
             result.append(NavigationBarComponent.Button(id: "exteraNavigation", content: .more,
                 overflow: NavigationBarComponent.OverflowInfo(title: self.context.sharedContext.currentPresentationData.with { $0.strings.Common_More }, iconName: nil, priority: 4),
@@ -7105,6 +7184,17 @@ private final class ChatListLocationContext {
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
         }
+        // MARK: AyuGram — with the search field hidden, search opens from the header.
+        if AyuChatListSearchBar.isHidden && !self.ayuHidesSearchButton {
+            result.append(NavigationBarComponent.Button(id: "search",
+                content: .icon(imageName: "Navigation/Search"),
+                tint: .generic,
+                action: { [weak self] _ in
+                    self?.parentController?.activateSearch()
+                }
+            ))
+        }
+        //
         return result
     }
     
@@ -7138,10 +7228,12 @@ private final class ChatListLocationContext {
         self.location = location
         self.parentController = parentController
         
-        let hasProxy = context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
-        |> map { sharedData -> (Bool, Bool) in
+        // MARK: AyuGram
+        // The shield reads as off while "Disable Proxy" bypasses the proxy.
+        let hasProxy = combineLatest(context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings]), ayuProxyAutoDisabledSignal())
+        |> map { sharedData, isAutoDisabled -> (Bool, Bool) in
             if let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) {
-                return (!settings.servers.isEmpty, settings.enabled)
+                return (!settings.servers.isEmpty, settings.enabled && !isAutoDisabled)
             } else {
                 return (false, false)
             }
@@ -7150,7 +7242,7 @@ private final class ChatListLocationContext {
             return lhs == rhs
         })
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let hideStoriesSignal = combineLatest(sgSimpleSettingsBoolSignal(.hideStories, defaultValue: false), ayuGhostStatusSignal()) // MARK: AyuGram
         // MARK: AyuGram — cheap notification-driven value, so the header reacts without polling.
         let headerSettingsSignal = combineLatest(hideStoriesSignal, ayuSettingSignal { ExteraSettings.shared.hideFloatingButton }, ayuSettingSignal { ExteraSettings.shared.hideActionBarStatus }, ayuSettingValueSignal { ExteraSettings.shared.tabTitleStyle }, ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }, ayuSettingSignal { ExteraSettings.shared.hideDialogsSearchBar }, ayuSettingValueSignal { ExteraStyleSettings.shared.controlStyle.rawValue }, ayuSettingSignal { ExteraSettings.shared.folderTabBackgrounds })
@@ -7244,7 +7336,7 @@ private final class ChatListLocationContext {
         case .chatList:
             if !hideNetworkActivityStatus {
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
-                    headerSettingsSignal, // MARK: Swiftgram / AyuGram
+                    headerSettingsSignal, // MARK: AyuGram / AyuGram
                     networkState,
                     hasProxy,
                     passcode,
@@ -7253,14 +7345,14 @@ private final class ChatListLocationContext {
                     peerTitle,
                     parentController.updatedPresentationData.1,
                     storyPostingAvailable
-                ).startStrict(next: { [weak self] headerSettings, /* MARK: Swiftgram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerTitle, presentationData, storyPostingAvailable in
+                ).startStrict(next: { [weak self] headerSettings, /* MARK: AyuGram */ networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerTitle, presentationData, storyPostingAvailable in
                     guard let self else {
                         return
                     }
                     self.ayuShowsGhostStatus = headerSettings.0.1 // MARK: AyuGram
                     
                     self.updateChatList(
-                        hideStories: headerSettings.0.0, // MARK: Swiftgram
+                        hideStories: headerSettings.0.0, // MARK: AyuGram
                         hideFloatingButton: headerSettings.1, // MARK: AyuGram
                         hideActionBarStatus: headerSettings.2, // MARK: AyuGram
                         networkState: networkState,
@@ -7514,7 +7606,7 @@ private final class ChatListLocationContext {
             }
             var transition: ContainedViewLayoutTransition = .immediate
             let previousToolbar = previousToolbarValue.swap(toolbar)
-            if ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: Swiftgram
+            if ExteraNavigationSettings.shared.configuration.barMode == .hide { // MARK: AyuGram
                 transition = .animated(duration: 0.2, curve: .easeInOut)
             } else if (previousToolbar == nil) != (toolbar == nil) {
                 transition = .animated(duration: 0.4, curve: .spring)
@@ -7535,7 +7627,7 @@ private final class ChatListLocationContext {
     }
     
     private func updateChatList(
-        hideStories: Bool, // MARK: Swiftgram
+        hideStories: Bool, // MARK: AyuGram
         hideFloatingButton: Bool, // MARK: AyuGram
         hideActionBarStatus: Bool, // MARK: AyuGram
         networkState: AccountNetworkState,
@@ -7564,6 +7656,8 @@ private final class ChatListLocationContext {
         let previousEditingAndNetworkState = self.previousEditingAndNetworkStateValue.swap((stateAndFilterId.state.editing, networkState))
         
         var titleContent: NetworkStatusTitle
+        
+        self.ayuHidesSearchButton = stateAndFilterId.state.editing || isReorderingTabs // MARK: AyuGram
         
         if stateAndFilterId.state.editing {
             if case .chatList(.root) = self.location {
@@ -7628,7 +7722,7 @@ private final class ChatListLocationContext {
                 } else {
                     self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        // MARK: Swiftgram — Compose is a neutral action, not an accented confirmation.
+                        // MARK: AyuGram — Compose is a neutral action, not an accented confirmation.
                         tint: .generic,
                         requiresOwnSection: true,
                         glassCornerRadius: ExteraStyleSettings.shared.controlStyle == .material ? 14.0 : nil,
@@ -7664,7 +7758,7 @@ private final class ChatListLocationContext {
                     }
                 }
                 
-                if storyPostingAvailable && !hideStories { // MARK: Swiftgram
+                if storyPostingAvailable && !hideStories { // MARK: AyuGram
                     self.storyButton = NavigationBarComponent.Button(id: "story",
                         content: .icon(imageName: "Chat List/AddStoryIcon"),
                         action: { [weak self] sourceView in
@@ -7683,7 +7777,7 @@ private final class ChatListLocationContext {
                     self.storyButton = nil
                 }
                 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if ExteraNavigationSettings.shared.configuration.barMode == .hide {
                     self.settingsButton = NavigationBarComponent.Button(id: "settings",
                         content: .more,
@@ -8111,7 +8205,7 @@ private func chatListSideListTitleView(in view: UIView) -> ChatTitleComponent.Vi
     return nil
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension ChatListControllerImpl {
 
     @objc fileprivate func settingsPressed() {
@@ -8123,3 +8217,165 @@ extension ChatListControllerImpl {
     }
 }
 //
+// MARK: - Pull to Next Chat shared selection
+
+/// Source-level Pull to Next Chat query. Keeping it free of plugin bridge types
+/// lets both the chat list (navigation) and the chat screen (stock overscroll
+/// control preview) resolve exactly the same dialog.
+public struct AyuNextUnreadQuery {
+    public var targetKinds: Set<String>
+    public var currentPeerId: Int64?
+    public var strategy: Int
+    public var includeMuted: Bool
+    public var skipPinned: Bool
+    public var otherFolders: Bool
+    public var countMarkedUnread: Bool
+
+    public init(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int,
+                includeMuted: Bool, skipPinned: Bool, otherFolders: Bool, countMarkedUnread: Bool) {
+        self.targetKinds = targetKinds
+        self.currentPeerId = currentPeerId
+        self.strategy = strategy
+        self.includeMuted = includeMuted
+        self.skipPinned = skipPinned
+        self.otherFolders = otherFolders
+        self.countMarkedUnread = countMarkedUnread
+    }
+}
+
+public struct AyuNextUnreadTarget {
+    public let peer: EnginePeer
+    public let unreadCount: Int
+    public let isArchived: Bool
+
+    public init(peer: EnginePeer, unreadCount: Int, isArchived: Bool) {
+        self.peer = peer
+        self.unreadCount = unreadCount
+        self.isArchived = isArchived
+    }
+}
+
+/// One Postbox transaction, same passes and filters as the audited source:
+/// current folder first, then the rest of the root list, then the archive when
+/// the source "other folders" switch is on.
+public enum AyuNextUnreadSelection {
+    public static func resolve(transaction: Transaction, accountPeerId: PeerId,
+                               currentFilterData: ChatListFilterData?,
+                               query: AyuNextUnreadQuery) -> AyuNextUnreadTarget? {
+        guard !query.targetKinds.isEmpty else {
+            return nil
+        }
+        let globalSettings = transaction.getGlobalNotificationSettings()
+
+        func kind(of peer: Peer) -> String? {
+            if peer is TelegramGroup {
+                return "group"
+            }
+            if let channel = peer as? TelegramChannel {
+                switch channel.info {
+                case .group:
+                    return "group"
+                case .broadcast:
+                    return "channel"
+                }
+            }
+            if let user = peer as? TelegramUser {
+                if user.botInfo != nil {
+                    return "bot"
+                }
+                return "private"
+            }
+            return nil
+        }
+
+        func qualifies(_ peer: Peer) -> Bool {
+            if peer.id == accountPeerId {
+                return false
+            }
+            if let currentPeerId = query.currentPeerId, peer.id.id._internalGetInt64Value() == currentPeerId {
+                return false
+            }
+            if let user = peer as? TelegramUser, user.id.namespace == Namespaces.Peer.CloudUser, user.id.id._internalGetInt64Value() == 777000 {
+                return false
+            }
+            guard let kindValue = kind(of: peer), query.targetKinds.contains(kindValue) else {
+                return false
+            }
+            if query.skipPinned, transaction.getPeerChatListIndex(peer.id)?.1.pinningIndex != nil {
+                return false
+            }
+            if !query.includeMuted {
+                let settings = transaction.getPeerNotificationSettings(id: peer.id)
+                if resolvedIsRemovedFromTotalUnreadCount(globalSettings: globalSettings, peer: peer, peerSettings: settings) {
+                    return false
+                }
+            }
+            guard let readState = transaction.getCombinedPeerReadState(peer.id) else {
+                return false
+            }
+            if readState.count <= 0 && !(query.countMarkedUnread && readState.markedUnread) {
+                return false
+            }
+            return true
+        }
+
+        var passes: [(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?)] = []
+        if let currentFilterData = currentFilterData {
+            passes.append((.root, chatListFilterPredicate(filter: currentFilterData, accountPeerId: accountPeerId)))
+            if query.otherFolders {
+                passes.append((.root, nil))
+            }
+        } else {
+            passes.append((.root, nil))
+        }
+        if query.otherFolders {
+            passes.append((Namespaces.PeerGroup.archive, nil))
+        }
+
+        var bestPeer: EnginePeer?
+        var bestWeight: Int32 = 0
+        var bestIsArchived = false
+        for pass in passes {
+            let peerIds = transaction.getUnreadChatListPeerIds(
+                groupId: pass.groupId,
+                filterPredicate: pass.filterPredicate,
+                additionalFilter: { qualifies($0) },
+                stopOnFirstMatch: query.strategy == 0
+            )
+            for peerId in peerIds {
+                guard let peer = transaction.getPeer(peerId) else {
+                    continue
+                }
+                let readState = transaction.getCombinedPeerReadState(peerId)
+                let unread = readState?.count ?? 0
+                let marked = readState?.markedUnread ?? false
+                let weight: Int32 = (query.countMarkedUnread && marked && unread <= 0) ? 1 : unread
+                switch query.strategy {
+                case 1:
+                    if bestPeer == nil || weight > bestWeight {
+                        bestPeer = EnginePeer(peer)
+                        bestWeight = weight
+                        bestIsArchived = pass.groupId == Namespaces.PeerGroup.archive
+                    }
+                case 2:
+                    if bestPeer == nil || weight < bestWeight {
+                        bestPeer = EnginePeer(peer)
+                        bestWeight = weight
+                        bestIsArchived = pass.groupId == Namespaces.PeerGroup.archive
+                    }
+                default:
+                    bestPeer = EnginePeer(peer)
+                    bestWeight = weight
+                    bestIsArchived = pass.groupId == Namespaces.PeerGroup.archive
+                }
+            }
+            if query.strategy == 0, bestPeer != nil {
+                break
+            }
+        }
+        guard let peer = bestPeer else {
+            return nil
+        }
+        return AyuNextUnreadTarget(peer: peer, unreadCount: Int(max(0, bestWeight)), isArchived: bestIsArchived)
+    }
+}

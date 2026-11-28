@@ -473,7 +473,7 @@ public final class ChatPanelInterfaceInteraction {
         self.chatController = chatController
         self.statuses = statuses
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgSelectLastWordIfIdle = {
             updateTextInputStateAndMode { current, inputMode in
                 return (sgChatTextInputStateSelectingLastWordIfIdle(current), inputMode)

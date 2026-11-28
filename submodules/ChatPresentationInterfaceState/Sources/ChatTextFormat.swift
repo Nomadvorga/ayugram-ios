@@ -2,9 +2,10 @@ import Foundation
 import TextFormat
 import TelegramCore
 import AccountContext
+import SGSimpleSettings
 
-public func chatTextInputAddFormattingAttribute(forceRemoveAll: Bool = false, _ state: ChatTextInputState, attribute: NSAttributedString.Key, value: Any?) -> ChatTextInputState { // MARK: Swiftgram
-    // MARK: Swiftgram
+public func chatTextInputAddFormattingAttribute(forceRemoveAll: Bool = false, _ state: ChatTextInputState, attribute: NSAttributedString.Key, value: Any?) -> ChatTextInputState { // MARK: AyuGram
+    // MARK: AyuGram
     if forceRemoveAll {
         return chatTextInputClearFormattingAttributes(state)
     }
@@ -182,17 +183,30 @@ public func chatTextInputRemoveDateAttribute(_ state: ChatTextInputState, select
     }
 }
 
+// MARK: AyuGram
+/// What follows an inserted mention of `peer`: the stock " ", or ", " with exteraGram's "Add Comma
+/// after Mention" on. Bots keep the space, so "@bot query" still reads as an inline query.
+public func chatTextInputMentionSuffix(peer: EnginePeer) -> String {
+    guard ExteraSettings.shared.addCommaAfterMention else {
+        return " "
+    }
+    if case let .user(user) = peer, user.botInfo != nil {
+        return " "
+    }
+    return ", "
+}
+
 /// The text the avatar context menu's Mention inserts for `peer`: `@username ` for a peer with a
 /// username, otherwise its name as a mention entity followed by a space; nil when it has neither.
 /// One definition for both paths — `chatTextInputAddMentionAttribute` (the legacy state transform) and
 /// the rich editor's insert through the node (`chatComposerInsertMention`).
 public func chatTextInputMentionText(peer: EnginePeer) -> NSAttributedString? {
     if let addressName = peer.addressName, !addressName.isEmpty {
-        return NSAttributedString(string: "@\(addressName) ")
+        return NSAttributedString(string: "@\(addressName)" + chatTextInputMentionSuffix(peer: peer)) // MARK: AyuGram
     } else if !peer.compactDisplayTitle.isEmpty {
         let replacementText = NSMutableAttributedString()
         replacementText.append(NSAttributedString(string: peer.compactDisplayTitle, attributes: [ChatTextInputAttributes.textMention: ChatTextInputTextMentionAttribute(peerId: peer.id)]))
-        replacementText.append(NSAttributedString(string: " "))
+        replacementText.append(NSAttributedString(string: chatTextInputMentionSuffix(peer: peer))) // MARK: AyuGram
         return replacementText
     } else {
         return nil

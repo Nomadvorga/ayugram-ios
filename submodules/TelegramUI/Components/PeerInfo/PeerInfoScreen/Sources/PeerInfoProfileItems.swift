@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -19,7 +19,7 @@ import PeerNameColorItem
 import BoostLevelIconComponent
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
-private let enabledPrivateBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag] // MARK: Swiftgram
+private let enabledPrivateBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag] // MARK: AyuGram
 
 private func peerVerificationDescriptionEntities(_ verification: PeerVerification) -> [MessageTextEntity] {
     var result = verification.descriptionEntities
@@ -42,7 +42,7 @@ private func peerVerificationDescriptionEntities(_ verification: PeerVerificatio
 enum InfoSection: Int, CaseIterable {
     case unofficial
     case community
-    // MARK: Swiftgram
+    // MARK: AyuGram
     case swiftgram
     //
     case groupLocation
@@ -618,7 +618,7 @@ func infoItems(
             }
         }
     } else if case let .channel(channel) = data.peer {
-        let ItemSGRecentActions = 20 // MARK: Swiftgram
+        let ItemSGRecentActions = 20 // MARK: AyuGram
         
         let ItemUsername = 1
         let ItemUsernameInfo = 2
@@ -657,7 +657,7 @@ func infoItems(
                     icon: .qrCode,
                     action: { _, progress in
                         interaction.openUsername(linkText, true, progress)
-                    }, longTapAction: nil, linkItemAction: { type, item, _, _, progress in // MARK: Swiftgram
+                    }, longTapAction: nil, linkItemAction: { type, item, _, _, progress in // MARK: AyuGram
                         if case .tap = type {
                             if case let .mention(username) = item {
                                 interaction.openUsername(String(username.suffix(from: username.index(username.startIndex, offsetBy: 1))), false, progress)
@@ -665,8 +665,8 @@ func infoItems(
                         }
                     }, iconAction: {
                         interaction.openQrCode()
-                    }, contextAction: { sourceNode, gesture, _ in // MARK: Swiftgram
-                        interaction.openSgContextMenu(sourceNode, gesture, .copyLink(text: linkText)) // MARK: Swiftgram
+                    }, contextAction: { sourceNode, gesture, _ in // MARK: AyuGram
+                        interaction.openSgContextMenu(sourceNode, gesture, .copyLink(text: linkText)) // MARK: AyuGram
                     }, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }
@@ -710,20 +710,20 @@ func infoItems(
                         icon: .qrCode,
                         action: { _, progress in
                             interaction.openUsername(mainUsername, true, progress)
-                        }, longTapAction: nil, linkItemAction: { type, item, sourceNode, _, progress in // MARK: Swiftgram
+                        }, longTapAction: nil, linkItemAction: { type, item, sourceNode, _, progress in // MARK: AyuGram
                             if case .tap = type {
                                 if case let .mention(username) = item {
                                     interaction.openUsername(String(username.suffix(from: username.index(username.startIndex, offsetBy: 1))), false, progress)
                                 }
                             } else if case .longTap = type {
                                 if case let .mention(username) = item {
-                                    interaction.openSgContextMenu(sourceNode, nil, .copyLink(text: username)) // MARK: Swiftgram
+                                    interaction.openSgContextMenu(sourceNode, nil, .copyLink(text: username)) // MARK: AyuGram
                                 }
                             }
                         }, iconAction: {
                             interaction.openQrCode()
-                        }, contextAction: { sourceNode, gesture, _ in // MARK: Swiftgram
-                            interaction.openSgContextMenu(sourceNode, gesture, .copyLink(text: "https://t.me/\(mainUsername)")) // MARK: Swiftgram
+                        }, contextAction: { sourceNode, gesture, _ in // MARK: AyuGram
+                            interaction.openSgContextMenu(sourceNode, gesture, .copyLink(text: "https://t.me/\(mainUsername)")) // MARK: AyuGram
                         }, requestLayout: { animated in
                             interaction.requestLayout(animated)
                         }
@@ -791,7 +791,7 @@ func infoItems(
 
                 if case .broadcast = channel.info {
                     var canEditMembers = false
-                    if channel.adminRights != nil || channel.flags.contains(.isCreator) { // MARK: Swiftgram
+                    if channel.adminRights != nil || channel.flags.contains(.isCreator) { // MARK: AyuGram
                         canEditMembers = true
                     }
                     if canEditMembers {
@@ -874,7 +874,7 @@ func infoItems(
                         interaction.openEditing()
                     }))
      
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     if channel.hasPermission(.banMembers) || channel.flags.contains(.isCreator) {
                         items[section]!.append(PeerInfoScreenDisclosureItem(id: ItemSGRecentActions, label: .none, text: presentationData.strings.Group_Info_AdminLog, icon: PresentationResourcesSettings.recentActions, action: {
                             interaction.openRecentActions()
@@ -977,7 +977,7 @@ func infoItems(
         }
     }
     
-    items[.swiftgram]!.append(contentsOf: sgPeerInfoProfileItems(nearestChatParticipant: nearestChatParticipant, data: data, context: context, presentationData: presentationData, interaction: interaction, isMyProfile: isMyProfile)) // MARK: Swiftgram
+    items[.swiftgram]!.append(contentsOf: sgPeerInfoProfileItems(nearestChatParticipant: nearestChatParticipant, data: data, context: context, presentationData: presentationData, interaction: interaction, isMyProfile: isMyProfile)) // MARK: AyuGram
     
     
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
@@ -1382,7 +1382,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 }
                 
                 var canEditMembers = false
-                if /*channel.hasPermission(.banMembers) &&*/ (channel.adminRights != nil || channel.flags.contains(.isCreator)) { // MARK: Swiftgram
+                if /*channel.hasPermission(.banMembers) &&*/ (channel.adminRights != nil || channel.flags.contains(.isCreator)) { // MARK: AyuGram
                     canEditMembers = true
                 }
                 if canEditMembers {

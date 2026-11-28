@@ -197,7 +197,7 @@ def main():
     overview = {}
     for asset, source in [('AyuOverviewIcon', DEST / 'Swiftgram.icon/Assets/AyuGram.png'),
                           ('ExteraOverviewIcon', DEST / 'ExteraDefault.alticon/ExteraDefault_1024x1024.png')]:
-        folder = ROOT / 'Swiftgram/SGSettingsUI/Images.xcassets' / (asset + '.imageset')
+        folder = ROOT / 'AyuGram/SGSettingsUI/Images.xcassets' / (asset + '.imageset')
         folder.mkdir(parents=True, exist_ok=True)
         data = source.read_bytes()
         (folder / (asset + '.png')).write_bytes(data)

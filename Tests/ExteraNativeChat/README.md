@@ -6,8 +6,8 @@ suite), plus wallpaper-search query and pagination decisions:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift \
   Tests/ExteraNativeChat/ExteraChatMediaSettingsTests.swift \
   submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/WallpaperSearchState.swift \
   Tests/ExteraNativeChat/WallpaperSearchStateTests.swift

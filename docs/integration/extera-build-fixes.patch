@@ -1,6 +1,6 @@
-diff --git a/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift b/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
---- a/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
-+++ b/Swiftgram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
+diff --git a/AyuGram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift b/AyuGram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
+--- a/AyuGram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
++++ b/AyuGram/SGSettingsUI/Sources/ExteraSettingsOverviewController.swift
 @@ -156,7 +156,7 @@
              self.categoryRows = categories.map { key, symbol, category in
                  self.row(i18n(key, lang), symbol: symbol, action: { [weak self] in

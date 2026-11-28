@@ -170,18 +170,8 @@ func chatHistoryEntriesForView(
     }
     
     // MARK: AyuGram
-    var ayuHidesReactions = false
-    if let channel = chatPeer as? TelegramChannel {
-        if case .broadcast = channel.info {
-            ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInChannels
-        } else {
-            ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInGroups
-        }
-    } else if chatPeer is TelegramGroup {
-        ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInGroups
-    } else if chatPeer is TelegramUser || chatPeer is TelegramSecretChat {
-        ayuHidesReactions = ExteraMessageSettings.shared.hideReactionsInPrivateChats
-    }
+    // exteraGram hide-reactions toggles, shared with the context menu picker and the chat list badge
+    let ayuHidesReactions = TelegramCore.ayuHidesReactions(inChatWith: chatPeer)
     var ayuHiddenAuthors = AyuShadowBan.shared.peerIds
     if AyuCustomizationSettings.shared.hideFromBlocked {
         ayuHiddenAuthors.formUnion(AyuBlockedPeers.shared.blockedPeerIds(account: context.account))
@@ -194,8 +184,9 @@ func chatHistoryEntriesForView(
         if !ayuHiddenAuthors.isEmpty, let authorId = message.author?.id, authorId != message.id.peerId, ayuHiddenAuthors.contains(authorId.toInt64()) {
             continue loop
         }
-        if ayuHidesReactions, message.attributes.contains(where: { $0 is ReactionsMessageAttribute || $0 is PendingReactionsMessageAttribute }) {
-            message = message.withUpdatedAttributes(message.attributes.filter { !($0 is ReactionsMessageAttribute) && !($0 is PendingReactionsMessageAttribute) })
+        // Saved Messages tags (isTags) are kept, as on exteraGram
+        if ayuHidesReactions, message.attributes.contains(where: { ($0 as? ReactionsMessageAttribute)?.isTags == false }) {
+            message = message.withUpdatedAttributes(message.attributes.filter { ($0 as? ReactionsMessageAttribute)?.isTags != false })
         }
         //
         var isRead = entry.isRead

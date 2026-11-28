@@ -199,7 +199,7 @@ NSString *TGLocalizedInternal(NSString *s)
     return s;
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 NSString *TGLocalized(NSString *s) {
     NSString *result = TGLocalizedInternal(s);
     return [result stringByReplacingOccurrencesOfString:@"Telegram" withString:@"Swiftgram"];

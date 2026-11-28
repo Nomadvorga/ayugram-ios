@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGStrings
 //
 
@@ -155,14 +155,14 @@ final class AuthorizedApplicationContext {
     
     private var applicationInForegroundDisposable: Disposable?
     
-    private var showContactsTab: Bool // MARK: Swiftgram
+    private var showContactsTab: Bool // MARK: AyuGram
     private var showCallsTab: Bool
     private var showCallsTabDisposable: Disposable?
     private var showNewsTab: Bool
     private var showNewsTabDisposable: Disposable?
     private var enablePostboxTransactionsDiposable: Disposable?
     
-    init(sharedApplicationContext: SharedApplicationContext, mainWindow: Window1, context: AccountContextImpl, accountManager: AccountManager<TelegramAccountManagerTypes>, showContactsTab: Bool, /* MARK: Swiftgram */ showCallsTab: Bool, reinitializedNotificationSettings: @escaping () -> Void) {
+    init(sharedApplicationContext: SharedApplicationContext, mainWindow: Window1, context: AccountContextImpl, accountManager: AccountManager<TelegramAccountManagerTypes>, showContactsTab: Bool, /* MARK: AyuGram */ showCallsTab: Bool, reinitializedNotificationSettings: @escaping () -> Void) {
         self.sharedApplicationContext = sharedApplicationContext
         
         setupLegacyComponents(context: context)
@@ -172,7 +172,7 @@ final class AuthorizedApplicationContext {
         self.lockedCoveringView = LockedWindowCoveringView(theme: presentationData.theme)
         
         self.context = context
-        self.showContactsTab = showContactsTab // MARK: Swiftgram
+        self.showContactsTab = showContactsTab // MARK: AyuGram
 
         self.showCallsTab = showCallsTab
         self.showNewsTab = isNewsFeedEnabled(appConfiguration: context.currentAppConfiguration.with { $0 })
@@ -258,7 +258,7 @@ final class AuthorizedApplicationContext {
         }
         
         if self.rootController.rootTabController == nil {
-            self.rootController.addRootControllers(showCallsTab: self.showCallsTab, showContactsTab: self.showContactsTab, /* MARK: Swiftgram */ showNewsTab: self.showNewsTab)
+            self.rootController.addRootControllers(showCallsTab: self.showCallsTab, showContactsTab: self.showContactsTab, /* MARK: AyuGram */ showNewsTab: self.showNewsTab)
         }
         if let tabsController = self.rootController.viewControllers.first as? TabBarController, !tabsController.controllers.isEmpty, tabsController.selectedIndex >= 0 {
             let controller = tabsController.controllers[tabsController.selectedIndex]
@@ -771,7 +771,7 @@ final class AuthorizedApplicationContext {
                     } else {
                         actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
                     }
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     let sgText = isDropAuth ? "AuthorizationError.Notice".i18n(presentationData.strings.baseLanguageCode) + "\n" + "AuthorizationError.PossibleReasons".i18n(presentationData.strings.baseLanguageCode) + "\n\n\(text)"  : text
                     let controller = textAlertController(context: strongSelf.context, title: nil, text: sgText, actions: actions)
                     //
@@ -814,7 +814,7 @@ final class AuthorizedApplicationContext {
             }
         })
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let showCallsTabSignal = context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.callListSettings])
         |> map { sharedData -> (Bool, Bool) in
             var showCallsTabValue = CallListSettings.defaultSettings.showTab
@@ -837,7 +837,7 @@ final class AuthorizedApplicationContext {
                     strongSelf.showContactsTab = showContactsTabValue
                 }
                 if needControllersUpdate {
-                    strongSelf.rootController.updateRootControllers(showCallsTab: showCallsTabValue, showContactsTab: showContactsTabValue, /* MARK: Swiftgram */ showNewsTab: strongSelf.showNewsTab)
+                    strongSelf.rootController.updateRootControllers(showCallsTab: showCallsTabValue, showContactsTab: showContactsTabValue, /* MARK: AyuGram */ showNewsTab: strongSelf.showNewsTab)
                 }
             }
         })
@@ -853,7 +853,7 @@ final class AuthorizedApplicationContext {
                 return
             }
             self.showNewsTab = value
-            self.rootController.updateRootControllers(showCallsTab: self.showCallsTab, showContactsTab: self.showContactsTab, /* MARK: Swiftgram */ showNewsTab: value)
+            self.rootController.updateRootControllers(showCallsTab: self.showCallsTab, showContactsTab: self.showContactsTab, /* MARK: AyuGram */ showNewsTab: value)
         })
         
         self.rootController.setForceInCallStatusBar((self.context.sharedContext as! SharedAccountContextImpl).currentCallStatusBarNode)

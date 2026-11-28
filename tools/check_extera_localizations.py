@@ -9,7 +9,7 @@ failures = []
 languages = {}
 read_status_placeholders = {}
 for language in ("en", "ru"):
-    path = ROOT / f"Swiftgram/SGStrings/Strings/{language}.lproj/SGLocalizable.strings"
+    path = ROOT / f"AyuGram/SGStrings/Strings/{language}.lproj/SGLocalizable.strings"
     source = path.read_text(encoding="utf-8")
     entries = re.findall(r'^"([^"\n]+)"\s*=\s*"((?:[^"\\\n]|\\.)*)";', source, re.M)
     counts = Counter(key for key, _ in entries if key.startswith(PREFIXES))
@@ -30,17 +30,17 @@ for key in read_status_placeholders["en"].keys() & read_status_placeholders["ru"
         failures.append(f"EN/RU placeholder mismatch: {key}")
 
 image = (ROOT / "submodules/GalleryUI/Sources/ExteraImageSearchController.swift").read_text(encoding="utf-8")
-feed = (ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraFeedController.swift").read_text(encoding="utf-8")
-takeout = (ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraTakeoutController.swift").read_text(encoding="utf-8")
+feed = (ROOT / "AyuGram/SGSettingsUI/Sources/ExteraFeedController.swift").read_text(encoding="utf-8")
+takeout = (ROOT / "AyuGram/SGSettingsUI/Sources/ExteraTakeoutController.swift").read_text(encoding="utf-8")
 required = set(re.findall(r'"(Extera\.(?:Image|Feed)[A-Za-z0-9]+)"', image + feed))
 required.update("Extera.Takeout." + key for key in re.findall(r'self\.text\("([A-Za-z]+)"', takeout))
 required.update("Extera.Takeout." + key for key in ("Personal", "Bots", "PrivateGroups", "PublicGroups", "PrivateChannels", "PublicChannels"))
 required.update("Extera.StickerTimeMode." + str(value) for value in range(3))
 required.update("Extera.StickerShape." + str(value) for value in range(3))
 for path in (
-    "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraFeedController.swift",
-    "Swiftgram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
+    "AyuGram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraFeedController.swift",
+    "AyuGram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
 ):
     required.update(re.findall(r'"(Ayu\.ReadStatus\.[A-Za-z]+)"', (ROOT / path).read_text(encoding="utf-8")))
 for language, keys in languages.items():

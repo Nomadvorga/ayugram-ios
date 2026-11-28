@@ -1,0 +1,6 @@
+"""Build-time helpers and offline tests for AyuPluginBridge packaging."""
+
+exports_files([
+    "prepare_test.py",
+    "python_deps.bzl",
+])

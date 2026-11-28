@@ -7,9 +7,9 @@ import tree_sitter_swift
 ROOT = Path(__file__).resolve().parents[2]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 FILES = [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraAdminSettings.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraAdminShortcutPolicy.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraAdminSettings.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraAdminHeaderPolicy.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraAdminShortcutPolicy.swift",
     "submodules/TelegramUI/Sources/ChatControllerExteraAdminShortcuts.swift",
     "submodules/TelegramUI/Sources/ChatControllerExteraAdminHeader.swift",
     "Tests/ExteraAdmin/ExteraAdminSettingsTests.swift",

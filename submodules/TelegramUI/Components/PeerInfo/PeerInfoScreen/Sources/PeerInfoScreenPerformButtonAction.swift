@@ -6,6 +6,7 @@ import SwiftSignalKit
 import TelegramCore
 import UndoUI
 import ContextUI
+import AyuPluginBridge
 import TelegramPresentationData
 import NotificationPeerExceptionController
 import NotificationExceptionsScreen
@@ -994,7 +995,7 @@ extension PeerInfoScreenNode {
                     }
                     if canReport {
                         items.append(strongSelf.reportContextMenuItem())
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     } else {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Group_Info_AdminLog, icon: { theme in
                             generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RefProgram/IntroListEye"), color: theme.contextMenu.primaryColor)
@@ -1011,7 +1012,7 @@ extension PeerInfoScreenNode {
                             self?.openParticipantsSection(section: .admins)
                         })))
                     }
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Channel_AdminLogFilter_EventsPinned, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/PinnedList"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] c, f in
@@ -1320,7 +1321,13 @@ extension PeerInfoScreenNode {
                 
                 let sourceView = sourceNode.view
                 
-                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                // MARK: AyuGram
+                // Android's profile menu: plugin rows registered for PROFILE_ACTION_MENU.
+                let ayuPluginMenu = AyuPluginContextMenuHandle()
+                let ayuPluginRequest = AyuPluginMenuRequest(kind: .profileActionMenu, accountKey: self.context.account.id.int64, peer: AyuPluginMenuRequest.Peer(namespace: peer.id.namespace._internalGetInt32Value(), id: peer.id.id._internalGetInt64Value()))
+                //
+                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: AyuPluginContextMenu.appending(to: items |> map { ContextController.Items(content: .list($0)) }, request: ayuPluginRequest, menu: ayuPluginMenu), gesture: gesture)
+                ayuPluginMenu.controller = contextController
                 contextController.dismissed = { [weak self] in
                     if let strongSelf = self {
                         strongSelf.state = strongSelf.state.withHighlightedButton(nil)

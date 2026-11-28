@@ -9,9 +9,9 @@ Run from the repository root on macOS with Xcode's Swift toolchain:
 
 ```sh
 TSAN_OPTIONS=halt_on_error=1 python3 tools/run_extera_xctests.py --sanitize=thread --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraFeedHistoryPolicy.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraFeedSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraFeedHistoryPolicy.swift \
   Tests/ExteraFeed/ExteraFeedSettingsTests.swift
 ```
 

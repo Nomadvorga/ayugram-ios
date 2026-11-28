@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 import SGStrings
 
@@ -25,6 +25,7 @@ private final class ProxySettingsControllerArguments {
     let setServerWithRevealedOptions: (ProxyServerSettings?, ProxyServerSettings?) -> Void
     let toggleUseForCalls: (Bool) -> Void
     let shareProxyList: () -> Void
+    var ayuToggleDisableCondition: (ExteraSettings.ProxyDisableConditions, Bool) -> Void = { _, _ in } // MARK: AyuGram
     
     init(toggleLocalDNS: @escaping (Bool) -> Void, toggleEnabled: @escaping (Bool) -> Void, addNewServer: @escaping () -> Void, activateServer: @escaping (ProxyServerSettings) -> Void, editServer: @escaping (ProxyServerSettings) -> Void, removeServer: @escaping (ProxyServerSettings) -> Void, setServerWithRevealedOptions: @escaping (ProxyServerSettings?, ProxyServerSettings?) -> Void, toggleUseForCalls: @escaping (Bool) -> Void, shareProxyList: @escaping () -> Void) {
         self.toggleLocalDNS = toggleLocalDNS
@@ -44,6 +45,7 @@ private enum ProxySettingsControllerSection: Int32 {
     case servers
     case share
     case calls
+    case ayuDisable // MARK: AyuGram
 }
 
 private enum ProxyServerAvailabilityStatus: Equatable {
@@ -88,6 +90,24 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
     case shareProxyList(PresentationTheme, String)
     case useForCalls(PresentationTheme, String, Bool)
     case useForCallsInfo(PresentationTheme, String)
+    // MARK: AyuGram
+    case ayuDisableHeader(PresentationTheme, String)
+    case ayuDisableToggle(Int, PresentationTheme, String, Bool)
+    case ayuDisableNotice(PresentationTheme, String)
+
+    // Position among the "Disable Proxy" rows, which close the list; nil for every other row.
+    private var ayuDisableOrder: Int? {
+        switch self {
+            case .ayuDisableHeader:
+                return 0
+            case let .ayuDisableToggle(condition, _, _, _):
+                return 1 + condition
+            case .ayuDisableNotice:
+                return 100
+            default:
+                return nil
+        }
+    }
     
     var section: ItemListSectionId {
         switch self {
@@ -101,6 +121,8 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                 return ProxySettingsControllerSection.share.rawValue
             case .useForCalls, .useForCallsInfo:
                 return ProxySettingsControllerSection.calls.rawValue
+            case .ayuDisableHeader, .ayuDisableToggle, .ayuDisableNotice:
+                return ProxySettingsControllerSection.ayuDisable.rawValue
         }
     }
     
@@ -124,6 +146,12 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                 return .index(4)
             case .useForCallsInfo:
                 return .index(5)
+            case .ayuDisableHeader:
+                return .index(6)
+            case let .ayuDisableToggle(condition, _, _, _):
+                return .index(10 + condition)
+            case .ayuDisableNotice:
+                return .index(7)
         }
     }
     
@@ -179,6 +207,24 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                 }
             case let .useForCallsInfo(lhsTheme, lhsText):
                 if case let .useForCallsInfo(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText {
+                    return true
+                } else {
+                    return false
+                }
+            case let .ayuDisableHeader(lhsTheme, lhsText):
+                if case let .ayuDisableHeader(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText {
+                    return true
+                } else {
+                    return false
+                }
+            case let .ayuDisableToggle(lhsCondition, lhsTheme, lhsText, lhsValue):
+                if case let .ayuDisableToggle(rhsCondition, rhsTheme, rhsText, rhsValue) = rhs, lhsCondition == rhsCondition, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .ayuDisableNotice(lhsTheme, lhsText):
+                if case let .ayuDisableNotice(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText {
                     return true
                 } else {
                     return false
@@ -247,7 +293,12 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                         return true
                 }
             case .useForCallsInfo:
-                return false
+                return rhs.ayuDisableOrder != nil
+            case .ayuDisableHeader, .ayuDisableToggle, .ayuDisableNotice:
+                guard let lhsOrder = lhs.ayuDisableOrder, let rhsOrder = rhs.ayuDisableOrder else {
+                    return false
+                }
+                return lhsOrder < rhsOrder
         }
     }
     
@@ -294,6 +345,14 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                 }, tag: ProxySettingsEntryTag.useForCalls)
             case let .useForCallsInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+            case let .ayuDisableHeader(_, text):
+                return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+            case let .ayuDisableToggle(condition, _, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: true, enabled: true, sectionId: self.section, style: .blocks, updated: { value in
+                    arguments.ayuToggleDisableCondition(ExteraSettings.ProxyDisableConditions(rawValue: condition), value)
+                })
+            case let .ayuDisableNotice(_, text):
+                return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -302,7 +361,7 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
     var entries: [ProxySettingsControllerEntry] = []
 
     entries.append(.enabled(theme, strings.ChatSettings_ConnectionType_UseProxy, proxySettings.enabled, proxySettings.servers.isEmpty))
-    // MARK: Swiftgram
+    // MARK: AyuGram
     entries.append(.localDNSToggle(theme, i18n("ProxySettings.UseSystemDNS", strings.baseLanguageCode), SGSimpleSettings.shared.localDNSForProxyHost))
     entries.append(.localDNSNotice(theme, i18n("ProxySettings.UseSystemDNS.Notice", strings.baseLanguageCode)))
     entries.append(.serversHeader(theme, strings.SocksProxySetup_SavedProxies))
@@ -359,7 +418,13 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
                     displayStatus = DisplayProxyServerStatus(activity: false, text: text, textActive: false)
             }
         }
-        entries.append(.server(index, theme, strings, server, server == proxySettings.activeServer, displayStatus, ProxySettingsServerItemEditing(editable: true, editing: state.editing, revealed: state.revealedServer == server), proxySettings.enabled))
+        // MARK: AyuGram
+        var ayuDisplayStatus = displayStatus
+        if let code = state.ayuCountries[server.host], let country = AyuProxyCountry.title(countryCode: code, languageCode: strings.baseLanguageCode) {
+            ayuDisplayStatus = DisplayProxyServerStatus(activity: displayStatus.activity, text: country + ", " + displayStatus.text, textActive: displayStatus.textActive)
+        }
+        //
+        entries.append(.server(index, theme, strings, server, server == proxySettings.activeServer, ayuDisplayStatus, ProxySettingsServerItemEditing(editable: true, editing: state.editing, revealed: state.revealedServer == server), proxySettings.enabled))
         index += 1
     }
     if !existingServers.isEmpty {
@@ -370,6 +435,17 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
         entries.append(.useForCalls(theme, strings.SocksProxySetup_UseForCalls, proxySettings.useForCalls))
         entries.append(.useForCallsInfo(theme, strings.SocksProxySetup_UseForCallsHelp))
     }
+
+    // MARK: AyuGram
+    if !proxySettings.servers.isEmpty {
+        let lang = strings.baseLanguageCode
+        let conditions = ExteraSettings.ProxyDisableConditions(rawValue: state.ayuDisableConditions)
+        entries.append(.ayuDisableHeader(theme, i18n("Extera.ProxyDisable", lang).uppercased()))
+        entries.append(.ayuDisableToggle(ExteraSettings.ProxyDisableConditions.vpn.rawValue, theme, i18n("Extera.ProxyDisable.VPN", lang), conditions.contains(.vpn)))
+        entries.append(.ayuDisableToggle(ExteraSettings.ProxyDisableConditions.mobileData.rawValue, theme, i18n("Extera.ProxyDisable.MobileData", lang), conditions.contains(.mobileData)))
+        entries.append(.ayuDisableToggle(ExteraSettings.ProxyDisableConditions.wifi.rawValue, theme, i18n("Extera.ProxyDisable.WiFi", lang), conditions.contains(.wifi)))
+        entries.append(.ayuDisableNotice(theme, i18n("Extera.ProxyDisable.Notice", lang)))
+    }
     
     return entries
 }
@@ -377,6 +453,9 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
 private struct ProxySettingsControllerState: Equatable {
     var editing: Bool = false
     var revealedServer: ProxyServerSettings? = nil
+    var ayuDisableConditions: Int = ExteraSettings.shared.doNotUseProxy.rawValue // MARK: AyuGram
+    // Country codes of the servers' hosts, as far as they are known.
+    var ayuCountries: [String: String] = [:]
 }
 
 public enum ProxySettingsControllerMode {
@@ -487,6 +566,21 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
     }, shareProxyList: {
        shareProxyListImpl?()
     })
+    // MARK: AyuGram
+    arguments.ayuToggleDisableCondition = { condition, value in
+        var conditions = ExteraSettings.shared.doNotUseProxy
+        if value {
+            conditions.insert(condition)
+        } else {
+            conditions.remove(condition)
+        }
+        ExteraSettings.shared.doNotUseProxy = conditions
+        updateState { state in
+            var state = state
+            state.ayuDisableConditions = conditions.rawValue
+            return state
+        }
+    }
     
     let proxySettings = Promise<ProxySettings>()
     proxySettings.set(accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
@@ -503,6 +597,33 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
         return proxySettings.servers
     })
     
+    // MARK: AyuGram
+    let ayuCountriesDisposable = MetaDisposable()
+    if ExteraSettings.shared.value(.showProxyCountry) {
+        var requestedHosts = Set<String>()
+        ayuCountriesDisposable.set((proxySettings.get()
+        |> deliverOnMainQueue).start(next: { settings in
+            for server in settings.servers {
+                let host = server.host
+                guard requestedHosts.insert(host).inserted else {
+                    continue
+                }
+                let _ = (AyuProxyCountry.shared.countryCode(host: host)
+                |> deliverOnMainQueue).start(next: { code in
+                    guard let code else {
+                        return
+                    }
+                    updateState { state in
+                        var state = state
+                        state.ayuCountries[host] = code
+                        return state
+                    }
+                })
+            }
+        }))
+    }
+    //
+
     let signal = combineLatest(updatedPresentationData, statePromise.get(), proxySettings.get(), statusesContext.statuses(), network.connectionStatus)
     |> map { presentationData, state, proxySettings, statuses, connectionStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var presentationData = presentationData
@@ -541,6 +662,9 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: proxySettingsControllerEntries(theme: presentationData.theme, strings: presentationData.strings, state: state, proxySettings: proxySettings, statuses: statuses, connectionStatus: connectionStatus), style: .blocks, ensureVisibleItemTag: focusOnItemTag)
         
         return (controllerState, (listState, arguments))
+    }
+    |> afterDisposed {
+        ayuCountriesDisposable.dispose() // MARK: AyuGram
     }
     
     let controller = ItemListController(presentationData: ItemListPresentationData(presentationData), updatedPresentationData: updatedPresentationData |> map(ItemListPresentationData.init(_:)), state: signal, tabBarItem: nil)
@@ -656,7 +780,7 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
             }
         }
     }
-    // MARK: Swiftgram
+    // MARK: AyuGram
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }

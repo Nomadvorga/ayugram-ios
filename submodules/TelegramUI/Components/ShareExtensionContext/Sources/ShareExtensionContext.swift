@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -93,7 +93,7 @@ private final class ShareControllerExtensionEnvironment: ShareControllerEnvironm
 
 public struct ShareRootControllerInitializationData {
     public let appBundleId: String
-    public let appSpecificUrlScheme: String // MARK: Swiftgram
+    public let appSpecificUrlScheme: String // MARK: AyuGram
     public let appBuildType: TelegramAppBuildType
     public let appGroupPath: String
     public let apiId: Int32
@@ -105,9 +105,9 @@ public struct ShareRootControllerInitializationData {
     public let useBetaFeatures: Bool
     public let makeTempContext: (AccountManager<TelegramAccountManagerTypes>, AppLockContext, TelegramApplicationBindings, InitialPresentationDataAndSettings, NetworkInitializationArguments) -> Signal<AccountContext, NoError>
     
-    public init(appBundleId: String, appSpecificUrlScheme: String, appBuildType: TelegramAppBuildType, appGroupPath: String, apiId: Int32, apiHash: String, languagesCategory: String, encryptionParameters: (Data, Data), appVersion: String, bundleData: Data?, useBetaFeatures: Bool, makeTempContext: @escaping (AccountManager<TelegramAccountManagerTypes>, AppLockContext, TelegramApplicationBindings, InitialPresentationDataAndSettings, NetworkInitializationArguments) -> Signal<AccountContext, NoError>) { // MARK: Swiftgram
+    public init(appBundleId: String, appSpecificUrlScheme: String, appBuildType: TelegramAppBuildType, appGroupPath: String, apiId: Int32, apiHash: String, languagesCategory: String, encryptionParameters: (Data, Data), appVersion: String, bundleData: Data?, useBetaFeatures: Bool, makeTempContext: @escaping (AccountManager<TelegramAccountManagerTypes>, AppLockContext, TelegramApplicationBindings, InitialPresentationDataAndSettings, NetworkInitializationArguments) -> Signal<AccountContext, NoError>) { // MARK: AyuGram
         self.appBundleId = appBundleId
-        self.appSpecificUrlScheme = appSpecificUrlScheme // MARK: Swiftgram
+        self.appSpecificUrlScheme = appSpecificUrlScheme // MARK: AyuGram
         self.appBuildType = appBuildType
         self.appGroupPath = appGroupPath
         self.apiId = apiId
@@ -237,7 +237,7 @@ public class ShareRootControllerImpl {
             
             setupSharedLogger(rootPath: rootPath, path: logsPath)
             
-            let applicationBindings = TelegramApplicationBindings(isMainApp: false, appBundleId: self.initializationData.appBundleId, appBuildType: self.initializationData.appBuildType, containerPath: self.initializationData.appGroupPath, appSpecificScheme: self.initializationData.appSpecificUrlScheme, openUrl: { [weak self] url in // MARK: Swiftgram
+            let applicationBindings = TelegramApplicationBindings(isMainApp: false, appBundleId: self.initializationData.appBundleId, appBuildType: self.initializationData.appBuildType, containerPath: self.initializationData.appGroupPath, appSpecificScheme: self.initializationData.appSpecificUrlScheme, openUrl: { [weak self] url in // MARK: AyuGram
                 self?.openUrl(url)
             }, openUniversalUrl: { _, completion in
                 completion.completion(false)
@@ -497,10 +497,10 @@ public class ShareRootControllerImpl {
                         let itemCount = max(1, extensionItems.reduce(0) { $0 + ($1.attachments?.count ?? 0) })
 
                         guard let appContext = context as? ShareControllerAppAccountContext else { return }
-                        var sgForceHD = false // MARK: Swiftgram
+                        var sgForceHD = false // MARK: AyuGram
                         let shareController = ShareScreen(context: appContext.context, subject: .fromExternal(itemCount, { peerIds, threadIds, requireStars, additionalText, account, silently in
                             if let strongSelf = self, let inputItems = strongSelf.getExtensionContext()?.inputItems, !inputItems.isEmpty, !peerIds.isEmpty {
-                                // MARK: Swiftgram
+                                // MARK: AyuGram
                                 let settings = SGSimpleSettings.shared.sharePhotoSettings
                                 let maxDimension: CGFloat = (sgForceHD || settings.sendLargePhotos) ? 2560.0 : 1280.0
                                 sgForceHD = false
@@ -545,7 +545,7 @@ public class ShareRootControllerImpl {
                             guard let context = account.account as? ShareControllerAppAccountContext else { return nil }
                             return (context: context.context, peer: account.peer)
                         }, immediatePeerId: immediatePeerId))
-                        shareController.sgRequestHighQualityPhotos = { sgForceHD = true } // MARK: Swiftgram
+                        shareController.sgRequestHighQualityPhotos = { sgForceHD = true } // MARK: AyuGram
                         shareController.presentationArguments = ViewControllerPresentationArguments(presentationAnimation: .modalSheet)
                         shareController.dismissed = {
                             //inForeground.set(false)
@@ -617,7 +617,7 @@ public class ShareRootControllerImpl {
                                     }
                                     
                                     dispatchGroup.notify(queue: .main) {
-                                        self.openUrl("\(self.initializationData.appSpecificUrlScheme)://shareStory?session=\(sessionId)") // MARK: Swiftgram
+                                        self.openUrl("\(self.initializationData.appSpecificUrlScheme)://shareStory?session=\(sessionId)") // MARK: AyuGram
                                     }
                                 }
                             }

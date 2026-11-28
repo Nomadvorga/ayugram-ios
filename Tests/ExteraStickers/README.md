@@ -5,8 +5,8 @@ From the repository root on macOS with Swift:
 ```sh
 OUT="$(mktemp -d)"
 swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraStickerSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraStickerSettings.swift \
   Tests/ExteraStickers/ExteraStickerHostTests.swift \
   -o "$OUT/ExteraStickerHostTests"
 "$OUT/ExteraStickerHostTests"
@@ -26,7 +26,7 @@ Parent integration:
 
 - `ExteraStickerSettings.shared.timeMode`: `.default = 0`, `.side = 1`, `.hidden = 2`.
 - `ExteraStickerSettings.shared.shape`: `.original = 0`, `.rounded = 1`, `.bubble = 2`.
-- Add `//Swiftgram/SGSimpleSettings:SGSimpleSettings` to both sticker-node BUILD dependencies.
+- Add `//AyuGram/SGSimpleSettings:SGSimpleSettings` to both sticker-node BUILD dependencies.
 - Include `timeMode.rawValue` and `shape.rawValue` in `ChatHistoryListNode`'s settings snapshot to
   trigger visible-row updates on changes, alongside the already included size.
 - Back up the new enum values; an unset time-mode sentinel inherits `stickerTimestamp`. An explicit

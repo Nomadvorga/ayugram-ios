@@ -4480,7 +4480,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     var existingIds = Set<PeerId>()
 
                     
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     // Hidding SwiftgramBot from recents so it won't annoy people. Ideally we should call removeRecentlyUsedApp, so it won't annoy users in other apps
                     let skipId = 5846791198
                     

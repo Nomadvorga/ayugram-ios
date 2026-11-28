@@ -4052,7 +4052,7 @@ final class PostboxImpl {
             chatPeerIds = chatPeerIds.filter(filterImpl)
             contactPeerIds = contactPeerIds.filter(filterImpl)
         }
-        if let peerId = self.sgSearchLocalPeerId(query: query) { // MARK: Swiftgram
+        if let peerId = self.sgSearchLocalPeerId(query: query) { // MARK: AyuGram
             chatPeerIds.append(peerId)
         }
         

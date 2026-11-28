@@ -1,9 +1,9 @@
 {
   "baseline": "9598c2c090f4a469714ae98e2c3a9c2cbda6311b",
   "swiftSources": [
-    "Swiftgram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraChatValueSliderItem.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraChatValueSliderItem.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
     "submodules/TelegramUIPreferences/Sources/ExteraNativeChatControls.swift",
     "submodules/SettingsUI/Sources/Themes/ExteraNativeChatAppearanceAdapter.swift",
     "submodules/SettingsUI/Sources/Data and Storage/ExteraSensitiveContentSettingsController.swift",
@@ -35,8 +35,8 @@
   ],
   "hostTests": {
     "sources": [
-      "Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
-      "Swiftgram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
+      "AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift",
+      "AyuGram/SGSimpleSettings/Sources/ExteraChatMediaSettings.swift",
       "Tests/ExteraNativeChat/ExteraChatMediaSettingsTests.swift",
       "submodules/TelegramUI/Components/Settings/WallpaperGridScreen/Sources/WallpaperSearchState.swift",
       "Tests/ExteraNativeChat/WallpaperSearchStateTests.swift"

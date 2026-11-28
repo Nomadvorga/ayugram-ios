@@ -4,7 +4,7 @@ import TelegramCore
 import TelegramUIPreferences
 import AccountContext
 
-// MARK: Swiftgram
+// MARK: AyuGram
 public let maximumSwiftgramNumberOfAccounts = 500
 public let maximumSafeNumberOfAccounts = 6
 public let maximumNumberOfAccounts = maximumSwiftgramNumberOfAccounts
@@ -53,7 +53,7 @@ public func activeAccountsAndPeers(context: AccountContext, includePrimary: Bool
     }
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 public func getContextForUserId(context: AccountContext, userId: Int64) -> Signal<AccountContext?, NoError> {
     if context.account.peerId.id._internalGetInt64Value() == userId {
         return .single(context)

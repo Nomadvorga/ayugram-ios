@@ -125,15 +125,15 @@ let ayuSettingsDidChangeNotification = Notification.Name("ExteraUIIconHostSettin
 enum SGSimpleSettings { static let shared = 0 }
 ''', encoding="utf-8")
         test = output / "ExteraUIIconSettingsTests.swift"
-        source = repo / "Swiftgram/SGSimpleSettings/Tests/ExteraUIIconSettingsTests.swift"
+        source = repo / "AyuGram/SGSimpleSettings/Tests/ExteraUIIconSettingsTests.swift"
         test.write_text(source.read_text(encoding="utf-8").replace("import SGSimpleSettings\n", ""), encoding="utf-8")
         fixtures = output / "UIIconArchiveFixtures.swift"
         fixtures.write_text(fixture_source(), encoding="utf-8")
         sources = [
-            repo / "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconSettings.swift",
-            repo / "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconArchive.swift",
-            repo / "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconPackStore.swift",
-            repo / "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconVector.swift",
+            repo / "AyuGram/SGSimpleSettings/Sources/ExteraUIIconSettings.swift",
+            repo / "AyuGram/SGSimpleSettings/Sources/ExteraUIIconArchive.swift",
+            repo / "AyuGram/SGSimpleSettings/Sources/ExteraUIIconPackStore.swift",
+            repo / "AyuGram/SGSimpleSettings/Sources/ExteraUIIconVector.swift",
             repo / "Tests/ExteraUIIcons/ExteraUIIconPackStoreTests.swift",
             bindings, test, fixtures,
         ]

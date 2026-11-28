@@ -75,12 +75,12 @@ def main():
     entries = records()
     print('PASS: exact 24 Android languages/IDs/URLs/publisher pins/licenses and complete SHA-256/expansion catalogue')
     strings = json.loads((ROOT / 'docs/integration/extera-vosk-strings.json').read_text(encoding='utf-8'))
-    screen = (ROOT / 'Swiftgram/SGSettingsUI/Sources/ExteraVoskRecognitionController.swift').read_text(encoding='utf-8')
+    screen = (ROOT / 'AyuGram/SGSettingsUI/Sources/ExteraVoskRecognitionController.swift').read_text(encoding='utf-8')
     keys = {'Extera.Vosk.' + key for key in re.findall(r'self\.text\("([^"]+)"\)', screen)}
     assert keys == set(strings['en']) == set(strings['ru'])
     patch = (ROOT / 'docs/integration/extera-vosk-root.patch').read_text(encoding='utf-8')
     for language in ['en', 'ru']:
-        section = patch.split(f'diff --git a/Swiftgram/SGStrings/Strings/{language}.lproj/SGLocalizable.strings ', 1)[1].split('diff --git ', 1)[0]
+        section = patch.split(f'diff --git a/AyuGram/SGStrings/Strings/{language}.lproj/SGLocalizable.strings ', 1)[1].split('diff --git ', 1)[0]
         values = {key: json.loads(value) for key, value in re.findall(r'^\+"(Extera\.Vosk\.[^"]+)" = (".*");$', section, re.M)}
         assert values == strings[language]
     print('PASS: all 21 UI localization keys have exact English/Russian integration hunks')

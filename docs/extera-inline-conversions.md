@@ -48,7 +48,7 @@ disabled row and never invents a conversion. Copy/insertion excludes the date.
 
 The four Foundation-only engine/unit/zone/rate files remain at their existing
 paths. `//submodules/TelegramUI:ExteraMathSources` supplies them to the static
-`//Swiftgram/SGMath` module; TelegramUI excludes those four from its own source
+`//AyuGram/SGMath` module; TelegramUI excludes those four from its own source
 glob and imports SGMath. SGSettingsUI also imports SGMath, so the standalone
 `exteraInlineSettingsController(context:)` runs its help examples with the same
 parser and rate cache as the composer. `Options(settings:preview:)` centralizes

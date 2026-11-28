@@ -10,7 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
-# MARK: Swiftgram
+# MARK: AyuGram
 #        "//submodules/SSignalKit/SwiftSignalKit",
 #        "//submodules/LegacyComponents",
 #        "//submodules/AccountContext",

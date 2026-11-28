@@ -1,5 +1,7 @@
 import Foundation
 import UIKit
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 import SwiftSignalKit
 import AsyncDisplayKit
 import Display
@@ -906,6 +908,29 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     private let backgroundNode: NavigationBackgroundNode
     private let separatorNode: ASDisplayNode
     private let textBackgroundNode: ASDisplayNode
+    private var atmosphericHost: AtmosphericSurfaceHostView?
+
+    private func refreshAtmosphericSurface() {
+        MainActor.assumeIsolated { self.refreshAtmosphericSurfaceOnMainActor() }
+    }
+
+    @MainActor private func refreshAtmosphericSurfaceOnMainActor() {
+        // Glass/inline styles use their actual placeholder glass owner instead of this detached background node.
+        let rect = self.textBackgroundNode.bounds
+        let eligible = self.textBackgroundNode.supernode === self && rect.width >= 24.0 && rect.width <= 1200.0
+            && rect.height >= 22.0 && rect.height <= 120.0
+        let visible = eligible && !self.isAnimatingOut && !self.textBackgroundNode.isHidden
+            && AtmosphericSurfaceLayout.hierarchyAllowsDecoration(in: self.textBackgroundNode.view)
+        if self.atmosphericHost == nil && visible {
+            let host = AtmosphericSurfaceHostView(container: self.textBackgroundNode.view, role: .glassPill)
+            self.atmosphericHost = host
+            self.textBackgroundNode.view.addSubview(host)
+        }
+        self.atmosphericHost?.update(geometry: AtmosphericHostGeometry(
+            rect: rect, cornerRadius: self.textBackgroundNode.cornerRadius, visible: visible,
+            isDarkTheme: self.presentationTheme.overallDarkAppearance
+        ))
+    }
     private var activityIndicator: ActivityIndicator?
     private let iconNode: ASImageNode
     private let textField: SearchBarTextField
@@ -1159,6 +1184,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func updateLayout(boundingSize: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
+        defer { self.refreshAtmosphericSurface() }
         self.validLayout = (boundingSize, leftInset, rightInset)
         
         self.backgroundNode.frame = self.bounds
@@ -1281,6 +1307,8 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func animateIn(from node: SearchBarPlaceholderNode, duration: Double, timingFunction: String) {
+        self.isAnimatingOut = false
+        self.refreshAtmosphericSurface()
         guard let (boundingSize, leftInset, rightInset) = self.validLayout else {
             return
         }
@@ -1383,6 +1411,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     
     public func transitionOut(to node: SearchBarPlaceholderNode, transition: ContainedViewLayoutTransition, completion: @escaping () -> Void) {
         self.isAnimatingOut = true
+        self.refreshAtmosphericSurface()
         
         /*let targetTextBackgroundFrame = node.view.convert(node.backgroundView.frame, to: self.view)
         

@@ -1,0 +1,39 @@
+import SGSimpleSettings
+import Foundation
+import SwiftSignalKit
+
+// MARK: AyuGram
+// The current value of an Ayu setting, emitted again whenever the settings change.
+public func ayuSettingSignal<T: Equatable>(_ current: @escaping () -> T) -> Signal<T, NoError> {
+    let changes = Signal<T, NoError> { subscriber in
+        subscriber.putNext(current())
+        let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+            subscriber.putNext(current())
+        }
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    return changes |> distinctUntilChanged
+}
+
+// The current value of an Ayu setting of any equatable type, emitted again whenever the settings change.
+public func ayuSettingValueSignal<T: Equatable>(_ current: @escaping () -> T) -> Signal<T, NoError> {
+    let changes = Signal<T, NoError> { subscriber in
+        subscriber.putNext(current())
+        let observer = NotificationCenter.default.addObserver(forName: ayuSettingsDidChangeNotification, object: nil, queue: nil) { _ in
+            subscriber.putNext(current())
+        }
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    return changes |> distinctUntilChanged
+}
+
+// Whether the chat list title marks that ghost mode is on ("Display Ghost Mode Status").
+public func ayuGhostStatusSignal() -> Signal<Bool, NoError> {
+    return ayuSettingSignal {
+        return AyuGhostSettings.shared.displayGhostStatus && AyuGhostSettings.shared.isGhostModeActive
+    }
+}

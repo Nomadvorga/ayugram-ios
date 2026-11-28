@@ -1,4 +1,4 @@
-import SGSimpleSettings // MARK: Swiftgram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import AsyncDisplayKit
@@ -30,6 +30,10 @@ import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import ShimmerEffect
 import GlassBackgroundComponent
+import AyuDialogCards
+
+// The sender's mini avatar is drawn before the message text (updateMiniAvatar); the author-line variant stays off so a row never shows two.
+private let ayuAuthorLineMiniAvatars = false
 
 public enum ChatListItemContent {
     public final class ThreadInfo: Equatable {
@@ -853,7 +857,7 @@ private func revealOptions(strings: PresentationStrings, theme: PresentationThem
             }
         }
     }
-    if canDelete && !SGSimpleSettings.shared.disableDeleteChatSwipeOption { // MARK: Swiftgram
+    if canDelete && !SGSimpleSettings.shared.disableDeleteChatSwipeOption { // MARK: AyuGram
         options.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: strings.Common_Delete, icon: deleteIcon, color: theme.list.itemDisclosureActions.destructive.fillColor, iconColor: theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: theme.chatList.dateTextColor, isDestructive: true))
     }
     if case .savedMessagesChats = location {
@@ -941,7 +945,7 @@ private func forumThreadRevealOptions(strings: PresentationStrings, theme: Prese
             }
         }
     }
-    if canDelete && !SGSimpleSettings.shared.disableDeleteChatSwipeOption { // MARK: Swiftgram
+    if canDelete && !SGSimpleSettings.shared.disableDeleteChatSwipeOption { // MARK: AyuGram
         options.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: strings.Common_Delete, icon: deleteIcon, color: theme.list.itemDisclosureActions.destructive.fillColor, iconColor: theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: theme.chatList.dateTextColor, isDestructive: true))
     }
     if canOpenClose {
@@ -1284,6 +1288,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     public final class AuthorNode: ASDisplayNode {
         public let authorNode: TextNode
         var titleTopicArrowNode: ASImageNode?
+        var ayuSenderAvatarNode: AvatarNode? // MARK: AyuGram — Sender Mini Avatars
         var topicNodes: [Int64: TopicItemNode] = [:]
         var topicNodeOrder: [Int64] = []
         
@@ -1333,22 +1338,28 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
         }
         
-        func asyncLayout() -> (_ context: AccountContext, _ constrainedWidth: CGFloat, _ theme: PresentationTheme, _ authorTitle: NSAttributedString?, _ topics: [(id: Int64, threadPeer: EnginePeer?, title: NSAttributedString, iconId: Int64?, iconColor: Int32?)], _ arrowColor: UIColor?) -> (CGSize, () -> CGRect?) {
+        func asyncLayout() -> (_ context: AccountContext, _ constrainedWidth: CGFloat, _ theme: PresentationTheme, _ authorTitle: NSAttributedString?, _ topics: [(id: Int64, threadPeer: EnginePeer?, title: NSAttributedString, iconId: Int64?, iconColor: Int32?)], _ arrowColor: UIColor?, _ ayuSenderAvatarPeer: EnginePeer?) -> (CGSize, () -> CGRect?) {
             let makeAuthorLayout = TextNode.asyncLayout(self.authorNode)
             var makeExistingTopicLayouts: [Int64: (_ constrainedWidth: CGFloat, _ context: AccountContext, _ theme: PresentationTheme, _ threadId: Int64, _ threadPeer: EnginePeer?, _ title: NSAttributedString, _ iconId: Int64?, _ iconColor: Int32?) -> (CGSize, () -> TopicItemNode)] = [:]
             for (topicId, topicNode) in self.topicNodes {
                 makeExistingTopicLayouts[topicId] = TopicItemNode.asyncLayout(topicNode)
             }
             
-            return { [weak self] context, constrainedWidth, theme, authorTitle, topics, arrowColor in
+            return { [weak self] context, constrainedWidth, theme, authorTitle, topics, arrowColor, ayuSenderAvatarPeer in
                 var maxTitleWidth = constrainedWidth
                 if !topics.isEmpty {
                     maxTitleWidth = floor(constrainedWidth * 0.7)
                 }
+                // MARK: AyuGram — Sender Mini Avatars: an 18 pt avatar before the name, as on Android.
+                let ayuSenderAvatarSide: CGFloat = 18.0
+                let ayuSenderAvatarInset: CGFloat = (ayuSenderAvatarPeer != nil && authorTitle != nil) ? ayuSenderAvatarSide + 3.0 : 0.0
+                if !ayuSenderAvatarInset.isZero {
+                    maxTitleWidth = max(1.0, maxTitleWidth - ayuSenderAvatarInset)
+                }
                 
                 let authorTitleLayout = makeAuthorLayout(TextNodeLayoutArguments(attributedString: authorTitle, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: maxTitleWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 1.0, bottom: 2.0, right: 1.0)))
                 
-                var remainingWidth = constrainedWidth - authorTitleLayout.0.size.width
+                var remainingWidth = constrainedWidth - authorTitleLayout.0.size.width - ayuSenderAvatarInset // MARK: AyuGram
                 
                 var arrowIconImage: UIImage?
                 if !topics.isEmpty {
@@ -1378,6 +1389,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 }
                 
                 var size = authorTitleLayout.0.size
+                size.width += ayuSenderAvatarInset // MARK: AyuGram
                 if !topicsSizeAndApply.isEmpty {
                     for item in topicsSizeAndApply {
                         size.height = max(size.height, item.1.height)
@@ -1391,8 +1403,31 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     
                     let _ = authorTitleLayout.1()
-                    let authorFrame = CGRect(origin: CGPoint(), size: authorTitleLayout.0.size)
+                    let authorFrame = CGRect(origin: CGPoint(x: ayuSenderAvatarInset, y: 0.0), size: authorTitleLayout.0.size) // MARK: AyuGram
                     self.authorNode.frame = authorFrame
+                    
+                    // MARK: AyuGram — Sender Mini Avatars
+                    if let ayuSenderAvatarPeer, !ayuSenderAvatarInset.isZero {
+                        let avatarNode: AvatarNode
+                        if let current = self.ayuSenderAvatarNode {
+                            avatarNode = current
+                        } else {
+                            avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
+                            self.ayuSenderAvatarNode = avatarNode
+                            self.addSubnode(avatarNode)
+                        }
+                        let avatarSize = CGSize(width: ayuSenderAvatarSide, height: ayuSenderAvatarSide)
+                        avatarNode.frame = CGRect(origin: CGPoint(x: 1.0, y: floor((authorFrame.height - ayuSenderAvatarSide) / 2.0)), size: avatarSize)
+                        avatarNode.updateSize(size: avatarSize)
+                        if ayuSenderAvatarPeer.smallProfileImage != nil {
+                            avatarNode.setPeerV2(context: context, theme: theme, peer: ayuSenderAvatarPeer, overrideImage: nil, emptyColor: theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: false, displayDimensions: avatarSize)
+                        } else {
+                            avatarNode.setPeer(context: context, theme: theme, peer: ayuSenderAvatarPeer, overrideImage: nil, emptyColor: theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: false, displayDimensions: avatarSize)
+                        }
+                    } else if let avatarNode = self.ayuSenderAvatarNode {
+                        self.ayuSenderAvatarNode = nil
+                        avatarNode.removeFromSupernode()
+                    }
                     
                     var nextX = authorFrame.maxX - 1.0
                     if authorTitle == nil {
@@ -1469,6 +1504,42 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private let backgroundNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
+
+    /// Premium Dialog Cards route state (nil until the node view loads).
+    var ayuDialogCardRow: AyuDialogCardRow?
+
+    private func applyAyuDialogCardRow(style: AyuDialogCardsStyle?, peer: EnginePeer?, active: Bool, item: ChatListItem, isMuted: Bool, isOnline: Bool, contentSize: CGSize, itemHeight: CGFloat) {
+        guard active, let style = style, let peer = peer else {
+            self.ayuDialogCardRow?.update(nil)
+            self.onlineNode.isHidden = false
+            return
+        }
+        let strongSelf = self
+        let special: AyuDialogCardSpecial?
+        if peer.id == item.context.account.peerId {
+            special = .saved
+        } else if peer.id.toInt64() == AyuDialogCardsMetrics.servicePeerId {
+            special = .service
+        } else {
+            special = nil
+        }
+        let cardFrame = CGRect(
+            x: AyuDialogCardsMetrics.marginX,
+            y: AyuDialogCardsMetrics.marginY,
+            width: max(1.0, contentSize.width - AyuDialogCardsMetrics.marginX * 2.0),
+            height: max(1.0, itemHeight - AyuDialogCardsMetrics.marginY * 2.0)
+        )
+        strongSelf.ayuDialogCardRow?.update(AyuDialogCardInfo(
+            style: style,
+            peerId: peer.id.toInt64(),
+            special: special,
+            isMuted: isMuted,
+            isOnline: isOnline,
+            frame: cardFrame,
+            avatarImage: strongSelf.avatarNode.imageNode.image
+        ))
+        strongSelf.onlineNode.isHidden = !style.showsOnlineBadge
+    }
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -1637,7 +1708,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if peerData.hasUnseenMentions {
                         result += "\n\(item.presentationData.strings.VoiceOver_ChatList_UnreadMentions)"
                     }
-                    if peerData.hasUnseenReactions {
+                    if peerData.hasUnseenReactions, !ayuHidesReactions(inChatWith: peerData.peer.peer?._asPeer()) { // MARK: AyuGram
                         result += "\n\(item.presentationData.strings.VoiceOver_ChatList_UnreadReactions)"
                     }
                     if self.accessibilityIsPinned {
@@ -1981,6 +2052,14 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             let avatarTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.avatarStoryTapGesture(_:)))
             self.avatarTapRecognizer = avatarTapRecognizer
             self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
+
+            self.ayuDialogCardRow = AyuDialogCardRow(hostView: self.view, separatorLayer: self.separatorNode.layer)
+            self.avatarNode.contentNode.imageUpdated = { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.ayuDialogCardRow?.updateAvatarImage(self.avatarNode.imageNode.image)
+            }
         }
     }
 
@@ -2008,7 +2087,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         } else if case let .groupReference(groupReference) = item.content {
             storyState = groupReference.storyState
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgCompactChatList = SGSimpleSettings.shared.compactChatList && !item.interaction.isSideListMode
         let sgCompactMessagePreview = SGCompactMessagePreviewLayout.isEnabled() && !item.interaction.isSideListMode
         let sgAvatarScaleDivisor: CGFloat = SGCompactMessagePreviewLayout.avatarScaleDivisor(compactChatList: sgCompactChatList, compactMessagePreview: sgCompactMessagePreview)
@@ -2190,7 +2269,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     isForumAvatar = true
                 }
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             var avatarDiameter = min(60.0, floor(item.presentationData.fontSize.baseDisplaySize * 60.0 / 17.0)) / sgAvatarScaleDivisor
             
             if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
@@ -2489,13 +2568,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         let currentChatListQuoteSearchResult = self.cachedChatListQuoteSearchResult
         let currentCustomTextEntities = self.cachedCustomTextEntities
         
-        return { [weak self] item, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls in
-            // MARK: Swiftgram — Side-list rows already fit their content and use inline avatars.
+        return { [weak self] (item: ChatListItem, params: ListViewItemLayoutParams, first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) in
+            // MARK: AyuGram — Side-list rows already fit their content and use inline avatars.
             let sgCompactChatList = SGSimpleSettings.shared.compactChatList && !item.interaction.isSideListMode
             let sgCompactMessagePreview = SGCompactMessagePreviewLayout.isEnabled() && !item.interaction.isSideListMode
             let sgAvatarScaleDivisor: CGFloat = SGCompactMessagePreviewLayout.avatarScaleDivisor(compactChatList: sgCompactChatList, compactMessagePreview: sgCompactMessagePreview)
             //
-            let titleFont = Font.medium(floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0)) // MARK: Swiftgram
+            let titleFont = Font.medium(floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0)) // MARK: AyuGram
             let textFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
             let italicTextFont = Font.italic(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
             let dateFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0))
@@ -2598,7 +2677,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     mediaDraftContentType = peerData.mediaDraftContentType
                     threadInfo = threadInfoValue
                     hasUnseenMentions = hasUnseenMentionsValue
-                    hasUnseenReactions = hasUnseenReactionsValue
+                    hasUnseenReactions = hasUnseenReactionsValue && !ayuHidesReactions(inChatWith: peerValue.peer?._asPeer()) // MARK: AyuGram (exteraGram hide-reactions toggles)
                     hasUnseenPollVotes = hasUnseenPollVotesValue
                     forumTopicData = forumTopicDataValue
                     topForumTopicItems = topForumTopicItemsValue
@@ -2763,7 +2842,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             let enableChatListPhotos = true
-            // MARK: Swiftgram
+            // MARK: AyuGram
             // if changed, adjust setupItem accordingly
             var avatarDiameter = min(60.0, floor(item.presentationData.fontSize.baseDisplaySize * 60.0 / 17.0)) / sgAvatarScaleDivisor
             let avatarLeftEdgeInset: CGFloat = item.useCommunityViewLayout ? 10.0 : 16.0
@@ -2841,7 +2920,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     contentData = .group(peers: groupPeers)
                     hideAuthor = true
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             let sgOriginalHideAuthor = hideAuthor
             let sgInlineAuthorPrefix = sgCompactMessagePreview && !hideAuthor
             if sgCompactChatList || sgCompactMessagePreview { hideAuthor = true };
@@ -2875,7 +2954,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                 }
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if sgCompactChatList || sgInlineAuthorPrefix { useInlineAuthorPrefix = true };
             //
             
@@ -2905,7 +2984,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             var communitySource: (peer: EnginePeer, title: String, placement: ChatListCommunitySourcePlacement)?
-            if case let .peer(peerData) = item.content, let message = messages.last, let source = chatListCommunitySource(chatPeer: peerData.peer, message: message, hasTags: !itemTags.isEmpty || sgCompactChatList || sgCompactMessagePreview /* MARK: Swiftgram — Keep the source in the single-line preview. */) {
+            if case let .peer(peerData) = item.content, let message = messages.last, let source = chatListCommunitySource(chatPeer: peerData.peer, message: message, hasTags: !itemTags.isEmpty || sgCompactChatList || sgCompactMessagePreview /* MARK: AyuGram — Keep the source in the single-line preview. */) {
                 let sourceTitle = source.peer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                 if !sourceTitle.isEmpty {
                     communitySource = (source.peer, sourceTitle, source.placement)
@@ -2949,6 +3028,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             var messageTypeIcon: MessageTypeIcon?
             var ignoreForwardedIcon = false
+            var ayuSenderAvatarPeer: EnginePeer? // MARK: AyuGram — Sender Mini Avatars
             
             switch contentData {
                 case let .chat(itemPeer, _, _, _, text, entities, spoilers, customEmojiRanges, richTextPreview):
@@ -2986,6 +3066,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 } else {
                                     peerText = author.id == account.peerId ? item.presentationData.strings.DialogList_You : EnginePeer(author).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                                     authorIsCurrentChat = !isGuestChatAuthor && author.id == peer.id
+                                    ayuSenderAvatarPeer = author.id == account.peerId ? nil : message.author // MARK: AyuGram
                                 }
                             }
                         }
@@ -3010,6 +3091,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         if let effectiveAuthor, effectiveAuthor.id != itemPeer.chatMainPeer?.id {
                             authorIsCurrentChat = false
                             peerText = EnginePeer(effectiveAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
+                            ayuSenderAvatarPeer = nil // MARK: AyuGram
                             ignoreForwardedIcon = true
                         }
                     }
@@ -3157,7 +3239,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                         if let communitySource, case .previewPrefix = communitySource.placement {
                             let communityPrefix = NSMutableAttributedString()
-                            let authorTitle = (sgOriginalHideAuthor || authorIsCurrentChat) ? nil : peerText // MARK: Swiftgram — Compact layout hides the author line, not the inline author.
+                            let authorTitle = (sgOriginalHideAuthor || authorIsCurrentChat) ? nil : peerText // MARK: AyuGram — Compact layout hides the author line, not the inline author.
                             if let author = chatListCommunityPreviewAuthor(authorTitle: authorTitle, authorId: message.author?.id, sourcePeerId: communitySource.peer.id) {
                                 communityPrefix.append(NSAttributedString(string: author, font: textFont, textColor: theme.titleColor))
                                 // The author line draws this arrow as an image, tinted like this.
@@ -3829,7 +3911,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_ScamAccount.uppercased())
                             } else if peer.isFake {
                                 currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_FakeAccount.uppercased())
-                            } else if let emojiStatus = peer.emojiStatus {
+                            } else if let emojiStatus = peer.emojiStatus ?? ayuExteraBadgeEmojiStatus(for: peer) { // MARK: AyuGram
                                 currentStatusIconContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(2))
                                 if let color = emojiStatus.color {
                                     currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
@@ -3860,7 +3942,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_ScamAccount.uppercased())
                     } else if peer.isFake {
                         currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_FakeAccount.uppercased())
-                    } else if let emojiStatus = peer.emojiStatus {
+                    } else if let emojiStatus = peer.emojiStatus ?? ayuExteraBadgeEmojiStatus(for: peer) { // MARK: AyuGram
                         currentStatusIconContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(2))
                         if let color = emojiStatus.color {
                             currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
@@ -4058,7 +4140,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 authorTopicArrowColor = theme.messageTextColor
             }
 
-            let (authorLayout, authorApply) = authorLayout(item.context, rawContentWidth - badgeSize, item.presentationData.theme, effectiveAuthorTitle, forumThreads, authorTopicArrowColor)
+            // MARK: AyuGram — Sender Mini Avatars: only next to a sender's name on the author line.
+            let ayuAuthorLineAvatarPeer: EnginePeer? = (ayuAuthorLineMiniAvatars && ExteraSettings.shared.senderMiniAvatars && !hasDraft && effectiveAuthorTitle != nil) ? ayuSenderAvatarPeer : nil
+            let (authorLayout, authorApply) = authorLayout(item.context, rawContentWidth - badgeSize, item.presentationData.theme, effectiveAuthorTitle, forumThreads, authorTopicArrowColor, ayuAuthorLineAvatarPeer)
             
             var textBottomRightCutout: CGFloat = 0.0
             
@@ -4098,7 +4182,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             let textLineSpacing: CGFloat = min(0.2, item.presentationData.fontSize.itemListBaseFontSize * 0.2 / 17.0)
-            // MARK: Swiftgram
+            // MARK: AyuGram
             let sgChatListMaxLines: Int
             if sgCompactMessagePreview {
                 sgChatListMaxLines = 1
@@ -4109,7 +4193,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             let (textLayout, textApply) = textLayout(TextNodeLayoutArguments(
                 attributedString: textAttributedString,
                 backgroundColor: nil,
-                maximumNumberOfLines: sgChatListMaxLines, // MARK: Swiftgram
+                maximumNumberOfLines: sgChatListMaxLines, // MARK: AyuGram
                 truncationType: .end,
                 constrainedSize: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
                 alignment: .natural,
@@ -4121,7 +4205,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             let maxTitleLines: Int
             switch item.index {
             case .forum:
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 if sgCompactChatList { maxTitleLines = 1 } else {
                 maxTitleLines = 2
                 }
@@ -4173,6 +4257,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             var online = false
+            var ayuCardOnline = false
             var animateOnline = false
             var onlineIsVoiceChat = false
             
@@ -4204,6 +4289,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             let relativeStatus = relativeUserPresenceStatus(updatedPresence, relativeTo: timestamp)
                             if case .online = relativeStatus {
                                 online = true
+                                ayuCardOnline = peer.botInfo == nil
                             }
                             animateOnline = true
                         } else if case let .channel(channel) = renderedPeer.peer, case .chatList = item.index {
@@ -4253,7 +4339,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 peerRevealOptions = [
                                     ItemListRevealOption(key: RevealOptionKey.hidePsa.rawValue, title: item.presentationData.strings.ChatList_HideAction, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.inactive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
                                 ]
-                                // MARK: Swiftgram
+                                // MARK: AyuGram
                                 if SGSimpleSettings.shared.disableDeleteChatSwipeOption { peerRevealOptions.removeLast() }
                                 peerLeftRevealOptions = []
                             } else if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
@@ -4263,7 +4349,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                         ItemListRevealOption(key: RevealOptionKey.edit.rawValue, title: item.presentationData.strings.ChatList_ItemMenuEdit, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor),
                                         ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.ChatList_ItemMenuDelete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor, isDestructive: true)
                                     ]
-                                    // MARK: Swiftgram
+                                    // MARK: AyuGram
                                     if SGSimpleSettings.shared.disableDeleteChatSwipeOption { peerRevealOptions.removeLast() }
                                 } else {
                                     peerRevealOptions = []
@@ -4359,7 +4445,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 peerRevealOptions = []
                 peerLeftRevealOptions = []
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if sgCompactChatList {
                 peerRevealOptions = peerRevealOptions.map { option in
                     ItemListRevealOption(key: option.key, title: option.title, icon: .none, color: option.color, iconColor: option.iconColor, textColor: option.textColor, isDestructive: option.isDestructive)
@@ -4395,7 +4481,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 itemHeight += titleSpacing
                 itemHeight += authorSpacing
             }
-            itemHeight = itemHeight / (sgCompactChatList ? 1.5 : 1.0) // MARK: Swiftgram
+            itemHeight = itemHeight / (sgCompactChatList ? 1.5 : 1.0) // MARK: AyuGram
                         
             // A side-list row centers its title and preview between the paddings.
             let sideListContentOffset: CGFloat = (item.isSideListCompactPeerRow || (item.interaction.isSideListMode && item.interaction.isInlineMode)) ? 4.0 : 0.0
@@ -4563,7 +4649,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     var avatarScaleOffset: CGFloat = 0.0
                     var avatarScale: CGFloat = 1.0
                     if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         let targetAvatarScale: CGFloat = floor(item.presentationData.fontSize.itemListBaseFontSize * 54.0 / 17.0) / sgAvatarScaleDivisor / avatarFrame.width
                         avatarScale = targetAvatarScale * inlineNavigationLocation.progress + 1.0 * (1.0 - inlineNavigationLocation.progress)
                         
@@ -4972,7 +5058,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.statusNode.fontSize = item.presentationData.fontSize.itemListBaseFontSize
                     let _ = strongSelf.statusNode.transitionToState(statusState, animated: animateContent)
                     
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     let sizeFactor = item.presentationData.fontSize.itemListBaseFontSize / 17.0
                     let sgCompactMessagePreviewBadgeOffset = SGCompactMessagePreviewLayout.badgeOffset(sizeFactor: sizeFactor, compactMessagePreview: sgCompactMessagePreview, compactChatList: sgCompactChatList)
                     //
@@ -4980,7 +5066,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     let rightAccessoryVerticalOffset: CGFloat = floorToScreenPixels(-4.0 * min(1.0, item.presentationData.fontSize.itemListBaseFontSize / 17.0))
                     var nextBadgeX: CGFloat = contentRect.maxX
                     if let _ = currentBadgeBackgroundImage {
-                        let badgeFrame = CGRect(x: nextBadgeX - badgeLayout.width, y: contentRect.maxY - badgeLayout.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: badgeLayout.width, height: badgeLayout.height) // MARK: Swiftgram
+                        let badgeFrame = CGRect(x: nextBadgeX - badgeLayout.width, y: contentRect.maxY - badgeLayout.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: badgeLayout.width, height: badgeLayout.height) // MARK: AyuGram
                         
                         transition.updateFrame(node: strongSelf.badgeNode, frame: badgeFrame)
                         nextBadgeX -= badgeLayout.width + 6.0
@@ -4991,7 +5077,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                     }
                     if currentMentionBadgeImage != nil || currentBadgeBackgroundImage != nil {
-                        let badgeFrame = CGRect(x: nextBadgeX - mentionBadgeLayout.width, y: contentRect.maxY - mentionBadgeLayout.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: mentionBadgeLayout.width, height: mentionBadgeLayout.height) // MARK: Swiftgram
+                        let badgeFrame = CGRect(x: nextBadgeX - mentionBadgeLayout.width, y: contentRect.maxY - mentionBadgeLayout.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: mentionBadgeLayout.width, height: mentionBadgeLayout.height) // MARK: AyuGram
                         
                         transition.updateFrame(node: strongSelf.mentionBadgeNode, frame: badgeFrame)
                         nextBadgeX -= mentionBadgeLayout.width + 6.0
@@ -5007,7 +5093,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.pinnedIconNode.isHidden = false
                         
                         let pinnedIconSize = currentPinnedIconImage.size
-                        let pinnedIconFrame = CGRect(x: nextBadgeX - pinnedIconSize.width, y: contentRect.maxY - pinnedIconSize.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: pinnedIconSize.width, height: pinnedIconSize.height) // MARK: Swiftgram
+                        let pinnedIconFrame = CGRect(x: nextBadgeX - pinnedIconSize.width, y: contentRect.maxY - pinnedIconSize.height + rightAccessoryVerticalOffset + (sgCompactChatList ? 13.0 / sizeFactor : 0.0) - sgCompactMessagePreviewBadgeOffset, width: pinnedIconSize.width, height: pinnedIconSize.height) // MARK: AyuGram
                         
                         strongSelf.pinnedIconNode.frame = pinnedIconFrame
                         nextBadgeX -= pinnedIconSize.width + 6.0
@@ -5021,7 +5107,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         let actionButtonTopInset = floor(item.presentationData.fontSize.itemListBaseFontSize * 5.0 / 17.0)
                         let actionButtonBottomInset = floor(item.presentationData.fontSize.itemListBaseFontSize * 4.0 / 17.0)
                         
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         var actionButtonSize = CGSize(width: actionButtonTitleNodeLayout.size.width + actionButtonSideInset * 2.0, height: actionButtonTitleNodeLayout.size.height + actionButtonTopInset + actionButtonBottomInset)
                         let sgActionButtonScaleDivisor: CGFloat = sgCompactChatList ? 1.5 : 1.0
                         if sgCompactChatList {
@@ -5073,7 +5159,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         actionButtonNode.isUserInteractionEnabled = true
                         actionButtonNode.frame = actionButtonFrame
                         actionButtonBackgroundView.frame = CGRect(origin: CGPoint(), size: actionButtonFrame.size)
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         let sgActionButtonTitleYOffset: CGFloat = sgCompactChatList ? floorToScreenPixels(1.0 * sizeFactor) : 0.0
                         actionButtonTitleNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels(max(0.0, (actionButtonFrame.width - actionButtonTitleNodeLayout.size.width) * 0.5)), y: floorToScreenPixels((actionButtonFrame.height - actionButtonTitleNodeLayout.size.height) * 0.5 + sgActionButtonTitleYOffset)), size: actionButtonTitleNodeLayout.size)
                         //
@@ -5110,7 +5196,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                     }
                     
-                    // MARK: Swiftgram
+                    // MARK: AyuGram
                     let sgCompactMessagePreviewVerticalOffset: CGFloat = SGCompactMessagePreviewLayout.textVerticalOffset(sizeFactor: sizeFactor, compactMessagePreview: sgCompactMessagePreview, compactChatList: sgCompactChatList, hasAuthorLine: !authorLayout.height.isZero)
                     let sgCompactMessagePreviewTitleTextSpacing: CGFloat = SGCompactMessagePreviewLayout.titleTextSpacing(sizeFactor: sizeFactor, compactMessagePreview: sgCompactMessagePreview, compactChatList: sgCompactChatList, hasAuthorLine: !authorLayout.height.isZero)
                     //
@@ -5128,7 +5214,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             strongSelf.secretIconNode = iconNode
                         }
                         iconNode.image = currentSecretIconImage
-                        transition.updateFrame(node: iconNode, frame: CGRect(origin: CGPoint(x: contentRect.origin.x + titleLeftOffset, y: contentRect.origin.y + floor((titleLayout.size.height - currentSecretIconImage.size.height) / 2.0) + sgCompactMessagePreviewVerticalOffset), size: currentSecretIconImage.size)) // MARK: Swiftgram
+                        transition.updateFrame(node: iconNode, frame: CGRect(origin: CGPoint(x: contentRect.origin.x + titleLeftOffset, y: contentRect.origin.y + floor((titleLayout.size.height - currentSecretIconImage.size.height) / 2.0) + sgCompactMessagePreviewVerticalOffset), size: currentSecretIconImage.size)) // MARK: AyuGram
                         titleOffset += currentSecretIconImage.size.width + 3.0
                     } else if let secretIconNode = strongSelf.secretIconNode {
                         strongSelf.secretIconNode = nil
@@ -5136,12 +5222,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     
                     let contentDelta = CGPoint(x: contentRect.origin.x - (strongSelf.titleNode.frame.minX - titleOffset), y: contentRect.origin.y - (strongSelf.titleNode.frame.minY - UIScreenPixel))
-                    let titleFrame = CGRect(origin: CGPoint(x: contentRect.origin.x + titleOffset, y: contentRect.origin.y + UIScreenPixel + sgCompactMessagePreviewVerticalOffset), size: titleLayout.size) // MARK: Swiftgram
+                    let titleFrame = CGRect(origin: CGPoint(x: contentRect.origin.x + titleOffset, y: contentRect.origin.y + UIScreenPixel + sgCompactMessagePreviewVerticalOffset), size: titleLayout.size) // MARK: AyuGram
                     strongSelf.titleNode.frame = titleFrame
                     
-                    let authorNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0 + sgCompactMessagePreviewVerticalOffset), size: authorLayout) // MARK: Swiftgram
+                    let authorNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0 + sgCompactMessagePreviewVerticalOffset), size: authorLayout) // MARK: AyuGram
                     strongSelf.authorNode.frame = authorNodeFrame
-                    let textNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0 + (authorLayout.height.isZero ? 0.0 : (authorLayout.height - 3.0)) + sgCompactMessagePreviewVerticalOffset + sgCompactMessagePreviewTitleTextSpacing), size: textLayout.size) // MARK: Swiftgram
+                    let textNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0 + (authorLayout.height.isZero ? 0.0 : (authorLayout.height - 3.0)) + sgCompactMessagePreviewVerticalOffset + sgCompactMessagePreviewTitleTextSpacing), size: textLayout.size) // MARK: AyuGram
                     strongSelf.updateMiniAvatar(peer: miniAvatarPeer, item: item, frame: CGRect(x: textNodeFrame.minX + 1.0, y: textNodeFrame.minY + 2.0 + floorToScreenPixels((textFont.lineHeight - miniAvatarDiameter) * 0.5), width: miniAvatarDiameter, height: miniAvatarDiameter), synchronousLoads: synchronousLoads, transition: transition)
                     
                     if let topForumTopicRect, !isSearching {
@@ -5324,11 +5410,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     if !itemTags.isEmpty {
                         let sizeFactor = item.presentationData.fontSize.itemListBaseFontSize / 17.0
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         let sgCompactMessagePreviewTagListOffset = max(0.0, SGCompactMessagePreviewLayout.textBlockOffset(sizeFactor: sizeFactor, compactMessagePreview: sgCompactMessagePreview, compactChatList: sgCompactChatList, hasAuthorLine: false) - floorToScreenPixels(4.0 * sizeFactor))
                         //
                         
-                        let itemTagListFrame = CGRect(origin: CGPoint(x: contentRect.minX, y: contentRect.minY + measureLayout.size.height * 2.0 + floorToScreenPixels(2.0 * sizeFactor) + sgCompactMessagePreviewTagListOffset), size: CGSize(width: contentRect.width, height: floorToScreenPixels(20.0 * sizeFactor))) // MARK: Swiftgram
+                        let itemTagListFrame = CGRect(origin: CGPoint(x: contentRect.minX, y: contentRect.minY + measureLayout.size.height * 2.0 + floorToScreenPixels(2.0 * sizeFactor) + sgCompactMessagePreviewTagListOffset), size: CGSize(width: contentRect.width, height: floorToScreenPixels(20.0 * sizeFactor))) // MARK: AyuGram
                         
                         var itemTagListTransition = transition
                         let itemTagList: ComponentView<Empty>
@@ -5752,6 +5838,22 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     let leftSeparatorInset: CGFloat
                     let rightSeparatorInset: CGFloat
+                    // MARK: AyuGram Premium Dialog Cards
+                    let ayuCardStyle: AyuDialogCardsStyle? = AyuDialogCardsState.shared.style
+                    var ayuCardPeer: EnginePeer?
+                    if case let .chat(renderedPeer) = contentPeer {
+                        ayuCardPeer = renderedPeer.chatOrMonoforumMainPeer
+                    }
+                    var ayuCardActive: Bool = false
+                    if let style = ayuCardStyle, style.isEnabled, ayuCardPeer != nil,
+                       item.presentationData.theme.overallDarkAppearance,
+                       !item.interaction.isSearchMode, !item.interaction.isSideListMode,
+                       item.interaction.inlineNavigationLocation == nil {
+                        if case .chatList = item.chatListLocation {
+                            ayuCardActive = true
+                        }
+                    }
+
                     let hideCommunitySeparator = item.useCommunityViewLayout && last
                     // Separators stay out of the side safe areas. The content-aligned ones end 16pt
                     // before the right inset; the full-width ones run to the edge unless there is a
@@ -5789,11 +5891,15 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         // The side list ends without a closing separator.
                         strongSelf.separatorNode.isHidden = true
                     }
+                    if ayuCardActive {
+                        // The card replaces the flat row background and divider.
+                        strongSelf.separatorNode.isHidden = true
+                    }
                     strongSelf.separatorBaseIsHidden = strongSelf.separatorNode.isHidden
                     strongSelf.updateSideListSeparatorVisibility()
                     
                     transition.updateFrame(node: strongSelf.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: itemHeight)))
-                    let backgroundColor: UIColor
+                    var backgroundColor: UIColor
                     let highlightedBackgroundColor: UIColor
                     if item.selected {
                         backgroundColor = theme.itemSelectedBackgroundColor
@@ -5816,6 +5922,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
+                    if ayuCardActive {
+                        backgroundColor = .clear
+                    }
+
                     if animated {
                         transition.updateBackgroundColor(node: strongSelf.backgroundNode, color: backgroundColor)
                     } else {
@@ -5828,6 +5938,18 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0)
                     }
                     
+                    // MARK: AyuGram Premium Dialog Cards
+                    strongSelf.applyAyuDialogCardRow(
+                        style: ayuCardStyle,
+                        peer: ayuCardPeer,
+                        active: ayuCardActive,
+                        item: item,
+                        isMuted: isMuted,
+                        isOnline: ayuCardOnline,
+                        contentSize: layout.contentSize,
+                        itemHeight: itemHeight
+                    )
+
                     // The side list's plate matches its search field.
                     strongSelf.highlightedBackgroundNode.backgroundColor = item.interaction.isSideListMode ? item.presentationData.theme.rootController.navigationSearchBar.inputFillColor : highlightedBackgroundColor
                     let topNegativeInset: CGFloat = 0.0
@@ -5849,7 +5971,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: CGSize(width: layout.contentSize.width, height: itemHeight), leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    if item.editing || SGSimpleSettings.shared.disableChatSwipeOptions { // MARK: Swiftgram
+                    if item.editing || SGSimpleSettings.shared.disableChatSwipeOptions { // MARK: AyuGram
                         strongSelf.setRevealOptions((left: [], right: []), enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
                     } else {
                         strongSelf.setRevealOptions((left: peerLeftRevealOptions, right: peerRevealOptions), enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
@@ -6081,7 +6203,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         miniAvatarNode.updateSize(size: frame.size)
         let ringFrame = frame.insetBy(dx: -1.0, dy: -1.0)
         transition.updateFrame(node: miniAvatarBackgroundNode, frame: ringFrame)
-        miniAvatarBackgroundNode.cornerRadius = ringFrame.width * 0.5
+        // The avatar is drawn with the "Avatar Corners" shape; its backing follows it.
+        miniAvatarBackgroundNode.cornerRadius = ExteraSettings.shared.avatarCornerRadius(side: ringFrame.width) ?? ringFrame.width * 0.5
         miniAvatarBackgroundNode.backgroundColor = item.isPinned ? item.presentationData.theme.chatList.pinnedItemBackgroundColor : item.presentationData.theme.chatList.itemBackgroundColor
     }
 

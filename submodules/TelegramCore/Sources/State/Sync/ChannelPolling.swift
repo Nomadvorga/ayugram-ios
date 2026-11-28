@@ -385,14 +385,26 @@ func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Network, peer
             }
         })
         |> retryRequest
-        |> mapToSignal { difference -> Signal<ChannelPollOutcome, NoError> in
+        // MARK: AyuGram
+        |> mapToSignal { difference -> Signal<(Api.updates.ChannelDifference?, [Api.Update]?), NoError> in
+            guard let difference, case let .channelDifference(channelDifferenceData) = difference else {
+                return .single((difference, nil))
+            }
+            return ayuPluginHookedDifferenceUpdates(accountPeerId: accountPeerId, updates: channelDifferenceData.otherUpdates)
+            |> map { updates -> (Api.updates.ChannelDifference?, [Api.Update]?) in
+                return (difference, updates)
+            }
+        }
+        //
+        |> mapToSignal { ayuPluginHooked -> Signal<ChannelPollOutcome, NoError> in
+            let (difference, ayuPluginOtherUpdates) = ayuPluginHooked
             guard let difference = difference else {
                 return .single(.channelUnavailable(state))
             }
             
             switch difference {
             case let .channelDifference(channelDifferenceData):
-                let (_, pts, timeout, newMessages, otherUpdates, chats, users) = (channelDifferenceData.flags, channelDifferenceData.pts, channelDifferenceData.timeout, channelDifferenceData.newMessages, channelDifferenceData.otherUpdates, channelDifferenceData.chats, channelDifferenceData.users)
+                let (_, pts, timeout, newMessages, otherUpdates, chats, users) = (channelDifferenceData.flags, channelDifferenceData.pts, channelDifferenceData.timeout, channelDifferenceData.newMessages, ayuPluginOtherUpdates ?? channelDifferenceData.otherUpdates, channelDifferenceData.chats, channelDifferenceData.users)
                 var updatedState = state
                 var apiTimeout: Int32?
                 

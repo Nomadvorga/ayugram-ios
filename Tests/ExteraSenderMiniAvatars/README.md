@@ -15,7 +15,7 @@ with Swift/XCTest:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift \
   Tests/ExteraSenderMiniAvatars/ExteraSenderMiniAvatarPolicyTests.swift
 ```
 

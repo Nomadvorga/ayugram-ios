@@ -11,10 +11,10 @@ Run from the repository root on a host with Swift and Foundation (macOS recommen
 ```sh
 OUT="$(mktemp -d)"
 swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift \
   Tests/ExteraPills/ExteraPillHostTests.swift \
   -o "$OUT/ExteraPillHostTests"
 "$OUT/ExteraPillHostTests"
@@ -25,10 +25,10 @@ Windows PowerShell, if a Swift toolchain is installed:
 ```powershell
 $pillTestBinary = Join-Path $env:TEMP "ExteraPillHostTests-$([guid]::NewGuid()).exe"
 swiftc -swift-version 5 -warnings-as-errors -parse-as-library `
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift `
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift `
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift `
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift `
+  AyuGram/SGSimpleSettings/Sources/ExteraPillSettings.swift `
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStrings.swift `
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift `
+  AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift `
   Tests/ExteraPills/ExteraPillHostTests.swift -o $pillTestBinary
 if ($LASTEXITCODE -eq 0) { & $pillTestBinary }
 ```
@@ -67,10 +67,10 @@ Swift, run it from the repository root:
 ```sh
 OUT="$(mktemp -d)"
 swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift \
   Tests/ExteraPills/ParityHostTests.swift \
   -o "$OUT/ParityHostTests"
 "$OUT/ParityHostTests"

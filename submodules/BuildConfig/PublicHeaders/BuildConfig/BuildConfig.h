@@ -11,7 +11,7 @@
 
 - (instancetype _Nonnull)initWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId;
 
-@property (nonatomic, strong, readonly) NSString * _Nonnull sgConfig; // MARK: Swiftgram
+@property (nonatomic, strong, readonly) NSString * _Nonnull sgConfig; // MARK: AyuGram
 @property (nonatomic, readonly) int32_t apiId;
 @property (nonatomic, strong, readonly) NSString * _Nonnull apiHash;
 @property (nonatomic, readonly) bool isInternalBuild;

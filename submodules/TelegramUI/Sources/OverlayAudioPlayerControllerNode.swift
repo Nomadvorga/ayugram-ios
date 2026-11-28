@@ -1,4 +1,5 @@
 import Foundation
+import SGStrings
 import UIKit
 import Display
 import AsyncDisplayKit

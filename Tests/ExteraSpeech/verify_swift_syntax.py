@@ -13,7 +13,7 @@ FILES = SOURCES + [
     "submodules/Media/LocalAudioTranscription/Sources/AppleSpeechAssetInventory.swift",
     "submodules/Media/LocalAudioTranscription/Sources/ExteraSpeechRecognition.swift",
     "submodules/Media/LocalAudioTranscription/Sources/LocalAudioTranscription.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraSpeechRecognitionController.swift",
     "submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift",
 ]
 PARSER = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))

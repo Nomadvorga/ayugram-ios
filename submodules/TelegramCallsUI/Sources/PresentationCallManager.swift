@@ -285,15 +285,19 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
             }
         }
         
+        // MARK: AyuGram
+        // Calls skip the proxy too while "Disable Proxy" bypasses it.
         self.proxyServerDisposable = (accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
-        |> deliverOnMainQueue).start(next: { [weak self] sharedData in
-            if let strongSelf = self, let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) {
-                if settings.enabled && settings.useForCalls {
-                    strongSelf.proxyServer = settings.activeServer
-                } else {
-                    strongSelf.proxyServer = nil
-                }
+        |> map { sharedData -> ProxyServerSettings? in
+            if let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self), settings.enabled && settings.useForCalls {
+                return settings.activeServer
+            } else {
+                return nil
             }
+        }
+        |> ayuProxyAutoDisabled
+        |> deliverOnMainQueue).start(next: { [weak self] proxyServer in
+            self?.proxyServer = proxyServer
         })
         
         self.callSettingsDisposable = (accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.voiceCallSettings])

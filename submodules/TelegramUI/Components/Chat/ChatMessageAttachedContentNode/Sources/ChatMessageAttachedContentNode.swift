@@ -33,6 +33,7 @@ import PlainButtonComponent
 import BundleIconComponent
 import AvatarNode
 import EmojiTextAttachmentView
+import SGSimpleSettings // MARK: AyuGram
 
 public enum ChatMessageAttachedContentActionIcon {
     case instant
@@ -256,7 +257,7 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
                 }
             }
             
-            let nameColors: PeerNameColors.Colors?
+            var nameColors: PeerNameColors.Colors? // MARK: AyuGram: var
             var giftEmojiFileId: Int64?
             switch author?.nameColor {
             case let .preset(nameColor):
@@ -269,6 +270,17 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
             default:
                 nameColors = nil
             }
+            // MARK: AyuGram: exteraGram's "Reply Elements" (ReplyMessageLine.check, TYPE_LINK); all three are on by default.
+            // The background toggle only reaches incoming link blocks there.
+            let exteraReplyEmoji = ExteraSettings.shared.replyEmoji
+            let exteraTransparentBlock = incoming && !ExteraSettings.shared.replyBackground
+            if !ExteraSettings.shared.replyColors {
+                nameColors = nil
+            }
+            if !exteraReplyEmoji {
+                giftEmojiFileId = nil
+            }
+            //
             
             let mainColor: UIColor
             var secondaryColor: UIColor?
@@ -1616,7 +1628,7 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
                             var pattern: MessageInlineBlockBackgroundView.Pattern?
                             if let _ = message.media.first(where: { $0 is TelegramMediaPoll }) {
                                 
-                            } else if let backgroundEmojiId = author?.backgroundEmojiId {
+                            } else if exteraReplyEmoji, let backgroundEmojiId = author?.backgroundEmojiId { // MARK: AyuGram
                                 pattern = MessageInlineBlockBackgroundView.Pattern(
                                     context: context,
                                     fileId: backgroundEmojiId,
@@ -1632,13 +1644,13 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
                             if let current = self.backgroundView {
                                 backgroundView = current
                                 animation.animator.updateFrame(layer: backgroundView.layer, frame: backgroundFrame, completion: nil)
-                                backgroundView.update(size: backgroundFrame.size, isTransparent: false, primaryColor: mainColor, secondaryColor: secondaryColor, thirdColor: tertiaryColor, backgroundColor: nil, pattern: pattern, patternTopRightPosition: patternTopRightPosition, patternAlpha: patternAlpha, animation: animation)
+                                backgroundView.update(size: backgroundFrame.size, isTransparent: exteraTransparentBlock, primaryColor: mainColor, secondaryColor: secondaryColor, thirdColor: tertiaryColor, backgroundColor: nil, pattern: pattern, patternTopRightPosition: patternTopRightPosition, patternAlpha: patternAlpha, animation: animation) // MARK: AyuGram
                             } else {
                                 backgroundView = MessageInlineBlockBackgroundView()
                                 self.backgroundView = backgroundView
                                 backgroundView.frame = backgroundFrame
                                 self.transformContainer.view.insertSubview(backgroundView, at: 0)
-                                backgroundView.update(size: backgroundFrame.size, isTransparent: false, primaryColor: mainColor, secondaryColor: secondaryColor, thirdColor: tertiaryColor, backgroundColor: nil, pattern: pattern, patternTopRightPosition: patternTopRightPosition, patternAlpha: patternAlpha, animation: .None)
+                                backgroundView.update(size: backgroundFrame.size, isTransparent: exteraTransparentBlock, primaryColor: mainColor, secondaryColor: secondaryColor, thirdColor: tertiaryColor, backgroundColor: nil, pattern: pattern, patternTopRightPosition: patternTopRightPosition, patternAlpha: patternAlpha, animation: .None) // MARK: AyuGram
                             }
                             // Without bubbles the block sits on the page, where it is rounder.
                             backgroundView.clipCornerRadius = bubbleStyle.isBubbleless ? chatMessageBubblelessInlineBlockCornerRadius : nil

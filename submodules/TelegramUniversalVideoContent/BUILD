@@ -1,6 +1,6 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgsrc = [
 ]
 #
@@ -8,7 +8,7 @@ sgsrc = [
 swift_library(
     name = "TelegramUniversalVideoContent",
     module_name = "TelegramUniversalVideoContent",
-    srcs = sgsrc + glob([ # MARK: Swiftgram
+    srcs = sgsrc + glob([ # MARK: AyuGram
         "Sources/**/*.swift",
     ]),
     copts = [

@@ -27,7 +27,7 @@ listed files below describe the initial wave already included in root's commit.
 
 New files:
 
-- `Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift`
+- `AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift`
 - `submodules/ChatListUI/Sources/ExteraPillBuiltinProvider.swift`
 - `submodules/ChatListUI/Sources/ExteraPillStackView.swift`
 - `submodules/ChatListUI/Sources/ExteraPillStackController.swift`
@@ -37,7 +37,7 @@ New files:
 
 Modified files:
 
-- `Swiftgram/SGSimpleSettings/Sources/ExteraPillRuntime.swift`
+- `AyuGram/SGSimpleSettings/Sources/ExteraPillRuntime.swift`
 - `submodules/ChatListUI/Sources/ExteraPillDashboardController.swift`
 - `submodules/ChatListUI/Sources/ChatListController.swift` (two lifecycle lines)
 - `submodules/ChatListUI/Sources/ChatListControllerNode.swift` (Pill-only hunks)
@@ -56,7 +56,7 @@ moved to their correct owner before any new syntax run.
    autolinked by the Swift import, as in the existing Weather module; no new
    location entitlement or location usage string is introduced by this work.
    Existing location usage descriptions and Weather dependencies remain required.
-2. Root added `Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift` to the
+2. Root added `AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift` to the
    Swift compiler arguments in `.github/workflows/extera-host-checks.yml`'s pill
    step. The exact standalone commands are in `Tests/ExteraPills/README.md`.
 3. Source globs already include all new files. Keep the model helper in

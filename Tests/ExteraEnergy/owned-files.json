@@ -1,11 +1,11 @@
 {
   "baseline": "136a2a1bf0cff0517ca49e677d028e6d9b601c0b",
   "swiftSources": [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraEnergySettings.swift",
-    "Swiftgram/SGSimpleSettings/Sources/ExteraEnergyRuntime.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraEnergySettingsController.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraEnergyThresholdItem.swift",
-    "Swiftgram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraEnergySettings.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraEnergyRuntime.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraEnergySettingsController.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraEnergyThresholdItem.swift",
+    "AyuGram/SGSettingsUI/Sources/ExteraChatAppearanceSettingsController.swift",
     "submodules/TelegramPresentationData/Sources/ExteraEnergyPolicy.swift",
     "submodules/TelegramPresentationData/Sources/PresentationData.swift",
     "submodules/Display/Source/NavigationBackgroundView.swift",

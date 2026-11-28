@@ -1,5 +1,5 @@
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
-new_git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "new_git_repository") # MARK: Swiftgram
+new_git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "new_git_repository") # MARK: AyuGram
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -9,6 +9,11 @@ http_archive(
     sha256 = "1891ad61293278363f75f2b4e5313c606183d0acd14f4b1ff1a71f5629c676f9",
     build_file = "//submodules/VoskNative:Vosk.BUILD",
 )
+
+# Experimental Python plugin bridge. The repository rule pins the iOS runtime archive
+# by SHA-256 and packages extension modules as signed frameworks, not loose .so files.
+ayu_python_repository = use_repo_rule("//third-party/ayu-python:repository.bzl", "ayu_python_repository")
+ayu_python_repository(name = "ayu_python")
 
 _WASI_SDK_BUILD = """
 exports_files(["bin/clang++"])
@@ -246,12 +251,12 @@ apple_cc_configure = use_extension("@build_bazel_apple_support//crosstool:setup.
 use_repo(apple_cc_configure, "local_config_apple_cc", "local_config_apple_cc_toolchains")
 register_toolchains("@local_config_apple_cc_toolchains//:all")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 new_git_repository(
     name = "flex_sdk",
     remote = "https://github.com/FLEXTool/FLEX.git",
     commit = "2bfba6715eff664ef84a02e8eb0ad9b5a609c684",
-    build_file = "@//Swiftgram/FLEX:FLEX.BUILD"
+    build_file = "@//AyuGram/FLEX:FLEX.BUILD"
 )
 #
 

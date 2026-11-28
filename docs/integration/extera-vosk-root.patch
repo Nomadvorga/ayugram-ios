@@ -15,9 +15,9 @@ diff --git a/MODULE.bazel b/MODULE.bazel
  
  _WASI_SDK_BUILD = """
  exports_files(["bin/clang++"])
-diff --git a/Swiftgram/SGSettingsUI/BUILD b/Swiftgram/SGSettingsUI/BUILD
---- a/Swiftgram/SGSettingsUI/BUILD
-+++ b/Swiftgram/SGSettingsUI/BUILD
+diff --git a/AyuGram/SGSettingsUI/BUILD b/AyuGram/SGSettingsUI/BUILD
+--- a/AyuGram/SGSettingsUI/BUILD
++++ b/AyuGram/SGSettingsUI/BUILD
 @@ -26,6 +26,7 @@
          "//submodules/TelegramCore:TelegramCore",
          "//submodules/TelegramAudio:TelegramAudio",
@@ -33,18 +33,18 @@ diff --git a/submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNod
          "//submodules/Media/ConvertOpusToAAC",
          "//submodules/Media/LocalAudioTranscription",
 +        "//submodules/Media/VoskSpeechAudio:VoskSpeechAudio",
-diff --git a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
---- a/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
-+++ b/Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+diff --git a/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift b/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
+--- a/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
++++ b/AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift
 @@ -360,3 +360,5 @@
          boolean("extera.appleSpeechOnDeviceOnly", read: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly }, write: { ExteraTranslationSettings.shared.appleSpeechOnDeviceOnly = $0 }),
          boolean("extera.speech.isEnabled", defaultValue: true, read: { ExteraSpeechSettings.shared.isEnabled }, write: { ExteraSpeechSettings.shared.isEnabled = $0 }),
          boolean("extera.speech.useManagedOfflineModel", read: { ExteraSpeechSettings.shared.useManagedOfflineModel }, write: { ExteraSpeechSettings.shared.useManagedOfflineModel = $0 }),
 +        boolean("extera.vosk.isSelected", read: { ExteraVoskSettings.shared.isSelected }, write: { ExteraVoskSettings.shared.isSelected = $0 }),
 +        text("extera.vosk.language", maximumLength: 4, allowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz"), read: { ExteraVoskSettings.shared.language }, write: { ExteraVoskSettings.shared.language = $0 }),
-diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
---- a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
-+++ b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+diff --git a/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift b/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
+--- a/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
++++ b/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
 @@ -684,1 +684,1 @@
 -    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .transcriptionBackend, text: i18n("Extera.TranscriptionBackend", lang), value: i18n(settings.transcriptionBackendEnum == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), enabled: true))
 +    entries.append(.oneFromManySelector(id: id.count, section: .speechRecognition, settingName: .transcriptionBackend, text: i18n("Extera.TranscriptionBackend", lang), value: ExteraVoskSettings.shared.isSelected ? "Vosk" : i18n(settings.transcriptionBackendEnum == .apple ? "Extera.TranscriptionBackend.Apple" : "Extera.TranscriptionBackend.Default", lang), enabled: true))
@@ -131,9 +131,9 @@ diff --git a/.github/workflows/extera-host-checks.yml b/.github/workflows/extera
 +          python3 Tests/ExteraVosk/run_native_tests.py
 +          python3 Tests/ExteraVosk/run_host_tests.py
        - name: AI generation and response formatting
-diff --git a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
---- a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
-+++ b/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+diff --git a/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
+--- a/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
++++ b/AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings
 @@ -1036,0 +1037,21 @@
 +"Extera.Vosk.None" = "None";
 +"Extera.Vosk.Automatic" = "Automatic — installed chat/app model";
@@ -156,9 +156,9 @@ diff --git a/Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings b/Swiftg
 +"Extera.Vosk.ErrorNotInstalled" = "Download this model first.";
 +"Extera.Vosk.ErrorInvalidModel" = "The model could not be loaded.";
 +"Extera.Vosk.ErrorOperation" = "Operation failed. Check network access and free storage, then retry.";
-diff --git a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
---- a/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
-+++ b/Swiftgram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+diff --git a/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings b/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
+--- a/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
++++ b/AyuGram/SGStrings/Strings/ru.lproj/SGLocalizable.strings
 @@ -1025,0 +1026,21 @@
 +"Extera.Vosk.None" = "Нет";
 +"Extera.Vosk.Automatic" = "Авто — установленная модель языка чата/приложения";

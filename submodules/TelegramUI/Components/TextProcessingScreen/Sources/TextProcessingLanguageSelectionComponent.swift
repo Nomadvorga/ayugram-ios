@@ -453,7 +453,7 @@ final class TextProcessingLanguageSelectionComponent: Component {
                 if languageCode.hasSuffix(rawSuffix) {
                     languageCode = String(languageCode.dropLast(rawSuffix.count))
                 }
-                languageCode = normalizeTranslationLanguage(languageCode) // MARK: Swiftgram
+                languageCode = normalizeTranslationLanguage(languageCode) // MARK: AyuGram
                 
                 if !topIds.contains(languageCode), let item = self.mainItems.first(where: { $0.languageCode == languageCode }) {
                     self.mainItems.insert(TextProcessingLanguageSelectionComponent.Language(

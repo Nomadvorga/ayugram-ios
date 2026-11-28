@@ -154,7 +154,7 @@ public protocol RichTextEditor: UIView {
     var initialInputPrimaryLanguage: String? { get set }
     func resetInputPrimaryLanguage()
 
-    // MARK: Swiftgram
+    // MARK: AyuGram
     /// The return-key appearance on the editor's actual text-input responder.
     var composerReturnKeyType: UIReturnKeyType { get set }
     //

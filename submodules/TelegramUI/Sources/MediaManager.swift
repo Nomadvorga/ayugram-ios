@@ -15,6 +15,7 @@ import DeviceProximity
 import MediaResources
 import PhotoResources
 import PeerMessagesMediaPlaylist
+import SGSimpleSettings
 
 enum SharedMediaPlayerGroup: Int {
     case music = 0

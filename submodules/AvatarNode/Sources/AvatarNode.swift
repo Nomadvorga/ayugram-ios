@@ -322,7 +322,11 @@ public func drawAvatarNodeContent(bounds: CGRect, parameters: Any?, isRasterizin
     if let parameters = parameters as? AvatarNodeParameters {
         colors = parameters.colors
         
-        if case .round = parameters.clipStyle {
+        if let ayuOutline = ayuAvatarOutlinePath(clipStyle: parameters.clipStyle, rect: CGRect(origin: CGPoint(), size: bounds.size)) { // MARK: AyuGram
+            context.beginPath()
+            context.addPath(ayuOutline)
+            context.clip()
+        } else if case .round = parameters.clipStyle {
             context.beginPath()
             context.addEllipse(in: CGRect(x: 0.0, y: 0.0, width: bounds.size.width, height:
                 bounds.size.height))
@@ -566,8 +570,12 @@ public final class AvatarEditOverlayNode: ASDisplayNode {
         }
         
         context.beginPath()
+        if let ayuOutline = ayuAvatarOutlinePath(clipStyle: .round, rect: CGRect(origin: CGPoint(), size: bounds.size)) { // MARK: AyuGram
+            context.addPath(ayuOutline)
+        } else {
         context.addEllipse(in: CGRect(x: 0.0, y: 0.0, width: bounds.size.width, height:
             bounds.size.height))
+        }
         context.clip()
         
         context.setFillColor(UIColor(rgb: 0x000000, alpha: 0.4).cgColor)
@@ -686,6 +694,9 @@ public final class AvatarNode: ASDisplayNode {
         public let imageNode: ImageNode
         private var imageNodeMask: UIImageView?
         public var editOverlayNode: AvatarEditOverlayNode?
+        /// Called after the displayed avatar image changes. Used by the chat list
+        /// to refresh a blurred card once the avatar has actually loaded.
+        public var imageUpdated: ((UIImage?) -> Void)?
         
         private let imageReadyDisposable = MetaDisposable()
         fileprivate var state: AvatarNodeState = .empty
@@ -758,6 +769,7 @@ public final class AvatarNode: ASDisplayNode {
                 }
                 
                 self.currentImage = image
+                self.imageUpdated?(image)
                 
                 guard let badgeView = self.badgeView, let parameters = self.parameters else {
                     return
@@ -1044,10 +1056,10 @@ public final class AvatarNode: ASDisplayNode {
                 self.imageNode.cornerRadius = 0.0
             case .round:
                 self.imageNode.clipsToBounds = true
-                self.imageNode.cornerRadius = displayDimensions.height * 0.5
+                self.imageNode.cornerRadius = ExteraSettings.shared.avatarCornerRadius(side: displayDimensions.height) ?? displayDimensions.height * 0.5 // MARK: AyuGram
             case .roundedRect:
                 self.imageNode.clipsToBounds = true
-                self.imageNode.cornerRadius = displayDimensions.height * 0.25
+                self.imageNode.cornerRadius = ExteraSettings.shared.avatarCornerRadius(side: displayDimensions.height, forum: true) ?? displayDimensions.height * 0.25 // MARK: AyuGram
             case .bubble:
                 break
             }
@@ -1610,6 +1622,18 @@ public final class AvatarNode: ASDisplayNode {
                 storyIndicator = ComponentView()
                 self.storyIndicator = storyIndicator
             }
+            // MARK: AyuGram
+            var ayuIsForumShape = self.contentNode.clipStyle == .roundedRect || storyPresentationParams.forceRoundedRect
+            var ayuHasAvatarShape = ayuIsForumShape || self.contentNode.clipStyle == .round
+            // An avatar with a rounding scope is drawn unclipped and shaped by its layer: the ring follows that shape.
+            if let scope = self.ayuRoundingScope {
+                ayuHasAvatarShape = true
+                if case .chatList(isForum: true) = scope {
+                    ayuIsForumShape = true
+                }
+            }
+            let ayuCornerRadius: CGFloat? = ayuHasAvatarShape ? ExteraSettings.shared.avatarCornerRadius(side: indicatorSize.width, forum: ayuIsForumShape) : nil
+            //
             var mappedProgress: AvatarStoryIndicatorComponent.Progress?
             if let value = storyStats.progress {
                 mappedProgress = .definite(value)
@@ -1634,7 +1658,8 @@ public final class AvatarNode: ASDisplayNode {
                         unseenCount: storyStats.unseenCount
                     ),
                     progress: mappedProgress,
-                    isRoundedRect: self.contentNode.clipStyle == .roundedRect || storyPresentationParams.forceRoundedRect
+                    isRoundedRect: ayuIsForumShape || ayuCornerRadius != nil, // MARK: AyuGram
+                    avatarCornerRadius: ayuCornerRadius
                 )),
                 environment: {},
                 containerSize: indicatorSize

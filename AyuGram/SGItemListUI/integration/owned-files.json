@@ -1,0 +1,40 @@
+{
+  "baseline": "9598c2c090f4a469714ae98e2c3a9c2cbda6311b",
+  "previewContractBaseline": "136a2a1bf0cff0517ca49e677d028e6d9b601c0b",
+  "status": "Uncommitted style implementation; static validation only; iOS build, XCTest and recorded frames pending root",
+  "swiftSources": [
+    "AyuGram/SGItemListUI/Sources/SGExteraItem.swift",
+    "AyuGram/SGItemListUI/Sources/SGItemListUI.swift",
+    "AyuGram/SGItemListUI/Sources/SGAppearanceControls.swift",
+    "AyuGram/SGItemListUI/Sources/SGItemListAppearance.swift",
+    "AyuGram/SGItemListUI/Sources/SGItemListGlassSurfaceView.swift",
+    "AyuGram/SGItemListUI/Sources/SGStyledItemListEntry.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraStyleSettings.swift",
+    "submodules/Display/Source/NavigationBackgroundView.swift",
+    "submodules/TelegramUI/Components/GlassBackgroundComponent/Sources/GlassBackgroundComponent.swift",
+    "submodules/TelegramUI/Components/GlassBackgroundComponent/Sources/LegacyGlassView.swift",
+    "submodules/ContextUI/Sources/ContextController.swift",
+    "submodules/TelegramUI/Components/LensTransition/Sources/LensTransitionContainer.swift",
+    "submodules/TelegramUI/Components/ContextControllerImpl/Sources/ContextControllerActionsStackNode.swift",
+    "submodules/TelegramUI/Components/ContextControllerImpl/Sources/ContextControllerExtractedPresentationNode.swift",
+    "submodules/ReactionSelectionNode/Sources/ReactionContextNode.swift",
+    "submodules/ReactionSelectionNode/Sources/ReactionContextBackgroundNode.swift",
+    "submodules/TelegramUI/Sources/Chat/ChatControllerOpenMessageContextMenu.swift",
+    "submodules/TelegramUI/Sources/ChatControllerOpenMessageReactionContextMenu.swift",
+    "submodules/ChatListUI/Sources/ChatListController.swift",
+    "AyuGram/SGItemListUI/Tests/SGItemListAppearanceTests.swift",
+    "AyuGram/SGSimpleSettings/Tests/ExteraStyleSettingsTests.swift"
+  ],
+  "supportFiles": [
+    "AyuGram/SGItemListUI/STYLE_HANDOFF.md",
+    "AyuGram/SGItemListUI/PREVIEW_HANDOFF.md",
+    "AyuGram/SGItemListUI/VISUAL_STYLE.md",
+    "AyuGram/SGItemListUI/Tests/validate_style_static.py",
+    "AyuGram/SGItemListUI/integration/owned-files.json",
+    "AyuGram/SGItemListUI/integration/style-strings.json"
+  ],
+  "sharedFileOwnership": "Only this worker's style hunks are owned here. Parallel icon hunks in ChatListController.swift are preserved and belong to their author.",
+  "newProductionDependencies": [],
+  "unwiredXCTestModules": ["SGItemListUI", "SGSimpleSettings"],
+  "rootOwnedIntegration": ["SGSettingsController/SGSettingsUI", "en/ru SGLocalizable.strings", "backup whitelist", "BUILD test targets", "workflows", "iOS build and recorded-frame validation"]
+}

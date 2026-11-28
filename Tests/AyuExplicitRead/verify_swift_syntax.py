@@ -16,9 +16,9 @@ FILES = [
     CORE / "Sources/Account/AccountManager.swift",
     CORE / "Sources/SyncCore/SyncCore_Namespaces.swift",
     *sorted((CORE / "Tests/AyuExplicitRead").glob("*.swift")),
-    ROOT / "Swiftgram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
-    ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraFeedController.swift",
-    ROOT / "Swiftgram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
+    ROOT / "AyuGram/SGSettingsUI/Sources/AyuReadHistoryController.swift",
+    ROOT / "AyuGram/SGSettingsUI/Sources/ExteraFeedController.swift",
+    ROOT / "AyuGram/SGTelegramUIExtensions/Sources/AyuEditHistoryUI.swift",
     ROOT / "submodules/TelegramUI/Sources/Chat/ChatControllerExteraGestures.swift",
     ROOT / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift",
 ]

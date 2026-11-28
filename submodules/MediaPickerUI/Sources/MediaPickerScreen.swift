@@ -1,5 +1,5 @@
-import SGStrings // MARK: Swiftgram
-import SGSimpleSettings // MARK: Swiftgram
+import SGStrings // MARK: AyuGram
+import SGSimpleSettings // MARK: AyuGram
 import Foundation
 import UIKit
 import Display
@@ -482,7 +482,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         fileprivate var isModernCameraHandedOff = false
         fileprivate var chatCameraCaptureState: Bool?
         private var isChatCameraCaptureUpdateScheduled = false
-        // MARK: Swiftgram
+        // MARK: AyuGram
         private var sgCreateModernCamera: (() -> CameraProtocol?)?
         private var sgCameraPreviewObserver: NSObjectProtocol?
         private var sgGenericCameraTile: UIView?
@@ -805,7 +805,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         }
         
         deinit {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if let observer = self.sgCameraPreviewObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
@@ -917,7 +917,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let isSimulator = false
             #endif
             let isIpad = LegacyCameraImpl.shared.isIpad
-            let cameraCellBranch: MediaPickerCameraCellBranch = SGSimpleSettings.shared.disableGalleryCamera ? .none : mediaPickerCameraCellBranch( // MARK: Swiftgram
+            let cameraCellBranch: MediaPickerCameraCellBranch = SGSimpleSettings.shared.disableGalleryCamera ? .none : mediaPickerCameraCellBranch( // MARK: AyuGram
                 flagOn: controller.context.routesToChatMediaEditorV2(.inlineCameraCell) && controller.preparedCompletion != nil && controller.opensChatCameraWithHolder,
                 subject: cameraCellSubject,
                 isIpad: isIpad,
@@ -927,7 +927,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             switch cameraCellBranch {
             case .legacyAttachmentCamera:
-                let enableAnimations = (self.controller?.context.sharedContext.energyUsageSettings.fullTranslucency ?? true) && !SGSimpleSettings.shared.disableGalleryCameraPreview // MARK: Swiftgram
+                let enableAnimations = (self.controller?.context.sharedContext.energyUsageSettings.fullTranslucency ?? true) && !SGSimpleSettings.shared.disableGalleryCameraPreview // MARK: AyuGram
   
                 let cameraView = TGAttachmentCameraView(forSelfPortrait: false, videoModeByDefault: controller.bannedSendPhotos != nil && controller.bannedSendVideos == nil)!
                 cameraView.clipsToBounds = true
@@ -957,7 +957,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self.modernCameraView = cameraPreviewView
                 
                 let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.cameraTapped))
-                self.cameraWrapperView.addGestureRecognizer(tapGestureRecognizer) // MARK: Swiftgram — Keep the neutral tile tappable.
+                self.cameraWrapperView.addGestureRecognizer(tapGestureRecognizer) // MARK: AyuGram — Keep the neutral tile tappable.
                 self.modernCameraTapGestureRecognizer = tapGestureRecognizer
                 
                 let _ = (cameraPreviewView.isPreviewing
@@ -978,7 +978,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 }
                 self.gridHost.headerHostNode.addSubnode(self.cameraActivateAreaNode)
                 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 // Construction itself starts capture. Defer it until inline preview or an explicit tap needs it.
                 self.sgCreateModernCamera = { [weak self, weak cameraPreviewView] in
                     guard let self, let cameraPreviewView, !self.isModernCameraInvalidated else { return nil }
@@ -1013,7 +1013,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self.modernCameraView = cameraPreviewView
                 
                 let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.cameraTapped))
-                self.cameraWrapperView.addGestureRecognizer(tapGestureRecognizer) // MARK: Swiftgram — Keep the neutral tile tappable.
+                self.cameraWrapperView.addGestureRecognizer(tapGestureRecognizer) // MARK: AyuGram — Keep the neutral tile tappable.
                 self.modernCameraTapGestureRecognizer = tapGestureRecognizer
                 
                 if #available(iOS 13.0, *) {
@@ -1031,7 +1031,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 
                 self.cameraWrapperView.addSubview(cameraPreviewView)
                 
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 self.sgCreateModernCamera = { [weak self, weak cameraPreviewView] in
                     guard let self, let cameraPreviewView, !self.isModernCameraInvalidated else { return nil }
                     let camera = cameraImpl.makeCamera(
@@ -1066,7 +1066,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     self.containerNode.clipsToBounds = true
                 }
             }
-            // MARK: Swiftgram
+            // MARK: AyuGram
             self.sgCameraPreviewObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: UserDefaults.standard, queue: .main) { [weak self] _ in
                 self?.updateIsCameraActive()
             }
@@ -1074,7 +1074,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             //
         }
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         private func sgUpdateCameraTile() {
             guard !self.isModernCameraHandedOff, self.modernCameraView?.superview === self.cameraWrapperView else { return }
             let disabled = SGSimpleSettings.shared.disableGalleryCameraPreview
@@ -1183,7 +1183,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         }
         
         @objc private func cameraTapped() {
-            // MARK: Swiftgram
+            // MARK: AyuGram
             guard !self.openingMedia, !self.isModernCameraInvalidated, !self.isModernCameraHandedOff, self.controller?.openCamera != nil,
                 let previewView = self.modernCameraView,
                 let camera = self.modernCamera ?? self.sgCreateModernCamera?() else {
@@ -1195,7 +1195,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             camera.startCapture()
             //
             let isChatCamera = self.cameraCellBranch == .chatCamera
-            // MARK: Swiftgram — Both modern camera branches transfer ownership before capture starts.
+            // MARK: AyuGram — Both modern camera branches transfer ownership before capture starts.
             if isChatCamera {
                 self.dismissInput()
                 self.chatCameraCaptureState = nil
@@ -1225,7 +1225,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                                 previewView.layer.removeAllAnimations()
                             }
                         }
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         self.isModernCameraHandedOff = false
                         self.sgGenericCameraTile?.removeFromSuperview()
                         self.sgGenericCameraTile = nil
@@ -1238,7 +1238,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         
         func updateIsCameraActive() {
             let isCameraActive = !self.isSuspended && !self.hasGallery && self.isCameraPreviewVisible
-            // MARK: Swiftgram
+            // MARK: AyuGram
             guard !self.isModernCameraHandedOff else { return }
             let previewDisabled = SGSimpleSettings.shared.disableGalleryCameraPreview
             self.modernCameraHasLivePreview = (self.controller?.context.sharedContext.energyUsageSettings.fullTranslucency ?? true) && !previewDisabled
@@ -1250,7 +1250,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
             //
             if let cameraView = self.cameraView {
-                if isCameraActive && !previewDisabled { // MARK: Swiftgram
+                if isCameraActive && !previewDisabled { // MARK: AyuGram
                     cameraView.resumePreview()
                 } else {
                     cameraView.pausePreview()
@@ -1258,7 +1258,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             } else if let camera = self.modernCamera, let cameraView = self.modernCameraView {
                 if self.cameraCellBranch == .chatCamera {
                     self.scheduleChatCameraCaptureUpdate()
-                } else if isCameraActive && !previewDisabled && !self.isModernCameraInvalidated { // MARK: Swiftgram
+                } else if isCameraActive && !previewDisabled && !self.isModernCameraInvalidated { // MARK: AyuGram
                     cameraView.isEnabled = true
                     camera.startCapture()
                 } else {
@@ -2015,7 +2015,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 return
             }
             controller.dismissAllTooltips()
-            // MARK: Swiftgram
+            // MARK: AyuGram
             if controller.sgSelectedMediaHasTelescope && controller.sgSelectedMediaHasPrice {
                 controller.isDismissing = false
                 controller.sgPresentTelescopePaidMediaNotice()
@@ -4065,7 +4065,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                                     return
                                 }
                                 
-                                // MARK: Swiftgram
+                                // MARK: AyuGram
                                 if self.sgSelectedMediaHasTelescope && (price ?? 0) <= 0 {
                                     self.sgPresentTelescopePaidMediaNotice()
                                     return
@@ -4075,7 +4075,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                                     guard let self else {
                                         return
                                     }
-                                    // MARK: Swiftgram
+                                    // MARK: AyuGram
                                     if amount > 0 && self.sgSelectedMediaHasTelescope {
                                         self.sgPresentTelescopePaidMediaNotice()
                                         return
@@ -4221,7 +4221,7 @@ final class MediaPickerContext: AttachmentMediaPickerContext {
         guard let controller = self.controller else {
             return
         }
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if price > 0 && controller.sgSelectedMediaHasTelescope {
             controller.sgPresentTelescopePaidMediaNotice()
             return
@@ -5178,7 +5178,7 @@ public func coverMediaPickerController(
     return controller
 }
 
-// MARK: Swiftgram
+// MARK: AyuGram
 extension MediaPickerScreenImpl {
     fileprivate var sgSelectedMediaHasTelescope: Bool {
         return (self.interaction?.selectionState?.selectedItems() ?? []).contains { item in

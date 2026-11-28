@@ -1,6 +1,6 @@
-diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
---- a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
-+++ b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+diff --git a/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift b/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
+--- a/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
++++ b/AyuGram/SGSettingsUI/Sources/SGSettingsController.swift
 @@ -832,5 +832,10 @@
  public func sgSettingsController(context: AccountContext, category: SGSettingsCategory? = nil, showOverview: Bool = true) -> ViewController {
 +    if category == .other && showOverview {
@@ -12,9 +12,9 @@ diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgr
          return exteraSettingsOverviewController(context: context, ayu: false)
      }
      var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
-diff --git a/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift b/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
---- a/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
-+++ b/Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift
+diff --git a/AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift b/AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift
+--- a/AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift
++++ b/AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift
 @@ -42,3 +42,16 @@
 +/// Retain the same backup coordinator for the direct Other-card actions. No persistence logic is
 +/// duplicated; reset uses the existing confirmation and complete shared-preference transactions.
@@ -40,7 +40,7 @@ diff --git a/.github/workflows/extera-host-checks.yml b/.github/workflows/extera
 +        if: ${{ !cancelled() }}
 +        run: |
 +          python3 tools/run_extera_xctests.py --warnings-as-errors \
-+            Swiftgram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
++            AyuGram/SGSimpleSettings/Sources/ExteraOtherSettingsModel.swift \
 +            Tests/ExteraOther/ExteraOtherSettingsModelTests.swift
        - name: Camera zoom and volume policy
          if: ${{ !cancelled() }}

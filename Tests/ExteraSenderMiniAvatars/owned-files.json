@@ -1,7 +1,7 @@
 {
   "purpose": "Show the last-message sender mini avatar in eligible group chat-list previews.",
   "productionFiles": [
-    "Swiftgram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift",
+    "AyuGram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift",
     "submodules/ChatListUI/Sources/Node/ChatListItem.swift"
   ],
   "testFiles": [

@@ -66,7 +66,7 @@ for scale in [2, 3]:
     previous = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], cwd=ROOT)
     assert (ROOT / relative).read_bytes() == previous, 'Shipped SGDefault bytes changed'
 for asset, item in provenance['overview'].items():
-    path = ROOT / 'Swiftgram/SGSettingsUI/Images.xcassets' / (asset + '.imageset')
+    path = ROOT / 'AyuGram/SGSettingsUI/Images.xcassets' / (asset + '.imageset')
     assert hashlib.sha256((path / (asset + '.png')).read_bytes()).hexdigest() == item['sha256']
     assert (path / (asset + '.png')).read_bytes() == (ROOT / item['source']).read_bytes()
     metadata = json.loads((path / 'Contents.json').read_text())

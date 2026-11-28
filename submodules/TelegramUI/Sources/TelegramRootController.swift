@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGSimpleSettings
 //
 import Foundation
@@ -38,6 +38,8 @@ import ShareWithPeersScreen
 import ChatEmptyNode
 import NewsScreen
 import QrCodeUI
+import AyuAtmosphericHost
+import AyuAtmosphericUI
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -85,7 +87,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
-    private var sgContactsTabController: ContactsController? // MARK: Swiftgram
+    private var sgContactsTabController: ContactsController? // MARK: AyuGram
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -105,6 +107,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
+    private var atmosphericNavigationDisposable: Disposable?
+    private var atmosphericOverlayDisposable: Disposable?
+    private var atmosphericSnowHost: AtmosphericSurfaceHostView?
+    private var atmosphericVisible = false
+    private var atmosphericApplicationActive = true
+    private var atmosphericHasOverlay = false
     
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
@@ -138,14 +146,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     strongSelf.rootTabController?.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
                 }
                 strongSelf.applyExteraNavigation(force: true)
+                strongSelf.updateAtmosphericSnow()
             }
         })
         
         if context.sharedContext.applicationBindings.isMainApp {
             self.applicationInFocusDisposable = (context.sharedContext.applicationBindings.applicationIsActive
             |> distinctUntilChanged
-            |> deliverOn(Queue.mainQueue())).startStrict(next: { value in
+            |> deliverOn(Queue.mainQueue())).startStrict(next: { [weak self] value in
                 context.sharedContext.mainWindow?.setForceBadgeHidden(!value)
+                self?.atmosphericApplicationActive = value
+                self?.updateAtmosphericSnow()
             })
             
             self.storyUploadEventsDisposable = (context.engine.messages.allStoriesUploadEvents()
@@ -157,6 +168,16 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 moveStorySource(engine: self.context.engine, peerId: self.context.account.peerId, from: Int64(stableId), to: Int64(id))
             })
         }
+
+        self.atmosphericNavigationDisposable = (self.viewControllersSignal
+        |> deliverOnMainQueue).start(next: { [weak self] _ in
+            self?.updateAtmosphericSnow()
+        })
+        self.atmosphericOverlayDisposable = (self.overlayControllersSignal
+        |> deliverOnMainQueue).start(next: { [weak self] controllers in
+            self?.atmosphericHasOverlay = !controllers.isEmpty
+            self?.updateAtmosphericSnow()
+        })
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -170,10 +191,74 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
+        self.atmosphericNavigationDisposable?.dispose()
+        self.atmosphericOverlayDisposable?.dispose()
+    }
+
+    override public func loadView() {
+        super.loadView()
+        let host = AtmosphericSurfaceHostView(container: self.view, role: .snowfall)
+        self.atmosphericSnowHost = host
+        self.view.addSubview(host)
+        self.updateAtmosphericSnow()
+    }
+
+    private func updateAtmosphericSnow() {
+        AtmosphericHost.shared.updateTheme(isDark: self.presentationData.theme.overallDarkAppearance)
+        guard self.isViewLoaded, let host = self.atmosphericSnowHost else {
+            return
+        }
+        // The actual navigation stack, including the selected root tab; no window or class-name guessing.
+        var controller = self.viewControllers.last
+        if let tabController = controller as? TabBarControllerImpl {
+            controller = tabController.currentController
+        }
+        let page: AtmosphericHostPage
+        if self.atmosphericHasOverlay || self.presentedViewController != nil {
+            page = .other
+        } else if controller is ChatController {
+            page = .chat
+        } else if controller is ChatListController {
+            page = .chatList
+        } else {
+            page = .other
+        }
+        host.update(geometry: AtmosphericHostGeometry(rect: self.view.bounds, page: page, visible: self.atmosphericVisible && self.atmosphericApplicationActive))
+        // A navigation/ancestor-visibility event also rechecks the already registered, typed glass/profile hosts.
+        AtmosphericHost.shared.refresh()
+    }
+
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.atmosphericVisible = true
+        self.updateAtmosphericSnow()
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        self.atmosphericVisible = true
+        self.updateAtmosphericSnow()
+    }
+
+    override public func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        self.atmosphericVisible = false
+        self.updateAtmosphericSnow()
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        self.atmosphericVisible = false
+        self.updateAtmosphericSnow()
+    }
+
+    override public func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        self.updateAtmosphericSnow()
     }
     
     public func getContactsController() -> ViewController? {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let sgContactsTabController = self.sgContactsTabController, self.rootTabController?.controllers.contains(where: { $0 === sgContactsTabController }) == true {
             return sgContactsTabController
         }
@@ -225,13 +310,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
     
         super.containerLayoutUpdated(layout, transition: transition)
+        self.updateAtmosphericSnow()
     }
     
-    public func addRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
+    public func addRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: AyuGram */ showNewsTab: Bool) {
         self.exteraLegacyTabs = (showContactsTab, showCallsTab, showNewsTab)
         let tabBarController = ExteraRootTabController(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.menuActions = { [weak self] in self?.exteraMenuActions() ?? [] }
         tabBarController.performMenuAction = { [weak self] id in self?.performExteraMenuAction(id) }
+        tabBarController.currentControllerUpdated = { [weak self] _ in
+            self?.updateAtmosphericSnow()
+        }
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)
         (chatListController as? ChatListControllerImpl)?.exteraOpenNavigationMenu = { [weak tabBarController] sourceView in
@@ -247,7 +336,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         var controllers: [ViewController] = []
         
-        // MARK: Swiftgram
+        // MARK: AyuGram
         let sgContactsTabController = ContactsController(context: self.context, sgIsTabMode: true)
         sgContactsTabController.sgSwitchToChatsController = { [weak self] in
             self?.openChatsController(activateSearch: false)
@@ -298,7 +387,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.pushViewController(tabBarController, animated: false)
     }
         
-    public func updateRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: Swiftgram */ showNewsTab: Bool) {
+    public func updateRootControllers(showCallsTab: Bool, showContactsTab: Bool, /* MARK: AyuGram */ showNewsTab: Bool) {
         self.exteraLegacyTabs = (showContactsTab, showCallsTab, showNewsTab)
         self.applyExteraNavigation()
     }
@@ -1047,15 +1136,44 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             rootTabController.selectedIndex = index
         }
     }
+
+    /// Native Pull to Next Chat route: return to the chat list and ask it to
+    /// select a dialog matching the source target/strategy/filter settings. The
+    /// list owns folder state, so selection stays inside the visible folder
+    /// unless "other folders" is enabled.
+    public func openNextUnreadChat(targetKinds: Set<String>, currentPeerId: Int64?, strategy: Int, includeMuted: Bool, skipPinned: Bool, otherFolders: Bool, countMarkedUnread: Bool, completion: @escaping (Bool) -> Void) {
+        guard let rootTabController = self.rootTabController else {
+            completion(false)
+            return
+        }
+        self.popToRoot(animated: false)
+        if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
+            rootTabController.selectedIndex = index
+        }
+        guard let chatList = self.chatListController as? ChatListControllerImpl else {
+            completion(false)
+            return
+        }
+        chatList.selectNextUnreadChat(
+            targetKinds: targetKinds,
+            currentPeerId: currentPeerId,
+            strategy: strategy,
+            includeMuted: includeMuted,
+            skipPinned: skipPinned,
+            searchOtherFolders: otherFolders,
+            countMarkedUnread: countMarkedUnread,
+            completion: completion
+        )
+    }
     
-    /// Opens the optional Contacts tab, or pushes Contacts over Settings when the tab is hidden. // MARK: Swiftgram
+    /// Opens the optional Contacts tab, or pushes Contacts over Settings when the tab is hidden. // MARK: AyuGram
     public func openContacts() {
         guard let rootTabController = self.rootTabController else {
             return
         }
         
         self.popToRoot(animated: false)
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let sgContactsTabController = self.sgContactsTabController, let index = rootTabController.controllers.firstIndex(where: { $0 === sgContactsTabController }) {
             rootTabController.selectedIndex = index
             return

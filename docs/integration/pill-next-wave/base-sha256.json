@@ -1,9 +1,9 @@
 {
-  "Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift": null,
+  "AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift": null,
   "submodules/ChatListUI/Sources/ExteraPillWeatherSettingsController.swift": null,
   "submodules/ChatListUI/Sources/ExteraPillStorageRing.swift": null,
   "submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraPresenceBarrier.swift": null,
-  "Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift": "a9e5f00386f30cad662d63dce64eb5664078d0b5cff434a3ffbb72ffcd49223c",
+  "AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift": "a9e5f00386f30cad662d63dce64eb5664078d0b5cff434a3ffbb72ffcd49223c",
   "submodules/TelegramCore/Sources/TelegramEngine/AccountData/ExteraAccountEntryStatus.swift": "5026987b6460d721e39141f029321651052dadb7f3c5bef0ca5ab9fe396e0f34",
   "submodules/TelegramCore/Sources/Network/AyuGhostRequestFilter.swift": "4c2d55e8d8fceaf05482658a8318598e1a0231c9d35066a98cdb22973aa21ee8",
   "submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift": "b44913fa3785032deec14a8bc96d883e2204eee99c9fc9272a8e788e7bb8eb27",

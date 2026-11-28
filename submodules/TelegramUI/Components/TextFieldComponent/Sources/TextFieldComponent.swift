@@ -1,4 +1,4 @@
-// MARK: Swiftgram
+// MARK: AyuGram
 import SGInputToolbar
 //
 
@@ -1939,7 +1939,7 @@ extension TextFieldComponent.InputState {
 
 extension TextFieldComponent.View {
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     public func sgToolbarAction(_ action: SGInputToolbarAction) {
         switch action {
             case .quote:

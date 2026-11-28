@@ -12,8 +12,8 @@ def source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-settings = source("Swiftgram/SGSimpleSettings/Sources/ExteraSettings.swift")
-policy = source("Swiftgram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift")
+settings = source("AyuGram/SGSimpleSettings/Sources/ExteraSettings.swift")
+policy = source("AyuGram/SGSimpleSettings/Sources/ExteraSenderMiniAvatarPolicy.swift")
 chat_list = source("submodules/ChatListUI/Sources/Node/ChatListItem.swift")
 
 assert "case senderMiniAvatars" in settings

@@ -157,15 +157,15 @@ public final class GlassControlPanelComponent: Component {
         override public var accessibilityElements: [Any]? {
             get {
                 let itemViews = [self.leftItemComponent, self.centralItemComponent, self.rightItemComponent].compactMap { $0?.view }
-                // MARK: Swiftgram
+                // MARK: AyuGram
                 // Include controls hosted directly in glassContentView, such as gallery footer playback.
                 let additionalViews = self.glassContentView.subviews.filter { view in
                     !itemViews.contains(where: { $0 === view })
                 }
                 //
-                return (itemViews + additionalViews /* MARK: Swiftgram */).filter { view in
+                return (itemViews + additionalViews /* MARK: AyuGram */).filter { view in
                     view.superview != nil && !view.isHidden && view.alpha > 0.01
-                }.sorted(by: { $0.frame.minX < $1.frame.minX }) // MARK: Swiftgram
+                }.sorted(by: { $0.frame.minX < $1.frame.minX }) // MARK: AyuGram
             }
             set {
             }

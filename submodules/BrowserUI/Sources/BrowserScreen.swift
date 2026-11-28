@@ -1,5 +1,7 @@
 import Foundation
 import UIKit
+import SGSimpleSettings
+import SGStrings
 import SwiftSignalKit
 import Display
 import TelegramCore
@@ -1371,6 +1373,14 @@ public class BrowserScreen: ViewController, MinimizableController {
                         performAction.invoke(.reload)
                         action(.default)
                     })))
+                    // MARK: AyuGram
+                    let isBlockingAds = ExteraBrowserSettings.shared.adBlockingEnabled
+                    items.append(.action(ContextMenuActionItem(text: i18n(isBlockingAds ? "Extera.AdBlock.Off" : "Extera.AdBlock.On", self.presentationData.strings.baseLanguageCode), icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.contextMenu.primaryColor) }, action: { (controller, action) in
+                        // Every open page observes the setting and reloads with or without the rule lists.
+                        ExteraBrowserSettings.shared.adBlockingEnabled = !isBlockingAds
+                        action(.default)
+                    })))
+                    //
                 }
                 
                 if canShare && !layout.metrics.isTablet {

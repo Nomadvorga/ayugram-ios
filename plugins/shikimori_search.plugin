@@ -1,0 +1,4025 @@
+import os
+import re
+import time
+import random
+import itertools
+import threading
+from datetime import datetime, timedelta, timezone
+from html import escape as html_escape, unescape as html_unescape
+from collections import deque, OrderedDict
+from typing import Any, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib.parse import urlencode, urlparse, urljoin, quote
+
+from base_plugin import BasePlugin, HookResult, HookStrategy, MenuItemData, MenuItemType
+from client_utils import send_photo, run_on_queue, get_last_fragment, send_message
+from android_utils import run_on_ui_thread, R, OnClickListener
+from ui.settings import Divider, Header, Input, Switch, Text
+from ui.alert import AlertDialogBuilder
+from ui.bulletin import BulletinHelper
+from extera_utils.text_formatting import parse_text
+from extera_utils.classes import Base, java_subclass, joverride
+from org.telegram.messenger import R as R_tg
+
+from java import jint, cast
+from java.lang import Object as JObject
+from android.app import Dialog
+from android.content import DialogInterface
+from android.text import TextWatcher, TextUtils, SpannableStringBuilder
+from android.text.style import ImageSpan
+from android.graphics import (
+    BitmapFactory, Color as AndroidColor, Typeface,
+    Bitmap, Canvas, Paint, Path, PorterDuff, PorterDuffXfermode, RectF,
+)
+from android.graphics.drawable import GradientDrawable, ColorDrawable
+from android.media import ThumbnailUtils
+from android.view import Gravity, View, ViewGroup, ViewOutlineProvider, MotionEvent, Window, WindowManager
+from android.util import TypedValue
+from android.widget import (
+    LinearLayout, FrameLayout, ScrollView, HorizontalScrollView,
+    EditText, TextView, ImageView, ProgressBar,
+)
+from android.animation import ObjectAnimator, ValueAnimator
+from android.transition import TransitionManager
+from android.view.animation import PathInterpolator, OvershootInterpolator
+
+from org.telegram.messenger import AndroidUtilities
+from org.telegram.ui.ActionBar import Theme
+
+__id__ = "shikimori_search"
+__name__ = "Shikimori Search"
+__description__ = "Shikimori в Telegram: окно поиска с обложками, расписание онгоингов, случайное аниме и ваша статистика"
+__author__ = "@obsidiphoria • @kaltsitu"
+__version__ = "1.7"
+__icon__ = "shikimorisearch/0"
+__app_version__ = ">=12.10.6"
+__sdk_version__ = ">=1.4.3.3"
+__category__ = ["tools", "integrations"]
+
+CUSTOM_EMOJI_IDS = {
+    "\u23F8":     "5445137435967126342",
+    "\u2B50":     "5444887644964159628",
+    "\u2705":     "5444987348334965906",
+    "\u274C":     "5445005936953424165",
+    "\U0001F3AC": "5447602197439218445",
+    "\U0001F39E": "5445373981290952548",
+    "\U0001F4CA": "5447460764166158313",
+    "\U0001F4C5": "5445350406215465190",
+    "\U0001F4FA": "5445158077579952110",
+    "\U0001F464": "5445174334031166029",
+    "\U0001F504": "5249019346512008974",
+    "\U0001F517": "5445326466067754897",
+    "\U0001F51C": "5771695636411847302",
+}
+
+_SEARCH_ICON_NAMES = ("outline_header_search", "msg_search", "search")
+_STATUS_ICON_NAMES = ("iv_lists", "outline_header_search", "msg_search", "search")
+_STAR_ICON_NAMES = ("star_small_outline",)
+_CALENDAR_ICON_NAMES = ("msg_calendar2", "msg_calendar", "calendar")
+_CLEAR_ICON_NAMES = ("ic_close_white", "ic_ab_search_clear", "input_clear_material", "msg_close")
+
+_ICON_ID_CACHE: dict = {}
+
+def _resolve_icon_id_cached(cache_key: str, ctx, tg_names: tuple, fallback_names: tuple) -> int:
+    if cache_key in _ICON_ID_CACHE:
+        return _ICON_ID_CACHE[cache_key]
+    rid = 0
+    try:
+        for name in tg_names:
+            rid = getattr(R_tg.drawable, name, 0)
+            if rid:
+                break
+    except Exception:
+        rid = 0
+    if not rid:
+        try:
+            res = ctx.getResources()
+            pkg = ctx.getPackageName()
+            for name in fallback_names:
+                found = res.getIdentifier(name, "drawable", pkg)
+                if found != 0:
+                    rid = found
+                    break
+        except Exception:
+            pass
+    rid = int(rid or 0)
+    _ICON_ID_CACHE[cache_key] = rid
+    return rid
+
+def _resolve_search_icon_id(ctx) -> int:
+    return _resolve_icon_id_cached("search", ctx, ("outline_header_search", "msg_search"), _SEARCH_ICON_NAMES)
+
+def _resolve_status_icon_id(ctx) -> int:
+    return _resolve_icon_id_cached("status", ctx, ("iv_lists", "outline_header_search", "msg_search"), _STATUS_ICON_NAMES)
+
+def _resolve_star_icon_id(ctx) -> int:
+    return _resolve_icon_id_cached("star", ctx, ("star_small_outline",), _STAR_ICON_NAMES)
+
+def _resolve_calendar_icon_id(ctx) -> int:
+    return _resolve_icon_id_cached("calendar", ctx, ("msg_calendar2",), _CALENDAR_ICON_NAMES)
+
+def _resolve_clear_icon_id(ctx) -> int:
+    return _resolve_icon_id_cached("clear", ctx, ("ic_close_white", "ic_ab_search_clear"), _CLEAR_ICON_NAMES)
+
+def _chevron_bitmap(size_px: int, up: bool, color: int):
+    bmp = Bitmap.createBitmap(size_px, size_px, Bitmap.Config.ARGB_8888)
+    canvas = Canvas(bmp)
+    paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.setColor(jint(color))
+    paint.setStyle(Paint.Style.STROKE)
+    paint.setStrokeWidth(size_px * 0.11)
+    paint.setStrokeCap(Paint.Cap.ROUND)
+    paint.setStrokeJoin(Paint.Join.ROUND)
+    sz = float(size_px)
+    path = Path()
+    if up:
+        path.moveTo(sz * 0.20, sz * 0.62)
+        path.lineTo(sz * 0.50, sz * 0.34)
+        path.lineTo(sz * 0.80, sz * 0.62)
+    else:
+        path.moveTo(sz * 0.20, sz * 0.38)
+        path.lineTo(sz * 0.50, sz * 0.66)
+        path.lineTo(sz * 0.80, sz * 0.38)
+    canvas.drawPath(path, paint)
+    return bmp
+
+def _cross_bitmap(size_px: int, color: int):
+    bmp = Bitmap.createBitmap(size_px, size_px, Bitmap.Config.ARGB_8888)
+    canvas = Canvas(bmp)
+    paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.setColor(jint(color))
+    paint.setStrokeWidth(size_px * 0.11)
+    paint.setStrokeCap(Paint.Cap.ROUND)
+    sz = float(size_px)
+    canvas.drawLine(sz * 0.25, sz * 0.25, sz * 0.75, sz * 0.75, paint)
+    canvas.drawLine(sz * 0.75, sz * 0.25, sz * 0.25, sz * 0.75, paint)
+    return bmp
+
+def _view_mode_bitmap(size_px: int, grid: bool, color: int):
+    bmp = Bitmap.createBitmap(size_px, size_px, Bitmap.Config.ARGB_8888)
+    canvas = Canvas(bmp)
+    paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.setColor(jint(color))
+    paint.setStyle(Paint.Style.STROKE)
+    paint.setStrokeWidth(size_px * 0.09)
+    paint.setStrokeCap(Paint.Cap.ROUND)
+    sz = float(size_px)
+    if grid:
+        r = sz * 0.06
+        for x, y in ((0.20, 0.20), (0.56, 0.20), (0.20, 0.56), (0.56, 0.56)):
+            canvas.drawRoundRect(RectF(sz * x, sz * y, sz * (x + 0.24), sz * (y + 0.24)), r, r, paint)
+    else:
+        for y in (0.30, 0.50, 0.70):
+            canvas.drawLine(sz * 0.22, sz * y, sz * 0.78, sz * y, paint)
+    return bmp
+
+CARD_EMOJI = {
+    "rating":     "5994453058656931434",
+    "year":       "5967782394080530708",
+    "genres":     "5843843420468024653",
+    "type":       "5854776233950188167",
+    "episodes":   "6005986106703613755",
+    "chapters":   "5956561916573782596",
+    "link":       "5877465816030515018",
+    "profile":    "5886412370347036129",
+    "watching":   "6005986106703613755",
+    "completed":  "5825794181183836432",
+    "on_hold":    "5776213190387961618",
+    "dropped":    "5879896690210639947",
+    "total":      "5843843420468024653",
+    "next":       "5909201569898827582",
+}
+
+def _ce(slot: str, fallback: str) -> str:
+    eid = CARD_EMOJI.get(slot)
+    if not eid:
+        return fallback
+    return f'<emoji id="{eid}">{fallback}</emoji>'
+
+def _wrap_custom_emoji(emoji_char: str) -> str:
+    eid = CUSTOM_EMOJI_IDS.get(emoji_char)
+    if not eid:
+        return emoji_char
+    return f'<emoji id="{eid}">{emoji_char}</emoji>'
+
+def _apply_custom_emoji(text: str) -> str:
+    if not text:
+        return text
+    if not any(ch in text for ch in CUSTOM_EMOJI_IDS):
+        return text
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("<emoji", i):
+            end = text.find("</emoji>", i)
+            if end != -1:
+                end += len("</emoji>")
+                out.append(text[i:end])
+                i = end
+                continue
+        ch = text[i]
+        if ch in CUSTOM_EMOJI_IDS:
+            out.append(_wrap_custom_emoji(ch))
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+BASE_URL = "https://shikimori.one/api"
+SITE_URL = "https://shikimori.one"
+USER_AGENT = f"exteraGramShikimoriPlugin/{__version__}"
+
+MEDIA_ENDPOINTS = {"anime": "/animes", "manga": "/mangas"}
+
+MEDIA_TOGGLE_ORDER = (("anime", "Аниме"), ("manga", "Манга"))
+MEDIA_FIELD_HINTS = {
+    "anime": "Поиск",
+    "manga": "Поиск",
+}
+MEDIA_START_HINTS = {
+    "anime": "Начни вводить название аниме…",
+    "manga": "Начни вводить название манги…",
+}
+MEDIA_SITE_PATHS = {"anime": "animes", "manga": "mangas"}
+MEDIA_NOT_FOUND = {
+    "anime": "Аниме с ID {id} не найдено",
+    "manga": "Манга с ID {id} не найдена",
+}
+PHOTO_CAPTION_LIMIT = 1024
+MAX_POSTER_BYTES = 8 * 1024 * 1024
+POSTER_SLOTS = 8
+
+ALLOWED_HOSTS = ("shikimori.one", "shikimori.io")
+GRAPHQL_URL = f"{SITE_URL}/api/graphql"
+GRAPHQL_ROOTS = {"anime": "animes", "manga": "mangas"}
+GQL_BATCH = 40 
+POSTER_PLACEHOLDER_MARKERS = ("/assets/globals/", "missing", "no_image", "noimage")
+
+STATUS_LABELS = {"anons": "Анонс", "ongoing": "Онгоинг", "released": "Вышло"}
+MANGA_STATUS_LABELS = {
+    "anons": "Анонс",
+    "ongoing": "Выпускается",
+    "released": "Завершено",
+    "paused": "Приостановлено",
+    "discontinued": "Заброшено",
+}
+STATUS_ICONS = {
+    "anons": "\U0001F51C", "ongoing": "\u23F8", "released": "\u2705",
+    "paused": "\u23F8", "discontinued": "\U0001F6AB",
+}
+
+STATUS_ICON_CUSTOM_IDS = {
+    "released":     "5825794181183836432",
+    "ongoing":      "5776213190387961618",
+    "paused":       "5776213190387961618",
+    "discontinued": "5872829476143894491",
+}
+
+STATUS_TONAL = {
+    "anons":        ("#1F3A57", "#B6D9FF"),
+    "ongoing":      ("#26463F", "#A8F0D8"),
+    "released":     ("#2A4A2C", "#B6E9B5"),
+    "paused":       ("#4A3B18", "#FFD98A"),
+    "discontinued": ("#55231F", "#FFB4AB"),
+}
+
+WEEKDAYS_SHORT = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+WEEKDAYS_FULL = ("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье")
+MONTHS_GEN = (
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+)
+SCHEDULE_DAYS = 7
+
+KIND_LABELS = {
+    "tv": "ТВ",
+    "movie": "Фильм",
+    "ova": "OVA",
+    "ona": "ONA",
+    "special": "Спешл",
+    "tv_special": "ТВ-спешл",
+    "music": "Клип",
+}
+MANGA_KIND_LABELS = {
+    "manga": "Манга",
+    "manhwa": "Манхва",
+    "manhua": "Маньхуа",
+    "light_novel": "Лайт-новелла",
+    "novel": "Ранобэ",
+    "one_shot": "Ваншот",
+    "doujin": "Додзинси",
+}
+
+DEFAULT_TIMEOUT = (5, 10)
+PAGE_TIMEOUT = (5, 12)
+SEARCH_TIMEOUT = (3, 6)
+SEARCH_LIMIT = 20
+STATS_PAGE_LIMIT = 100
+STATS_BATCH_SIZE = 4
+
+SEARCH_TTL = 90
+ANIME_TTL = 300
+PROFILE_TTL = 45
+POSTER_TTL = 600
+
+SEARCH_DEBOUNCE_MS = 180
+
+RATE_TTL = 60
+GENRES_TTL = 86400
+SCORE_TOKEN_RE = re.compile(r"^(?:>=?|\u2265)?(\d{1,2}(?:[.,]\d+)?)\+?$")
+USER_STATUS_LABELS = {
+    "planned": "В планах", "watching": "Смотрю", "rewatching": "Пересматриваю",
+    "completed": "Просмотрено", "on_hold": "Отложено", "dropped": "Брошено",
+}
+USER_STATUS_LABELS_MANGA = {
+    "planned": "В планах", "watching": "Читаю", "rewatching": "Перечитываю",
+    "completed": "Прочитано", "on_hold": "Отложено", "dropped": "Брошено",
+}
+
+COMPACT_RESULTS_DP = 2 * 114 + 34
+POPULAR_TTL = 600
+
+POPULAR_PARAMS = {"order": "popularity"}
+POPULAR_LABELS = {"anime": "Популярное аниме", "manga": "Популярная манга"}
+
+GRID_COLUMNS = 3
+GRID_GAP_DP = 5
+GRID_POSTER_RATIO = 1.5
+GRID_RADIUS_DP = 14
+
+def _build_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
+    try:
+        from urllib3.util.retry import Retry
+        retry = Retry(
+            total=2,
+            connect=2,
+            read=1,
+            backoff_factor=0.3,
+            status_forcelist=(500, 502, 503, 504),
+        )
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=16, max_retries=retry)
+    except Exception:
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=16)
+    session.mount("https://", adapter)
+    return session
+
+SESSION = _build_session()
+
+class _RateLimiter:
+    def __init__(self, max_calls: int, period: float):
+        self.max_calls = max_calls
+        self.period = period
+        self._lock = threading.Lock()
+        self._calls = deque()
+
+    def acquire(self):
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._calls and now - self._calls[0] > self.period:
+                    self._calls.popleft()
+                if len(self._calls) < self.max_calls:
+                    self._calls.append(now)
+                    return
+                wait = self.period - (now - self._calls[0])
+            if wait > 0:
+                time.sleep(wait)
+
+    def note_retry_after(self, seconds: float):
+        with self._lock:
+            now = time.monotonic()
+            reserve_until = now + seconds
+            while len(self._calls) < self.max_calls:
+                self._calls.append(reserve_until)
+
+_SHIKI_LIMITER = _RateLimiter(max_calls=4, period=1.0)
+
+def _is_allowed_url(url: str) -> bool:
+    try:
+        parts = urlparse(url)
+        host = (parts.hostname or "").lower()
+    except Exception:
+        return False
+    if parts.scheme != "https" or not host:
+        return False
+    return any(host == d or host.endswith("." + d) for d in ALLOWED_HOSTS)
+
+def _absolute_url(url: str) -> str:
+    if not url:
+        return ""
+    full = urljoin(SITE_URL + "/", url)
+    return full if _is_allowed_url(full) else ""
+
+_POSTER_COUNTER = itertools.count()
+
+def _throttled_request(method: str, url: str, timeout, max_retries: int = 2, limited: bool = True, **kwargs):
+    if not _is_allowed_url(url):
+        raise ValueError("Запрос на недопустимый адрес заблокирован")
+    last_exc = None
+    resp = None
+    for attempt in range(max_retries + 1):
+        if limited:
+            _SHIKI_LIMITER.acquire()
+        try:
+            resp = SESSION.request(method, url, timeout=timeout, **kwargs)
+        except Exception as e:
+            last_exc = e
+            continue
+        if not _is_allowed_url(resp.url):
+            resp.close()
+            raise ValueError("Редирект на недопустимый адрес заблокирован")
+        if resp.status_code == 429:
+            retry_after = 1.0
+            try:
+                retry_after = float(resp.headers.get("Retry-After", "1"))
+            except (TypeError, ValueError):
+                pass
+            retry_after = min(max(retry_after, 0.5), 5.0)
+            _SHIKI_LIMITER.note_retry_after(retry_after)
+            if attempt < max_retries:
+                time.sleep(retry_after)
+                continue
+        return resp
+    if last_exc:
+        raise last_exc
+    return resp
+
+def _throttled_get(url: str, timeout, max_retries: int = 2, limited: bool = True, **kwargs):
+    return _throttled_request("GET", url, timeout, max_retries, limited, **kwargs)
+
+_CACHE: dict = {}
+
+BMP_CACHE_MAX = 60
+_BMP_CACHE: "OrderedDict" = OrderedDict()
+_BMP_LOCK = threading.Lock()
+
+def _bmp_get(key):
+    with _BMP_LOCK:
+        entry = _BMP_CACHE.get(key)
+        if entry is None:
+            return None
+        if time.time() - entry[0] > POSTER_TTL:
+            _BMP_CACHE.pop(key, None)
+            return None
+        _BMP_CACHE.move_to_end(key)
+        return entry[1]
+
+def _bmp_set(key, bmp):
+    with _BMP_LOCK:
+        _BMP_CACHE[key] = (time.time(), bmp)
+        _BMP_CACHE.move_to_end(key)
+        while len(_BMP_CACHE) > BMP_CACHE_MAX:
+            _BMP_CACHE.popitem(last=False)
+
+_GQL_INFLIGHT: dict = {}
+_GQL_LOCK = threading.Lock()
+_GQL_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="shiki-gql")
+
+def _cache_get(key, ttl: int):
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    ts, value = entry
+    if time.time() - ts > ttl:
+        return None
+    return value
+
+def _cache_set(key, value):
+    _CACHE[key] = (time.time(), value)
+    if len(_CACHE) > 200:
+        for k, _ in sorted(_CACHE.items(), key=lambda kv: kv[1][0])[:50]:
+            _CACHE.pop(k, None)
+
+def _blend_colors(base: int, over: int, ratio: float) -> int:
+    def channel(color: int, shift: int) -> int:
+        return (color >> shift) & 0xFF
+    out = 0
+    for shift in (24, 16, 8, 0):
+        value = round(channel(base, shift) * (1.0 - ratio) + channel(over, shift) * ratio)
+        out |= max(0, min(255, value)) << shift
+    return out - (1 << 32) if out >= (1 << 31) else out
+
+class _SwipeTracker:
+
+    def __init__(self, slop: float, fast_px_per_ms: float):
+        self.slop = slop
+        self.fast = fast_px_per_ms
+        self.active = False
+        self.dragging = False
+        self.x0 = 0.0
+        self.y0 = 0.0
+        self.t0 = 0
+
+    def down(self, x: float, y: float, t: int):
+        self.active, self.dragging = True, False
+        self.x0, self.y0, self.t0 = x, y, t
+
+    def reset(self):
+        self.active = self.dragging = False
+
+    def move(self, x: float, y: float, idx: int, n: int) -> Optional[float]:
+        if not self.active:
+            return None
+        dx, dy = x - self.x0, y - self.y0
+        if not self.dragging:
+            if abs(dx) < self.slop or abs(dx) < abs(dy) * 1.5:
+                return None
+            if (dx < 0 and idx >= n - 1) or (dx > 0 and idx <= 0):
+                return None
+            self.dragging = True
+        return dx
+
+    def finish(self, x: float, t: int, width: float, idx: int, n: int, cancelled: bool = False):
+        was = self.dragging
+        dx = x - self.x0
+        self.reset()
+        if not was:
+            return False, None
+        if cancelled:
+            return True, None
+        target = idx + (1 if dx < 0 else -1)
+        if not 0 <= target < n:
+            return True, None
+        elapsed = max(1, t - self.t0)
+        if abs(dx) > width * 0.25 or (abs(dx) > self.slop * 3 and abs(dx) / elapsed > self.fast):
+            return True, target
+        return True, None
+
+
+def _to_float(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+def dp(value: float) -> int:
+    return AndroidUtilities.dp(value)
+
+MD3_SHAPE_SMALL = 8
+MD3_SHAPE_MEDIUM = 12
+MD3_SHAPE_FULL = 100
+
+MD3_ELEVATION_RESTING = 2
+MD3_ELEVATION_PRESSED = 6
+
+_MATERIAL_SPRING = OvershootInterpolator(0.4)
+_MATERIAL_STANDARD = PathInterpolator(0.4, 0.0, 0.2, 1.0)
+
+@java_subclass(JObject, TextWatcher)
+class _QueryWatcher(Base):
+    def __init__(self, callback):
+        self.callback = callback
+
+    @joverride()
+    def beforeTextChanged(self, s, start, count, after):
+        pass
+
+    @joverride()
+    def onTextChanged(self, s, start, before, count):
+        pass
+
+    @joverride()
+    def afterTextChanged(self, s):
+        try:
+            self.callback("" if s is None else str(s))
+        except Exception:
+            pass
+
+@java_subclass(JObject, ViewOutlineProvider)
+class _RoundedOutlineProvider(Base):
+    def __init__(self, radius_px: float):
+        self.radius_px = radius_px
+
+    @joverride()
+    def getOutline(self, view, outline):
+        try:
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), float(self.radius_px))
+        except Exception:
+            pass
+
+@java_subclass(JObject, View.OnTouchListener)
+class _PressElevationListener(Base):
+    def __init__(self, target, resting_px: float, pressed_px: float):
+        self.target = target
+        self.resting_px = float(resting_px)
+        self.pressed_px = float(pressed_px)
+
+    @joverride()
+    def onTouch(self, v, event):
+        try:
+            action = event.getAction()
+            if action == MotionEvent.ACTION_DOWN:
+                self.target.setElevation(self.pressed_px)
+            elif action in (MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL):
+                self.target.setElevation(self.resting_px)
+        except Exception:
+            pass
+        return False
+
+@java_subclass(JObject, View.OnTouchListener)
+class _ClearFieldTouchListener(Base):
+    def __init__(self, edit_text, on_clear):
+        self.edit_text = edit_text
+        self.on_clear = on_clear
+
+    @joverride()
+    def onTouch(self, v, event):
+        try:
+            if event.getAction() == MotionEvent.ACTION_UP:
+                drawables = self.edit_text.getCompoundDrawables()
+                end_drawable = drawables[2] if drawables else None
+                if end_drawable is not None:
+                    icon_w = end_drawable.getBounds().width()
+                    hit_zone = icon_w + dp(16)
+                    if event.getX() >= v.getWidth() - v.getPaddingRight() - hit_zone:
+                        self.on_clear()
+                        return True
+        except Exception:
+            pass
+        return False
+
+@java_subclass(JObject, View.OnTouchListener)
+class _SwipeTouchListener(Base):
+    def __init__(self, callback):
+        self.callback = callback
+
+    @joverride()
+    def onTouch(self, v, event):
+        try:
+            return bool(self.callback(v, event))
+        except Exception:
+            return False
+
+@java_subclass(JObject, DialogInterface.OnDismissListener)
+class _DismissWatcher(Base):
+    def __init__(self, callback):
+        self.callback = callback
+
+    @joverride()
+    def onDismiss(self, dialog):
+        try:
+            self.callback()
+        except Exception:
+            pass
+
+@java_subclass(JObject, View.OnApplyWindowInsetsListener)
+class _InsetsListener(Base):
+    def __init__(self, callback):
+        self.callback = callback
+
+    @joverride()
+    def onApplyWindowInsets(self, view, insets):
+        try:
+            self.callback(int(insets.getSystemWindowInsetTop()), int(insets.getSystemWindowInsetBottom()))
+        except Exception:
+            pass
+        return insets
+
+class ShikimoriPlugin(BasePlugin):
+    def on_plugin_load(self):
+        self.add_on_send_message_hook()
+        try:
+            self.search_menu_item_id = self.add_menu_item(
+                MenuItemData(
+                    menu_type=MenuItemType.CHAT_ACTION_MENU,
+                    text="Поиск аниме",
+                    on_click=self._handle_menu_search,
+                    icon="msg_media",
+                    subtext="Shikimori",
+                    priority=5,
+                )
+            )
+        except Exception as e:
+            self.log(f"Не удалось добавить пункт меню: {e}")
+        try:
+            self.schedule_menu_item_id = self.add_menu_item(
+                MenuItemData(
+                    menu_type=MenuItemType.CHAT_ACTION_MENU,
+                    text="Расписание онгоингов",
+                    on_click=self._handle_menu_schedule,
+                    icon="msg_calendar2",
+                    subtext="Shikimori",
+                    priority=4,
+                )
+            )
+        except Exception as e:
+            self.log(f"Не удалось добавить пункт меню расписания: {e}")
+
+    def create_settings(self) -> List[Any]:
+        return [
+            Header(text="Аккаунт"),
+            Input(
+                key="nickname",
+                text="Никнейм на Shikimori",
+                default="",
+                subtext="Нужен для личной статистики и отметок «мой список»",
+                icon="settings_account",
+            ),
+            Text(
+                text="Проверить никнейм",
+                subtext="Убедиться, что профиль найден",
+                icon="menu_verification",
+                on_click=self._manual_check_nickname,
+            ),
+            Divider(),
+            Header(text="Внешний вид"),
+            Switch(
+                key="grid_view",
+                text="Сетка обложек",
+                default=False,
+                subtext="Три обложки в ряд вместо списка. Можно переключать прямо в окне поиска",
+                icon="msg_media",
+            ),
+            Switch(
+                key="show_my_list",
+                text="Мой список на карточке",
+                default=True,
+                subtext="Статус, прогресс и оценка, если тайтл есть в вашем списке",
+                icon="msg_stats",
+            ),
+            Divider(),
+            Header(text="Команды в чате"),
+            Input(
+                key="cmd_search",
+                text="Поиск аниме",
+                default=".s",
+                subtext="Открывает окно поиска. Пример: .s наруто",
+                icon="msg_search",
+            ),
+            Input(
+                key="cmd_manga",
+                text="Поиск манги",
+                default=".m",
+                subtext="Открывает окно поиска по манге. Пример: .m берсерк",
+                icon="msg_media",
+            ),
+            Input(
+                key="cmd_schedule",
+                text="Расписание онгоингов",
+                default=".c",
+                subtext="Серии на ближайшую неделю",
+                icon="msg_calendar2",
+            ),
+            Input(
+                key="cmd_random",
+                text="Случайное аниме",
+                default=".r",
+                subtext="Можно с фильтрами. Пример: .r 8 комедия или .r план",
+                icon="menu_random",
+            ),
+            Input(
+                key="cmd_info",
+                text="Личная статистика",
+                default=".i",
+                subtext="Отправляет карточку вашего профиля",
+                icon="msg_stats",
+            ),
+        ]
+
+    def _manual_check_nickname(self, view=None):
+        nick = self.get_setting("nickname", "").strip()
+        if not nick:
+            self._show_dialog("Никнейм не указан", "Сначала введите его в поле выше")
+            return
+        run_on_queue(lambda: self._do_check_nickname(nick))
+
+    def _do_check_nickname(self, nickname: str, silent: bool = False):
+        try:
+            data = self._api_get(f"/users/{quote(nickname, safe='')}", {"is_nickname": 1})
+            if not data or not data.get("id"):
+                if not silent:
+                    self._show_dialog("Профиль не найден", f"На Shikimori нет пользователя «{nickname}»")
+                return None
+            if not silent:
+                self._show_dialog("Всё в порядке", f"Профиль {data.get('nickname')} найден и доступен")
+            return data
+        except Exception as e:
+            if not silent:
+                self._show_dialog("Не удалось проверить", str(e))
+            return None
+
+    def _resolve_user_id(self):
+        nick = self.get_setting("nickname", "").strip()
+        return nick or None
+
+    def _api_get(self, path: str, query: dict = None, timeout=DEFAULT_TIMEOUT) -> Any:
+        url = f"{BASE_URL}{path}"
+        if query:
+            url += "?" + urlencode(query)
+        resp = _throttled_get(url, timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _bulletin_info(self, text: str):
+        try:
+            BulletinHelper.show_info(text)
+        except Exception:
+            pass
+
+    def _bulletin_error(self, text: str):
+        try:
+            BulletinHelper.show_error(text)
+        except Exception:
+            pass
+
+    def _plain_text(self, html_text: str) -> str:
+        return html_unescape(re.sub(r"<[^>]*>", "", html_text))
+
+    def _send_formatted(self, peer_id: int, text: str, parse_mode: str = "HTML"):
+        if not peer_id:
+            return
+        try:
+            if parse_mode and parse_mode.upper() == "HTML":
+                text_to_parse = _apply_custom_emoji(text)
+            else:
+                text_to_parse = text
+            parsed = parse_text(text_to_parse, parse_mode=parse_mode)
+            send_message({"peer": peer_id, "message": parsed["message"], "entities": parsed.get("entities")})
+        except Exception:
+            try:
+                send_message({"peer": peer_id, "message": self._plain_text(text)})
+            except Exception:
+                pass
+
+    def _show_dialog(self, title: str, message: str):
+        def _do():
+            try:
+                frag = get_last_fragment()
+                if not frag:
+                    return
+                act = frag.getParentActivity()
+                if not act:
+                    return
+                b = AlertDialogBuilder(act)
+                b.set_title(title)
+                b.set_message(message)
+                b.set_positive_button("OK", lambda b, w: b.dismiss())
+                b.show()
+            except Exception:
+                pass
+        run_on_ui_thread(_do)
+
+    def _get_my_rate(self, media_type: str, aid) -> Optional[dict]:
+        if not aid or not self.get_setting("show_my_list", True):
+            return None
+        nickname = (self.get_setting("nickname", "") or "").strip()
+        if not nickname:
+            return None
+        try:
+            user = self._fetch_user_payload(nickname)
+            uid = user.get("id") if isinstance(user, dict) else None
+            if not uid:
+                return None
+            key = ("my_rate", uid, media_type, aid)
+            cached = _cache_get(key, RATE_TTL)
+            if cached is not None:
+                return cached or None
+            rows = self._api_get("/v2/user_rates", {
+                "user_id": uid,
+                "target_id": aid,
+                "target_type": "Manga" if media_type == "manga" else "Anime",
+            }, timeout=SEARCH_TIMEOUT)
+            rate = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+            _cache_set(key, rate)
+            return rate or None
+        except Exception as e:
+            self.log(f"Мой список #{aid}: {e}")
+            return None
+
+    def _my_list_parts(self, a: dict, rate: dict, media_type: str) -> Optional[dict]:
+        manga = media_type == "manga"
+        status = rate.get("status")
+        label = (USER_STATUS_LABELS_MANGA if manga else USER_STATUS_LABELS).get(status)
+        if not label:
+            return None
+        if manga:
+            total = a.get("chapters") or 0
+            done = rate.get("chapters") or 0
+        else:
+            total = a.get("episodes") or a.get("episodes_aired") or 0
+            done = rate.get("episodes") or 0
+        if status == "completed" and not done:
+            done = total
+
+        progress = None
+        if status != "planned" and done and not (status == "completed" and total and done >= total):
+            progress = f"{done}/{total}" if total else str(done)
+        score = rate.get("score") or 0
+        return {"label": label, "progress": progress, "score": score or None}
+
+    def _format_anime(self, a: dict, anime_id: int = 0, media_type: str = "anime",
+                      user_rate: Optional[dict] = None) -> str:
+        title_ru = a.get("russian") or a.get("name") or "Без названия"
+        year = ""
+        aired = a.get("aired_on")
+        if aired and len(str(aired)) >= 4:
+            year = str(aired)[:4]
+        score = a.get("score") or 0
+
+        status_key = a.get("status")
+        status = self._status_labels_for(media_type).get(status_key, status_key or "?")
+        status_icon = STATUS_ICONS.get(status_key, "❔")
+        _status_emoji_id = STATUS_ICON_CUSTOM_IDS.get(status_key)
+        if _status_emoji_id:
+            status_icon = f'<emoji id="{_status_emoji_id}">{status_icon}</emoji>'
+        kind = self._kind_labels_for(media_type).get(a.get("kind"), a.get("kind") or "?")
+
+        mine = self._my_list_parts(a, user_rate, media_type) if user_rate else None
+        me = _ce('profile', chr(0x1F464))
+
+        rating_line = f"{_ce('rating', chr(0x2B50))} <b>Рейтинг:</b> {html_escape(str(score))}"
+        if mine and mine["score"]:
+            rating_line += f" · {me} оценка {html_escape(str(mine['score']))}"
+
+        status_line = f"{status_icon} <b>Статус:</b> {html_escape(str(status))}"
+        if mine:
+            status_line += f" · {me} {html_escape(mine['label'])}"
+
+        aid = anime_id or a.get("id")
+        title_html = html_escape(title_ru)
+        if aid:
+            path = MEDIA_SITE_PATHS.get(media_type, "animes")
+            title_html = f"<a href='{SITE_URL}/{path}/{int(aid)}'>{title_html}</a>"
+
+        lines = [
+            f"<b>{title_html}</b>",
+            "",
+            rating_line,
+            status_line,
+            f"{_ce('year', chr(0x1F4C5))} <b>Год:</b> {html_escape(year) if year else '-'}",
+        ]
+
+        genre_names = [
+            g.get("russian") or g.get("name")
+            for g in (a.get("genres") or [])
+            if isinstance(g, dict) and (g.get("russian") or g.get("name"))
+        ]
+        if genre_names:
+            lines.append(f"{_ce('genres', chr(0x1F3AD))} <b>Жанры:</b> {html_escape(', '.join(genre_names))}")
+
+        lines.append(f"{_ce('type', chr(0x1F3AC))} <b>Тип:</b> {html_escape(str(kind))}")
+
+        if media_type == "manga":
+            chapters = a.get("chapters") or 0
+            volumes = a.get("volumes") or 0
+            chapters_line = f"{_ce('chapters', chr(0x1F4D6))} <b>Главы:</b> {chapters if chapters else '?'}"
+            if volumes:
+                chapters_line += f" ({volumes} т.)"
+            if mine and mine["progress"]:
+                chapters_line += f" · {me} {html_escape(mine['progress'])}"
+            lines.append(chapters_line)
+        else:
+            ep_aired = int(_to_float(a.get("episodes_aired")))
+            ep_total = int(_to_float(a.get("episodes")))
+            if status_key == "ongoing":
+                episodes_text = f"{ep_aired}/{ep_total if ep_total else '?'}"
+            else:
+                episodes_text = str(ep_total or ep_aired or "?")
+            episodes_line = f"{_ce('episodes', chr(0x1F4FA))} <b>Эпизоды:</b> {episodes_text}"
+            if mine and mine["progress"]:
+                episodes_line += f" · {me} {html_escape(mine['progress'])}"
+            lines.append(episodes_line)
+            if status_key == "ongoing":
+                next_line = self._next_episode_line(a, ep_aired)
+                if next_line:
+                    lines.append(f"{_ce('next', chr(0x1F514))} <b>Новая серия:</b> {next_line}")
+
+        return f"<blockquote>{chr(10).join(lines)}</blockquote>"
+
+    def _send_anime(self, peer_id: int, anime: dict):
+        aid = anime.get("id", 0)
+        media_type = anime.get("_media_type", "anime")
+
+        def _work():
+            item = self._with_genres(anime, media_type)
+            rate = self._get_my_rate(media_type, aid)
+            caption = self._format_anime(item, anime_id=aid, media_type=media_type, user_rate=rate)
+            self._send_card(peer_id, caption, media_type, item)
+
+        run_on_queue(_work)
+
+    def _with_genres(self, item: dict, media_type: str) -> dict:
+        if not item.get("id"):
+            return item
+        full = _cache_get(("title_full", media_type, item["id"]), ANIME_TTL)
+        if full is None:
+            try:
+                endpoint = MEDIA_ENDPOINTS.get(media_type, "/animes")
+                full = self._api_get(f"{endpoint}/{item['id']}")
+                if full and full.get("id"):
+                    _cache_set(("title_full", media_type, item["id"]), full)
+            except Exception as e:
+                self.log(f"Жанры #{item.get('id')}: {e}")
+                return item
+        if not full:
+            return item
+        item = dict(item)
+        for key in ("genres", "next_episode_at", "description", "status", "kind", "episodes", "episodes_aired", "chapters", "volumes"):
+            if key in full:
+                item[key] = full[key]
+        return item
+
+    def _next_episode_line(self, a: dict, ep_aired: int) -> str:
+        raw = a.get("next_episode_at")
+        if not raw:
+            return ""
+        try:
+            text = str(raw).replace("Z", "+00:00")
+            dt = datetime.fromisoformat(text)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            seconds = int((dt - datetime.now(timezone.utc)).total_seconds())
+        except Exception:
+            return ""
+        number = (ep_aired or 0) + 1
+        if seconds <= 0:
+            return f"серия {number} уже вышла или выходит сейчас"
+        days, rest = divmod(seconds, 86400)
+        hours, rest = divmod(rest, 3600)
+        minutes = rest // 60
+        if days:
+            when = f"{days} дн. {hours} ч." if hours else f"{days} дн."
+        elif hours:
+            when = f"{hours} ч. {minutes} мин." if minutes else f"{hours} ч."
+        else:
+            when = f"{max(minutes, 1)} мин."
+        return f"серия {number} - через {when}"
+
+    def _graphql_poster_url(self, media_type: str, aid) -> str:
+        root = GRAPHQL_ROOTS.get(media_type)
+        if not root or not aid:
+            return ""
+        query = '{ %s(ids: "%d") { id poster { originalUrl previewUrl } } }' % (root, int(aid))
+        try:
+            resp = _throttled_request("POST", GRAPHQL_URL, (5, 10), max_retries=0, json={"query": query})
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            self.log(f"GraphQL {media_type} #{aid}: {e}")
+            return ""
+        if not isinstance(payload, dict) or payload.get("errors"):
+            return ""
+        for row in (payload.get("data") or {}).get(root) or []:
+            if isinstance(row, dict) and str(row.get("id")) == str(aid):
+                poster = row.get("poster")
+                if isinstance(poster, dict):
+                    return _absolute_url(poster.get("originalUrl") or poster.get("previewUrl") or "")
+        return ""
+
+    @staticmethod
+    def _abs_url(url: str) -> str:
+        return _absolute_url(url)
+
+    @staticmethod
+    def _looks_like_placeholder(url: str) -> bool:
+        low = (url or "").lower()
+        return any(marker in low for marker in POSTER_PLACEHOLDER_MARKERS)
+
+    _gql_batch_broken = False
+
+    def _graphql_posters_batch(self, media_type: str, ids) -> dict:
+        root = GRAPHQL_ROOTS.get(media_type)
+        if not root or self._gql_batch_broken:
+            return {}
+        clean = []
+        for raw in ids:
+            try:
+                clean.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        clean = list(dict.fromkeys(clean))[:GQL_BATCH]
+        if not clean:
+            return {}
+        query = '{ %s(ids: "%s", limit: %d) { id poster { originalUrl previewUrl } } }' % (
+            root, ",".join(str(i) for i in clean), len(clean))
+        try:
+            resp = _throttled_request("POST", GRAPHQL_URL, (5, 10), max_retries=0, json={"query": query})
+            if resp.status_code != 200:
+                self.log(f"GraphQL batch {media_type}: HTTP {resp.status_code}")
+                return {}
+            payload = resp.json()
+        except Exception as e:
+            self.log(f"GraphQL batch {media_type}: {e}")
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        if payload.get("errors"):
+            self.log(f"GraphQL batch {media_type}: {payload.get('errors')}")
+            self._gql_batch_broken = True
+            return {}
+        result = {}
+        for row in (payload.get("data") or {}).get(root) or []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                rid = int(row.get("id"))
+            except (TypeError, ValueError):
+                continue
+            poster = row.get("poster")
+            url = ""
+            if isinstance(poster, dict):
+                url = self._abs_url(poster.get("previewUrl") or poster.get("originalUrl") or "")
+            result[rid] = url
+            _cache_set(("gql_thumb", media_type, rid), url)
+        return result
+
+    def _gql_thumb_url(self, media_type: str, aid) -> str:
+        try:
+            key = ("gql_thumb", media_type, int(aid))
+        except (TypeError, ValueError):
+            return ""
+        cached = _cache_get(key, ANIME_TTL)
+        if cached is not None:
+            return cached
+        fut = _GQL_INFLIGHT.get((media_type, key[2]))
+        if fut is not None:
+            try:
+                fut.result(timeout=12)
+            except Exception:
+                pass
+            cached = _cache_get(key, ANIME_TTL)
+            if cached is not None:
+                return cached
+        got = self._graphql_posters_batch(media_type, [aid])
+        if key[2] in got:
+            return got[key[2]]
+        try:
+            url = self._graphql_poster_url(media_type, aid)
+        except Exception as e:
+            self.log(f"GraphQL-постер {media_type} #{aid}: {e}")
+            url = ""
+        if url:
+            _cache_set(key, url)
+        return url
+
+    def _prefetch_gql_posters(self, media_type: str, ids) -> None:
+        pending = []
+        for raw in ids:
+            try:
+                aid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if aid not in pending and _cache_get(("gql_thumb", media_type, aid), ANIME_TTL) is None:
+                pending.append(aid)
+        for i in range(0, len(pending), GQL_BATCH):
+            if self._gql_batch_broken:
+                break
+            self._graphql_posters_batch(media_type, pending[i:i + GQL_BATCH])
+
+    def _get_hq_poster_url(self, media_type: str, item: dict) -> str:
+        aid = item.get("id")
+        key = ("hq_poster", media_type, aid)
+        if aid:
+            cached = _cache_get(key, ANIME_TTL)
+            if cached is not None:
+                return cached
+        url = self._graphql_poster_url(media_type, aid) if aid else ""
+        if not url:
+            url = self._extract_poster_url(item)
+        if not url and aid:
+            url = self._extract_poster_url(self._enrich_with_poster(dict(item, _media_type=media_type)))
+        if self._looks_like_placeholder(url):
+            url = ""
+        if aid:
+            _cache_set(key, url)
+        return url
+
+    def _poster_path(self, ext: str) -> Optional[str]:
+        try:
+            cache_dir = str(AndroidUtilities.getCacheDir().getAbsolutePath())
+        except Exception:
+            return None
+
+        return os.path.join(cache_dir, f"shikimori_card_{next(_POSTER_COUNTER) % POSTER_SLOTS}{ext}")
+
+    def _download_poster_file(self, url: str) -> Optional[str]:
+        if not url:
+            return None
+        resp = _throttled_get(url, timeout=(6, 20), limited=False, stream=True)
+        try:
+            resp.raise_for_status()
+            declared = resp.headers.get("Content-Length")
+            if declared and declared.isdigit() and int(declared) > MAX_POSTER_BYTES:
+                return None
+            buf = bytearray()
+            for chunk in resp.iter_content(65536):
+                buf.extend(chunk)
+                if len(buf) > MAX_POSTER_BYTES:
+                    return None
+        finally:
+            resp.close()
+        data = bytes(buf)
+        if data[:3] == b"\xff\xd8\xff":
+            ext = ".jpg"
+        elif data[:8] == b"\x89PNG\r\n\x1a\n":
+            ext = ".png"
+        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            ext = ".webp"
+        else:
+            return None
+        path = self._poster_path(ext)
+        if not path:
+            return None
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
+
+    def _send_card(self, peer_id: int, caption: str, media_type: str, item: dict):
+        path = None
+        try:
+            url = self._get_hq_poster_url(media_type, item)
+            path = self._download_poster_file(url) if url else None
+        except Exception as e:
+            self.log(f"Не удалось получить обложку: {e}")
+
+        def _do():
+            if path and len(self._plain_text(caption)) <= PHOTO_CAPTION_LIMIT:
+                try:
+                    send_photo(peer_id, path, caption=_apply_custom_emoji(caption), high_quality=True, parse_mode="HTML")
+                    return
+                except Exception as e:
+                    self.log(f"Не удалось отправить фото: {e}")
+            self._send_formatted(peer_id, caption, "HTML")
+        run_on_ui_thread(_do)
+
+    def _fetch_user_payload(self, nickname: str) -> Optional[dict]:
+        key = ("user_profile", nickname.lower())
+        cached = _cache_get(key, PROFILE_TTL)
+        if cached is not None:
+            return cached
+        user = self._api_get(f"/users/{quote(nickname, safe='')}", {"is_nickname": 1})
+        if user and user.get("id"):
+            _cache_set(key, user)
+        return user
+
+    def _get_user_stats(self, nickname: str) -> dict:
+        stats = {
+            "watching": {"count": 0, "episodes": 0},
+            "planned": {"count": 0, "episodes": 0},
+            "rewatching": {"count": 0, "episodes": 0},
+            "completed": {"count": 0, "episodes": 0},
+            "on_hold": {"count": 0, "episodes": 0},
+            "dropped": {"count": 0, "episodes": 0},
+        }
+        page = 1
+        limit = STATS_PAGE_LIMIT
+
+        def fetch_page(p: int):
+            return self._api_get(
+                f"/users/{quote(nickname, safe='')}/anime_rates",
+                {"is_nickname": 1, "page": p, "limit": limit},
+                timeout=PAGE_TIMEOUT,
+            )
+
+        with ThreadPoolExecutor(max_workers=STATS_BATCH_SIZE) as ex:
+            while True:
+                batch_pages = list(range(page, page + STATS_BATCH_SIZE))
+                futures = {ex.submit(fetch_page, p): p for p in batch_pages}
+                page_results, page_errors = {}, {}
+                for fut in as_completed(futures):
+                    p = futures[fut]
+                    try:
+                        page_results[p] = fut.result() or []
+                    except Exception as e:
+                        page_errors[p] = e
+
+                stop = False
+                for p in batch_pages:
+                    if p in page_errors:
+                        raise page_errors[p]
+                    rates = page_results.get(p, [])
+                    for rate in rates:
+                        status = rate.get("status")
+                        if status not in stats:
+                            continue
+                        
+                        stats[status]["count"] += 1
+                        anime = rate.get("anime") or {}
+                        
+                        watched = rate.get("episodes") or 0
+                        if status == "completed" and not watched:
+                            watched = anime.get("episodes") or anime.get("episodes_aired") or 0
+                        
+                        if status != "planned":
+                            stats[status]["episodes"] += watched
+                            
+                    if len(rates) < limit:
+                        stop = True
+                        break
+                if stop:
+                    break
+                page += STATS_BATCH_SIZE
+        return stats
+
+    def _cmd_profile(self, peer_id: int):
+        nickname = self._resolve_user_id()
+        if not nickname:
+            run_on_ui_thread(lambda: self._send_formatted(
+                peer_id,
+                "Укажите ваш никнейм в настройках плагина",
+                "HTML",
+            ))
+            return
+        run_on_queue(lambda: self._fetch_profile(peer_id, nickname))
+
+    def _fetch_profile(self, peer_id: int, nickname: str):
+        try:
+            user = self._fetch_user_payload(nickname)
+            if not user or not user.get("id"):
+                run_on_ui_thread(lambda: self._send_formatted(
+                    peer_id,
+                    f"Профиль «{html_escape(nickname)}» не найден",
+                    "HTML",
+                ))
+                return
+
+            cache_key = ("profile_stats_full", nickname.lower())
+            stats = _cache_get(cache_key, PROFILE_TTL)
+            if stats is None:
+                self._bulletin_info("Собираю информацию…")
+                stats = self._get_user_stats(nickname)
+                _cache_set(cache_key, stats)
+
+            self._send_profile(peer_id, user, stats)
+        except Exception as e:
+            self._reply_html(peer_id, f"Ошибка: {html_escape(str(e))}")
+
+    def _send_profile(self, peer_id: int, user: dict, stats: dict):
+        total_count = sum(s.get("count", 0) for s in stats.values())
+        total_episodes = sum((s.get("episodes") or 0) for s in stats.values())
+
+        status_map = {
+            "watching": (_ce("watching", "\U0001F4FA"), "Смотрю"),
+            "rewatching": ("\U0001f504", "Пересматриваю"),
+            "completed": (_ce("completed", "\u2705"), "Просмотрено"),
+            "planned": ("\U0001F4C5", "В планах"),
+            "on_hold": (_ce("on_hold", "\u23F8"), "Отложено"),
+            "dropped": (_ce("dropped", "\u274C"), "Брошено"),
+        }
+
+        lines = [
+            f"{_ce('profile', chr(0x1F464))} <b>{html_escape(str(user.get('nickname', 'Unknown')))}</b>",
+        ]
+        if user.get("name"):
+            lines.append(f"<i>{html_escape(str(user['name']))}</i>")
+        lines.append("")
+
+        shown_any = False
+        for status, (icon, label) in status_map.items():
+            data = stats.get(status)
+            if not data or not data.get("count"):
+                continue
+            count = data["count"]
+            episodes = data.get("episodes") or 0
+            if status == "planned":
+                lines.append(f"{icon} {label}: {count}")
+            else:
+                lines.append(f"{icon} {label}: {count} · {episodes} эп.")
+            shown_any = True
+        if not shown_any:
+            lines.append("<i>Список пуст или скрыт настройками приватности</i>")
+
+        lines.append("")
+        lines.append(f"{_ce('total', chr(0x1F4CA))} Итого: {total_count} тайтлов, просмотрено {total_episodes} серий")
+
+        text = f"<blockquote>{chr(10).join(lines)}</blockquote>"
+        text += f"\n{_ce('link', chr(0x1F517))} <a href='{SITE_URL}/{quote(str(user['nickname']), safe='')}'>Открыть профиль на Shikimori</a>"
+        run_on_ui_thread(lambda: self._send_formatted(peer_id, text, "HTML"))
+
+    def _get_cmd(self, key: str, default: str) -> str:
+        val = (self.get_setting(key, default) or "").strip().lower()
+        if not val:
+            val = default
+        if not val.startswith("."):
+            val = "." + val
+        return val
+
+    def on_send_message_hook(self, account: int, params: Any) -> HookResult:
+        try:
+            msg = getattr(params, "message", None)
+            if not isinstance(msg, str):
+                return HookResult()
+            text = msg.strip()
+            low = text.lower()
+
+            cmd_search = self._get_cmd("cmd_search", ".s")
+            cmd_manga = self._get_cmd("cmd_manga", ".m")
+            cmd_info = self._get_cmd("cmd_info", ".i")
+            cmd_schedule = self._get_cmd("cmd_schedule", ".c")
+            cmd_random = self._get_cmd("cmd_random", ".r")
+
+            if low == cmd_schedule:
+                mode, arg = "c", ""
+            elif low == cmd_info:
+                mode, arg = "i", ""
+            elif low.startswith(cmd_info + " "):
+                peer = getattr(params, "peer", None) or getattr(params, "dialog_id", None)
+                peer_id = self._extract_peer_id(peer)
+                if peer_id:
+                    run_on_ui_thread(lambda: self._send_formatted(peer_id, f"\u274C Используйте просто {cmd_info}", "HTML"))
+                return HookResult(strategy=HookStrategy.CANCEL)
+            elif low == cmd_search or low.startswith(cmd_search + " "):
+                mode, arg = "s", text[len(cmd_search):].strip()
+            elif low == cmd_manga or low.startswith(cmd_manga + " "):
+                mode, arg = "m", text[len(cmd_manga):].strip()
+            elif low == cmd_random or low.startswith(cmd_random + " "):
+                mode, arg = "r", text[len(cmd_random):].strip()
+            else:
+                return HookResult()
+
+            peer = getattr(params, "peer", None) or getattr(params, "dialog_id", None)
+            peer_id = self._extract_peer_id(peer)
+            if not peer_id:
+                return HookResult()
+
+            if mode == "s":
+                run_on_ui_thread(lambda: self._open_inline_search(peer_id, arg, media_type="anime"))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            if mode == "m":
+                run_on_ui_thread(lambda: self._open_inline_search(peer_id, arg, media_type="manga"))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            if mode == "c":
+                run_on_ui_thread(lambda: self._open_schedule(peer_id))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            if mode == "i":
+                run_on_queue(lambda: self._cmd_profile(peer_id))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            if mode == "r":
+                run_on_queue(lambda: self._cmd_random(peer_id, arg))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            return HookResult()
+        except Exception:
+            return HookResult()
+
+    def _peer_from_menu_context(self, context: dict) -> int:
+        dialog_id = context.get("dialog_id")
+        if isinstance(dialog_id, int) and dialog_id:
+            return dialog_id
+        user_id = context.get("userId")
+        chat_id = context.get("chatId")
+        if user_id:
+            return user_id
+        if chat_id:
+            return -chat_id
+        return 0
+
+    def _handle_menu_search(self, context: dict):
+        try:
+            peer_id = self._peer_from_menu_context(context)
+            if peer_id:
+                self._open_inline_search(peer_id, "")
+        except Exception as e:
+            self.log(f"Не удалось открыть поиск из меню: {e}")
+
+    def _handle_menu_schedule(self, context: dict):
+        try:
+            peer_id = self._peer_from_menu_context(context)
+            if peer_id:
+                self._open_schedule(peer_id)
+        except Exception as e:
+            self.log(f"Не удалось открыть расписание из меню: {e}")
+
+    def _extract_peer_id(self, peer) -> int:
+        if peer is None:
+            return 0
+        if isinstance(peer, int):
+            return peer
+        try:
+            uid = getattr(peer, "user_id", 0)
+            if uid:
+                return uid
+            cid = getattr(peer, "chat_id", 0)
+            if cid:
+                return -cid
+            chid = getattr(peer, "channel_id", 0)
+            if chid:
+                return -(1000000000000 + chid)
+            return 0
+        except Exception:
+            return 0
+
+    def _search_animes(self, query: str, page: int = 1, limit: int = SEARCH_LIMIT, media_type: str = "anime") -> list:
+        endpoint = MEDIA_ENDPOINTS.get(media_type, "/animes")
+        key = ("search", media_type, query.lower(), page, limit)
+        cached = _cache_get(key, SEARCH_TTL)
+        if cached is not None:
+            return cached
+        results = self._api_get(endpoint, {"search": query, "limit": limit, "page": page}, timeout=SEARCH_TIMEOUT) or []
+        for r in results:
+            r["_media_type"] = media_type
+        _cache_set(key, results)
+        return results
+
+    def _search_with_fallback(self, query: str, page: int = 1, media_type: str = "anime") -> Tuple[list, str]:
+        attempts = [query]
+        stripped = query.strip(" .,!?-_\u2014\u2013\"'")
+        if stripped and stripped != query:
+            attempts.append(stripped)
+        words = query.split()
+        if len(words) > 1:
+            attempts.append(" ".join(words[:-1]))
+            if len(words) > 2:
+                attempts.append(" ".join(words[:1]))
+
+        seen = set()
+        ordered = []
+        for q in attempts:
+            q = q.strip()
+            if q and q not in seen:
+                seen.add(q)
+                ordered.append(q)
+        if not ordered:
+            return [], query
+
+        try:
+            first = self._search_animes(ordered[0], page, media_type=media_type)
+        except Exception:
+            first = []
+        if first or len(ordered) == 1:
+            return first, ordered[0] if first else query
+        ordered = ordered[1:]
+
+        with ThreadPoolExecutor(max_workers=min(4, len(ordered))) as ex:
+            futures = {ex.submit(self._search_animes, q, page, SEARCH_LIMIT, media_type): q for q in ordered}
+            results_map = {}
+            for fut in as_completed(futures):
+                q = futures[fut]
+                try:
+                    results_map[q] = fut.result() or []
+                except Exception:
+                    results_map[q] = []
+                for candidate in ordered:
+                    if candidate not in results_map:
+                        break
+                    if results_map[candidate]:
+                        return results_map[candidate], candidate
+        return [], query
+
+    def _cmd_info(self, peer_id: int, aid: int, media_type: str = "anime"):
+        try:
+            endpoint = MEDIA_ENDPOINTS.get(media_type, "/animes")
+            cache_key = ("title_full", media_type, aid)
+            data = _cache_get(cache_key, ANIME_TTL)
+            if data is None:
+                self._bulletin_info(f" Загружаю карточку #{aid}…")
+                data = self._api_get(f"{endpoint}/{aid}")
+                if data and data.get("id"):
+                    _cache_set(cache_key, data)
+            if not data or not data.get("id"):
+                not_found = MEDIA_NOT_FOUND.get(media_type, MEDIA_NOT_FOUND["anime"]).format(id=aid)
+                run_on_ui_thread(lambda: self._send_formatted(peer_id, f"\u274C {not_found}", "HTML"))
+                return
+            data["_media_type"] = media_type
+            self._send_anime(peer_id, data)
+        except Exception as e:
+            self._reply_html(peer_id, f"\u274C Ошибка: {html_escape(str(e))}")
+
+    def _reply_html(self, peer_id: int, text: str):
+        run_on_ui_thread(lambda: self._send_formatted(peer_id, text, "HTML"))
+
+    def _get_genres(self) -> list:
+        key = ("genres_anime",)
+        cached = _cache_get(key, GENRES_TTL)
+        if cached is not None:
+            return cached
+        rows = self._api_get("/genres", timeout=DEFAULT_TIMEOUT) or []
+        genres = [g for g in rows if isinstance(g, dict) and (g.get("kind") == "anime" or g.get("entry_type") == "Anime")]
+        _cache_set(key, genres)
+        return genres
+
+    def _find_genre(self, query: str) -> Optional[dict]:
+        def norm(x):
+            return (x or "").lower().replace("ё", "е").strip()
+        q = norm(query)
+        if not q:
+            return None
+        genres = self._get_genres()
+        for g in genres:
+            if q in (norm(g.get("russian")), norm(g.get("name"))):
+                return g
+        for g in genres:
+            if norm(g.get("russian")).startswith(q) or norm(g.get("name")).startswith(q):
+                return g
+        for g in genres:
+            if q in norm(g.get("russian")) or q in norm(g.get("name")):
+                return g
+        return None
+
+    def _parse_random_args(self, arg: str) -> dict:
+        opts = {"planned": False, "min_score": None, "words": []}
+        for tok in arg.split():
+            t = tok.strip(",;")
+            low = t.lower()
+            m = SCORE_TOKEN_RE.match(low)
+            if m:
+                value = float(m.group(1).replace(",", "."))
+                if 0 < value <= 10:
+                    opts["min_score"] = value
+                    continue
+            if low.startswith("план") or low in ("planned", "plan"):
+                opts["planned"] = True
+                continue
+            if t:
+                opts["words"].append(t)
+        return opts
+
+    def _cmd_random(self, peer_id: int, arg: str):
+        try:
+            opts = self._parse_random_args(arg)
+            min_score = opts["min_score"]
+            words = opts["words"]
+            if opts["planned"]:
+                item = self._random_planned(peer_id, min_score, bool(words))
+            else:
+                item = self._random_catalog(peer_id, min_score, words)
+            if not item:
+                return
+            item["_media_type"] = "anime"
+            self._send_anime(peer_id, item)
+        except Exception as e:
+            self._reply_html(peer_id, f"\u274C Ошибка: {html_escape(str(e))}")
+
+    def _random_catalog(self, peer_id: int, min_score: Optional[float], words: list) -> Optional[dict]:
+        genre_ids = []
+        if words:
+            found = self._find_genre(" ".join(words))
+            pairs = [found] if found else [self._find_genre(w) for w in words[:3]]
+            missing = [w for w, g in zip(words[:3], pairs) if g is None] if not found else []
+            if not pairs or any(g is None for g in pairs):
+                names = ", ".join(g.get("russian") or g.get("name") for g in self._get_genres()[:24])
+                shown = html_escape(" ".join(missing or words))
+                self._reply_html(peer_id, f"\u274C Жанр «{shown}» не найден.\nПопробуйте: {html_escape(names)}")
+                return None
+            genre_ids = [g["id"] for g in pairs]
+        self._bulletin_info("Ищу случайное аниме…")
+        params = {"order": "random", "limit": 20, "status": "ongoing,released"}
+        if genre_ids:
+            params["genre"] = ",".join(str(i) for i in genre_ids)
+        if min_score:
+            params["score"] = int(min_score)
+        rows = self._api_get("/animes", params, timeout=SEARCH_TIMEOUT) or []
+        if min_score:
+            rows = [r for r in rows if isinstance(r, dict) and _to_float(r.get("score")) >= min_score]
+        rows = [r for r in rows if isinstance(r, dict) and r.get("id")]
+        if not rows:
+            self._reply_html(peer_id, "\u274C По этим фильтрам ничего не нашлось")
+            return None
+        return random.choice(rows)
+
+    def _random_planned(self, peer_id: int, min_score: Optional[float], has_genres: bool) -> Optional[dict]:
+        nickname = self._resolve_user_id()
+        if not nickname:
+            self._reply_html(peer_id, "Укажите ваш никнейм в настройках плагина")
+            return None
+        if has_genres:
+            self._bulletin_info("В режиме «план» жанр не учитывается")
+        self._bulletin_info("Выбираю из списка «В планах»…")
+        rates = self._api_get(
+            f"/users/{quote(nickname, safe='')}/anime_rates",
+            {"is_nickname": 1, "status": "planned", "limit": 5000},
+            timeout=PAGE_TIMEOUT,
+        ) or []
+        pool = []
+        for r in rates:
+            a = r.get("anime") if isinstance(r, dict) else None
+            if not isinstance(a, dict) or not a.get("id"):
+                continue
+            if min_score and _to_float(a.get("score")) < min_score:
+                continue
+            pool.append(a)
+        if not pool:
+            self._reply_html(peer_id, "\u274C В списке «В планах» нет подходящих тайтлов")
+            return None
+        return random.choice(pool)
+
+    def _calc_in_sample_size(self, options, req_w_px: int, req_h_px: int) -> int:
+        height = options.outHeight
+        width = options.outWidth
+        in_sample_size = 1
+        if req_w_px > 0 and req_h_px > 0 and (height > req_h_px or width > req_w_px):
+            half_h = height // 2
+            half_w = width // 2
+            while (half_h // in_sample_size) >= req_h_px and (half_w // in_sample_size) >= req_w_px:
+                in_sample_size *= 2
+        return in_sample_size
+
+    def _load_poster_bitmap(self, url: str, target_w_px: int = 0, target_h_px: int = 0, radius_px: float = 0.0):
+        if not url:
+            return None
+        key = (url, target_w_px, target_h_px, radius_px)
+        cached = _bmp_get(key)
+        if cached is not None:
+            return cached
+        try:
+            resp = _throttled_get(url, timeout=(6, 10), limited=False)
+            resp.raise_for_status()
+            data = resp.content
+            if target_w_px > 0 and target_h_px > 0:
+                opts = BitmapFactory.Options()
+                opts.inJustDecodeBounds = True
+                BitmapFactory.decodeByteArray(data, 0, len(data), opts)
+                opts.inSampleSize = self._calc_in_sample_size(opts, target_w_px, target_h_px)
+                opts.inJustDecodeBounds = False
+                bmp = BitmapFactory.decodeByteArray(data, 0, len(data), opts)
+                if bmp is not None:
+                    bmp = self._prepare_poster_bitmap(bmp, target_w_px, target_h_px, radius_px)
+            else:
+                bmp = BitmapFactory.decodeByteArray(data, 0, len(data))
+            if bmp is not None:
+                _bmp_set(key, bmp)
+            else:
+                self.log(f"Не удалось декодировать постер: {url}")
+            return bmp
+        except Exception as e:
+            self.log(f"Ошибка загрузки постера {url}: {e}")
+            return None
+
+    def _rounded_background(self, color_hex: str, radius_dp: float) -> "GradientDrawable":
+        d = GradientDrawable()
+        d.setShape(GradientDrawable.RECTANGLE)
+        d.setColor(AndroidColor.parseColor(color_hex))
+        d.setCornerRadius(dp(radius_dp))
+        return d
+
+    def _clip_rounded(self, view, radius_dp: float):
+        try:
+            view.setOutlineProvider(_RoundedOutlineProvider.new_instance(init_args=[float(dp(radius_dp))]))
+            view.setClipToOutline(True)
+        except Exception:
+            pass
+
+    def _prepare_poster_bitmap(self, bitmap, target_w_px: int, target_h_px: int, radius_px: float):
+        try:
+            if bitmap is None or target_w_px <= 0 or target_h_px <= 0:
+                return bitmap
+            cropped = ThumbnailUtils.extractThumbnail(bitmap, target_w_px, target_h_px)
+            if cropped is None:
+                cropped = bitmap
+            output = Bitmap.createBitmap(target_w_px, target_h_px, Bitmap.Config.ARGB_8888)
+            canvas = Canvas(output)
+            paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            rect = RectF(0.0, 0.0, float(target_w_px), float(target_h_px))
+            canvas.drawRoundRect(rect, radius_px, radius_px, paint)
+            paint.setXfermode(PorterDuffXfermode(PorterDuff.Mode.SRC_IN))
+            canvas.drawBitmap(cropped, 0.0, 0.0, paint)
+            return output
+        except Exception as e:
+            self.log(f"Не удалось скруглить обложку: {e}")
+            return bitmap
+
+    def _ripple_foreground(self, ctx):
+        try:
+            cached_id = _ICON_ID_CACHE.get("ripple")
+            if cached_id is None:
+                from android.R import attr as AndroidAttr
+                tv = TypedValue()
+                ctx.getTheme().resolveAttribute(AndroidAttr.selectableItemBackground, tv, True)
+                cached_id = int(tv.resourceId or 0)
+                _ICON_ID_CACHE["ripple"] = cached_id
+            if cached_id:
+                return ctx.getResources().getDrawable(cached_id, ctx.getTheme())
+        except Exception:
+            pass
+        return None
+
+    def _theme_color(self, key_name: str, fallback_hex: str) -> int:
+        try:
+            key = getattr(Theme, key_name)
+            return Theme.getColor(key)
+        except Exception:
+            return AndroidColor.parseColor(fallback_hex)
+
+    def _contrast_on_color(self, bg_color: int) -> int:
+        try:
+            r = (bg_color >> 16) & 0xFF
+            g = (bg_color >> 8) & 0xFF
+            b = bg_color & 0xFF
+            luminance = 0.299 * r + 0.587 * g + 0.114 * b
+            return AndroidColor.parseColor("#1A1A1A") if luminance > 150 else AndroidColor.WHITE
+        except Exception:
+            return AndroidColor.WHITE
+
+    def _status_labels_for(self, media_type: str) -> dict:
+        return MANGA_STATUS_LABELS if media_type == "manga" else STATUS_LABELS
+
+    def _kind_labels_for(self, media_type: str) -> dict:
+        return MANGA_KIND_LABELS if media_type == "manga" else KIND_LABELS
+
+    def _status_color_hex(self, status_key: str) -> str:
+        container_hex, _content_hex = STATUS_TONAL.get(status_key, ("#333333", "#CCCCCC"))
+        return container_hex
+
+    def _build_status_badge(self, ctx, status_key: str, media_type: str = "anime"):
+        label = self._status_labels_for(media_type).get(status_key)
+        if not label:
+            return None
+        container_hex, content_hex = STATUS_TONAL.get(status_key, ("#333333", "#CCCCCC"))
+        try:
+            container = AndroidColor.parseColor(container_hex)
+            content = AndroidColor.parseColor(content_hex)
+        except Exception:
+            return None
+
+        badge = LinearLayout(ctx)
+        badge.setOrientation(LinearLayout.HORIZONTAL)
+        badge.setGravity(Gravity.CENTER_VERTICAL)
+        bg = GradientDrawable()
+        bg.setShape(GradientDrawable.RECTANGLE)
+        bg.setCornerRadius(dp(MD3_SHAPE_FULL))
+        bg.setColor(container)
+        badge.setBackground(bg)
+        badge.setPadding(dp(8), dp(3), dp(9), dp(3))
+
+        dot = View(ctx)
+        dot_bg = GradientDrawable()
+        dot_bg.setShape(GradientDrawable.OVAL)
+        dot_bg.setColor(content)
+        dot.setBackground(dot_bg)
+        dot_size = dp(6)
+        dot_lp = LinearLayout.LayoutParams(dot_size, dot_size)
+        dot_lp.setMargins(0, 0, dp(5), 0)
+        dot.setLayoutParams(dot_lp)
+        badge.addView(dot)
+
+        text = TextView(ctx)
+        text.setText(label)
+        text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11)
+        text.setTypeface(None, Typeface.BOLD)
+        text.setIncludeFontPadding(False)
+        try:
+            text.setAllCaps(True)
+        except Exception:
+            pass
+        try:
+            text.setLetterSpacing(0.04)
+        except Exception:
+            pass
+        try:
+            text.setTextColor(content)
+        except Exception:
+            pass
+        badge.addView(text)
+        return badge
+
+    def _extract_poster_url(self, item: dict) -> str:
+        url = None
+
+        image_data = item.get("image")
+        if isinstance(image_data, dict):
+            for field in ("original", "preview", "x96"):
+                val = image_data.get(field)
+                if val:
+                    url = val
+                    break
+        elif isinstance(image_data, str) and image_data.startswith("http"):
+            url = image_data
+
+        if not url:
+            url = item.get("poster") or item.get("cover") or ""
+
+        return _absolute_url(url or "")
+
+    def _make_card_row(self, ctx):
+        row = LinearLayout(ctx)
+        row.setOrientation(LinearLayout.HORIZONTAL)
+        row.setGravity(Gravity.CENTER_VERTICAL)
+        pad_v, pad_h = dp(12), dp(14)
+        row.setPadding(pad_h, pad_v, pad_h, pad_v)
+
+        card_bg = self._rounded_background("#00000000", MD3_SHAPE_MEDIUM)
+        try:
+            card_color = self._theme_color("key_windowBackgroundGray", "#F0F0F0")
+            card_bg.setColor(card_color)
+        except Exception:
+            pass
+        row.setBackground(card_bg)
+
+        ripple = self._ripple_foreground(ctx)
+        if ripple is not None:
+            try:
+                row.setForeground(ripple)
+            except Exception:
+                pass
+
+        try:
+            row.setElevation(float(dp(MD3_ELEVATION_RESTING)))
+            row.setOnTouchListener(_PressElevationListener.new_instance(
+                init_args=[row, dp(MD3_ELEVATION_RESTING), dp(MD3_ELEVATION_PRESSED)]
+            ).java)
+        except Exception:
+            pass
+
+        lp_row = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp_row.setMargins(dp(6), dp(6), dp(6), dp(6))
+        row.setLayoutParams(lp_row)
+        return row
+
+    def _wants_gql(self, item: dict, poster_url: Optional[str] = None) -> bool:
+        if not item.get("id"):
+            return False
+        url = self._extract_poster_url(item) if poster_url is None else poster_url
+        return not url or self._looks_like_placeholder(url) or item.get("status") in ("ongoing", "anons")
+
+    def _prefetch_gql_async(self, media_type: str, items) -> None:
+        ids = []
+        with _GQL_LOCK:
+            for it in items:
+                if not isinstance(it, dict) or not self._wants_gql(it):
+                    continue
+                try:
+                    aid = int(it.get("id"))
+                except (TypeError, ValueError):
+                    continue
+                if (aid in ids or (media_type, aid) in _GQL_INFLIGHT
+                        or _cache_get(("gql_thumb", media_type, aid), ANIME_TTL) is not None):
+                    continue
+                ids.append(aid)
+            if not ids:
+                return
+            fut = _GQL_EXECUTOR.submit(self._prefetch_gql_posters, media_type, ids)
+            for aid in ids:
+                _GQL_INFLIGHT[(media_type, aid)] = fut
+
+        def _done(_f):
+            with _GQL_LOCK:
+                for aid in ids:
+                    _GQL_INFLIGHT.pop((media_type, aid), None)
+        fut.add_done_callback(_done)
+
+    def _setup_poster(self, ctx, item: dict, poster_executor, enrich_executor, is_stale=None,
+                      w_px: int = 0, h_px: int = 0, radius_dp: float = MD3_SHAPE_MEDIUM):
+        tw = w_px or dp(56)
+        th = h_px or dp(78)
+        radius_px = float(dp(radius_dp))
+        poster = ImageView(ctx)
+        poster.setScaleType(ImageView.ScaleType.CENTER_CROP)
+        poster_bg = self._rounded_background("#22000000", radius_dp)
+        poster.setBackground(poster_bg)
+        poster_lp = LinearLayout.LayoutParams(tw, th)
+        poster.setLayoutParams(poster_lp)
+        self._clip_rounded(poster, radius_dp)
+        poster.setAlpha(0.0)
+
+        poster_url = self._extract_poster_url(item)
+        status_key_for_poster = item.get("status")
+
+        def _show_placeholder():
+            placeholder_hex = self._status_color_hex(status_key_for_poster)
+            soft_hex = "#33" + placeholder_hex.lstrip("#")
+            poster.setBackground(self._rounded_background(soft_hex, radius_dp))
+            poster.setAlpha(1.0)
+
+        def _apply_bitmap(bmp):
+            if is_stale and is_stale():
+                return
+            if bmp is None:
+                run_on_ui_thread(_show_placeholder)
+                return
+            def apply():
+                try:
+                    poster.setScaleType(ImageView.ScaleType.FIT_XY)
+                    poster.setImageBitmap(bmp)
+                    poster.animate().alpha(1.0).setDuration(300).setInterpolator(_MATERIAL_SPRING).start()
+                except Exception:
+                    pass
+            run_on_ui_thread(apply)
+
+        def _fallback_chain():
+            if is_stale and is_stale():
+                return
+            full_item = self._enrich_with_poster(dict(item))
+            url = self._extract_poster_url(full_item)
+            if self._looks_like_placeholder(url):
+                url = ""
+            bmp = self._load_poster_bitmap(url, tw, th, radius_px) if url else None
+            _apply_bitmap(bmp)
+
+        aid = item.get("id")
+        media_type = item.get("_media_type", "anime")
+
+        want_gql = self._wants_gql(item, poster_url)
+
+        quick_url = poster_url
+        if want_gql:
+            try:
+                quick_url = _cache_get(("gql_thumb", media_type, int(aid)), ANIME_TTL)
+            except (TypeError, ValueError):
+                quick_url = None
+            if quick_url == "":
+                quick_url = poster_url
+        if quick_url and not self._looks_like_placeholder(quick_url):
+            ready = _bmp_get((quick_url, tw, th, radius_px))
+            if ready is not None:
+                poster.setScaleType(ImageView.ScaleType.FIT_XY)
+                poster.setImageBitmap(ready)
+                poster.setAlpha(1.0)
+                return poster
+
+        def _resolve_url() -> str:
+            if want_gql:
+                gql_url = self._gql_thumb_url(media_type, aid)
+                if gql_url:
+                    return gql_url
+            return "" if self._looks_like_placeholder(poster_url) else poster_url
+
+        if poster_url or want_gql:
+            def load():
+                if is_stale and is_stale():
+                    return
+                url = _resolve_url()
+                bmp = self._load_poster_bitmap(url, tw, th, radius_px) if url else None
+                if bmp is not None:
+                    _apply_bitmap(bmp)
+                elif aid:
+                    _fallback_chain()
+                else:
+                    _apply_bitmap(None)
+            poster_executor.submit(load)
+        else:
+            _show_placeholder()
+            if aid:
+                enrich_executor.submit(_fallback_chain)
+        return poster
+
+    def _progress_label(self, item: dict, media_type: str) -> str:
+        if media_type == "manga":
+            chapters = int(_to_float(item.get("chapters")))
+            volumes = int(_to_float(item.get("volumes")))
+            parts = []
+            if chapters:
+                parts.append(f"{chapters} гл.")
+            if volumes:
+                parts.append(f"{volumes} т.")
+            return ", ".join(parts)
+        total = int(_to_float(item.get("episodes")))
+        aired = int(_to_float(item.get("episodes_aired")))
+        status = item.get("status")
+        if status == "ongoing":
+            if total and aired:
+                return f"{aired}/{total} эп."
+            if aired:
+                return f"{aired} эп."
+            return f"{total} эп." if total else ""
+        if total and not (item.get("kind") == "movie" and total == 1):
+            return f"{total} эп."
+        return ""
+
+    def _make_result_cell(self, activity, item: dict, on_pick, poster_executor, enrich_executor, is_stale=None):
+        ctx = activity
+        row = self._make_card_row(ctx)
+
+        poster = self._setup_poster(ctx, item, poster_executor, enrich_executor, is_stale)
+        row.addView(poster)
+
+        text_col = LinearLayout(ctx)
+        text_col.setOrientation(LinearLayout.VERTICAL)
+        text_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+        text_lp.setMargins(dp(12), 0, 0, 0)
+        text_col.setLayoutParams(text_lp)
+
+        title = item.get("russian") or item.get("name") or "Без названия"
+        title_view = TextView(ctx)
+        title_view.setText(title)
+        title_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16)
+        title_view.setTypeface(None, Typeface.BOLD)
+        title_view.setMaxLines(2)
+        try:
+            title_view.setTextColor(self._theme_color("key_windowBackgroundWhiteBlackText", "#000000"))
+        except Exception:
+            pass
+        text_col.addView(title_view)
+
+        score = item.get("score") or 0
+        year = ""
+        aired = item.get("aired_on")
+        if aired and len(str(aired)) >= 4:
+            year = str(aired)[:4]
+
+        media_type = item.get("_media_type", "anime")
+        kind = item.get("kind")
+        kind_label = self._kind_labels_for(media_type).get(kind, "")
+
+        status_badge = self._build_status_badge(ctx, item.get("status"), media_type=media_type)
+
+        default_kind = "manga" if media_type == "manga" else "tv"
+
+        parts = []
+        if score:
+            parts.append(f"{score:.1f}" if isinstance(score, float) else str(score))
+        if year:
+            parts.append(year)
+        if kind_label and kind != default_kind:
+            parts.append(kind_label)
+        progress = self._progress_label(item, media_type)
+        if progress:
+            parts.append(progress)
+
+        meta_view = None
+        if parts:
+            builder = SpannableStringBuilder()
+            sep = " · "
+
+            star_id = _resolve_star_icon_id(ctx)
+            cal_id = _resolve_calendar_icon_id(ctx)
+
+            def insert_icon(icon_id):
+                try:
+                    drawable = ctx.getResources().getDrawable(icon_id, None)
+                    if drawable is not None:
+                        drawable = drawable.mutate()
+                        try:
+                            drawable.setTint(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+                        except Exception:
+                            pass
+                        size = dp(14)
+                        drawable.setBounds(0, 0, size, size)
+                        span = ImageSpan(drawable, ImageSpan.ALIGN_CENTER)
+                        placeholder = '\uFFFC'
+                        start = builder.length()
+                        builder.append(placeholder)
+                        builder.setSpan(span, start, start + 1, 0)
+                except Exception as e:
+                    self.log(f"Ошибка вставки иконки: {e}")
+
+            for i, part in enumerate(parts):
+                if i > 0:
+                    builder.append(sep)
+
+                if i == 0 and score:
+                    insert_icon(star_id)
+                    builder.append(" ")
+                    builder.append(part)
+                elif i == (1 if score else 0) and year:
+                    insert_icon(cal_id)
+                    builder.append(" ")
+                    builder.append(part)
+                else:
+                    builder.append(part)
+
+            meta_view = TextView(ctx)
+            meta_view.setText(builder)
+            meta_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12)
+            meta_view.setSingleLine(True)
+            meta_view.setEllipsize(TextUtils.TruncateAt.END)
+            meta_view.setIncludeFontPadding(False)
+            try:
+                meta_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            except Exception:
+                pass
+
+            def _enable_marquee_if_truncated(tv=meta_view):
+                try:
+                    layout = tv.getLayout()
+                    if layout is None:
+                        return
+                    truncated = False
+                    for line in range(layout.getLineCount()):
+                        if layout.getEllipsisCount(line) > 0:
+                            truncated = True
+                            break
+                    if truncated:
+                        tv.setEllipsize(TextUtils.TruncateAt.MARQUEE)
+                        tv.setMarqueeRepeatLimit(-1)
+                        tv.setHorizontalFadingEdgeEnabled(True)
+                        tv.setSelected(True)
+                except Exception:
+                    pass
+            try:
+                meta_view.post(R(_enable_marquee_if_truncated))
+            except Exception:
+                pass
+
+        if status_badge is not None or meta_view is not None:
+            meta_row = LinearLayout(ctx)
+            meta_row.setOrientation(LinearLayout.HORIZONTAL)
+            meta_row.setGravity(Gravity.CENTER_VERTICAL)
+            meta_row_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            meta_row_lp.setMargins(0, dp(5), 0, 0)
+            meta_row.setLayoutParams(meta_row_lp)
+
+            if status_badge is not None:
+                badge_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                badge_lp.setMargins(0, 0, dp(8) if meta_view is not None else 0, 0)
+                status_badge.setLayoutParams(badge_lp)
+                meta_row.addView(status_badge)
+
+            if meta_view is not None:
+                meta_view.setLayoutParams(LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ))
+                meta_row.addView(meta_view)
+
+            text_col.addView(meta_row)
+
+        row.addView(text_col)
+        row.setClickable(True)
+        row.setOnClickListener(OnClickListener(lambda v: on_pick(item)))
+        return row
+
+    def _grid_metrics(self, results_col) -> Tuple[int, int]:
+        avail = 0
+        try:
+            avail = int(results_col.getWidth())
+        except Exception:
+            pass
+        if avail <= 0:
+            try:
+                width = int(results_col.getContext().getResources().getDisplayMetrics().widthPixels)
+                avail = width - dp(16) * 2 - dp(4) * 2
+            except Exception:
+                avail = dp(320)
+        w = max(dp(60), (avail - GRID_COLUMNS * 2 * dp(GRID_GAP_DP)) // GRID_COLUMNS)
+        return w, int(w * GRID_POSTER_RATIO)
+
+    def _grid_slot_lp(self):
+        lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+        lp.setMargins(dp(GRID_GAP_DP), 0, dp(GRID_GAP_DP), dp(14))
+        return lp
+
+    def _new_grid_row(self, ctx):
+        row = LinearLayout(ctx)
+        row.setOrientation(LinearLayout.HORIZONTAL)
+        row.setLayoutParams(LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        for _ in range(GRID_COLUMNS):
+            row.addView(View(ctx), self._grid_slot_lp())
+        return row
+
+    def _build_score_badge(self, ctx, score):
+        value = _to_float(score)
+        if value <= 0:
+            return None
+        badge = LinearLayout(ctx)
+        badge.setOrientation(LinearLayout.HORIZONTAL)
+        badge.setGravity(Gravity.CENTER_VERTICAL)
+        badge.setBackground(self._rounded_background("#B31C1C1C", 10))
+        badge.setPadding(dp(7), dp(4), dp(8), dp(4))
+        star = TextView(ctx)
+        star.setText("★")
+        star.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14)
+        star.setIncludeFontPadding(False)
+        star.setTextColor(AndroidColor.parseColor("#FFC53D"))
+        badge.addView(star)
+        num = TextView(ctx)
+        num.setText(f"{value:.2f}".replace(".", ","))
+        num.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13)
+        num.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+        num.setIncludeFontPadding(False)
+        num.setTextColor(AndroidColor.WHITE)
+        num_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        num_lp.setMargins(dp(4), 0, 0, 0)
+        badge.addView(num, num_lp)
+        return badge
+
+    def _make_grid_cell(self, activity, item: dict, on_pick, poster_executor, enrich_executor,
+                        poster_w: int, poster_h: int, is_stale=None):
+        ctx = activity
+        cell = LinearLayout(ctx)
+        cell.setOrientation(LinearLayout.VERTICAL)
+
+        frame = FrameLayout(ctx)
+        poster = self._setup_poster(ctx, item, poster_executor, enrich_executor, is_stale,
+                                    poster_w, poster_h, GRID_RADIUS_DP)
+        frame.addView(poster, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, poster_h))
+        badge = self._build_score_badge(ctx, item.get("score"))
+        if badge is not None:
+            badge_lp = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.END)
+            badge_lp.setMargins(0, dp(6), dp(6), 0)
+            frame.addView(badge, badge_lp)
+        cell.addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, poster_h))
+
+        title_view = TextView(ctx)
+        title_view.setText(item.get("russian") or item.get("name") or "Без названия")
+        title_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15)
+        title_view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+        title_view.setMaxLines(2)
+        title_view.setEllipsize(TextUtils.TruncateAt.END)
+        title_view.setTextColor(self._theme_color("key_windowBackgroundWhiteBlackText", "#000000"))
+        title_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        title_lp.setMargins(dp(4), dp(8), dp(4), 0)
+        cell.addView(title_view, title_lp)
+
+        media_type = item.get("_media_type", "anime")
+        meta = []
+        kind = self._kind_labels_for(media_type).get(item.get("kind"), "")
+        if kind:
+            meta.append(kind)
+        aired = str(item.get("aired_on") or "")
+        if len(aired) >= 4:
+            meta.append(aired[:4])
+        if meta:
+            meta_view = TextView(ctx)
+            meta_view.setText(" • ".join(meta))
+            meta_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13)
+            meta_view.setSingleLine(True)
+            meta_view.setEllipsize(TextUtils.TruncateAt.END)
+            meta_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            meta_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            meta_lp.setMargins(dp(4), dp(2), dp(4), 0)
+            cell.addView(meta_view, meta_lp)
+
+        progress = self._progress_label(item, media_type)
+        if progress:
+            progress_view = TextView(ctx)
+            progress_view.setText(progress)
+            progress_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12)
+            progress_view.setSingleLine(True)
+            progress_view.setEllipsize(TextUtils.TruncateAt.END)
+            progress_view.setTextColor(self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF"))
+            progress_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            progress_lp.setMargins(dp(4), dp(1), dp(4), 0)
+            cell.addView(progress_view, progress_lp)
+
+        ripple = self._ripple_foreground(ctx)
+        if ripple is not None:
+            try:
+                cell.setForeground(ripple)
+            except Exception:
+                pass
+        cell.setClickable(True)
+        cell.setOnClickListener(OnClickListener(lambda v: on_pick(item)))
+        return cell
+
+    def _append_results(self, results, replace, activity, on_pick, results_col, do_load_more,
+                         poster_executor, enrich_executor, stale_check=None,
+                         grid=None, show_more=None, on_ui=False):
+        def _do():
+            if stale_check and stale_check():
+                return
+            try:
+                if replace:
+                    for i in range(results_col.getChildCount()):
+                        v = results_col.getChildAt(i)
+                        try:
+                            anim = getattr(v, "_skeleton_anim", None)
+                            if anim:
+                                anim.cancel()
+                        except Exception:
+                            pass
+                    results_col.removeAllViews()
+                    if grid is not None:
+                        grid["row"] = None
+                        grid["count"] = 0
+                if results:
+                    self._prefetch_gql_async(results[0].get("_media_type", "anime"), results)
+                if grid is not None:
+                    poster_w, poster_h = self._grid_metrics(results_col)
+                for index, item in enumerate(results):
+                    if grid is None:
+                        cell = self._make_result_cell(
+                            activity, item, on_pick,
+                            poster_executor=poster_executor,
+                            enrich_executor=enrich_executor,
+                            is_stale=stale_check,
+                        )
+                        results_col.addView(cell)
+                    else:
+                        cell = self._make_grid_cell(
+                            activity, item, on_pick, poster_executor, enrich_executor,
+                            poster_w, poster_h, is_stale=stale_check,
+                        )
+                        row = grid.get("row")
+                        if row is None or grid["count"] >= GRID_COLUMNS:
+                            row = self._new_grid_row(activity)
+                            results_col.addView(row)
+                            grid["row"] = row
+                            grid["count"] = 0
+                        slot = grid["count"]
+                        row.removeViewAt(slot)
+                        row.addView(cell, slot, self._grid_slot_lp())
+                        grid["count"] = slot + 1
+                    cell.setAlpha(0.0)
+                    cell.setTranslationY(float(dp(10)))
+                    stagger_delay = min(index, 6) * 24
+                    cell.animate().alpha(1.0).translationY(0.0).setStartDelay(stagger_delay).setDuration(240).setInterpolator(_MATERIAL_STANDARD).start()
+                if (show_more if show_more is not None else len(results) >= SEARCH_LIMIT):
+                    more_row = TextView(activity)
+                    more_row.setText("Показать ещё ⌄")
+                    more_row.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14)
+                    more_row.setGravity(Gravity.CENTER)
+                    more_row.setPadding(0, dp(16), 0, dp(16))
+                    try:
+                        more_row.setTextColor(self._theme_color("key_windowBackgroundWhiteBlueText", "#4EA4F5"))
+                    except Exception:
+                        pass
+
+                    def on_more(v):
+                        try:
+                            results_col.removeView(more_row)
+                        except Exception:
+                            pass
+                        do_load_more()
+                    more_row.setOnClickListener(OnClickListener(on_more))
+                    results_col.addView(more_row)
+            except Exception as e:
+                self.log(f"Не удалось отрисовать результаты: {e}")
+
+        if on_ui:
+            _do()
+        else:
+            run_on_ui_thread(_do)
+
+    def _popular_list(self, media_type: str, page: int = 1) -> list:
+        key = ("popular", media_type, page)
+        cached = _cache_get(key, POPULAR_TTL)
+        if cached is not None:
+            return cached
+        endpoint = MEDIA_ENDPOINTS.get(media_type, "/animes")
+        params = dict(POPULAR_PARAMS, limit=SEARCH_LIMIT, page=page)
+        rows = self._api_get(endpoint, params, timeout=SEARCH_TIMEOUT) or []
+        rows = [r for r in rows if isinstance(r, dict) and r.get("id")]
+        for r in rows:
+            r["_media_type"] = media_type
+        _cache_set(key, rows)
+        return rows
+
+    def _open_inline_search(self, peer_id: int, initial_query: str = "", media_type: str = "anime"):
+        try:
+            frag = get_last_fragment()
+            if not frag:
+                return
+            activity = frag.getParentActivity()
+            if not activity:
+                return
+
+            poster_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="shiki-poster")
+            enrich_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="shiki-enrich")
+
+            root = LinearLayout(activity)
+            root.setOrientation(LinearLayout.VERTICAL)
+            root.setPadding(dp(16), dp(12), dp(16), dp(12))
+
+            query_field = EditText(activity)
+            query_field.setHint(MEDIA_FIELD_HINTS.get(media_type, "Поиск"))
+            query_field.setSingleLine(True)
+            query_field.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16)
+            query_field.setPadding(dp(18), dp(12), dp(18), dp(12))
+            query_field.setMinHeight(dp(56))
+            try:
+                query_field.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+            except Exception:
+                pass
+
+            _win_bg = self._theme_color("key_windowBackgroundWhite", "#FFFFFF")
+            _on_surface = self._theme_color("key_windowBackgroundWhiteBlackText", "#000000")
+            bg = GradientDrawable()
+            bg.setShape(GradientDrawable.RECTANGLE)
+            bg.setCornerRadius(float(dp(MD3_SHAPE_FULL)))
+            bg.setColor(self._theme_color("key_windowBackgroundGray", "#F0F0F0"))
+            query_field.setBackground(bg)
+
+            try:
+                _qf_icon_id = _resolve_search_icon_id(activity)
+                if _qf_icon_id:
+                    _qf_icon = activity.getResources().getDrawable(_qf_icon_id, None)
+                    if _qf_icon is not None:
+                        _qf_icon = _qf_icon.mutate()
+                        try:
+                            _qf_icon.setTint(_on_surface)
+                        except Exception:
+                            pass
+                        _qf_size = dp(22)
+                        _qf_icon.setBounds(0, 0, _qf_size, _qf_size)
+                        query_field.setCompoundDrawables(_qf_icon, None, None, None)
+                        query_field.setCompoundDrawablePadding(dp(14))
+            except Exception:
+                pass
+
+            try:
+                query_field.setTextColor(_on_surface)
+                query_field.setHintTextColor(_blend_colors(_win_bg, _on_surface, 0.72))
+                cursor_color = self._theme_color("key_windowBackgroundWhiteBlackText", "#000000")
+                try:
+                    query_field.setCursorVisible(True)
+                    query_field.setTextCursorDrawable(None)
+                except Exception:
+                    pass
+                try:
+                    query_field.setHighlightColor((cursor_color & 0x00FFFFFF) | 0x55000000)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            if initial_query:
+                query_field.setText(initial_query)
+                query_field.setSelection(len(initial_query))
+
+            _clear_icon_id = _resolve_clear_icon_id(activity)
+
+            def _update_clear_icon(has_text: bool):
+                if not _clear_icon_id:
+                    return
+                try:
+                    start = query_field.getCompoundDrawables()[0]
+                    if has_text:
+                        _cd = activity.getResources().getDrawable(_clear_icon_id, None)
+                        if _cd is not None:
+                            _cd = _cd.mutate()
+                            try:
+                                _cd.setTint(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+                            except Exception:
+                                pass
+                            _cd_size = dp(20)
+                            _cd.setBounds(0, 0, _cd_size, _cd_size)
+                            query_field.setCompoundDrawables(start, None, _cd, None)
+                        else:
+                            query_field.setCompoundDrawables(start, None, None, None)
+                    else:
+                        query_field.setCompoundDrawables(start, None, None, None)
+                except Exception:
+                    pass
+
+            def _do_clear_field():
+                try:
+                    query_field.setText("")
+                    query_field.requestFocus()
+                except Exception:
+                    pass
+
+            if _clear_icon_id:
+                query_field.setOnTouchListener(
+                    _ClearFieldTouchListener.new_instance(init_args=[query_field, _do_clear_field]).java
+                )
+                _update_clear_icon(bool(initial_query))
+
+            lp_field = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp_field.setMargins(0, 0, 0, dp(12))
+            root.addView(query_field, lp_field)
+
+            TOGGLE_HEIGHT_DP = 40
+            TOGGLE_TRACK_PAD_DP = 3
+
+            tab_keys = [k for k, _label in MEDIA_TOGGLE_ORDER]
+
+            media_toggle_frame = FrameLayout(activity)
+            toggle_frame_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(TOGGLE_HEIGHT_DP))
+            toggle_frame_lp.setMargins(0, 0, 0, dp(12))
+            media_toggle_frame.setLayoutParams(toggle_frame_lp)
+
+            _toggle_track_bg = GradientDrawable()
+            _toggle_track_bg.setShape(GradientDrawable.RECTANGLE)
+            _toggle_track_bg.setCornerRadius(dp(MD3_SHAPE_FULL))
+            try:
+                _toggle_track_bg.setColor(self._theme_color("key_windowBackgroundGray", "#F0F0F0"))
+            except Exception:
+                _toggle_track_bg.setColor(AndroidColor.parseColor("#F0F0F0"))
+            media_toggle_frame.setBackground(_toggle_track_bg)
+            media_toggle_frame.setPadding(
+                dp(TOGGLE_TRACK_PAD_DP), dp(TOGGLE_TRACK_PAD_DP), dp(TOGGLE_TRACK_PAD_DP), dp(TOGGLE_TRACK_PAD_DP)
+            )
+
+            toggle_highlight = View(activity)
+            highlight_bg = GradientDrawable()
+            highlight_bg.setShape(GradientDrawable.RECTANGLE)
+            highlight_bg.setCornerRadius(dp(MD3_SHAPE_FULL) - dp(TOGGLE_TRACK_PAD_DP))
+            highlight_color_int = self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF")
+            highlight_bg.setColor(highlight_color_int)
+            toggle_highlight.setBackground(highlight_bg)
+            active_text_color = self._contrast_on_color(highlight_color_int)
+            toggle_highlight.setLayoutParams(FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT))
+            media_toggle_frame.addView(toggle_highlight)
+
+            toggle_content_row = LinearLayout(activity)
+            toggle_content_row.setOrientation(LinearLayout.HORIZONTAL)
+            toggle_content_row.setLayoutParams(FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            media_toggle_frame.addView(toggle_content_row)
+
+            media_toggle_buttons = {}
+            tab_geo = {"seg_w": 0}
+
+            def _set_indicator(progress: float, animate: bool = False):
+                seg_w = tab_geo["seg_w"]
+                if seg_w <= 0:
+                    return
+                p = max(0.0, min(float(len(tab_keys) - 1), float(progress)))
+                x = float(seg_w) * p
+                if animate:
+                    toggle_highlight.animate().translationX(x).setDuration(220).setInterpolator(_MATERIAL_STANDARD).start()
+                else:
+                    toggle_highlight.animate().cancel()
+                    toggle_highlight.setTranslationX(x)
+
+            def _position_toggle_highlight(active_key: str, animate: bool):
+                def _do():
+                    try:
+                        total_w = media_toggle_frame.getWidth() - media_toggle_frame.getPaddingLeft() - media_toggle_frame.getPaddingRight()
+                        if total_w <= 0:
+                            return
+                        seg_w = total_w // len(tab_keys)
+                        tab_geo["seg_w"] = seg_w
+                        lp = toggle_highlight.getLayoutParams()
+                        if lp.width != seg_w:
+                            lp.width = seg_w
+                            toggle_highlight.setLayoutParams(lp)
+                        _set_indicator(float(tab_keys.index(active_key) if active_key in tab_keys else 0), animate)
+                    except Exception:
+                        pass
+                media_toggle_frame.post(R(_do))
+
+            def _restyle_media_toggle_text(active: str):
+                for key, btn in media_toggle_buttons.items():
+                    is_active = key == active
+                    btn.setTextColor(active_text_color if is_active else self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+                    btn.setTypeface(None, Typeface.BOLD if is_active else Typeface.NORMAL)
+
+            def _restyle_media_toggle(active: str, animate: bool = True):
+                _restyle_media_toggle_text(active)
+                _position_toggle_highlight(active, animate)
+
+            def _make_media_toggle_button(key: str, label: str):
+                btn = TextView(activity)
+                btn.setText(label)
+                btn.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14)
+                try:
+                    btn.setLetterSpacing(0.1 / 14)
+                except Exception:
+                    pass
+                btn.setGravity(Gravity.CENTER)
+                ripple = self._ripple_foreground(activity)
+                if ripple is not None:
+                    try:
+                        btn.setForeground(ripple)
+                    except Exception:
+                        pass
+                btn.setOnClickListener(OnClickListener(lambda v, k=key: switch_media_animated(k)))
+                btn_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0)
+                media_toggle_buttons[key] = btn
+                return btn, btn_lp
+
+            for _toggle_key, _toggle_label in MEDIA_TOGGLE_ORDER:
+                _toggle_btn, _toggle_btn_lp = _make_media_toggle_button(_toggle_key, _toggle_label)
+                toggle_content_row.addView(_toggle_btn, _toggle_btn_lp)
+
+            root.addView(media_toggle_frame)
+
+            progress_bar = None
+            try:
+                from android.R import attr as _AndroidAttr
+                progress_bar = ProgressBar(activity, None, _AndroidAttr.progressBarStyleHorizontal)
+                progress_bar.setIndeterminate(True)
+                try:
+                    accent = self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF")
+                    progress_bar.getIndeterminateDrawable().mutate().setTint(accent)
+                except Exception:
+                    pass
+                progress_bar.setVisibility(View.GONE)
+                progress_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(4))
+                progress_lp.setMargins(0, 0, 0, dp(8))
+                root.addView(progress_bar, progress_lp)
+            except Exception as e:
+                self.log(f"Не удалось создать индикатор загрузки: {e}")
+
+            def _set_loading(loading: bool):
+                if progress_bar is None:
+                    return
+
+                def _do():
+                    try:
+                        progress_bar.setVisibility(View.VISIBLE if loading else View.GONE)
+                    except Exception:
+                        pass
+                run_on_ui_thread(_do)
+
+            status_view = TextView(activity)
+            status_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13)
+            try:
+                status_view.setLetterSpacing(0.2 / 13)
+            except Exception:
+                pass
+            status_view.setMaxLines(1)
+            status_view.setEllipsize(TextUtils.TruncateAt.END)
+            try:
+                status_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            except Exception:
+                pass
+            _status_icon_id = _resolve_status_icon_id(activity)
+            _status_uses_icon = False
+            if _status_icon_id:
+                try:
+                    _icon_drawable = activity.getResources().getDrawable(_status_icon_id, None)
+                    if _icon_drawable is not None:
+                        _size = dp(16)
+                        _icon_drawable.setBounds(0, 0, _size, _size)
+                        try:
+                            _icon_drawable.setTint(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+                        except Exception:
+                            pass
+                        status_view.setCompoundDrawables(_icon_drawable, None, None, None)
+                        status_view.setCompoundDrawablePadding(dp(8))
+                        _status_uses_icon = True
+                except Exception:
+                    _status_uses_icon = False
+
+            def _search_prefix(with_space: bool = True) -> str:
+                if _status_uses_icon:
+                    return ""
+                return "🔍 " if with_space else "🔍"
+
+            status_view.setText(MEDIA_START_HINTS.get(media_type, "Начни вводить запрос…"))
+
+            status_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            status_lp.setMargins(dp(4), dp(8), dp(4), dp(8))
+            root.addView(status_view, status_lp)
+
+            scroll = ScrollView(activity)
+            scroll_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0)
+            scroll.setLayoutParams(scroll_lp)
+            scroll.setFillViewport(True)
+            scroll.setPadding(dp(4), dp(4), dp(4), dp(4))
+            results_col = LinearLayout(activity)
+            results_col.setOrientation(LinearLayout.VERTICAL)
+            scroll.addView(results_col)
+            root.addView(scroll)
+
+            window_bg = self._theme_color("key_windowBackgroundWhite", "#FFFFFF")
+
+            title_view = TextView(activity)
+            title_view.setText("Поиск")
+            title_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20)
+            title_view.setTypeface(Typeface.DEFAULT_BOLD)
+            try:
+                icon_color = self._theme_color("key_windowBackgroundWhiteBlackText", "#000000")
+            except Exception:
+                icon_color = AndroidColor.parseColor("#000000")
+            try:
+                tonal_color = self._theme_color("key_windowBackgroundGray", "#F0F0F0")
+            except Exception:
+                tonal_color = AndroidColor.parseColor("#F0F0F0")
+            try:
+                title_view.setTextColor(icon_color)
+            except Exception:
+                pass
+
+            ICON_BTN_DP = 40
+            ICON_GLYPH_PX = dp(22)
+
+            def _make_icon_button(desc: str):
+                btn = ImageView(activity)
+                btn.setScaleType(ImageView.ScaleType.CENTER)
+                circle = GradientDrawable()
+                circle.setShape(GradientDrawable.OVAL)
+                circle.setColor(tonal_color)
+                btn.setBackground(circle)
+                ripple = self._ripple_foreground(activity)
+                if ripple is not None:
+                    try:
+                        btn.setForeground(ripple)
+
+                        btn.setOutlineProvider(ViewOutlineProvider.BACKGROUND)
+                        btn.setClipToOutline(True)
+                    except Exception:
+                        pass
+                btn.setContentDescription(desc)
+                return btn
+
+            view_btn = _make_icon_button("Сетка")
+            collapse_btn = _make_icon_button("Свернуть")
+            close_btn = _make_icon_button("Закрыть")
+
+            def set_view_visual(grid_on: bool):
+
+                view_btn.setImageBitmap(_view_mode_bitmap(ICON_GLYPH_PX, not grid_on, icon_color))
+                view_btn.setContentDescription("Список" if grid_on else "Сетка")
+
+            close_icon_id = _resolve_clear_icon_id(activity)
+            if close_icon_id:
+                close_btn.setImageResource(close_icon_id)
+                close_btn.setColorFilter(icon_color, PorterDuff.Mode.SRC_IN)
+            else:
+                close_btn.setImageBitmap(_cross_bitmap(ICON_GLYPH_PX, icon_color))
+
+            def set_collapse_visual(compact: bool):
+                collapse_btn.setImageBitmap(_chevron_bitmap(ICON_GLYPH_PX, compact, icon_color))
+                collapse_btn.setContentDescription("Развернуть" if compact else "Свернуть")
+
+            set_collapse_visual(False)
+
+            header = LinearLayout(activity)
+            header.setOrientation(LinearLayout.HORIZONTAL)
+            header.setGravity(Gravity.CENTER_VERTICAL)
+            header.setPadding(dp(20), dp(8), dp(12), dp(6))
+            header.addView(title_view, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0))
+            view_lp = LinearLayout.LayoutParams(dp(ICON_BTN_DP), dp(ICON_BTN_DP))
+            view_lp.setMargins(0, 0, dp(8), 0)
+            header.addView(view_btn, view_lp)
+            collapse_lp = LinearLayout.LayoutParams(dp(ICON_BTN_DP), dp(ICON_BTN_DP))
+            collapse_lp.setMargins(0, 0, dp(8), 0)
+            header.addView(collapse_btn, collapse_lp)
+            header.addView(close_btn, LinearLayout.LayoutParams(dp(ICON_BTN_DP), dp(ICON_BTN_DP)))
+
+            handle_row = FrameLayout(activity)
+            handle_bar = View(activity)
+            handle_bg = GradientDrawable()
+            handle_bg.setShape(GradientDrawable.RECTANGLE)
+            handle_bg.setCornerRadius(float(dp(2)))
+            try:
+                handle_bg.setColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            except Exception:
+                handle_bg.setColor(AndroidColor.parseColor("#888888"))
+            handle_bg.setAlpha(110)
+            handle_bar.setBackground(handle_bg)
+            handle_row.addView(handle_bar, FrameLayout.LayoutParams(dp(36), dp(4), Gravity.CENTER))
+            handle_row.setVisibility(View.GONE)
+
+            window_root = LinearLayout(activity)
+            window_root.setOrientation(LinearLayout.VERTICAL)
+            window_root.addView(handle_row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(22)))
+            window_root.addView(header, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            root_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0)
+            window_root.addView(root, root_lp)
+
+            full_bg = ColorDrawable(window_bg)
+
+            mini_bg = GradientDrawable()
+            mini_bg.setColor(window_bg)
+            try:
+                _r = float(dp(28))
+                mini_bg.setCornerRadii([_r, _r, _r, _r, 0.0, 0.0, 0.0, 0.0])
+            except Exception:
+                mini_bg.setCornerRadius(float(dp(28)))
+            try:
+                _outline = self._theme_color("key_divider", "#00000000")
+                mini_bg.setStroke(dp(1), (_outline & 0x00FFFFFF) | 0x40000000)
+            except Exception:
+                pass
+            window_root.setBackground(full_bg)
+
+            dialog = Dialog(activity)
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+            dialog.setContentView(window_root)
+            dialog.setCancelable(True)
+            dialog.setCanceledOnTouchOutside(False)
+
+            mode_state = {"compact": False, "inset_top": 0, "inset_bottom": 0}
+
+            def apply_insets():
+                top = 0 if mode_state["compact"] else mode_state["inset_top"]
+                window_root.setPadding(0, top, 0, mode_state["inset_bottom"])
+
+            def on_insets(top: int, bottom: int):
+                mode_state["inset_top"] = top
+                mode_state["inset_bottom"] = bottom
+                apply_insets()
+
+            window_root.setOnApplyWindowInsetsListener(_InsetsListener.new_instance(init_args=[on_insets]).java)
+
+            def style_window(compact: bool):
+                window = dialog.getWindow()
+                if window is None:
+                    return
+                wlp = WindowManager.LayoutParams
+                window.setBackgroundDrawable(ColorDrawable(0))
+                window.getDecorView().setPadding(0, 0, 0, 0)
+                window.clearFlags(wlp.FLAG_DIM_BEHIND)
+                if compact:
+                    window.addFlags(wlp.FLAG_NOT_TOUCH_MODAL)
+                    window.setGravity(Gravity.BOTTOM)
+                    window.setLayout(wlp.MATCH_PARENT, wlp.WRAP_CONTENT)
+                else:
+                    window.clearFlags(wlp.FLAG_NOT_TOUCH_MODAL)
+                    window.setGravity(Gravity.TOP)
+                    window.setLayout(wlp.MATCH_PARENT, wlp.MATCH_PARENT)
+
+            def apply_window_mode(compact: bool):
+                mode_state["compact"] = compact
+                try:
+                    TransitionManager.beginDelayedTransition(window_root)
+                except Exception:
+                    pass
+                try:
+                    media_toggle_frame.setVisibility(View.GONE if compact else View.VISIBLE)
+                    handle_row.setVisibility(View.VISIBLE if compact else View.GONE)
+                    set_collapse_visual(compact)
+                    window_root.setBackground(mini_bg if compact else full_bg)
+                    title_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18 if compact else 20)
+
+                    root.setPadding(dp(16), dp(2 if compact else 12), dp(16), dp(8 if compact else 12))
+                    query_field.setMinHeight(dp(48 if compact else 56))
+                    pad_h, pad_v = (16, 8) if compact else (18, 12)
+                    query_field.setPadding(dp(pad_h), dp(pad_v), dp(pad_h), dp(pad_v))
+                    status_lp.setMargins(dp(4), dp(4 if compact else 8), dp(4), dp(4 if compact else 8))
+                    status_view.setLayoutParams(status_lp)
+
+                    root_lp.height = LinearLayout.LayoutParams.WRAP_CONTENT if compact else 0
+                    root_lp.weight = 0.0 if compact else 1.0
+                    root.setLayoutParams(root_lp)
+                    scroll_lp.height = dp(COMPACT_RESULTS_DP) if compact else 0
+                    scroll_lp.weight = 0.0 if compact else 1.0
+                    scroll.setLayoutParams(scroll_lp)
+                    apply_insets()
+                    _position_toggle_highlight(state["media_type"], False)
+                except Exception as e:
+                    self.log(f"Не удалось сменить вид окна: {e}")
+                try:
+                    style_window(compact)
+                except Exception as e:
+                    self.log(f"Не удалось сменить размер окна: {e}")
+
+            collapse_btn.setOnClickListener(OnClickListener(lambda v: apply_window_mode(not mode_state["compact"])))
+            handle_row.setOnClickListener(OnClickListener(lambda v: apply_window_mode(False)))
+            close_btn.setOnClickListener(OnClickListener(lambda v: dialog.dismiss()))
+
+            state = {
+                "seq": 0,
+                "runnable": None,
+                "page": 1,
+                "query": "",
+                "used_query": "",
+                "closed": False,
+                "last_raw_text": "",
+                "skeletons_shown": False,
+                "clear_icon_shown": bool(initial_query and initial_query.strip()),
+                "media_type": media_type,
+                "grid": bool(self.get_setting("grid_view", False)),
+                "items": [],
+                "has_more": False,
+            }
+            grid_state = {"row": None, "count": 0}
+            _restyle_media_toggle(media_type, animate=False)
+            set_view_visual(state["grid"])
+
+            def on_pick(item: dict):
+                state["closed"] = True
+                dialog.dismiss()
+                self._send_anime(peer_id, item)
+
+            def set_status(text: str, token: int = None):
+                def _do():
+                    if token is not None and state["seq"] != token:
+                        return
+                    try:
+                        status_view.setText(text)
+                    except Exception:
+                        pass
+                run_on_ui_thread(_do)
+
+            def clear_results(token: int = None):
+                stale = (lambda: state["seq"] != token) if token is not None else None
+                self._hide_skeletons(results_col, stale_check=stale)
+                state["skeletons_shown"] = False
+                state["items"] = []
+                state["has_more"] = False
+
+            def show_skeletons(stale):
+                self._show_skeletons(results_col, count=5, stale_check=stale, grid=state["grid"])
+
+            def append_results(results: list, replace: bool, token: int = None):
+                stale = (lambda: state["seq"] != token) if token is not None else None
+
+                def _commit():
+
+                    if state["closed"] or (stale and stale()):
+                        return
+                    if replace:
+                        state["items"] = list(results)
+                    else:
+                        state["items"].extend(results)
+                    state["has_more"] = len(results) >= SEARCH_LIMIT
+                    self._append_results(
+                        results, replace, activity, on_pick, results_col, do_load_more,
+                        poster_executor, enrich_executor, stale_check=stale,
+                        grid=grid_state if state["grid"] else None, on_ui=True,
+                    )
+                    attach_swipe(results_col)
+                run_on_ui_thread(_commit)
+
+            def toggle_view_mode(v=None):
+                grid_on = not state["grid"]
+                state["grid"] = grid_on
+                set_view_visual(grid_on)
+                try:
+                    self.set_setting("grid_view", grid_on)
+                except Exception as e:
+                    self.log(f"Не удалось сохранить вид: {e}")
+                if state["skeletons_shown"]:
+                    show_skeletons(lambda: state["closed"])
+                elif state["items"]:
+                    stale_now = (lambda t=state["seq"]: state["seq"] != t)
+                    self._append_results(
+                        state["items"], True, activity, on_pick, results_col, do_load_more,
+                        poster_executor, enrich_executor, stale_check=stale_now,
+                        grid=grid_state if grid_on else None,
+                        show_more=state["has_more"], on_ui=True,
+                    )
+                    attach_swipe(results_col)
+                    try:
+                        scroll.scrollTo(0, 0)
+                    except Exception:
+                        pass
+
+            view_btn.setOnClickListener(OnClickListener(toggle_view_mode))
+
+            def do_load_more():
+                query = state["used_query"] or state["query"]
+                popular_mode = bool(state.get("popular")) and not query
+                if not query and not popular_mode:
+                    return
+                next_page = state["page"] + 1
+                token = state["seq"]
+                load_more_media_type = state["media_type"]
+                label = POPULAR_LABELS.get(load_more_media_type, "Популярное") if popular_mode else f"«{query}»"
+                set_status(f"{_search_prefix()}{label} · загружаю ещё…", token)
+                _set_loading(True)
+
+                def work():
+                    try:
+                        if popular_mode:
+                            results = self._popular_list(load_more_media_type, next_page)
+                        else:
+                            results = self._search_animes(query, next_page, media_type=load_more_media_type)
+                    except Exception as e:
+                        set_status(f"Не удалось загрузить: {e}", token)
+                        return
+                    finally:
+                        _set_loading(False)
+                    if state["closed"] or state["seq"] != token:
+                        return
+                    if not results:
+                        set_status(f"{_search_prefix()}{label} · больше результатов нет", token)
+                        return
+                    state["page"] = next_page
+                    set_status(f"{_search_prefix()}{label} · страница {next_page}", token)
+                    append_results(results, replace=False, token=token)
+
+                run_on_queue(work)
+
+            def show_popular(token: int, popular_media_type: str):
+                stale = lambda: state["seq"] != token
+                state["popular"] = True
+                state["used_query"] = ""
+                state["page"] = 1
+                label = POPULAR_LABELS.get(popular_media_type, "Популярное")
+                if not state["skeletons_shown"]:
+                    show_skeletons(stale)
+                    state["skeletons_shown"] = True
+                set_status(label, token)
+                _set_loading(True)
+
+                def work():
+                    try:
+                        results = self._popular_list(popular_media_type, 1)
+                    except Exception as e:
+                        if not state["closed"] and not stale():
+                            clear_results(token)
+                            set_status(f"Не удалось загрузить популярное: {e}", token)
+                        return
+                    finally:
+                        _set_loading(False)
+                    if state["closed"] or stale():
+                        return
+                    state["skeletons_shown"] = False
+                    if not results:
+                        clear_results(token)
+                        set_status(MEDIA_START_HINTS.get(popular_media_type, "Начни вводить запрос…"), token)
+                        return
+                    append_results(results, replace=True, token=token)
+
+                run_on_queue(work)
+
+            def run_search(query: str):
+                if state["closed"]:
+                    return
+                query = query.strip()
+                state["query"] = query
+                token = state["seq"]
+                search_media_type = state["media_type"]
+                stale = lambda: state["seq"] != token
+                state["popular"] = not query
+                if not query:
+                    show_popular(token, search_media_type)
+                    return
+
+                if not state["skeletons_shown"]:
+                    show_skeletons(stale)
+                    state["skeletons_shown"] = True
+
+                set_status(f"{_search_prefix()}Ищу «{query}»…", token)
+                _set_loading(True)
+
+                def work():
+                    try:
+                        results, used_query = self._search_with_fallback(query, page=1, media_type=search_media_type)
+                    except Exception as e:
+                        if not state["closed"] and not stale():
+                            set_status(f"\u274C Ошибка поиска: {e}", token)
+                        return
+                    finally:
+                        _set_loading(False)
+                    if state["closed"] or stale():
+                        return
+                    state["page"] = 1
+                    state["used_query"] = used_query
+                    state["last_searched_query"] = query
+                    state["skeletons_shown"] = False
+
+                    if not results:
+                        clear_results(token)
+                        list_path = MEDIA_SITE_PATHS.get(search_media_type, "animes")
+                        site_url = f"{SITE_URL}/{list_path}?" + urlencode({"search": query})
+                        set_status(f"Ничего не найдено по «{query}». Открыть на сайте: {site_url}", token)
+                        return
+
+                    if used_query != query:
+                        set_status(f"{_search_prefix()}«{used_query}» · похоже на «{query}» · {len(results)}", token)
+                    else:
+                        set_status(f"{_search_prefix()}«{used_query}» · найдено {len(results)}", token)
+                    append_results(results, replace=True, token=token)
+
+                run_on_queue(work)
+
+            def schedule_search(text: str):
+                has_text = bool(text.strip())
+                if has_text != state.get("clear_icon_shown"):
+                    state["clear_icon_shown"] = has_text
+                    _update_clear_icon(has_text)
+                prev_raw = state.get("last_raw_text", "")
+                state["last_raw_text"] = text
+                state["seq"] += 1
+                seq = state["seq"]
+                if state["runnable"] is not None:
+                    try:
+                        query_field.removeCallbacks(state["runnable"])
+                    except Exception:
+                        pass
+
+                if text.strip() and not prev_raw.strip():
+                    run_search(text)
+                    return
+
+                def fire():
+                    if state["seq"] == seq:
+                        run_search(text)
+
+                runnable = R(fire)
+                state["runnable"] = runnable
+                query_field.postDelayed(runnable, SEARCH_DEBOUNCE_MS)
+
+            swipe = _SwipeTracker(slop=float(dp(12)), fast_px_per_ms=0.8 * float(dp(1)))
+
+            def _page_width() -> float:
+                return float(max(scroll.getWidth(), dp(320)))
+
+            def switch_media_animated(target_key: str):
+                cur = state.get("media_type")
+                if target_key == cur or target_key not in tab_keys or state.get("switching"):
+                    return
+                direction = -1 if tab_keys.index(target_key) > tab_keys.index(cur) else 1
+                state["switching"] = True
+                state["media_type"] = target_key
+                state["seq"] += 1
+                _restyle_media_toggle(target_key)
+                try:
+                    query_field.setHint(MEDIA_FIELD_HINTS.get(target_key, "Поиск"))
+                except Exception:
+                    pass
+                width = _page_width()
+
+                def _done():
+                    state["switching"] = False
+
+                def _slide_in():
+                    try:
+                        results_col.removeAllViews()
+                        state["items"] = []
+                        state["has_more"] = False
+                        state["skeletons_shown"] = False
+                        scroll.scrollTo(0, 0)
+                        scroll.setTranslationX(-direction * width)
+                        scroll.animate().translationX(0.0).setDuration(220).setInterpolator(_MATERIAL_STANDARD).withEndAction(R(_done)).start()
+                    except Exception:
+                        _done()
+                    try:
+                        text_now = query_field.getText().toString()
+                    except Exception:
+                        text_now = ""
+                    run_search(text_now)
+
+                scroll.animate().translationX(direction * width).setDuration(150).setInterpolator(_MATERIAL_STANDARD).withEndAction(R(_slide_in)).start()
+
+                query_field.postDelayed(R(_done), 800)
+
+            def on_swipe_touch(v, event) -> bool:
+                action = event.getActionMasked()
+                media = state.get("media_type")
+                idx = tab_keys.index(media) if media in tab_keys else 0
+                if action == MotionEvent.ACTION_DOWN:
+                    if state.get("switching"):
+                        swipe.reset()
+                    else:
+                        swipe.down(event.getRawX(), event.getRawY(), event.getEventTime())
+                    return False
+                if action == MotionEvent.ACTION_MOVE:
+                    was_dragging = swipe.dragging
+                    dx = swipe.move(event.getRawX(), event.getRawY(), idx, len(tab_keys))
+                    if dx is None:
+                        return False
+                    if not was_dragging:
+
+                        try:
+                            cancel = MotionEvent.obtain(event)
+                            cancel.setAction(MotionEvent.ACTION_CANCEL)
+                            v.onTouchEvent(cancel)
+                            cancel.recycle()
+                            v.setPressed(False)
+                        except Exception:
+                            pass
+                        try:
+                            parent = v.getParent()
+                            if parent is not None:
+                                parent.requestDisallowInterceptTouchEvent(True)
+                        except Exception:
+                            pass
+                    scroll.setTranslationX(float(dx))
+                    _set_indicator(idx - dx / _page_width())
+                    return True
+                if action == MotionEvent.ACTION_UP or action == MotionEvent.ACTION_CANCEL:
+                    ours, target = swipe.finish(
+                        event.getRawX(), event.getEventTime(), _page_width(), idx, len(tab_keys),
+                        cancelled=action == MotionEvent.ACTION_CANCEL,
+                    )
+                    if not ours:
+                        return False
+                    if target is not None:
+                        switch_media_animated(tab_keys[target])
+                    else:
+                        scroll.animate().translationX(0.0).setDuration(180).setInterpolator(_MATERIAL_STANDARD).start()
+                        _set_indicator(float(idx), True)
+                    return True
+                return swipe.dragging
+
+            swipe_listener = _SwipeTouchListener.new_instance(init_args=[on_swipe_touch]).java
+            scroll.setOnTouchListener(swipe_listener)
+
+            def attach_swipe(view):
+                try:
+                    if view.isClickable():
+                        view.setOnTouchListener(swipe_listener)
+                except Exception:
+                    pass
+                try:
+                    children = [view.getChildAt(i) for i in range(view.getChildCount())]
+                except Exception:
+                    try:
+                        group = cast(ViewGroup, view)
+                        children = [group.getChildAt(i) for i in range(group.getChildCount())]
+                    except Exception:
+                        children = []
+                for child in children:
+                    attach_swipe(child)
+
+            watcher = _QueryWatcher.new_instance(init_args=[schedule_search])
+            query_field.addTextChangedListener(watcher.java)
+
+            def on_dismiss(b):
+                state["closed"] = True
+                self._hide_skeletons(results_col)
+                try:
+                    poster_executor.shutdown(wait=False, cancel_futures=True)
+                except Exception:
+                    pass
+                try:
+                    enrich_executor.shutdown(wait=False, cancel_futures=True)
+                except Exception:
+                    pass
+            dialog.setOnDismissListener(_DismissWatcher.new_instance(init_args=[lambda: on_dismiss(None)]).java)
+            dialog.show()
+
+            try:
+                _window = dialog.getWindow()
+                if _window is not None:
+                    _ime_state = 0 if initial_query else WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+                    _window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | _ime_state)
+                style_window(False)
+                window_root.requestApplyInsets()
+            except Exception as e:
+                self.log(f"Не удалось настроить окно: {e}")
+
+            run_search(initial_query or "")
+        except Exception as e:
+            self.log(f"Inline-поиск недоступен, использую резервный вариант: {e}")
+            for _ex in (locals().get("poster_executor"), locals().get("enrich_executor")):
+                if _ex is not None:
+                    try:
+                        _ex.shutdown(wait=False, cancel_futures=True)
+                    except Exception:
+                        pass
+            self._fallback_search_dialog(peer_id, initial_query)
+
+    @staticmethod
+    def _parse_iso(raw) -> Optional[datetime]:
+        if not raw:
+            return None
+        try:
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except Exception:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    def _to_local(self, dt: datetime) -> datetime:
+        try:
+            from java.util import TimeZone
+            offset_ms = int(TimeZone.getDefault().getOffset(int(dt.timestamp() * 1000)))
+            return dt.astimezone(timezone(timedelta(milliseconds=offset_ms)))
+        except Exception:
+            try:
+                return dt.astimezone()
+            except Exception:
+                return dt
+
+    @staticmethod
+    def _plural_ru(n: int, forms: tuple) -> str:
+        n10, n100 = n % 10, n % 100
+        if n10 == 1 and n100 != 11:
+            return forms[0]
+        if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+            return forms[1]
+        return forms[2]
+
+    def _fetch_calendar(self) -> list:
+        cached = _cache_get(("calendar",), ANIME_TTL)
+        if cached is not None:
+            return cached
+        data = self._api_get("/calendar")
+        entries = data if isinstance(data, list) else []
+        if entries:
+            _cache_set(("calendar",), entries)
+        return entries
+
+    def _group_schedule(self, entries: list, now_local: datetime) -> dict:
+        today = now_local.date()
+        last = today + timedelta(days=SCHEDULE_DAYS - 1)
+        days = {}
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("anime"), dict):
+                continue
+            dt = self._parse_iso(entry.get("next_episode_at"))
+            if dt is None:
+                continue
+            local = self._to_local(dt)
+            if not today <= local.date() <= last:
+                continue
+            days.setdefault(local.date(), []).append((local, entry))
+        for items in days.values():
+            items.sort(key=lambda pair: pair[0])
+        return days
+
+    @staticmethod
+    def _day_chip_label(day, today) -> str:
+        delta = (day - today).days
+        if delta == 0:
+            return "Сегодня"
+        if delta == 1:
+            return "Завтра"
+        return WEEKDAYS_SHORT[day.weekday()]
+
+    @staticmethod
+    def _day_title(day, today) -> str:
+        delta = (day - today).days
+        if delta == 0:
+            prefix = "Сегодня"
+        elif delta == 1:
+            prefix = "Завтра"
+        else:
+            prefix = WEEKDAYS_FULL[day.weekday()]
+        return f"{prefix}, {day.day} {MONTHS_GEN[day.month - 1]}"
+
+    @staticmethod
+    def _relative_time(seconds: float) -> str:
+        if seconds <= 0:
+            return "вышла"
+        hours, minutes = divmod(int(seconds // 60), 60)
+        if hours:
+            return f"через {hours} ч {minutes} мин" if minutes else f"через {hours} ч"
+        return f"через {max(minutes, 1)} мин"
+
+    def _clear_children(self, col):
+        for i in range(col.getChildCount()):
+            try:
+                anim = getattr(col.getChildAt(i), "_skeleton_anim", None)
+                if anim:
+                    anim.cancel()
+            except Exception:
+                pass
+        col.removeAllViews()
+
+    def _make_schedule_cell(self, activity, entry: dict, local_dt: datetime, now_local: datetime,
+                            show_relative: bool, on_pick, poster_executor, enrich_executor, is_stale=None):
+        ctx = activity
+        anime = dict(entry["anime"])
+        row = self._make_card_row(ctx)
+        row.addView(self._setup_poster(ctx, anime, poster_executor, enrich_executor, is_stale))
+
+        text_col = LinearLayout(ctx)
+        text_col.setOrientation(LinearLayout.VERTICAL)
+        text_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+        text_lp.setMargins(dp(12), 0, dp(8), 0)
+        text_col.setLayoutParams(text_lp)
+
+        title_view = TextView(ctx)
+        title_view.setText(anime.get("russian") or anime.get("name") or "Без названия")
+        title_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16)
+        title_view.setTypeface(None, Typeface.BOLD)
+        title_view.setMaxLines(2)
+        title_view.setEllipsize(TextUtils.TruncateAt.END)
+        title_view.setTextColor(self._theme_color("key_windowBackgroundWhiteBlackText", "#000000"))
+        text_col.addView(title_view)
+
+        number = entry.get("next_episode")
+        episode_view = TextView(ctx)
+        total_episodes = int(_to_float(anime.get("episodes")))
+        if number and total_episodes:
+            episode_text = f"Серия {number} из {total_episodes}"
+        elif number:
+            episode_text = f"Серия {number}"
+        else:
+            episode_text = "Новая серия"
+        episode_view.setText(episode_text)
+        episode_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13)
+        episode_view.setTextColor(self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF"))
+        episode_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        episode_lp.setMargins(0, dp(3), 0, 0)
+        text_col.addView(episode_view, episode_lp)
+
+        parts = []
+        score = anime.get("score")
+        try:
+            if score and float(score) > 0:
+                parts.append(f"\u2605 {float(score):.1f}")
+        except (TypeError, ValueError):
+            pass
+        kind_label = KIND_LABELS.get(anime.get("kind"), "")
+        if kind_label and anime.get("kind") != "tv":
+            parts.append(kind_label)
+        if parts:
+            meta_view = TextView(ctx)
+            meta_view.setText(" · ".join(parts))
+            meta_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12)
+            meta_view.setSingleLine(True)
+            meta_view.setEllipsize(TextUtils.TruncateAt.END)
+            meta_view.setIncludeFontPadding(False)
+            meta_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            meta_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            meta_lp.setMargins(0, dp(4), 0, 0)
+            text_col.addView(meta_view, meta_lp)
+        row.addView(text_col)
+
+        container_hex, content_hex = STATUS_TONAL.get(anime.get("status"), STATUS_TONAL["ongoing"])
+        seconds = (local_dt - now_local).total_seconds()
+
+        time_col = LinearLayout(ctx)
+        time_col.setOrientation(LinearLayout.VERTICAL)
+        time_col.setGravity(Gravity.CENTER_HORIZONTAL)
+        time_col.setMinimumWidth(dp(76))
+
+        pill = TextView(ctx)
+        pill.setText(local_dt.strftime("%H:%M"))
+        pill.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14)
+        pill.setTypeface(None, Typeface.BOLD)
+        pill.setGravity(Gravity.CENTER)
+        pill.setIncludeFontPadding(False)
+        pill.setPadding(dp(12), dp(6), dp(12), dp(6))
+        pill.setBackground(self._rounded_background(container_hex, MD3_SHAPE_FULL))
+        pill.setTextColor(AndroidColor.parseColor(content_hex))
+        pill_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        time_col.addView(pill, pill_lp)
+
+        if show_relative:
+            rel_view = TextView(ctx)
+            rel_view.setText(self._relative_time(seconds))
+            rel_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11)
+            rel_view.setGravity(Gravity.CENTER)
+            rel_view.setIncludeFontPadding(False)
+            rel_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            rel_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            rel_lp.setMargins(0, dp(5), 0, 0)
+            time_col.addView(rel_view, rel_lp)
+        row.addView(time_col)
+
+        if show_relative and seconds <= 0:
+            row.setAlpha(0.6)
+
+        row.setClickable(True)
+        row.setOnClickListener(OnClickListener(lambda v: on_pick(anime)))
+        return row
+
+    def _build_day_container(self, activity, items: list, is_today: bool, now_local: datetime,
+                             on_pick, poster_executor, enrich_executor, is_stale=None):
+        col = LinearLayout(activity)
+        col.setOrientation(LinearLayout.VERTICAL)
+        if not items:
+            empty = TextView(activity)
+            empty.setText("В этот день серий нет")
+            empty.setGravity(Gravity.CENTER)
+            empty.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14)
+            empty.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            empty.setPadding(0, dp(48), 0, dp(48))
+            col.addView(empty)
+            return col
+        for index, (local_dt, entry) in enumerate(items):
+            cell = self._make_schedule_cell(
+                activity, entry, local_dt, now_local, is_today, on_pick,
+                poster_executor, enrich_executor, is_stale,
+            )
+            if index < 7:
+                target_alpha = 0.6 if (is_today and (local_dt - now_local).total_seconds() <= 0) else 1.0
+                cell.setAlpha(0.0)
+                cell.setTranslationY(float(dp(10)))
+                col.addView(cell)
+                cell.animate().alpha(target_alpha).translationY(0.0).setStartDelay(index * 24).setDuration(240).setInterpolator(_MATERIAL_STANDARD).start()
+            else:
+                col.addView(cell)
+        return col
+
+    def _open_schedule(self, peer_id: int):
+        poster_executor = None
+        enrich_executor = None
+        try:
+            frag = get_last_fragment()
+            if not frag:
+                return
+            activity = frag.getParentActivity()
+            if not activity:
+                return
+
+            poster_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="shiki-poster")
+            enrich_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="shiki-enrich")
+
+            root = LinearLayout(activity)
+            root.setOrientation(LinearLayout.VERTICAL)
+            root.setPadding(dp(16), dp(12), dp(16), dp(12))
+
+            chips_scroll = HorizontalScrollView(activity)
+            chips_scroll.setHorizontalScrollBarEnabled(False)
+            chips_scroll.setOverScrollMode(View.OVER_SCROLL_NEVER)
+            chips_row = LinearLayout(activity)
+            chips_row.setOrientation(LinearLayout.HORIZONTAL)
+            chips_scroll.addView(chips_row)
+            chips_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            chips_lp.setMargins(0, 0, 0, dp(12))
+            root.addView(chips_scroll, chips_lp)
+
+            progress_bar = None
+            try:
+                from android.R import attr as _AndroidAttr
+                progress_bar = ProgressBar(activity, None, _AndroidAttr.progressBarStyleHorizontal)
+                progress_bar.setIndeterminate(True)
+                try:
+                    progress_bar.getIndeterminateDrawable().mutate().setTint(
+                        self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF")
+                    )
+                except Exception:
+                    pass
+                progress_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(4))
+                progress_lp.setMargins(0, 0, 0, dp(8))
+                root.addView(progress_bar, progress_lp)
+            except Exception as e:
+                self.log(f"Не удалось создать индикатор загрузки: {e}")
+
+            status_view = TextView(activity)
+            status_view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13)
+            status_view.setMaxLines(1)
+            status_view.setEllipsize(TextUtils.TruncateAt.END)
+            status_view.setTextColor(self._theme_color("key_windowBackgroundWhiteGrayText", "#888888"))
+            status_view.setText("Загружаю расписание…")
+            status_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            status_lp.setMargins(dp(4), dp(4), dp(4), dp(8))
+            root.addView(status_view, status_lp)
+
+            scroll = ScrollView(activity)
+            scroll.setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(342)))
+            scroll.setFillViewport(True)
+            scroll.setPadding(dp(4), dp(4), dp(4), dp(4))
+            results_col = LinearLayout(activity)
+            results_col.setOrientation(LinearLayout.VERTICAL)
+            scroll.addView(results_col)
+            root.addView(scroll)
+
+            outer_scroll = ScrollView(activity)
+            outer_scroll.setFillViewport(True)
+            outer_scroll.addView(root)
+
+            builder = AlertDialogBuilder(activity)
+            builder.set_title("Расписание")
+            _cal_icon_id = _resolve_calendar_icon_id(activity)
+            if _cal_icon_id:
+                try:
+                    builder.set_icon(_cal_icon_id)
+                except Exception:
+                    pass
+            builder.set_view(outer_scroll, -2)
+            builder.set_negative_button("Закрыть", lambda b, w: b.dismiss())
+            builder.set_cancelable(True)
+
+            state = {"closed": False, "selected": None, "days": {}, "today": None, "now": None}
+            day_views = {}
+            chips = {}
+            is_stale = lambda: state["closed"]
+
+            highlight_color = self._theme_color("key_windowBackgroundWhiteBlueText", "#5C9EFF")
+            active_text_color = self._contrast_on_color(highlight_color)
+            idle_bg_color = self._theme_color("key_windowBackgroundGray", "#F0F0F0")
+            idle_text_color = self._theme_color("key_windowBackgroundWhiteGrayText", "#888888")
+
+            def set_loading(loading: bool):
+                if progress_bar is not None:
+                    progress_bar.setVisibility(View.VISIBLE if loading else View.GONE)
+
+            def on_pick(anime: dict):
+                state["closed"] = True
+                builder.dismiss()
+                self._send_anime(peer_id, anime)
+
+            def style_chip(day, selected: bool):
+                chip, top, bottom = chips[day]
+                bg = GradientDrawable()
+                bg.setShape(GradientDrawable.RECTANGLE)
+                bg.setCornerRadius(dp(MD3_SHAPE_MEDIUM))
+                if selected:
+                    bg.setColor(highlight_color)
+                else:
+                    bg.setColor(idle_bg_color)
+                chip.setBackground(bg)
+                top.setTextColor(active_text_color if selected else idle_text_color)
+                bottom.setTextColor(active_text_color if selected else self._theme_color("key_windowBackgroundWhiteBlackText", "#000000"))
+
+            def select_day(day):
+                state["selected"] = day
+                today = state["today"]
+                items = state["days"].get(day, [])
+                for key in chips:
+                    style_chip(key, key == day)
+                container = day_views.get(day)
+                fresh = container is None
+                if fresh:
+                    container = self._build_day_container(
+                        activity, items, day == today, state["now"], on_pick,
+                        poster_executor, enrich_executor, is_stale,
+                    )
+                    day_views[day] = container
+                    results_col.addView(container)
+                for key, view in day_views.items():
+                    view.setVisibility(View.VISIBLE if key == day else View.GONE)
+                if not fresh:
+                    container.setAlpha(0.0)
+                    container.animate().alpha(1.0).setDuration(180).setInterpolator(_MATERIAL_STANDARD).start()
+                count = len(items)
+                status_view.setText(
+                    f"{self._day_title(day, today)} · {count} {self._plural_ru(count, ('серия', 'серии', 'серий'))}"
+                )
+                scroll.scrollTo(0, 0)
+
+            def make_chip(day, today):
+                chip = LinearLayout(activity)
+                chip.setOrientation(LinearLayout.VERTICAL)
+                chip.setGravity(Gravity.CENTER)
+                chip.setPadding(dp(10), dp(8), dp(10), dp(8))
+                top = TextView(activity)
+                top_label = self._day_chip_label(day, today)
+                top.setText(top_label)
+                top.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12)
+                top.setIncludeFontPadding(False)
+                top.setGravity(Gravity.CENTER)
+                top.setMaxLines(1)
+                top.setEllipsize(None)
+                try:
+                    widest = max(
+                        top.getPaint().measureText(label)
+                        for label in ("Сегодня", "Завтра", "Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб")
+                    )
+                    chip.setMinimumWidth(int(widest) + dp(44))
+                except Exception:
+                    chip.setMinimumWidth(dp(92))
+                bottom = TextView(activity)
+                bottom.setText(str(day.day))
+                bottom.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18)
+                bottom.setTypeface(None, Typeface.BOLD)
+                bottom.setIncludeFontPadding(False)
+                bottom.setGravity(Gravity.CENTER)
+                bottom_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                bottom_lp.setMargins(0, dp(2), 0, 0)
+                chip.addView(top, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                chip.addView(bottom, bottom_lp)
+                ripple = self._ripple_foreground(activity)
+                if ripple is not None:
+                    try:
+                        chip.setForeground(ripple)
+                    except Exception:
+                        pass
+                self._clip_rounded(chip, MD3_SHAPE_MEDIUM)
+                chip.setOnClickListener(OnClickListener(lambda v, d=day: select_day(d)))
+                chips[day] = (chip, top, bottom)
+                return chip
+
+            def render(days: dict, now_local: datetime):
+                if state["closed"]:
+                    return
+                set_loading(False)
+                self._clear_children(results_col)
+                if not days:
+                    status_view.setText("На ближайшую неделю серий не найдено")
+                    return
+                today = now_local.date()
+                state["days"] = days
+                state["today"] = today
+                state["now"] = now_local
+                for day in sorted(days):
+                    chip_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    chip_lp.setMargins(0, 0, dp(8), 0)
+                    chips_row.addView(make_chip(day, today), chip_lp)
+                select_day(today if today in days else min(days))
+
+            def render_error():
+                if state["closed"]:
+                    return
+                set_loading(False)
+                self._clear_children(results_col)
+                status_view.setText("Не удалось загрузить расписание")
+
+            def work():
+                try:
+                    entries = self._fetch_calendar()
+                    now_local = self._to_local(datetime.now(timezone.utc))
+                    days = self._group_schedule(entries, now_local)
+                except Exception as e:
+                    self.log(f"Расписание: {e}")
+                    run_on_ui_thread(render_error)
+                    return
+                ordered_ids = [
+                    entry["anime"].get("id")
+                    for day in sorted(days) for _, entry in days[day]
+                ]
+                try:
+                    self._prefetch_gql_posters("anime", ordered_ids[:GQL_BATCH])
+                except Exception as e:
+                    self.log(f"Предзагрузка обложек: {e}")
+                run_on_ui_thread(lambda: render(days, now_local))
+                if len(ordered_ids) > GQL_BATCH and not state["closed"]:
+                    try:
+                        self._prefetch_gql_posters("anime", ordered_ids[GQL_BATCH:])
+                    except Exception as e:
+                        self.log(f"Предзагрузка обложек (остаток): {e}")
+
+            def on_dismiss(b):
+                state["closed"] = True
+                for ex in (poster_executor, enrich_executor):
+                    try:
+                        ex.shutdown(wait=False, cancel_futures=True)
+                    except Exception:
+                        pass
+                try:
+                    self._clear_children(results_col)
+                except Exception:
+                    pass
+            builder.set_on_dismiss_listener(on_dismiss)
+
+            builder.show()
+            set_loading(True)
+            self._show_skeletons(results_col, count=4, stale_check=is_stale)
+            run_on_queue(work)
+        except Exception as e:
+            self.log(f"Не удалось открыть расписание: {e}")
+            for ex in (poster_executor, enrich_executor):
+                if ex is not None:
+                    try:
+                        ex.shutdown(wait=False, cancel_futures=True)
+                    except Exception:
+                        pass
+            self._bulletin_error("Не удалось открыть расписание")
+
+    def _fallback_search_dialog(self, peer_id: int, query: str):
+        query = (query or "").strip()
+        if not query:
+            self._send_help_fallback(peer_id)
+            return
+        self._bulletin_info(f"🔍 Ищу «{query}»…")
+
+        def work():
+            try:
+                results, used_query = self._search_with_fallback(query, page=1)
+            except Exception as e:
+                self._reply_html(peer_id, f"Ошибка поиска: {html_escape(str(e))}")
+                return
+            if not results:
+                self._bulletin_error(f"Ничего не найдено по «{query}»")
+                return
+            self._show_fallback_results(peer_id, query, used_query, results)
+
+        run_on_queue(work)
+
+    def _show_fallback_results(self, peer_id: int, orig_query: str, used_query: str, results: list):
+        names, ids = [], []
+        for item in results:
+            title = item.get("russian") or item.get("name") or "Без названия"
+            year = ""
+            aired = item.get("aired_on")
+            if aired and len(str(aired)) >= 4:
+                year = str(aired)[:4]
+            icon = STATUS_ICONS.get(item.get("status"), "❔")
+            score = item.get("score") or 0
+            meta = f"\U0001F4C5 {year}" if year else "—"
+            if score:
+                meta += f"\u2B50 {score}"
+            names.append(f"{icon} {meta}  ·  {title}")
+            ids.append(item.get("id", 0))
+
+        def on_click(bld, idx):
+            bld.dismiss()
+            run_on_queue(lambda: self._cmd_info(peer_id, ids[idx]))
+
+        def show():
+            try:
+                frag = get_last_fragment()
+                if not frag:
+                    return
+                act = frag.getParentActivity()
+                if not act:
+                    return
+                b = AlertDialogBuilder(act)
+                _fb_icon_id = _resolve_search_icon_id(act)
+                if _fb_icon_id:
+                    b.set_title(f"«{used_query}»  ·  {len(results)}")
+                    try:
+                        b.set_icon(_fb_icon_id)
+                    except Exception:
+                        b.set_title(f"«{used_query}»  ·  {len(results)}")
+                else:
+                    b.set_title(f"«{used_query}»  ·  {len(results)}")
+                b.set_items(names, on_click)
+                b.set_negative_button("Закрыть", lambda b, w: b.dismiss())
+                b.show()
+            except Exception as e:
+                self._bulletin_error(f"Не удалось показать результаты: {e}")
+
+        run_on_ui_thread(show)
+
+    def _send_help_fallback(self, peer_id: int):
+        text = (
+            "<b>Shikimori Search</b>\n\n"
+            ".s &lt;запрос&gt;  — поиск аниме\n"
+            ".m &lt;запрос&gt;  — поиск манги\n"
+            ".i           — статистика профиля (нужен никнейм в настройках)\n"
+            ".c           — расписание онгоингов\n"
+            ".r [оценка] [жанр] [план] — случайное аниме, например .r 8 комедия"
+        )
+        run_on_ui_thread(lambda: self._send_formatted(peer_id, text, "HTML"))
+
+    def _create_skeleton_view(self, activity):
+        ctx = activity
+        row = LinearLayout(ctx)
+        row.setOrientation(LinearLayout.HORIZONTAL)
+        row.setGravity(Gravity.CENTER_VERTICAL)
+        pad_v, pad_h = dp(12), dp(14)
+        row.setPadding(pad_h, pad_v, pad_h, pad_v)
+        card_bg = self._rounded_background("#00000000", MD3_SHAPE_MEDIUM)
+        try:
+            card_color = self._theme_color("key_windowBackgroundGray", "#F0F0F0")
+            card_bg.setColor(card_color)
+        except Exception:
+            pass
+        row.setBackground(card_bg)
+        row.setElevation(float(dp(MD3_ELEVATION_RESTING)))
+        lp_row = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp_row.setMargins(dp(6), dp(6), dp(6), dp(6))
+        row.setLayoutParams(lp_row)
+
+        poster = View(ctx)
+        poster.setBackground(self._rounded_background("#DDDDDD", MD3_SHAPE_MEDIUM))
+        poster_lp = LinearLayout.LayoutParams(dp(56), dp(78))
+        poster.setLayoutParams(poster_lp)
+        row.addView(poster)
+
+        text_col = LinearLayout(ctx)
+        text_col.setOrientation(LinearLayout.VERTICAL)
+        text_lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0)
+        text_lp.setMargins(dp(12), 0, 0, 0)
+        text_col.setLayoutParams(text_lp)
+
+        title_placeholder = View(ctx)
+        title_placeholder.setBackground(self._rounded_background("#DDDDDD", MD3_SHAPE_SMALL))
+        title_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(18))
+        title_placeholder.setLayoutParams(title_lp)
+        text_col.addView(title_placeholder)
+
+        meta_placeholder = View(ctx)
+        meta_placeholder.setBackground(self._rounded_background("#DDDDDD", MD3_SHAPE_SMALL))
+        meta_lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(14))
+        meta_lp.setMargins(0, dp(6), 0, 0)
+        meta_placeholder.setLayoutParams(meta_lp)
+        text_col.addView(meta_placeholder)
+
+        row.addView(text_col)
+        return row
+
+    def _create_grid_skeleton_row(self, activity, poster_w: int, poster_h: int):
+        row = self._new_grid_row(activity)
+        for slot in range(GRID_COLUMNS):
+            tile = LinearLayout(activity)
+            tile.setOrientation(LinearLayout.VERTICAL)
+            poster = View(activity)
+            poster.setBackground(self._rounded_background("#DDDDDD", GRID_RADIUS_DP))
+            tile.addView(poster, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, poster_h))
+            for width_part, top in ((0.9, 10), (0.55, 8)):
+                bar = View(activity)
+                bar.setBackground(self._rounded_background("#DDDDDD", MD3_SHAPE_SMALL))
+                bar_lp = LinearLayout.LayoutParams(int(poster_w * width_part), dp(13))
+                bar_lp.setMargins(dp(4), dp(top), 0, 0)
+                tile.addView(bar, bar_lp)
+            row.removeViewAt(slot)
+            row.addView(tile, slot, self._grid_slot_lp())
+        return row
+
+    def _show_skeletons(self, results_col, count=5, stale_check=None, animate=True, grid=False):
+        def _do():
+            if stale_check and stale_check():
+                return
+            try:
+                results_col.removeAllViews()
+                activity = results_col.getContext()
+                if grid:
+                    poster_w, poster_h = self._grid_metrics(results_col)
+                    for _ in range(2 if count <= 4 else 3):
+                        results_col.addView(self._create_grid_skeleton_row(activity, poster_w, poster_h))
+                else:
+                    for _ in range(count):
+                        sk = self._create_skeleton_view(activity)
+                        results_col.addView(sk)
+
+                if not animate:
+                    for i in range(results_col.getChildCount()):
+                        results_col.getChildAt(i).setAlpha(0.7)
+                    return
+
+                for i in range(results_col.getChildCount()):
+                    v = results_col.getChildAt(i)
+                    try:
+                        anim = ObjectAnimator.ofFloat(v, "alpha", 0.4, 1.0)
+                        anim.setDuration(1200)
+                        anim.setRepeatCount(ValueAnimator.INFINITE)
+                        anim.setRepeatMode(ValueAnimator.REVERSE)
+                        anim.setInterpolator(_MATERIAL_STANDARD)
+                        anim.start()
+                        setattr(v, "_skeleton_anim", anim)
+                    except Exception:
+                        pass
+            except Exception as e:
+                self.log(f"Ошибка отображения скелетонов: {e}")
+        run_on_ui_thread(_do)
+
+    def _hide_skeletons(self, results_col, stale_check=None):
+        def _do():
+            if stale_check and stale_check():
+                return
+            try:
+                for i in range(results_col.getChildCount()):
+                    v = results_col.getChildAt(i)
+                    try:
+                        anim = getattr(v, "_skeleton_anim", None)
+                        if anim:
+                            anim.cancel()
+                    except Exception:
+                        pass
+                results_col.removeAllViews()
+            except Exception:
+                pass
+        run_on_ui_thread(_do)
+
+    def _enrich_with_poster(self, item: dict) -> dict:
+        aid = item.get("id")
+        if not aid:
+            return item
+        media_type = item.get("_media_type", "anime")
+        endpoint = MEDIA_ENDPOINTS.get(media_type, "/animes")
+
+        cache_key = ("title_full", media_type, aid)
+        full = _cache_get(cache_key, ANIME_TTL)
+        if full is None:
+            try:
+                full = self._api_get(f"{endpoint}/{aid}")
+                if full and full.get("id"):
+                    _cache_set(cache_key, full)
+            except Exception as e:
+                self.log(f"Не удалось загрузить карточку #{aid}: {e}")
+                return item
+
+        if "image" in full and full["image"]:
+            item["image"] = full["image"]
+        if "poster" in full and full["poster"]:
+            item["poster"] = full["poster"]
+        return item

@@ -658,7 +658,7 @@ public struct GalleryConfiguration {
     }
     
     static func with(appConfiguration: AppConfiguration) -> GalleryConfiguration {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if appConfiguration.sgWebSettings.global.ytPip {
             return GalleryConfiguration(youtubePictureInPictureEnabled: true)
         }

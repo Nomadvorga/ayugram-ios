@@ -8,7 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 ZOOM = ROOT / "submodules/Camera/Sources/CameraZoom.swift"
-SETTINGS = ROOT / "Swiftgram/SGSimpleSettings/Sources/ExteraMediaSettings.swift"
+SETTINGS = ROOT / "AyuGram/SGSimpleSettings/Sources/ExteraMediaSettings.swift"
 TESTS = Path(__file__).with_name("MediaModelTests.swift")
 
 

@@ -4,6 +4,6 @@ swift_library(
     name = "AyuSnowEffect",
     module_name = "AyuSnowEffect",
     srcs = glob(["Sources/**/*.swift"]),
-    deps = ["//Swiftgram/SGSimpleSettings:SGSimpleSettings"],
+    deps = ["//AyuGram/SGSimpleSettings:SGSimpleSettings"],
     visibility = ["//visibility:public"],
 )

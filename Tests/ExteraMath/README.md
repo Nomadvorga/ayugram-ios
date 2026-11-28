@@ -10,9 +10,9 @@ python3 tools/run_extera_xctests.py \
   submodules/TelegramUI/Sources/ExteraMathUnits.swift \
   submodules/TelegramUI/Sources/ExteraMathTimeZones.swift \
   submodules/TelegramUI/Sources/ExteraMathCurrencyRates.swift \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraMathSettings.swift \
-  Swiftgram/SGMath/Sources/ExteraMathPreferences.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraMathSettings.swift \
+  AyuGram/SGMath/Sources/ExteraMathPreferences.swift \
   Tests/ExteraMath/ExteraMathEngineTests.swift \
   Tests/ExteraMath/ExteraMathSettingsTests.swift
 ```
@@ -40,7 +40,7 @@ imports SGSimpleSettings, so this direct-source host target needs neither SGMath
 nor SGSimpleSettings as an installed module. Engine-only tests can still run with
 the original four engine files and `ExteraMathEngineTests.swift` alone.
 
-The application compiles those same four engine files once in `//Swiftgram/SGMath`;
+The application compiles those same four engine files once in `//AyuGram/SGMath`;
 TelegramUI and SGSettingsUI import that static library. The source filegroup does
 not introduce a dependency from SGMath back to TelegramUI. No UI/presentation type
 is imported into SGMath. It is linked inside the existing TelegramUIFramework,

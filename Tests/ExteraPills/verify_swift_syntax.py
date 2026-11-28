@@ -7,8 +7,8 @@ import tree_sitter_swift
 root = Path(__file__).resolve().parents[2]
 parser = tree_sitter.Parser(tree_sitter.Language(tree_sitter_swift.language()))
 files = [
-    *sorted((root / "Swiftgram/SGSimpleSettings/Sources").glob("ExteraPill*.swift")),
-    *sorted((root / "Swiftgram/SGSettingsUI/Sources").glob("ExteraPill*.swift")),
+    *sorted((root / "AyuGram/SGSimpleSettings/Sources").glob("ExteraPill*.swift")),
+    *sorted((root / "AyuGram/SGSettingsUI/Sources").glob("ExteraPill*.swift")),
     *sorted((root / "submodules/ChatListUI/Sources").glob("ExteraPill*.swift")),
     root / "submodules/ChatListUI/Sources/ChatListController.swift",
     root / "submodules/ChatListUI/Sources/ChatListControllerNode.swift",

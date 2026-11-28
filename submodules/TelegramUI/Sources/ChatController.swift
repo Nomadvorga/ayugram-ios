@@ -17,6 +17,8 @@ import DeviceAccess
 import TextFormat
 import TelegramBaseController
 import AccountContext
+import AyuPluginBridge
+import AyuPluginTelegramAdapter
 import WalletContext
 import TelegramStringFormatting
 import OverlayStatusController
@@ -245,7 +247,7 @@ struct ScrolledToMessageId: Equatable {
     var allowedReplacementDirection: AllowedReplacementDirections
 }
 
-public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {
+public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate, UIGestureRecognizerDelegate {
     private let ayuHeaderSnowView = AyuSnowView(style: .header)
     
     var validLayout: ContainerViewLayout?
@@ -342,6 +344,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     public private(set) var controllerInteraction: ChatControllerInteraction?
     var interfaceInteraction: ChatPanelInterfaceInteraction?
     var ayuSendIsConfirmed = false // MARK: AyuGram
+    private var ayuNativePluginGesturesInstalled = false // MARK: AyuGram
+    private weak var ayuNativePluginGesture: UIPanGestureRecognizer? // MARK: AyuGram
+    private var ayuPullNextChatStartedWithStockOffer = false // MARK: AyuGram
+    private var ayuNextUnreadOffer: (peer: EnginePeer, unreadCount: Int, location: TelegramEngine.NextUnreadChannelLocation)? // MARK: AyuGram
+    private var ayuNextUnreadPolledPeerId: PeerId? // MARK: AyuGram
+    private let ayuNextUnreadOfferDisposable = MetaDisposable() // MARK: AyuGram
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -619,7 +627,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var translationStateDisposable: Disposable?
     var premiumGiftSuggestionDisposable: Disposable?
     
-    // MARK: Swiftgram
+    // MARK: AyuGram
     private var sgShowHiddenPinnedMessagesObserver: NSObjectProtocol?
     public var overlayTitle: String? {
          var title: String?
@@ -1880,6 +1888,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     strongSelf.interfaceInteraction?.setupEditMessage(message.id, { _ in })
                 }
             }
+        }, ayuPerformDoubleTapAction: { [weak self] message, action in
+            self?.ayuPerformDoubleTapAction(message: message, rawAction: action)
         }, openPeer: { [weak self] peer, navigation, fromMessage, source in
             var expandAvatar = false
             if case let .groupParticipant(storyStats, avatarHeaderNode) = source {
@@ -1910,11 +1920,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.openMessageReactionContextMenu(message: EngineMessage(message), sourceView: sourceView, gesture: gesture, value: value)
         }, updateMessageReaction: { [weak self] initialMessage, reaction, force, sourceView in
             guard let strongSelf = self else {
-                return
-            }
-            // Sticker and other non-bubble messages use the default-reaction entry point.
-            // Explicit reaction-picker selections must always keep their normal behavior.
-            if case .default = reaction, !force, strongSelf.performExteraDoubleTapAction(initialMessage) {
                 return
             }
             guard !strongSelf.presentAccountFrozenInfoIfNeeded() else {
@@ -2497,6 +2502,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     })
                 }
             }, nil)
+            // MARK: AyuGram
+            // SandBox cancels the send. Group Mentions is applied later, at
+            // enqueue time, so media captions are covered too.
+            if AyuNativePluginRuntime.shared.handleSandCommand(text, from: strongSelf) {
+                strongSelf.clearInputText()
+                return
+            }
+            //
             var attributes: [MessageAttribute] = []
             let entities = generateTextEntities(text, enabledTypes: .all)
             if !entities.isEmpty {
@@ -4611,7 +4624,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         default:
                             break
                         }
-                        // MARK: Swiftgram
+                        // MARK: AyuGram
                         switch SGSimpleSettings.shared.translationBackendEnum {
                         case .system:
                             if #available(iOS 18.0, *) {
@@ -6537,7 +6550,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     source = .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: .zero))
                 }
                 
-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: strongSelf.exteraAdminHeaderMenuItems(addingTo: items, peerId: peer.id) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                // MARK: AyuGram
+                // Android's chat header menu: plugin rows registered for CHAT_ACTION_MENU.
+                let ayuPluginMenu = AyuPluginContextMenuHandle()
+                var ayuItems = strongSelf.exteraAdminHeaderMenuItems(addingTo: items, peerId: peer.id) |> map { ContextController.Items(content: .list($0)) }
+                if let ayuPeerId = strongSelf.chatLocation.peerId {
+                    ayuItems = AyuPluginContextMenu.appending(to: ayuItems, request: AyuPluginMenuRequest(kind: .chatActionMenu, accountKey: strongSelf.context.account.id.int64, peer: AyuPluginMenuRequest.Peer(namespace: ayuPeerId.namespace._internalGetInt32Value(), id: ayuPeerId.id._internalGetInt64Value())), menu: ayuPluginMenu)
+                }
+                //
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: ayuItems, gesture: gesture)
+                ayuPluginMenu.controller = contextController
                 contextController.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -7182,7 +7204,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
         }
 
-        // MARK: Swiftgram
+        // MARK: AyuGram
         self.sgShowHiddenPinnedMessagesObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("SGShowHiddenPinnedMessages"),
             object: nil,
@@ -7261,7 +7283,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     deinit {
-        // MARK: Swiftgram
+        // MARK: AyuGram
         if let observer = sgShowHiddenPinnedMessagesObserver { NotificationCenter.default.removeObserver(observer) }
         let _ = ChatControllerCount.modify { value in
             return value - 1
@@ -7880,6 +7902,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.forwardSideListAppearance(.willAppear, animated: animated)
+        self.installAyuNativePluginGesturesIfNeeded() // MARK: AyuGram
+        self.ayuRefreshNextUnreadOffer() // MARK: AyuGram
 
         self.walletTransferAnimationsVisible = true
         self.chatDisplayNode.historyNode.forEachVisibleMessageItemNode { itemNode in
@@ -9418,8 +9442,20 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, presentSchedulePickerInOverlay: Bool = false) {
+        // MARK: AyuGram — original plugin send hook runs before enqueueing.
+        if AyuPluginTelegramAdapter.shared.hasSendMessageHooks {
+            self.ayuApplyPluginSendHooks(to: messages) { [weak self] resolved, cancelled in
+                guard let self, !cancelled else { return }
+                self.sendMessagesResolved(resolved, media: media, postpone: postpone, commit: commit, presentSchedulePickerInOverlay: presentSchedulePickerInOverlay)
+            }
+            return
+        }
+        self.sendMessagesResolved(messages, media: media, postpone: postpone, commit: commit, presentSchedulePickerInOverlay: presentSchedulePickerInOverlay)
+    }
+
+    private func sendMessagesResolved(_ ayuMessages: [EnqueueMessage], media: Bool, postpone: Bool, commit: Bool, presentSchedulePickerInOverlay: Bool) {
         if case let .customChatContents(customChatContents) = self.subject {
-            customChatContents.enqueueMessages(messages: messages)
+            customChatContents.enqueueMessages(messages: ayuMessages)
             return
         }
         
@@ -9427,13 +9463,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
 
-        let _ = (self.shouldDivertMessagesToScheduled(messages: messages)
+        let _ = (self.shouldDivertMessagesToScheduled(messages: ayuMessages)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] shouldDivert in
             guard let self else {
                 return
             }
             
-            var messages = messages
+            var messages = ayuMessages
             var shouldOpenScheduledMessages = false
             
             if shouldDivert {
@@ -10464,7 +10500,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func displayMediaRecordingTooltip() {
-        if ({ return true })() { return } // MARK: Swiftgram
+        if ({ return true })() { return } // MARK: AyuGram
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return
         }
@@ -10942,7 +10978,167 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         })
     }
-    
+
+    // MARK: AyuGram native plugin surfaces
+
+    private func installAyuNativePluginGesturesIfNeeded() {
+        guard !self.ayuNativePluginGesturesInstalled else { return }
+        self.ayuNativePluginGesturesInstalled = true
+        // One finger, like Android: the pull only counts while the history is at
+        // the newest message, where an upward drag has nothing left to scroll.
+        // Two-finger gestures were invisible to users and are gone.
+        let gesture = UIPanGestureRecognizer(target: self, action: #selector(self.ayuPullNextChatGesture(_:)))
+        gesture.minimumNumberOfTouches = 1
+        gesture.maximumNumberOfTouches = 1
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        self.ayuNativePluginGesture = gesture
+        self.view.addGestureRecognizer(gesture)
+    }
+
+    @objc private func ayuPullNextChatGesture(_ gesture: UIPanGestureRecognizer) {
+        if gesture.state == .began {
+            // Remember whether the stock next-channel pull owned this gesture
+            // from the start, so a channel hand-over is never navigated twice.
+            self.ayuPullNextChatStartedWithStockOffer = self.chatDisplayNode.historyNode.offerNextChannelToRead
+            return
+        }
+        guard gesture.state == .ended else { return }
+        let translation = gesture.translation(in: self.view)
+        let velocity = gesture.velocity(in: self.view)
+        guard translation.y < -60.0 || velocity.y < -500.0, abs(translation.y) > abs(translation.x) else { return }
+        // Only the end of the history can carry this gesture; anywhere else the
+        // same drag is ordinary scrolling. Threads/topics and multi-select keep
+        // stock Telegram behaviour, as the source does.
+        guard self.chatDisplayNode.historyNode.isScrollAtBottomPosition else { return }
+        guard self.presentationInterfaceState.interfaceState.selectionState == nil else { return }
+        guard self.chatLocation.threadId == nil else { return }
+        // Channels that already offer the stock next-channel pull keep it; we
+        // must not navigate twice on the same release.
+        guard !self.ayuPullNextChatStartedWithStockOffer else { return }
+        guard !self.chatDisplayNode.historyNode.offerNextChannelToRead else { return }
+        let kind = self.ayuNativePluginChatKind()
+        let raw: String
+        if kind.channel { raw = "channel" }
+        else if kind.group { raw = "group" }
+        else if kind.bot { raw = "bot" }
+        else if kind.privateChat { raw = "private" }
+        else { return }
+        AyuNativePluginRuntime.shared.requestNextUnread(sourceKind: raw,
+                                                         currentPeerId: self.chatLocation.peerId?.id._internalGetInt64Value())
+    }
+
+    /// Resolves the stock overscroll-control preview from the same policy and
+    /// Postbox passes as the list selection, so the control shows the dialog a
+    /// release will actually open. Channels keep their own stock target.
+    private func ayuRefreshNextUnreadOffer() {
+        self.ayuNextUnreadOfferDisposable.dispose()
+        self.ayuNextUnreadOffer = nil
+        let kind = self.ayuNativePluginChatKind()
+        guard !kind.channel, self.chatLocation.threadId == nil else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        let raw: String
+        if kind.group { raw = "group" }
+        else if kind.bot { raw = "bot" }
+        else if kind.privateChat { raw = "private" }
+        else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        guard let policy = AyuNativePluginRuntime.shared.nextUnreadPolicy(sourceKind: raw) else {
+            self.updateNextChannelToReadVisibility()
+            return
+        }
+        let query = AyuNextUnreadQuery(
+            targetKinds: policy.targetKinds,
+            currentPeerId: self.chatLocation.peerId?.id._internalGetInt64Value(),
+            strategy: policy.strategy,
+            includeMuted: policy.includeMuted,
+            skipPinned: policy.skipPinned,
+            otherFolders: policy.otherFolders,
+            countMarkedUnread: policy.countMarkedUnread
+        )
+        let filterData = self.ayuCurrentChatListFilterData()
+        let accountPeerId = self.context.account.peerId
+        self.ayuNextUnreadOfferDisposable.set((self.context.account.postbox.transaction { transaction -> AyuNextUnreadTarget? in
+            AyuNextUnreadSelection.resolve(
+                transaction: transaction,
+                accountPeerId: accountPeerId,
+                currentFilterData: filterData,
+                query: query
+            )
+        } |> deliverOnMainQueue).startStrict(next: { [weak self] target in
+            guard let self else { return }
+            if let target {
+                self.ayuNextUnreadOffer = (target.peer, target.unreadCount, target.isArchived ? .archived : .same)
+            } else {
+                self.ayuNextUnreadOffer = nil
+            }
+            self.updateNextChannelToReadVisibility()
+        }))
+    }
+
+    private func ayuCurrentChatListFilterData() -> ChatListFilterData? {
+        guard let root = self.context.sharedContext.mainWindow?.viewController as? TelegramRootController,
+              let list = root.chatListController as? ChatListControllerImpl else {
+            return nil
+        }
+        return list.ayuCurrentChatListFilterData
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return gestureRecognizer === self.ayuNativePluginGesture || otherGestureRecognizer === self.ayuNativePluginGesture
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === self.ayuNativePluginGesture else { return true }
+        // Ignore the input panel and navigation bar: only a touch that actually
+        // lands inside the message history may start a pull, so typing, the
+        // attach panel and media menus are never intercepted.
+        let location = touch.location(in: self.view)
+        let historyView = self.chatDisplayNode.historyNode.view
+        guard let hitView = self.view.hitTest(location, with: nil) else { return false }
+        return hitView === historyView || hitView.isDescendant(of: historyView)
+    }
+
+    func ayuNativePluginChatKind() -> (group: Bool, channel: Bool, privateChat: Bool, bot: Bool) {
+        guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
+            return (false, false, false, false)
+        }
+        // `renderedPeer.peer` is the Postbox `Peer` existential, not `EnginePeer`.
+        if peer is TelegramGroup {
+            return (true, false, false, false)
+        }
+        if let channel = peer as? TelegramChannel {
+            if case .group = channel.info {
+                return (true, false, false, false)
+            } else {
+                return (false, true, false, false)
+            }
+        }
+        if let user = peer as? TelegramUser {
+            return (false, false, true, user.botInfo != nil)
+        }
+        return (false, false, false, false)
+    }
+
+    /// Shows the outgoing messages to the plugins' send hooks (the typed `telegram.hooks.send_message`
+    /// hooks and the three-field ones, one priority order) before they are queued. The adapter
+    /// builds the hook values, waits for the plugins and writes their changes back; forwards pass
+    /// unchanged, and a cancelling hook drops the whole send.
+    private func ayuApplyPluginSendHooks(to messages: [EnqueueMessage], completion: @escaping ([EnqueueMessage], Bool) -> Void) {
+        guard let peerId = self.chatLocation.peerId else { completion(messages, false); return }
+        AyuPluginTelegramAdapter.shared.applySendHooks(account: self.context.account, peerId: peerId, messages: messages) { resolved in
+            if let resolved {
+                completion(resolved, false)
+            } else {
+                completion(messages, true)
+            }
+        }
+    }
+
     func updateSlowmodeStatus() {
         if let slowmodeState = self.presentationInterfaceState.slowmodeState, case let .timestamp(slowmodeActiveUntilTimestamp) = slowmodeState.variant {
             let timestamp = Int32(Date().timeIntervalSince1970)
@@ -11465,7 +11661,31 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let contentData = self.contentData else {
             return
         }
-        self.chatDisplayNode.historyNode.offerNextChannelToRead = contentData.state.offerNextChannelToRead && self.presentationInterfaceState.interfaceState.selectionState == nil
+        let stockOffer = contentData.state.offerNextChannelToRead
+        var ayuOffer = false
+        // Pull to Next Chat uses Telegram's own overscroll control outside
+        // channels: the source hooks the same ChatPullingDownDrawable that
+        // channels already show, so the preview must be the real thing.
+        if !stockOffer {
+            if let offer = self.ayuNextUnreadOffer, self.chatLocation.threadId == nil {
+                ayuOffer = true
+                self.chatDisplayNode.historyNode.nextChannelToRead = (offer.peer, nil, offer.unreadCount, offer.location)
+            } else {
+                self.chatDisplayNode.historyNode.nextChannelToRead = nil
+            }
+        }
+        self.chatDisplayNode.historyNode.offerNextChannelToRead = (stockOffer || ayuOffer) && self.presentationInterfaceState.interfaceState.selectionState == nil
+        // The first display update can arrive before the peer exists. Poll once
+        // per peer after it loads, without turning every update into a query.
+        if let peerId = self.chatLocation.peerId, self.ayuNextUnreadPolledPeerId != peerId {
+            self.ayuNextUnreadPolledPeerId = peerId
+            Queue.mainQueue().after(0.35) { [weak self] in
+                guard let self, self.chatLocation.peerId == peerId else {
+                    return
+                }
+                self.ayuRefreshNextUnreadOffer()
+            }
+        }
     }
     
     func displayGiveawayStatusInfo(messageId: EngineMessage.Id, giveawayInfo: PremiumGiveawayInfo) {

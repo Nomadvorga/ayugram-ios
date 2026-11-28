@@ -3,12 +3,12 @@ files = [
     'submodules/TelegramUI/Sources/OverlayAudioPlayerLyricsNode.swift',
     'submodules/TelegramUI/Sources/OverlayAudioPlayerControlsNode.swift',
     'submodules/TelegramUI/Sources/ChatHistoryListNode.swift',
-    'Swiftgram/SGSimpleSettings/Sources/SimpleSettings.swift',
-    'Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift',
+    'AyuGram/SGSimpleSettings/Sources/SimpleSettings.swift',
+    'AyuGram/SGSettingsUI/Sources/SGSettingsController.swift',
     'submodules/TelegramUI/Components/Chat/ChatMessageItemView/Sources/ChatMessageItemView.swift',
     'submodules/TelegramUI/Components/Chat/ChatMessageTextBubbleContentNode/Sources/ChatMessageTextBubbleContentNode.swift',
-    'Swiftgram/SGTranslate/Sources/SGHttpProviders.swift',
-    'Swiftgram/SGTranslate/Sources/SGTranslate.swift',
+    'AyuGram/SGTranslate/Sources/SGHttpProviders.swift',
+    'AyuGram/SGTranslate/Sources/SGTranslate.swift',
 ]
 
 def strip(src):

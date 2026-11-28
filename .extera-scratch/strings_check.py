@@ -1,7 +1,7 @@
 import io
 import re
 
-s = io.open('Swiftgram/SGStrings/Strings/en.lproj/SGLocalizable.strings', encoding='utf-8').read()
+s = io.open('AyuGram/SGStrings/Strings/en.lproj/SGLocalizable.strings', encoding='utf-8').read()
 bad = []
 for line in s.splitlines():
     stripped = line.strip()

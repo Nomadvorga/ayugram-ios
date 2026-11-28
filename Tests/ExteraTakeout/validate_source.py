@@ -44,11 +44,11 @@ assert "appendBuffer(" not in source  # Buffer.appendBuffer does not advance siz
 assert "automaticFloodWait: false" in source
 assert "self.finish(success: false" in source
 assert "self.writer?.closeAndRemove()" in source
-for path in (ROOT / "Swiftgram/SGSettingsUI/Sources").glob("ExteraTakeout*.swift"):
+for path in (ROOT / "AyuGram/SGSettingsUI/Sources").glob("ExteraTakeout*.swift"):
     assert "import TelegramApi" not in path.read_text(encoding="utf-8")
 print("PASS: 3 wrapper constructors, 7 generated request signatures, Core-only API imports, cleanup source paths")
 
-for path in [*CORE.glob("ExteraTakeout*.swift"), * (ROOT / "Swiftgram/SGSettingsUI/Sources").glob("ExteraTakeout*.swift"), *Path(__file__).parent.glob("*")]:
+for path in [*CORE.glob("ExteraTakeout*.swift"), * (ROOT / "AyuGram/SGSettingsUI/Sources").glob("ExteraTakeout*.swift"), *Path(__file__).parent.glob("*")]:
     if not path.is_file():
         continue
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):

@@ -11,16 +11,24 @@ import SGSimpleSettings // MARK: AyuGram
 
 // MARK: AyuGram
 public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
-    return combineLatest(chatListFilterItemsWithCounters(context: context), ayuSettingSignal { AyuCustomizationSettings.shared.hideFolderCounters })
-    |> map { countAndItems, hideCounters -> (Int, [(ChatListFilter, Int, Bool)]) in
-        if !hideCounters {
-            return countAndItems
+    return combineLatest(
+        chatListFilterItemsWithCounters(context: context),
+        ayuSettingSignal { AyuCustomizationSettings.shared.hideFolderCounters },
+        ayuSettingValueSignal { ExteraSettings.shared.tabCounterMode }
+    )
+    |> map { countAndItems, hideCounters, counterMode -> (Int, [(ChatListFilter, Int, Bool)]) in
+        if hideCounters || counterMode == .off {
+            return (countAndItems.0, countAndItems.1.map { ($0.0, 0, false) })
         }
-        return (countAndItems.0, countAndItems.1.map { ($0.0, 0, false) })
+        // exteraGram "Tab counter: Unmuted": a folder counts only its unread chats with notifications on.
+        let unmutedOnly = counterMode == .unmuted
+        return (countAndItems.0, countAndItems.1.map { ($0.0, unmutedOnly ? $0.2 : $0.1, $0.2 > 0) })
     }
 }
 
-private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
+// Per folder: its unread chats, and how many of them are not muted.
+
+private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Int)]), NoError> {
     // A folder never names a secret chat. ChatListFilterPredicate resolves a secret chat's identity
     // to its associated cloud user, so including or excluding the user silently does the same to the
     // secret chat; and a folder can pin one, which ChatListFilterIncludePeers deliberately keeps out
@@ -63,7 +71,7 @@ private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<
             return (filters, ChatListFilterBadgeSecretChats(userIds: folderUserIds, associatedPeerIds: associatedPeerIds, userIdsOfFolderSecretChats: userIdsOfFolderSecretChats))
         }
     }
-    |> mapToSignal { filters, secretChats -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> in
+    |> mapToSignal { filters, secretChats -> Signal<(Int, [(ChatListFilter, Int, Int)]), NoError> in
         let secretChatsByUserId = secretChats.secretChatsByUserId
         let userIdBySecretChatId = secretChats.userIdBySecretChatId
         
@@ -113,7 +121,7 @@ private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<
             let associatedPeerIds = (view.views[associatedPeerIdsKey] as? EngineRawAssociatedPeerIdsView)?.associatedPeerIds ?? [:]
             return associatedPeerIds == secretChats.associatedPeerIds
         }
-        |> map { view -> (Int, [(ChatListFilter, Int, Bool)]) in
+        |> map { view -> (Int, [(ChatListFilter, Int, Int)]) in
             guard let unreadCounts = view.views[unreadKey] as? EngineRawUnreadMessageCountsView else {
                 return (0, [])
             }
@@ -126,7 +134,7 @@ private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<
             }
             let globalNotificationSettingsAccessor = globalNotificationSettings.postboxAccessor
             
-            var result: [(ChatListFilter, Int, Bool)] = []
+            var result: [(ChatListFilter, Int, Int)] = []
             
             var unreadChats: [EnginePeer.Id: ChatListFilterBadgeChat] = [:]
             
@@ -226,7 +234,7 @@ private func chatListFilterItemsWithCounters(context: AccountContext) -> Signal<
                     count += correction.count
                     unmutedUnreadCount += correction.unmuted
                 }
-                result.append((filter, max(0, count), unmutedUnreadCount > 0))
+                result.append((filter, max(0, count), max(0, unmutedUnreadCount)))
             }
             
             return (totalBadge, result)

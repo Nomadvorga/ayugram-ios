@@ -12,8 +12,8 @@ Run from the repository root with a Swift host toolchain:
 
 ```sh
 python3 tools/run_extera_xctests.py --warnings-as-errors \
-  Swiftgram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraChatAppearanceSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/AyuSettingsStore.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraChatAppearanceSettings.swift \
   Tests/ExteraChatAppearance/ExteraChatAppearanceSettingsTests.swift
 ```
 

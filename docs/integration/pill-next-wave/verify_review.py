@@ -19,7 +19,7 @@ for name, expected in manifest.items():
     existing += 1
 print(f"PASS: {existing} existing source hashes match patch baseline; no new destination applied")
 
-model_name = "Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift"
+model_name = "AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift"
 fallback = '(Locale.current as NSLocale).object(forKey: .currencyCode) as? String ?? "USD"'
 assert fallback in (repository / model_name).read_text(encoding="utf-8")
 assert fallback in (root / "review" / model_name).read_text(encoding="utf-8")

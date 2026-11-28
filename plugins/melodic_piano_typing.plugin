@@ -1,0 +1,2161 @@
+import os
+import re
+import sys
+import json
+import math
+import cmath
+import struct
+import random
+import shutil
+import threading
+import time
+from array import array
+from itertools import accumulate, repeat
+from operator import add, mul
+from base_plugin import BasePlugin, HookResult
+try:
+    from client_utils import send_message as _ext_send_message
+except Exception:
+    _ext_send_message = None
+try:
+    from base_plugin import MenuItemData, MenuItemType
+    _HAS_MENU = True
+except Exception:
+    MenuItemData = MenuItemType = None
+    _HAS_MENU = False
+from ui.settings import Header, Switch, Selector, Input, Divider, Text
+from ui.alert import AlertDialogBuilder
+from ui.bulletin import BulletinHelper
+from android_utils import log, run_on_ui_thread
+from client_utils import get_last_fragment
+from java import jclass, dynamic_proxy
+
+__id__ = "melodic_piano_typing"
+__name__ = "Melodic Piano Sequencer"
+__description__ = "Пошаговая игра мелодий при печати + конструктор мелодии (до 64 тактов, октавы по тактам). Тембры пианино, отправка своих мелодий в чат"
+__author__ = "@itzmahmudj"
+__version__ = "2.1.1"
+__icon__ = "urphey/5"
+__min_version__ = "12.10.6"
+__category__ = ["fun"]
+
+AppLoader = jclass("org.telegram.messenger.ApplicationLoader")
+SPBuilder = jclass("android.media.SoundPool$Builder")
+AABuilder = jclass("android.media.AudioAttributes$Builder")
+AAttr = jclass("android.media.AudioAttributes")
+TextWatcher = jclass("android.text.TextWatcher")
+EditText = jclass("android.widget.EditText")
+ViewGroup = jclass("android.view.ViewGroup")
+Sys = jclass("java.lang.System")
+LinearLayout = jclass("android.widget.LinearLayout")
+LinearLP = jclass("android.widget.LinearLayout$LayoutParams")
+AndroidUtilities = jclass("org.telegram.messenger.AndroidUtilities")
+Theme = jclass("org.telegram.ui.ActionBar.Theme")
+
+SR = 22050
+FMAX = 8000.0          # выше этой частоты гармоники не синтезируются
+NORM_PEAK = 0.80       # пиковый уровень готовых сэмплов (доля от полной шкалы)
+WT = 4096              # размер wavetable для смычковых
+WT_MASK = WT - 1
+CACHE_DIR = "piano_seq_v3"
+OLD_CACHE_DIRS = ("piano_seq_v2",)
+
+SEMITONES = {
+    "C": 0, "C#": 1, "DB": 1, "D": 2, "D#": 3, "EB": 3, "E": 4, "F": 5,
+    "F#": 6, "GB": 6, "G": 7, "G#": 8, "AB": 8, "A": 9, "A#": 10, "BB": 10, "B": 11
+}
+
+PRESET_NAMES = [
+    "Своя мелодия (редактор тактов)",
+    "Бетховен — К Элизе",
+    "Interstellar — Hans Zimmer",
+    "Гарри Поттер — Hedwig's Theme",
+    "Gravity Falls — Опенинг",
+    "Пираты Карибского моря",
+    "The Seven Seas — F-777 (Geometry Dash)"
+]
+
+PRESET_NOTES = [
+    "",
+    "E5 D#5 E5 D#5 E5 B4 D5 C5 A3+A4 C4+E4+A4 E4 A4 B4 E4 G#4 B4 C5 E4 E5 D#5 E5 D#5 E5 B4 D5 C5 A3+A4 C4+E4+A4 E4 C5 B4 A4",
+    "A4 E5 A4 E5 B4 E5 B4 E5 C5 E5 C5 E5 D5 E5 D5 E5 A3+A4 E4+E5 A4 E5 B3+B4 E4+E5 B4 E5 C4+C5 E4+E5 C5 E5 D4+D5 E4+E5 B4 E5",
+    "B4 E5 G5 F#5 E5 B5 A5 F#5 E5 G5 F#5 D#5 F5 B4 B4 E5 G5 F#5 E5 B5 D6 C#6 C6 G#5 C6 B5 A#5 F#5 G5 E5",
+    # Gravity Falls (Brad Breeck): вступление Dm-F-A-A, тема D E F A G A C..., быстрая часть F F F A A G F...
+    "D3+A3+D4+F4 F3+A3+C4+F4 A3+C#4+E4 A3+C#4+E4 D4 E4 F4 A4 G4 A4 C4 D4 E4 F4 E4 G4 A4 G4 F4 F4 F4 F4 A4 A4 G4 F4 A4 A4 A4 G4 A4 G4 F4 F4 F4 F4 A4 A4 G4 F4 A4 A4 A4 C#5 C#5 C#5 F4 F4 F4 A4 A4 G4 F4 A#4 A#4 A#4 G4 C5 A4 C#5 D5",
+    "A3 A4 C5 D4+D5 D5 D5 E5 F4+F5 F5 F5 G5 C4+E5 E5 D5 C5 C5 G3+D5 A3 A4 C5 D4+D5 D5 D5 E5 F4+F5 F5 F5 G5 C4+E5 E5 D5 C5 D4+D5",
+    # The Seven Seas (F-777), до минор: рифф, рифф октавой выше, связка, аккорды, октавные дубли
+    "C4 A#3 C4 C4 A#3 C4 C4 A#3 C4 G3 A#3 C4 A#3 C4 D#4 A#3 D4 F4 C4 F4 G4 A#4 G4 C4 A#3 C4 C4 A#3 C4 D#4 D4 A#3 C4 G4 F4 A#3 D4 D#4 A#3 D4 C4 C4 A#4 F4 G4 C4 A#3 C4 C5 A#4 C5 C5 A#4 C5 C5 A#4 C5 G4 A#4 C5 A#4 C5 D#5 A#4 D5 F5 C5 F5 G5 A#5 G5 C5 A#4 C5 C5 A#4 C5 D#5 D5 A#4 C5 G5 F5 A#4 D5 D#5 A#4 D5 C5 C5 A#5 F5 G5 C5 A#4 C5 A#5 C6 A#5 C6 C6 A#6 F6 G6 C4+G4+C5 C5+G5 C5+F5 C5+D#5 D#4+G#4+C5 A#4 D4+F4+A#4+C5 F4 D#4 A#3 C4+C5 C4+C5 D4+D5 D#4+D#5 C4+C5 F4+F5 G4+G5 C4+C5 D4+D5 D#4+D#5 A#3+A#4 C4+C5 D4+D5 D#4+D#5 F4+F5 F4+F5 D#4+D#5 A#3+A#4 C4+C5"
+]
+
+# Для пользователя: начальные такты редактора (как было в версии 1.8)
+DEFAULT_BARS = [
+    "D#5 G#4 A#4 G#4 D#5 G#4 A#4 G#4",
+    "D#5 G#4 A#4 G#4 F5 G#4 A#4 G#4",
+    "D5 G4 A#4 G4 D5 G4 A#4 G4",
+    "D5 G4 A#4 G4 F5 G4 A#4 G4",
+]
+MAX_BARS = 64          # максимум тактов в редакторе
+BAR_CHUNK = 8          # сколько нот в такте при автоматической разбивке
+LIB_FILE = "PianoSeq_melodies.txt"
+
+# Источники нот: (название, описание, ссылка)
+LIBRARIES = [
+    ("NoobNotes", "🇬🇧 Буквенные ноты для новичков (A-B-C и До-Ре-Ми), сотни популярных песен", "https://noobnotes.net/"),
+    ("NoobNotes — Super Mario Bros. Theme", "Пример записи с октавами .C  C  ^C  *C — плагин понимает её при импорте", "https://noobnotes.net/super-mario-bros-theme-nintendo/"),
+    ("Piano Letter Notes", "🌍 Буквенные ноты игр, аниме, кино и мемов", "https://pianoletternotes.blogspot.com/"),
+    ("Synthesizer Notes", "🌍 Буквенные ноты с аккордами левой руки", "https://www.synthesizernotes.com/"),
+    ("PlayPianoSheets", "🌍 Игровая музыка в формате Virtual Piano (буквы клавиатуры)", "https://playpianosheets.com/"),
+    ("Virtual Piano", "🌍 Классика виртуального пианино: ноты-буквы для клавиатуры", "https://virtualpiano.net/"),
+    ("MuseScore", "🌍 Крупнейшая библиотека нот сообщества, PDF и MIDI", "https://musescore.com/"),
+    ("IMSLP (Petrucci Music Library)", "🌍 Ноты общественного достояния: классика всех эпох и стран", "https://imslp.org/"),
+    ("Mutopia Project", "🌍 Свободные ноты классики в PDF, MIDI и LilyPond", "https://www.mutopiaproject.org/"),
+    ("8notes", "🌍 Бесплатные ноты и MIDI для множества инструментов", "https://www.8notes.com/"),
+    ("Free-Scores", "🇫🇷 Международная библиотека нот, интерфейс на разных языках", "https://www.free-scores.com/"),
+    ("Нотный архив Бориса Тараканова", "🇷🇺 Большой российский архив нот и партитур", "http://notes.tarakanov.net/"),
+]
+
+# ---------------------------------------------------------------------------
+# Тембры пианино (аддитивный синтез с моделью реальной струны)
+#   alpha   — наклон спектра (чем больше, тем мягче/темнее)
+#   fc      — частота «яркости» (Гц), выше неё гармоники затухают
+#   b       — инхармоничность струны (жёсткость): гармоники чуть «растянуты»
+#   gamma   — насколько быстрее затухают верхние гармоники
+#   df, ds  — скорость быстрого («удар») и медленного («послезвучие») затухания, 1/с
+#   wf      — доля быстрой компоненты
+#   cents   — расстройка двух струн (биения, «живость»)
+#   noise   — уровень стука молоточка по струне
+#   att     — атака, мс
+#   dur     — множитель длительности сэмпла
+#   sym     — резонанс соседних струн (педаль)
+#   wander  — случайная расстройка каждой ноты (винтажный строй), центы
+#   partials— свой набор обертонов [(кратность, громкость, ускорение затухания)]
+# ---------------------------------------------------------------------------
+TIMBRES = [
+    {"name": "Концертный рояль (реалистичный)",
+     "alpha": 1.0, "fc": 3600.0, "b": 4.0e-5, "gamma": 0.34, "df": 2.3, "ds": 0.50,
+     "wf": 0.58, "cents": 2.4, "noise": 0.07, "att": 0.8, "dur": 1.0},
+    {"name": "Мягкое пианино (тёплое)",
+     "alpha": 1.25, "fc": 2000.0, "b": 6.0e-5, "gamma": 0.28, "df": 2.6, "ds": 0.65,
+     "wf": 0.60, "cents": 2.8, "noise": 0.05, "att": 1.6, "dur": 0.95},
+    {"name": "Яркое фортепиано",
+     "alpha": 0.85, "fc": 6500.0, "b": 5.0e-5, "gamma": 0.45, "df": 2.8, "ds": 0.60,
+     "wf": 0.62, "cents": 2.2, "noise": 0.11, "att": 0.6, "dur": 0.95},
+    {"name": "Камерное пианино (приглушённое)",
+     "alpha": 1.45, "fc": 1200.0, "b": 8.0e-5, "gamma": 0.22, "df": 3.4, "ds": 1.30,
+     "wf": 0.70, "cents": 3.0, "noise": 0.03, "att": 2.5, "dur": 0.75},
+    {"name": "Рояль с педалью (мечтательный)",
+     "alpha": 1.05, "fc": 3000.0, "b": 4.0e-5, "gamma": 0.30, "df": 1.5, "ds": 0.28,
+     "wf": 0.40, "cents": 3.2, "noise": 0.05, "att": 1.2, "dur": 1.3, "sym": 0.10},
+    {"name": "Старое пианино (винтаж)",
+     "alpha": 1.0, "fc": 2600.0, "b": 1.4e-4, "gamma": 0.50, "df": 3.0, "ds": 0.90,
+     "wf": 0.62, "cents": 8.0, "noise": 0.10, "att": 1.0, "dur": 0.85, "wander": 7.0},
+    {"name": "Электро-пианино Rhodes (мягкое)",
+     "fc": 3500.0, "df": 1.8, "ds": 0.85, "wf": 0.35, "cents": 3.5, "noise": 0.02,
+     "att": 2.0, "dur": 1.0,
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.22, 2.2), (3.0, 0.07, 3.0), (7.03, 0.16, 6.5)]},
+    {"name": "Музыкальная шкатулка (мягкая)",
+     "fc": 4500.0, "df": 4.5, "ds": 2.20, "wf": 0.50, "cents": 1.5, "noise": 0.06,
+     "att": 0.6, "dur": 0.60,
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.28, 1.6), (3.0, 0.10, 2.4),
+                  (5.42, 0.14, 4.5), (8.93, 0.06, 7.0)]},
+    # ---- новые тембры (v2.0) ----
+    {"name": "Кинематографическое фетровое пианино (Felt Piano)",
+     "alpha": 1.75, "fc": 850.0, "b": 5.0e-5, "gamma": 0.16, "df": 1.9, "ds": 0.45,
+     "wf": 0.50, "cents": 2.0, "noise": 0.015, "att": 7.0, "dur": 1.3, "sym": 0.14},
+    {"name": "Джазовое пианино (Jazz Piano)",
+     "fc": 2800.0, "df": 2.7, "ds": 0.55, "wf": 0.58, "cents": 2.6, "noise": 0.05,
+     "att": 1.0, "dur": 1.0,
+     "partials": [(1.0, 1.00, 1.0), (2.0003, 0.78, 1.3), (3.001, 0.52, 1.7), (4.002, 0.34, 2.1),
+                  (5.004, 0.19, 2.6), (6.006, 0.10, 3.1), (7.009, 0.05, 3.6)]},
+    {"name": "Поп/Рок пианино (Pop Piano)",
+     "alpha": 0.55, "fc": 9000.0, "b": 3.0e-5, "gamma": 0.60, "df": 4.5, "ds": 1.0,
+     "wf": 0.76, "cents": 1.0, "noise": 0.19, "att": 0.4, "dur": 0.8},
+    {"name": "Стеклянное FM-электропианино (80s DX7)",
+     "fc": 7500.0, "df": 2.3, "ds": 0.80, "wf": 0.30, "cents": 1.0, "noise": 0.01,
+     "att": 0.8, "dur": 1.1,
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.14, 2.0), (3.0, 0.05, 3.0),
+                  (14.0, 0.26, 12.0), (7.0, 0.07, 6.0), (1.0005, 0.35, 1.2)]},
+    {"name": "Электропианино Wurlitzer",
+     "fc": 2200.0, "df": 1.7, "ds": 0.60, "wf": 0.40, "cents": 4.5, "noise": 0.035,
+     "att": 1.4, "dur": 1.0, "trem": (5.2, 0.10),
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.60, 1.4), (3.0, 0.38, 2.0), (4.0, 0.14, 2.6),
+                  (5.0, 0.11, 3.2), (6.0, 0.05, 3.8)]},
+    {"name": "Пианино со струнным оркестром (Piano & Strings)",
+     "alpha": 1.2, "fc": 2600.0, "b": 5.0e-5, "gamma": 0.26, "df": 2.5, "ds": 0.60,
+     "wf": 0.58, "cents": 2.4, "noise": 0.04, "att": 1.4, "dur": 1.2, "layer": "strings"},
+    {"name": "Клавесин (Harpsichord)",
+     "fc": 9000.0, "df": 3.6, "ds": 1.7, "wf": 0.70, "cents": 5.0, "noise": 0.12,
+     "att": 0.3, "dur": 0.75,
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.90, 1.2), (3.0, 0.70, 1.5), (4.0, 0.55, 1.8),
+                  (5.0, 0.48, 2.1), (6.0, 0.34, 2.4), (7.0, 0.28, 2.7), (8.0, 0.20, 3.0),
+                  (9.0, 0.16, 3.4), (10.0, 0.11, 3.8), (12.0, 0.07, 4.4)]},
+    {"name": "Клавикорд (Clavichord)",
+     "fc": 2300.0, "df": 5.0, "ds": 2.2, "wf": 0.62, "cents": 1.0, "noise": 0.07,
+     "att": 0.6, "dur": 0.6, "trem": (6.0, 0.10),
+     "partials": [(1.0, 1.00, 1.0), (2.0, 0.48, 1.5), (3.0, 0.42, 2.0), (4.0, 0.18, 2.6),
+                  (5.0, 0.16, 3.0), (6.0, 0.08, 3.6)]},
+    {"name": "Таперское/Салунное пианино (Honky-Tonk)",
+     "alpha": 0.80, "fc": 4500.0, "b": 2.0e-4, "gamma": 0.50, "df": 3.2, "ds": 1.1,
+     "wf": 0.55, "cents": 22.0, "noise": 0.14, "att": 0.6, "dur": 0.8, "wander": 14.0},
+    {"name": "Детское игрушечное пианино (Toy Piano)",
+     "fc": 5200.0, "df": 6.0, "ds": 3.0, "wf": 0.60, "cents": 4.0, "noise": 0.20,
+     "att": 0.3, "dur": 0.5, "wander": 12.0,
+     "partials": [(1.0, 1.00, 1.0), (2.76, 0.55, 3.5), (5.40, 0.40, 6.0),
+                  (8.93, 0.18, 9.0), (13.34, 0.10, 12.0)]},
+]
+TIMBRE_NAMES = [t["name"] for t in TIMBRES]
+
+# ---------------------------------------------------------------------------
+# Смычковые (wavetable + вибрато + смычковый шум)
+# formants — (центр Гц, ширина Гц, усиление): резонансы корпуса
+# ---------------------------------------------------------------------------
+STRINGS = {
+    "vn": {  # скрипка
+        "tilt": 0.95, "roll": 4800.0, "maxh": 28,
+        "formants": [(290.0, 100.0, 0.7), (520.0, 160.0, 1.0), (1500.0, 500.0, 0.8), (3000.0, 900.0, 0.6)],
+        "att": 0.045, "sd": 0.35, "vr": 5.6, "vd": 0.0065, "vdelay": 0.12, "am": 0.07,
+        "noise": 0.05, "scratch": 3.0, "dur": 1.15,
+    },
+    "vc": {  # виолончель
+        "tilt": 1.0, "roll": 2800.0, "maxh": 30,
+        "formants": [(120.0, 40.0, 0.5), (200.0, 70.0, 1.0), (450.0, 150.0, 0.8),
+                     (1000.0, 350.0, 0.7), (2000.0, 600.0, 0.35)],
+        "att": 0.065, "sd": 0.30, "vr": 5.0, "vd": 0.0050, "vdelay": 0.15, "am": 0.06,
+        "noise": 0.06, "scratch": 3.0, "dur": 1.35,
+    },
+    "ens": {  # струнный оркестр (медленная атака) для тембра «Piano & Strings»
+        "tilt": 1.1, "roll": 3200.0, "maxh": 24,
+        "formants": [(300.0, 120.0, 0.7), (700.0, 250.0, 1.0), (1600.0, 500.0, 0.6)],
+        "att": 0.22, "sd": 0.22, "vr": 5.2, "vd": 0.0035, "vdelay": 0.20, "am": 0.04,
+        "noise": 0.012, "scratch": 0.5, "dur": 2.3,
+    },
+}
+
+
+def _midi_to_freq(m):
+    return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
+
+
+def _token_to_midis(token: str):
+    res = []
+    for part in token.upper().split("+"):
+        p = part.strip()
+        if len(p) < 2:
+            continue
+        octv = int(p[-1]) if p[-1].isdigit() else 4
+        note = p[:-1] if p[-1].isdigit() else p
+        if note in SEMITONES:
+            res.append((octv + 1) * 12 + SEMITONES[note])
+    return res
+
+
+def _token_to_freqs(token: str):
+    return [_midi_to_freq(m) for m in _token_to_midis(token)]
+
+
+# --------------------- запись нот: разбор, нормализация, октавы -------------
+
+_BASE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+_NAMES12 = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+# NoobNotes: _C — самая низкая, .C — низкая, C — средняя (4-я), ^C — высокая, *C — самая высокая
+_PREFIX_OCT = {"_": 2, ".": 3, "": 4, "^": 5, "*": 6}
+MIDI_MIN = 24      # C1
+MIDI_MAX = 107     # B7
+
+
+def _parse_note(part):
+    """'A#4', 'Bb4', 'BB', 'c', '^C#', '.A', '♯', '♭' -> MIDI-номер или None."""
+    s = str(part).strip().replace("♯", "#").replace("♭", "b")
+    if not s:
+        return None
+    pref = ""
+    if s[0] in "_.^*":
+        pref, s = s[0], s[1:]
+    if not s or s[0].upper() not in _BASE:
+        return None
+    base = _BASE[s[0].upper()]
+    rest = s[1:]
+    acc = 0
+    if rest[:1] == "#":
+        acc, rest = 1, rest[1:]
+    elif rest[:1] in ("b", "B"):
+        acc, rest = -1, rest[1:]
+    if rest == "":
+        octv = _PREFIX_OCT[pref]
+    elif len(rest) == 1 and rest.isdigit():
+        octv = int(rest)
+    else:
+        return None
+    m = (octv + 1) * 12 + base + acc
+    return m if 0 <= m <= 127 else None
+
+
+def _fmt_midi(m):
+    return f"{_NAMES12[m % 12]}{m // 12 - 1}"
+
+
+def _norm_token(tok):
+    """Приводит ноту/аккорд к виду A#4 / C4+E4+G4. Не нота -> None."""
+    ms = []
+    for p in str(tok).split("+"):
+        if not p.strip():
+            continue
+        m = _parse_note(p)
+        if m is None:
+            return None
+        ms.append(m)
+    if not ms:
+        return None
+    return "+".join(_fmt_midi(m) for m in ms)
+
+
+def _shift_bar(text, octs):
+    """Сдвигает все ноты такта на octs октав. Если что-то выйдет за C1–B7 — None."""
+    out = []
+    for tok in str(text).split():
+        parts = []
+        for p in tok.split("+"):
+            m = _parse_note(p)
+            if m is None:
+                continue
+            m2 = m + 12 * octs
+            if m2 < MIDI_MIN or m2 > MIDI_MAX:
+                return None
+            parts.append(_fmt_midi(m2))
+        if parts:
+            out.append("+".join(parts))
+    return " ".join(out)
+
+
+def _text_to_bars(text, chunk=0):
+    """Текст с нотами -> список тактов. Такты разделяются знаком |.
+    Если | нет и chunk > 0, длинный текст режется на такты по chunk нот."""
+    s = str(text).replace("\r", "\n")
+    has_bar = "|" in s
+    pieces = s.split("|") if has_bar else [s]
+    bars = []
+    for piece in pieces:
+        toks = []
+        for t in re.split(r"[\s,;]+", piece.replace("-", " ")):
+            n = _norm_token(t) if t else None
+            if n:
+                toks.append(n)
+        if not toks:
+            continue
+        if chunk and not has_bar:
+            for i in range(0, len(toks), chunk):
+                bars.append(" ".join(toks[i:i + chunk]))
+        else:
+            bars.append(" ".join(toks))
+    return bars[:MAX_BARS]
+
+
+# ------------------------------ пианино -------------------------------------
+
+def _piano_partials(f0, midi, P):
+    """Список обертонов ноты: (частота, громкость, множитель скорости затухания)."""
+    res = []
+    fc = P["fc"]
+    custom = P.get("partials")
+    if custom:
+        for r, a, dm in custom:
+            fk = f0 * r
+            if fk <= FMAX:
+                res.append((fk, a / (1.0 + (fk / fc) ** 2), dm))
+    else:
+        bcoef = P["b"] * 2.0 ** ((midi - 36.0) / 14.0)
+        beta = min(0.16, max(0.075, 0.125 - 0.0016 * (midi - 60.0)))  # точка удара молоточка
+        for k in range(1, 41):
+            fk = k * f0 * math.sqrt(1.0 + bcoef * k * k)
+            if fk > FMAX:
+                break
+            a = (k ** -P["alpha"]) * abs(math.sin(math.pi * k * beta)) / (1.0 + (fk / fc) ** 2)
+            if fk < 150.0:
+                a *= (fk / 150.0) ** 1.2
+            res.append((fk, a, 1.0 + P["gamma"] * (k - 1)))
+    if not res:
+        return res
+    amax = max(a for _, a, _ in res)
+    res = [t for t in res if t[1] >= amax * 0.025]
+    sym = P.get("sym", 0.0)
+    if sym:
+        res.append((f0 * 0.5, amax * sym, 0.5))
+        res.append((f0 / 3.0, amax * sym * 0.6, 0.5))
+    return res
+
+
+def _render_piano(midis, P, dur_s, strum=0.0):
+    """Рендер ноты/аккорда. Каждая гармоника = две слегка расстроенные струны
+    (быстрое + медленное затухание), как у настоящего фортепиано."""
+    n = int(SR * dur_s)
+    acc = [0j] * n
+    rng = random.Random(7919 + sum(midis) * 31)
+    two_pi_sr = 2.0 * math.pi / SR
+    wf = P["wf"]
+    comps = ((wf, P["df"], -P["cents"] / 2.0), (1.0 - wf, P["ds"], P["cents"] / 2.0))
+    wander = P.get("wander", 0.0)
+
+    for ni, midi in enumerate(midis):
+        off = int(ni * strum * SR)
+        if off >= n - 8:
+            continue
+        f0 = _midi_to_freq(midi)
+        pf = (f0 / 261.63) ** 0.45
+        shift = 2.0 ** (rng.uniform(-wander, wander) / 1200.0) if wander else 1.0
+        for fk, a, dm in _piano_partials(f0, midi, P):
+            fk *= shift
+            for wgt, rbase, cents in comps:
+                if wgt <= 0.0:
+                    continue
+                rate = rbase * pf * dm
+                m = min(n - off, int(SR * 7.0 / rate) + 2)
+                step = cmath.rect(math.exp(-rate / SR), two_pi_sr * fk * (2.0 ** (cents / 1200.0)))
+                series = accumulate(repeat(step, m - 1), mul, initial=complex(a * wgt, 0.0))
+                end = off + m
+                acc[off:end] = map(add, acc[off:end], series)
+
+    out = [z.imag for z in acc]
+    pk = max(abs(x) for x in out) or 1.0
+
+    nz = P.get("noise", 0.0)
+    if nz > 0.0:
+        tau = 0.0035 * SR
+        amp = pk * nz * 3.0
+        lp = 0.0
+        for i in range(min(int(0.016 * SR), n)):
+            lp += 0.30 * ((rng.random() * 2.0 - 1.0) * math.exp(-i / tau) - lp)
+            out[i] += lp * amp
+
+    tr = P.get("trem")
+    if tr:
+        rate, depth = tr
+        for i in range(n):
+            t = i / SR
+            out[i] *= 1.0 + depth * min(1.0, t / 0.25) * math.sin(2.0 * math.pi * rate * t)
+
+    na = max(1, int(SR * P["att"] / 1000.0))
+    for i in range(min(na, n)):
+        out[i] *= i / na
+
+    fst = int(n * 0.78)
+    fl = max(1, n - fst)
+    for i in range(fst, n):
+        out[i] *= 0.5 * (1.0 + math.cos(math.pi * (i - fst) / fl))
+    return out
+
+
+def _norm1(x):
+    pk = max((abs(v) for v in x), default=0.0) or 1.0
+    return [v / pk for v in x]
+
+
+def _render_voice(midis, P, dur_s, strum=0.0):
+    """Пианино + (для некоторых тембров) струнный оркестр под ним."""
+    out = _render_piano(midis, P, dur_s, strum)
+    if P.get("layer") != "strings" or dur_s < 0.9:
+        return out
+    base = _norm1(out)
+    top = _violin_midi(midis)
+    low = _cello_midi(midis)
+    pad = [0.0]
+    for m, d, g in ((top, -7.0, 0.30), (top, 7.0, 0.30), (low, 0.0, 0.40)):
+        r = _render_bowed(m, "ens", d)
+        if len(r) > len(pad):
+            pad += [0.0] * (len(r) - len(pad))
+        for i, v in enumerate(r):
+            pad[i] += v * g
+    pad = _norm1(pad)
+    n = max(len(base), len(pad))
+    base += [0.0] * (n - len(base))
+    pad += [0.0] * (n - len(pad))
+    return [b + 0.55 * p for b, p in zip(base, pad)]
+
+
+# ------------------------------ смычковые -----------------------------------
+
+_STR_CACHE = {}
+
+
+def _make_table(amps):
+    acc = [0j] * WT
+    for h, a in enumerate(amps, 1):
+        if a < 1e-4:
+            continue
+        step = cmath.rect(1.0, 2.0 * math.pi * h / WT)
+        series = accumulate(repeat(step, WT - 1), mul, initial=complex(a, 0.0))
+        acc = list(map(add, acc, series))
+    t = [z.imag for z in acc]
+    pk = max(abs(x) for x in t) or 1.0
+    t = [x / pk for x in t]
+    t.append(t[0])  # для линейной интерполяции
+    return t
+
+
+def _string_shared(key):
+    """Вибрато, огибающая и смычковый шум одинаковы для всех нот инструмента — считаем один раз."""
+    c = _STR_CACHE.get(key)
+    if c:
+        return c
+    S = STRINGS[key]
+    n = int(SR * S["dur"])
+    two_pi = 2.0 * math.pi
+    tau = S["att"] / 3.0
+    rng = random.Random(4242)
+    fade_start = int(n * 0.66)
+    fade_len = max(1, n - fade_start)
+    vm, env, noise = [], [], []
+    lp = 0.0
+    for i in range(n):
+        t = i / SR
+        vb = min(1.0, max(0.0, (t - S["vdelay"]) / 0.30))
+        ph = two_pi * S["vr"] * t
+        vm.append(1.0 + S["vd"] * vb * math.sin(ph))
+        e = (1.0 - math.exp(-t / tau)) * math.exp(-S["sd"] * t)
+        e *= 1.0 + S["am"] * vb * math.sin(ph - 1.0)
+        if i >= fade_start:
+            e *= 0.5 * (1.0 + math.cos(math.pi * (i - fade_start) / fade_len))
+        env.append(e)
+        lp += 0.45 * ((rng.random() * 2.0 - 1.0) - lp)
+        noise.append(lp * S["noise"] * (1.0 + S["scratch"] * math.exp(-t / 0.06)) * e)
+    c = (vm, env, noise)
+    _STR_CACHE[key] = c
+    return c
+
+
+def _render_bowed(midi, key, detune=0.0):
+    S = STRINGS[key]
+    f0 = _midi_to_freq(midi) * (2.0 ** (detune / 1200.0))
+    vm, env, noise = _string_shared(key)
+    nh = max(1, min(S["maxh"], int(0.46 * SR / f0)))
+    amps = []
+    for h in range(1, nh + 1):
+        fh = h * f0
+        form = 0.30 + sum(g * math.exp(-((fh - c) / w) ** 2) for c, w, g in S["formants"])
+        amps.append((h ** -S["tilt"]) * form / (1.0 + (fh / S["roll"]) ** 2))
+    wt = _make_table(amps)
+    inc0 = f0 * WT / SR
+    out = []
+    ap = out.append
+    p = 0.0
+    for v, e, z in zip(vm, env, noise):
+        p += inc0 * v
+        i = int(p)
+        fr = p - i
+        i &= WT_MASK
+        a = wt[i]
+        ap((a + (wt[i + 1] - a) * fr) * e + z)
+    return out
+
+
+def _violin_midi(midis):
+    m = max(midis)          # скрипка ведёт верхний голос
+    while m < 55:
+        m += 12
+    while m > 100:
+        m -= 12
+    return m
+
+
+def _cello_midi(midis):
+    m = min(midis) - 12     # виолончель — нижний голос на октаву ниже
+    while m < 36:
+        m += 12
+    while m > 79:
+        m -= 12
+    return m
+
+
+def _save_wav(path: str, samples):
+    pk = max(abs(x) for x in samples) or 1.0
+    g = 32767.0 * NORM_PEAK / pk
+    arr = array("h", [int(x * g) for x in samples])
+    if sys.byteorder == "big":
+        arr.byteswap()
+    raw = arr.tobytes()
+    sz = len(raw)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as fp:
+        fp.write(struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + sz, b"WAVE", b"fmt ", 16, 1, 1, SR, SR * 2, 2, 16, b"data", sz))
+        fp.write(raw)
+    os.replace(tmp, path)
+
+
+def _note_duration(midis, P):
+    top = max(midis)
+    return max(0.4, max(1.0, min(1.8, 2.0 - (top - 48) * 0.022)) * P["dur"])
+
+
+class _Abort(Exception):
+    pass
+
+
+class _Watcher(dynamic_proxy(TextWatcher)):
+    def __init__(self, plg, vid: int):
+        super().__init__()
+        self.plg = plg
+        self.vid = vid
+
+    def beforeTextChanged(self, s, st, c, a):
+        pass
+
+    def onTextChanged(self, s, st, bef, cnt):
+        try:
+            self.plg.on_text(self.vid, s, st, bef, cnt)
+        except Exception:
+            pass
+
+    def afterTextChanged(self, s):
+        pass
+
+
+class MelodicPianoSequencer(BasePlugin):
+    def __init__(self):
+        super().__init__()
+        self._sp = None
+        self._token_ids = {}
+        self._vn_ids = {}
+        self._vc_ids = {}
+        self._seq = []
+        self._step = 0
+        self._bs_id = 0
+        self._send_id = 0
+        self._vn_send_id = 0
+        self._vc_send_id = 0
+        self._busy = False
+        self._dirty = False
+        self._after = None
+        self._play_gen = 0
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thr = None
+        self._views = set()
+        self._wlist = []
+        self._vtime = {}
+        self._lts = 0.0
+        self._cleaned = False
+
+    def on_plugin_load(self):
+        self._init_sp()
+        self.add_on_send_message_hook()
+        self._register_menu()
+        if self.get_setting("enabled", True):
+            self._reload_async(False)
+            self._start_mon()
+
+    def on_plugin_unload(self):
+        self._stop_mon()
+        if self._sp:
+            try:
+                self._sp.release()
+            except Exception:
+                pass
+            self._sp = None
+
+    def create_settings(self):
+        saved = self._saved()
+        bars = self._get_bars()
+        preset_items = list(PRESET_NAMES) + [f"★ {n}" for n in saved]
+        items = [
+            Header(text="Основные настройки"),
+            Switch(key="enabled", text="Включить мелодию при наборе", subtext="Каждое нажатие клавиши играет следующую ноту мелодии", default=True, icon="msg_music", on_change=self._on_tgl),
+            Selector(key="preset", text="Выбор мелодии", default=1, items=preset_items, icon="msg_ton", on_change=self._on_cfg),
+            Divider(),
+            Header(text="Конструктор мелодии"),
+            Text(text="Редактор тактов", subtext=f"Тактов: {len(bars)} из {MAX_BARS}. Изменить ноты, добавить такт, сдвинуть на октаву", icon="msg_edit", on_click=lambda v: self._dlg_editor()),
+            Text(text="Мои мелодии", subtext=f"Сохранено: {len(saved)}. Сохранить, выбрать, переименовать, удалить", icon="msg_list", on_click=lambda v: self._dlg_saved()),
+            Text(text="Экспорт / импорт (.txt)", subtext="Сохранить мелодии в файл или вернуть их из файла / буфера обмена", icon="msg_send", on_click=lambda v: self._dlg_exchange()),
+            Text(text="Как записывать ноты", subtext="Октавы, аккорды, такты, формат NoobNotes", icon="msg_info", on_click=lambda v: self._dlg_help()),
+            Divider(),
+            Header(text="Инструмент"),
+            Selector(key="timbre", text="Тембр инструмента", default=0, items=TIMBRE_NAMES, icon="msg_voice_pip", on_change=self._on_cfg),
+            Input(key="volume", text="Громкость (10-100)", default="80", icon="msg_notifications", on_change=lambda _: self._preview_step()),
+            Switch(key="humanize", text="Живая игра", subtext="Лёгкие случайные отличия в силе каждого нажатия, как у живого исполнителя", default=True, icon="msg_music"),
+            Divider(),
+            Header(text="Струнные (добавляются к пианино)"),
+            Switch(key="violin_enabled", text="Скрипка", subtext="Ведёт верхний голос смычком, с вибрато. По умолчанию выключена", default=False, icon="msg_voice_pip", on_change=self._on_str_cfg),
+            Switch(key="cello_enabled", text="Виолончель", subtext="Играет нижний голос на октаву ниже, тёплый смычковый тон. По умолчанию выключена", default=False, icon="msg_voice_pip", on_change=self._on_str_cfg),
+            Input(key="strings_volume", text="Громкость струнных (10-100)", subtext="Относительно основной громкости", default="60", icon="msg_notifications", on_change=lambda _: self._preview_step()),
+            Divider(),
+            Header(text="Поведение"),
+            Input(key="reset_sec", text="Сброс мелодии после паузы (сек)", subtext="0 = не сбрасывать после паузы", default="8", icon="msg_timer"),
+            Switch(key="reset_on_send", text="Сбрасывать мелодию при отправке", subtext="Начинать сначала при отправке сообщения + финальный аккорд", default=True, icon="msg_send"),
+            Switch(key="enable_backspace", text="Откатывать ноту назад при Backspace", subtext="При стирании символа шаг мелодии возвращается на 1 ноту назад", default=True, icon="msg_delete"),
+            Divider(),
+            Header(text="Нотные библиотеки и источники"),
+            Text(text="Где искать ноты", subtext="Нажмите на сайт, чтобы открыть его. Найденные буквенные ноты вставляйте через «Редактор тактов → Добавить такт» или копируйте и импортируйте из буфера обмена"),
+        ]
+        for name, desc, url in LIBRARIES:
+            items.append(Text(text=name, subtext=desc, on_click=(lambda v, u=url: self._open_url(u))))
+        items.append(Divider())
+        items.append(Header(text="Автор"))
+        items.append(Text(text="Поддержать автора", subtext="@itzMahmudj", icon="msg_fave",
+                          on_click=lambda v: self._open_url("https://t.me/itzMahmudj")))
+        return items
+
+    def _tid(self) -> int:
+        try:
+            return max(0, min(len(TIMBRES) - 1, int(self.get_setting("timbre", 0))))
+        except Exception:
+            return 0
+
+    def _pid(self) -> int:
+        try:
+            n = len(PRESET_NAMES) + len(self._saved())
+            return max(0, min(n - 1, int(self.get_setting("preset", 1))))
+        except Exception:
+            return 1
+
+    def _vol(self) -> float:
+        try:
+            return max(5, min(100, int(str(self.get_setting("volume", "80")).strip()))) / 100.0
+        except Exception:
+            return 0.80
+
+    def _svol(self) -> float:
+        try:
+            return max(5, min(100, int(str(self.get_setting("strings_volume", "60")).strip()))) / 100.0
+        except Exception:
+            return 0.60
+
+    def _flag(self, key: str) -> bool:
+        try:
+            return bool(self.get_setting(key, False))
+        except Exception:
+            return False
+
+    def _reset_timeout(self) -> float:
+        try:
+            return float(max(0, int(str(self.get_setting("reset_sec", "8")).strip())))
+        except Exception:
+            return 8.0
+
+    def _on_tgl(self, en: bool):
+        if en:
+            self._reload_async(True)
+            self._start_mon()
+        else:
+            self._stop_mon()
+
+    def _on_cfg(self, _v):
+        self._step = 0
+        self._reload_async(True)
+
+    def _on_str_cfg(self, _v):
+        self._reload_async(True)
+
+    def _init_sp(self):
+        try:
+            a = AABuilder().setUsage(AAttr.USAGE_MEDIA).setContentType(AAttr.CONTENT_TYPE_MUSIC).build()
+            self._sp = SPBuilder().setMaxStreams(20).setAudioAttributes(a).build()
+        except Exception as e:
+            log(f"[PianoSeq] SP err: {e}")
+
+    def _get_melody_tokens(self):
+        pid = self._pid()
+        nb = len(PRESET_NAMES)
+        if pid == 0:
+            raw = " ".join(self._get_bars())
+        elif pid < nb:
+            raw = PRESET_NOTES[pid]
+        else:
+            saved = self._saved()
+            names = list(saved.keys())
+            raw = " ".join(saved[names[pid - nb]]) if 0 <= pid - nb < len(names) else ""
+        tokens = []
+        for t in str(raw).replace(",", " ").replace("|", " ").split():
+            n = _norm_token(t)
+            if n:
+                tokens.append(n)
+        return tokens if tokens else ["C4", "E4", "G4", "C5"]
+
+    def _reload_async(self, prev: bool = False, after=None):
+        # Любое изменение настроек во время синтеза не теряется: рендер перезапускается.
+        # after — что выполнить, когда первые ноты готовы (предпрослушивание ноты/такта).
+        with self._lock:
+            self._dirty = True
+            if after is not None:
+                self._after = after
+            elif prev and self._after is None:
+                self._after = self._preview_step
+            if self._busy:
+                return
+            self._busy = True
+
+        def _run():
+            while True:
+                with self._lock:
+                    if not self._dirty:
+                        self._busy = False
+                        return
+                    self._dirty = False
+                    after_now = self._after
+                    self._after = None
+                try:
+                    done = self._synth_melody(after_now)
+                except Exception as e:
+                    log(f"[PianoSeq] Synth err: {e}")
+                    continue
+                if after_now and not done:
+                    with self._lock:
+                        if self._after is None:
+                            self._after = after_now
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _cleanup_old_cache(self, base: str):
+        if self._cleaned:
+            return
+        self._cleaned = True
+        for name in OLD_CACHE_DIRS:
+            try:
+                shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+            except Exception:
+                pass
+
+    def _synth_melody(self, after=None):
+        """Быстрое переключение: сначала рендерятся только ближайшие ноты (звук слышен сразу),
+        остальная мелодия догружается в фоне. Возвращает True, если after был вызван (или не нужен)."""
+        if not self._sp:
+            self._init_sp()
+        if not self._sp:
+            return True
+        tid = self._tid()
+        P = TIMBRES[tid]
+        want_vn = self._flag("violin_enabled")
+        want_vc = self._flag("cello_enabled")
+        tokens = self._get_melody_tokens()
+        base = str(AppLoader.applicationContext.getCacheDir().getAbsolutePath())
+        cdir = os.path.join(base, CACHE_DIR)
+        os.makedirs(cdir, exist_ok=True)
+        self._cleanup_old_cache(base)
+
+        n = len(tokens)
+        st = self._step % n if n else 0
+        order = list(dict.fromkeys(tokens[st:] + tokens[:st]))
+        head, rest = order[:3], order[3:]
+
+        loaded = []
+
+        def load(path):
+            sid = self._sp.load(path, 1)
+            loaded.append(sid)
+            return sid
+
+        def ensure(path, make):
+            if not os.path.exists(path):
+                _save_wav(path, make())
+
+        new_p, new_vn, new_vc = {}, {}, {}
+
+        def build(tok):
+            safe = tok.replace("#", "s").replace("+", "_")
+            midis = _token_to_midis(tok)
+            strum = 0.015 if len(midis) > 1 else 0.0
+            p = os.path.join(cdir, f"p{tid}_{safe}.wav")
+            ensure(p, lambda: _render_voice(midis, P, _note_duration(midis, P), strum))
+            new_p[tok] = load(p)
+            if want_vn:
+                vm = _violin_midi(midis)
+                p = os.path.join(cdir, f"vn_{safe}.wav")
+                ensure(p, lambda: _render_bowed(vm, "vn"))
+                new_vn[tok] = load(p)
+            if want_vc:
+                cm = _cello_midi(midis)
+                p = os.path.join(cdir, f"vc_{safe}.wav")
+                ensure(p, lambda: _render_bowed(cm, "vc"))
+                new_vc[tok] = load(p)
+
+        try:
+            for tok in head:
+                if self._dirty:
+                    raise _Abort()
+                build(tok)
+            if self._dirty:
+                raise _Abort()
+            p_bs = os.path.join(cdir, f"p{tid}_bs.wav")
+            ensure(p_bs, lambda: _render_voice([55, 50], P, 0.35, 0.01))
+            bs_id = load(p_bs)
+        except _Abort:
+            for sid in loaded:
+                try:
+                    self._sp.unload(sid)
+                except Exception:
+                    pass
+            return False
+
+        old = (list(self._token_ids.values()) + list(self._vn_ids.values()) + list(self._vc_ids.values())
+               + [self._bs_id, self._send_id, self._vn_send_id, self._vc_send_id])
+        self._token_ids = new_p
+        self._vn_ids = new_vn
+        self._vc_ids = new_vc
+        self._seq = tokens
+        self._bs_id = bs_id
+        self._send_id = self._vn_send_id = self._vc_send_id = 0
+        for oid in old:
+            if oid and oid > 0:
+                try:
+                    self._sp.unload(oid)
+                except Exception:
+                    pass
+
+        called = True
+        if after:
+            time.sleep(0.10)
+            if self._dirty:
+                called = False
+            else:
+                try:
+                    after()
+                except Exception as e:
+                    log(f"[PianoSeq] after err: {e}")
+
+        # --- фон: остальные ноты мелодии и аккорд отправки ---
+        try:
+            for tok in rest:
+                if self._dirty:
+                    return called
+                build(tok)
+            if self._dirty:
+                return called
+            p_snd = os.path.join(cdir, f"p{tid}_snd.wav")
+            ensure(p_snd, lambda: _render_voice([57, 61, 64, 69], P, 1.2, 0.02))
+            self._send_id = load(p_snd)
+            if want_vn:
+                p = os.path.join(cdir, "vn_snd.wav")
+                ensure(p, lambda: _render_bowed(76, "vn"))
+                self._vn_send_id = load(p)
+            if want_vc:
+                p = os.path.join(cdir, "vc_snd.wav")
+                ensure(p, lambda: _render_bowed(45, "vc"))
+                self._vc_send_id = load(p)
+        except Exception as e:
+            log(f"[PianoSeq] bg synth err: {e}")
+        return called
+
+    def _play(self, sid: int, sc: float = 1.0, human: bool = False):
+        if sid and self._sp:
+            v = max(0.02, min(1.0, self._vol() * sc))
+            rate = 1.0
+            if human and self.get_setting("humanize", True):
+                v = max(0.02, min(1.0, v * random.uniform(0.90, 1.0)))
+                rate = random.uniform(0.9985, 1.0015)
+            try:
+                self._sp.play(sid, v, v, 1, 0, rate)
+            except Exception:
+                pass
+
+    def _play_layers(self, tok: str, sc: float, human: bool):
+        self._play(self._token_ids.get(tok, 0), sc, human)
+        if self._vn_ids and self._flag("violin_enabled"):
+            self._play(self._vn_ids.get(tok, 0), self._svol() * 0.75 * sc, human)
+        if self._vc_ids and self._flag("cello_enabled"):
+            self._play(self._vc_ids.get(tok, 0), self._svol() * 0.90 * sc, human)
+
+    def _preview_step(self):
+        if self._seq:
+            tok = self._seq[self._step % len(self._seq)]
+            self._play_layers(tok, 0.95, False)
+
+    def _play_next_step(self):
+        if not self._seq:
+            return
+        now = time.time()
+        if now - self._lts < 0.018:
+            return
+        rsec = self._reset_timeout()
+        if rsec > 0 and self._lts > 0 and (now - self._lts) > rsec:
+            self._step = 0
+        self._lts = now
+        tok = self._seq[self._step % len(self._seq)]
+        self._step += 1
+        self._play_layers(tok, 1.0, True)
+
+    def on_text(self, vid: int, s, st: int, bef: int, cnt: int):
+        if not self.get_setting("enabled", True) or s is None:
+            return
+        if time.time() - self._vtime.get(vid, 0.0) < 0.18:
+            return
+        txt = str(s)
+        if not txt and bef > 1:
+            return
+        df = cnt - bef
+        if df >= 1 and (st + cnt) <= len(txt):
+            self._play_next_step()
+        elif df == -1 and cnt >= 0:
+            if self.get_setting("enable_backspace", True):
+                self._step = max(0, self._step - 1)
+                if time.time() - self._lts >= 0.025:
+                    self._lts = time.time()
+                    self._play(self._bs_id, 0.45)
+
+    def on_send_message_hook(self, account, params):
+        if self.get_setting("enabled", True) and self.get_setting("reset_on_send", True):
+            self._step = 0
+            self._play(self._send_id, 0.85)
+            if self._flag("violin_enabled"):
+                self._play(self._vn_send_id, self._svol() * 0.75 * 0.85)
+            if self._flag("cello_enabled"):
+                self._play(self._vc_send_id, self._svol() * 0.90 * 0.85)
+        return HookResult()
+
+    def _start_mon(self):
+        self._stop_mon()
+        self._stop.clear()
+        self._thr = threading.Thread(target=self._loop, daemon=True)
+        self._thr.start()
+
+    def _stop_mon(self):
+        self._stop.set()
+        if self._thr and self._thr.is_alive():
+            self._thr.join(timeout=1.0)
+        self._thr = None
+
+    def _hook(self, v):
+        if v is None:
+            return
+        try:
+            if isinstance(v, EditText):
+                vid = int(Sys.identityHashCode(v))
+                if vid not in self._views:
+                    self._views.add(vid)
+                    self._vtime[vid] = time.time()
+                    w = _Watcher(self, vid)
+                    self._wlist.append(w)
+                    v.addTextChangedListener(w)
+            elif isinstance(v, ViewGroup):
+                for i in range(v.getChildCount()):
+                    self._hook(v.getChildAt(i))
+        except Exception:
+            pass
+
+    def _scan(self):
+        try:
+            from client_utils import get_last_fragment
+            f = get_last_fragment()
+            if not f:
+                return
+            a = f.getParentActivity()
+            if a:
+                self._hook(a.getCurrentFocus())
+            d = f.getVisibleDialog()
+            if d:
+                self._hook(d.getCurrentFocus())
+            fv = f.getFragmentView()
+            if fv:
+                self._hook(fv.findFocus())
+        except Exception:
+            pass
+
+    def _loop(self):
+        while not self._stop.is_set():
+            if self.get_setting("enabled", True):
+                run_on_ui_thread(self._scan)
+            if self._stop.wait(timeout=0.35):
+                break
+
+    # ======================= данные: такты и сохранённые мелодии ==============
+
+    def _put(self, key, value, reload_ui=False):
+        if reload_ui:
+            self.set_setting(key, value, reload_settings=True)
+        else:
+            self.set_setting(key, value)
+
+    def _get_bars(self):
+        raw = self.get_setting("bars_json", "")
+        if raw:
+            try:
+                data = json.loads(str(raw))
+                if isinstance(data, list):
+                    bars = [str(x) for x in data if str(x).strip()]
+                    if bars:
+                        return bars
+            except Exception:
+                pass
+        # миграция со старых полей bar1..bar4 (версия 1.8 и ниже)
+        legacy = []
+        for i in range(1, 5):
+            v = self.get_setting(f"bar{i}", DEFAULT_BARS[i - 1])
+            if v and str(v).strip():
+                legacy.append(str(v))
+        bars = _text_to_bars(" | ".join(legacy))
+        return bars or list(DEFAULT_BARS)
+
+    def _saved(self):
+        raw = self.get_setting("saved_json", "")
+        try:
+            data = json.loads(str(raw)) if raw else {}
+        except Exception:
+            data = {}
+        out = {}
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, list):
+                    bars = [str(x) for x in v if str(x).strip()]
+                    if bars:
+                        out[str(k)] = bars
+        return out
+
+    def _store_saved(self, saved, reload_ui=True):
+        self._put("saved_json", json.dumps(saved, ensure_ascii=False), reload_ui)
+
+    def _selected_saved_name(self):
+        i = self._pid() - len(PRESET_NAMES)
+        names = list(self._saved().keys())
+        return names[i] if 0 <= i < len(names) else None
+
+    def _select_saved(self, name, reload_ui=True):
+        names = list(self._saved().keys())
+        idx = len(PRESET_NAMES) + names.index(name) if name in names else 0
+        self._put("preset", idx, reload_ui)
+
+    @staticmethod
+    def _clean_name(s):
+        return " ".join(str(s).replace(":::", " ").split())[:40]
+
+    @staticmethod
+    def _short(text, n=34):
+        s = " ".join(str(text).split())
+        return s if len(s) <= n else s[:n - 1] + "…"
+
+    def _commit_bars(self, bars, hear=None):
+        """Сохраняет такты редактора, делает их активной мелодией и пересобирает звуки."""
+        bars = [b for b in bars if str(b).strip()][:MAX_BARS]
+        if not bars:
+            return
+        self._put("bars_json", json.dumps(bars, ensure_ascii=False))
+        self._step = 0
+        self._put("preset", 0, True)
+        if hear:
+            self._reload_async(False, after=lambda: self._play_bar(hear))
+        else:
+            self._reload_async(True)
+
+    def _play_bar(self, text, gap=0.19):
+        toks = [t for t in str(text).split() if t in self._token_ids]
+        if not toks:
+            return
+        self._play_gen += 1
+        gen = self._play_gen
+
+        def _run():
+            for t in toks:
+                if gen != self._play_gen:
+                    return
+                self._play_layers(t, 1.0, False)
+                time.sleep(gap)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    # ============================ вспомогательный UI ==========================
+
+    def _activity(self):
+        f = get_last_fragment()
+        return f.getParentActivity() if f else None
+
+    def _text_field(self, act, hint, text="", lines=3):
+        et = EditText(act)
+        if lines > 1:
+            et.setInputType(1 | 0x20000 | 0x80000)       # text | multiline | no suggestions
+            et.setMinLines(2)
+            et.setMaxLines(6)
+        else:
+            et.setInputType(1 | 0x80000)
+            et.setSingleLine(True)
+        et.setHint(hint)
+        if text:
+            et.setText(text)
+            try:
+                et.setSelection(len(text))
+            except Exception:
+                pass
+        try:
+            et.setTextColor(Theme.getColor(Theme.key_dialogTextBlack))
+            et.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint))
+        except Exception:
+            pass
+        # поля наших диалогов не должны играть мелодию при вводе
+        try:
+            self._views.add(int(Sys.identityHashCode(et)))
+        except Exception:
+            pass
+        return et
+
+    def _column(self, act, fields):
+        col = LinearLayout(act)
+        col.setOrientation(1)
+        p = AndroidUtilities.dp(22)
+        col.setPadding(p, AndroidUtilities.dp(4), p, 0)
+        for f in fields:
+            col.addView(f, LinearLP(-1, -2))
+        return col
+
+    def _info(self, title, message):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            b = AlertDialogBuilder(act)
+            b.set_title(title)
+            b.set_message(message)
+            b.set_positive_button("OK", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _toast(self, text):
+        run_on_ui_thread(lambda: BulletinHelper.show_info(text))
+
+    def _confirm(self, title, message, yes_text, on_yes, on_no=None):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            b = AlertDialogBuilder(act)
+            b.set_title(title)
+            b.set_message(message)
+            b.set_positive_button(yes_text, lambda bld, w: (bld.dismiss(), on_yes()))
+            b.set_negative_button("Отмена", lambda bld, w: (bld.dismiss(), on_no() if on_no else None))
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _open_url(self, url):
+        def _go():
+            try:
+                Browser = jclass("org.telegram.messenger.browser.Browser")
+                Browser.openUrl(self._activity() or AppLoader.applicationContext, url)
+                return
+            except Exception as e:
+                log(f"[PianoSeq] Browser err: {e}")
+            try:
+                Intent = jclass("android.content.Intent")
+                Uri = jclass("android.net.Uri")
+                i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                i.addFlags(0x10000000)
+                AppLoader.applicationContext.startActivity(i)
+            except Exception as e:
+                log(f"[PianoSeq] Intent err: {e}")
+                BulletinHelper.show_info("Не удалось открыть ссылку: " + url)
+        run_on_ui_thread(_go)
+
+    def _dlg_help(self):
+        self._info("Как записывать ноты", (
+            "• C4 D#4 A#3 — нота и октава (диез #, бемоль b). Октавы 1–7, без цифры = 4-я.\n"
+            "• C4+E4+G4 — аккорд (ноты через +).\n"
+            "• Такты разделяет знак |. Один такт = любое число нот, обычно 4 или 8.\n"
+            "• Формат NoobNotes понимается тоже: .C — ниже, C — средняя, ^C — выше, *C — ещё выше.\n"
+            "• Одно нажатие клавиши при наборе = одна следующая нота или аккорд мелодии.\n"
+            "• Октаву такта можно менять кнопками в «Редакторе тактов»."))
+
+    # ============================== редактор тактов ===========================
+
+    def _dlg_editor(self, _v=None):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            bars = self._get_bars()
+            n = len(bars)
+            labels = [f"{i + 1}. {self._short(b)}" for i, b in enumerate(bars)]
+            labels += ["➕ Добавить такт", "⬆️ Все такты на октаву выше",
+                       "⬇️ Все такты на октаву ниже", "📥 Взять выбранную мелодию за основу"]
+
+            def _pick(bld, i):
+                bld.dismiss()
+                if i < n:
+                    self._dlg_bar_menu(i)
+                elif i == n:
+                    self._dlg_edit_bar(n, True)
+                elif i == n + 1:
+                    self._shift_all(1)
+                elif i == n + 2:
+                    self._shift_all(-1)
+                else:
+                    self._load_selected_into_editor()
+
+            b = AlertDialogBuilder(act)
+            b.set_title(f"🎼 Такты: {n} из {MAX_BARS}")
+            b.set_items(labels, _pick)
+            b.set_negative_button("Закрыть", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _dlg_bar_menu(self, idx):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            bars = self._get_bars()
+            if idx >= len(bars):
+                self._dlg_editor()
+                return
+            labels = ["▶ Прослушать такт", "✏️ Изменить ноты", "⬆️ Октава выше (+1)", "⬇️ Октава ниже (−1)",
+                      "➕ Вставить такт после этого", "📄 Дублировать такт", "🗑 Удалить такт", "← К списку тактов"]
+
+            def _pick(bld, i):
+                bld.dismiss()
+                cur = self._get_bars()
+                if idx >= len(cur):
+                    self._dlg_editor()
+                    return
+                if i == 0:
+                    self._commit_bars(cur, hear=cur[idx])
+                    self._dlg_bar_menu(idx)
+                elif i == 1:
+                    self._dlg_edit_bar(idx, False)
+                elif i == 2:
+                    self._shift_one(idx, 1)
+                elif i == 3:
+                    self._shift_one(idx, -1)
+                elif i == 4:
+                    if len(cur) >= MAX_BARS:
+                        self._toast(f"Максимум {MAX_BARS} тактов")
+                        self._dlg_bar_menu(idx)
+                    else:
+                        self._dlg_edit_bar(idx + 1, True)
+                elif i == 5:
+                    if len(cur) >= MAX_BARS:
+                        self._toast(f"Максимум {MAX_BARS} тактов")
+                    else:
+                        cur.insert(idx + 1, cur[idx])
+                        self._commit_bars(cur)
+                        self._toast(f"Такт {idx + 1} продублирован")
+                    self._dlg_editor()
+                elif i == 6:
+                    if len(cur) <= 1:
+                        self._toast("Нужен хотя бы один такт")
+                        self._dlg_bar_menu(idx)
+                    else:
+                        del cur[idx]
+                        self._commit_bars(cur)
+                        self._dlg_editor()
+                else:
+                    self._dlg_editor()
+
+            b = AlertDialogBuilder(act)
+            b.set_title(f"Такт {idx + 1}: {self._short(bars[idx], 26)}")
+            b.set_items(labels, _pick)
+            b.set_negative_button("Закрыть", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _dlg_edit_bar(self, pos, insert=False):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            bars = self._get_bars()
+            if insert and len(bars) >= MAX_BARS:
+                self._toast(f"Максимум {MAX_BARS} тактов")
+                self._dlg_editor()
+                return
+            cur = "" if insert else (bars[pos] if pos < len(bars) else "")
+            et = self._text_field(act, "C4 E4 G4 C5 …", cur)
+            msg = ("Ноты через пробел (C4 D#4 A#3), аккорд через + (C4+E4+G4). "
+                   "Несколько тактов сразу разделяйте знаком |.")
+            if insert:
+                msg += " Длинный текст без | будет разбит на такты по 8 нот."
+            b = AlertDialogBuilder(act)
+            b.set_title("Новый такт" if insert else f"Такт {pos + 1}")
+            b.set_message(msg)
+            b.set_view(self._column(act, [et]))
+
+            def _save(bld, w):
+                text = str(et.getText())
+                bld.dismiss()
+                new = _text_to_bars(text, chunk=BAR_CHUNK if insert else 0)
+                if not new:
+                    self._toast("Не нашёл ни одной ноты. Пример: C4 E4 G4")
+                    self._dlg_edit_bar(pos, insert)
+                    return
+                cur_bars = self._get_bars()
+                if insert:
+                    cur_bars[pos:pos] = new
+                else:
+                    cur_bars[pos:pos + 1] = new
+                if len(cur_bars) > MAX_BARS:
+                    cur_bars = cur_bars[:MAX_BARS]
+                    self._toast(f"Лишнее отрезано: максимум {MAX_BARS} тактов")
+                self._commit_bars(cur_bars, hear=new[0])
+                self._dlg_editor()
+
+            b.set_positive_button("Сохранить", _save)
+            b.set_negative_button("Отмена", lambda bld, w: (bld.dismiss(), self._dlg_editor()))
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _shift_one(self, idx, d):
+        bars = self._get_bars()
+        s = _shift_bar(bars[idx], d)
+        if s is None:
+            self._toast("Дальше нельзя: ноты выйдут за диапазон C1–B7")
+        else:
+            bars[idx] = s
+            self._commit_bars(bars, hear=s)
+        self._dlg_bar_menu(idx)
+
+    def _shift_all(self, d):
+        bars = self._get_bars()
+        new = []
+        for b in bars:
+            s = _shift_bar(b, d)
+            if s is None:
+                self._toast("Дальше нельзя: часть нот выйдет за диапазон C1–B7")
+                self._dlg_editor()
+                return
+            new.append(s)
+        self._commit_bars(new, hear=new[0])
+        self._dlg_editor()
+
+    def _load_selected_into_editor(self):
+        if self._pid() == 0:
+            self._toast("Сейчас уже выбрана мелодия из редактора")
+            self._dlg_editor()
+            return
+        bars = _text_to_bars(" ".join(self._get_melody_tokens()), chunk=BAR_CHUNK)
+
+        def _yes():
+            self._commit_bars(bars)
+            self._toast(f"Загружено тактов: {len(bars)}")
+            self._dlg_editor()
+
+        self._confirm("Заменить такты в редакторе?",
+                      f"Выбранная мелодия будет разбита на {len(bars)} тактов по {BAR_CHUNK} нот и заменит текущие такты редактора. "
+                      "Сохраните свою мелодию в «Мои мелодии», если она нужна.",
+                      "Заменить", _yes, self._dlg_editor)
+
+    # ============================ сохранённые мелодии =========================
+
+    def _dlg_saved(self, _v=None):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            saved = self._saved()
+            names = list(saved.keys())
+            b = AlertDialogBuilder(act)
+            b.set_title("💾 Мои мелодии")
+            if names:
+                labels = [f"★ {n} · тактов: {len(saved[n])}" for n in names]
+                b.set_items(labels, lambda bld, i: (bld.dismiss(), self._dlg_saved_menu(names[i])))
+            else:
+                b.set_message("Пока пусто. Соберите мелодию в «Редакторе тактов» и нажмите «Сохранить текущую». "
+                              "Сохранённые мелодии появятся в списке «Выбор мелодии» со звёздочкой.")
+            b.set_positive_button("Сохранить текущую", lambda bld, w: (bld.dismiss(), self._dlg_save_current()))
+            b.set_negative_button("Закрыть", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _dlg_save_current(self):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            saved = self._saved()
+            n = 1
+            while f"Моя мелодия {n}" in saved:
+                n += 1
+            et = self._text_field(act, "Название", f"Моя мелодия {n}", lines=1)
+            b = AlertDialogBuilder(act)
+            b.set_title("Сохранить мелодию")
+            b.set_message(f"Будут сохранены такты из редактора: {len(self._get_bars())}")
+            b.set_view(self._column(act, [et]))
+
+            def _ok(bld, w):
+                name = self._clean_name(str(et.getText()))
+                bld.dismiss()
+                if not name:
+                    self._toast("Введите название")
+                    self._dlg_save_current()
+                    return
+                self._save_named(name, self._get_bars())
+
+            b.set_positive_button("Сохранить", _ok)
+            b.set_negative_button("Отмена", lambda bld, w: (bld.dismiss(), self._dlg_saved()))
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _save_named(self, name, bars):
+        saved = self._saved()
+
+        def _do():
+            cur = self._selected_saved_name()
+            s = self._saved()
+            s[name] = list(bars)
+            self._store_saved(s, False)
+            if cur:
+                self._select_saved(cur, True)
+            else:
+                self._put("preset", self._pid(), True)
+            self._toast(f"Сохранено: {name}")
+            self._dlg_saved()
+
+        if name in saved:
+            self._confirm("Название уже есть", f"Перезаписать «{name}»?", "Перезаписать", _do, self._dlg_saved)
+        else:
+            _do()
+
+    def _dlg_saved_menu(self, name):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            saved = self._saved()
+            if name not in saved:
+                self._dlg_saved()
+                return
+            labels = ["▶ Выбрать для набора", "✏️ Открыть в редакторе (копия)", "📨 Отправить в чат", "📝 Переименовать", "🗑 Удалить"]
+
+            def _pick(bld, i):
+                bld.dismiss()
+                if i == 0:
+                    self._select_saved(name, True)
+                    self._step = 0
+                    self._reload_async(True)
+                    self._toast(f"Выбрана мелодия: {name}")
+                elif i == 1:
+                    bars = list(self._saved().get(name, []))
+
+                    def _yes():
+                        self._commit_bars(bars)
+                        self._dlg_editor()
+
+                    self._confirm("Открыть в редакторе?", "Такты из «Редактора» будут заменены копией этой мелодии.",
+                                  "Открыть", _yes, lambda: self._dlg_saved_menu(name))
+                elif i == 2:
+                    self._dlg_send_target(name, list(self._saved().get(name, [])))
+                elif i == 3:
+                    self._dlg_rename(name)
+                else:
+                    self._confirm("Удалить мелодию?", f"«{name}» будет удалена из сохранённых.", "Удалить",
+                                  lambda: self._delete_saved(name), lambda: self._dlg_saved_menu(name))
+
+            b = AlertDialogBuilder(act)
+            b.set_title(f"★ {self._short(name, 30)}")
+            b.set_items(labels, _pick)
+            b.set_negative_button("Закрыть", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _dlg_rename(self, name):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            et = self._text_field(act, "Новое название", name, lines=1)
+            b = AlertDialogBuilder(act)
+            b.set_title("Переименовать")
+            b.set_view(self._column(act, [et]))
+
+            def _ok(bld, w):
+                new = self._clean_name(str(et.getText()))
+                bld.dismiss()
+                saved = self._saved()
+                if not new or new == name:
+                    self._dlg_saved_menu(name)
+                    return
+                if new in saved:
+                    self._toast("Такое название уже есть")
+                    self._dlg_rename(name)
+                    return
+                cur = self._selected_saved_name()
+                self._store_saved({(new if k == name else k): v for k, v in saved.items()}, False)
+                if cur:
+                    self._select_saved(new if cur == name else cur, True)
+                else:
+                    self._put("preset", self._pid(), True)
+                self._dlg_saved()
+
+            b.set_positive_button("Готово", _ok)
+            b.set_negative_button("Отмена", lambda bld, w: (bld.dismiss(), self._dlg_saved_menu(name)))
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _delete_saved(self, name):
+        cur = self._selected_saved_name()
+        saved = self._saved()
+        saved.pop(name, None)
+        self._store_saved(saved, False)
+        keep = cur if cur and cur != name else None
+        if keep:
+            self._select_saved(keep, True)
+        elif cur == name:
+            self._put("preset", 0, True)
+        else:
+            self._put("preset", self._pid(), True)
+        self._step = 0
+        self._reload_async(False)
+        self._toast(f"Удалено: {name}")
+        self._dlg_saved()
+
+    # ================= сохранение мелодии из .txt в чате ======================
+
+    def _register_menu(self):
+        if not _HAS_MENU:
+            log("[PianoSeq] menu API недоступен")
+            return
+        variants = (
+            dict(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Сохранить мелодию",
+                 on_click=self._on_msg_menu, icon="msg_music", item_id="piano_seq_save_melody"),
+            dict(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Сохранить мелодию",
+                 on_click=self._on_msg_menu),
+        )
+        for kw in variants:
+            try:
+                self.add_menu_item(MenuItemData(**kw))
+                return
+            except Exception as e:
+                log(f"[PianoSeq] menu err: {e}")
+
+    @staticmethod
+    def _has(obj, name):
+        try:
+            return getattr(obj, name, None) is not None
+        except Exception:
+            return False
+
+    @staticmethod
+    def _ctx_items(context):
+        """Содержимое контекста меню как список (ключ, значение). Контекст может быть dict или java.util.HashMap."""
+        items = []
+        if context is None:
+            return items
+        if isinstance(context, dict):
+            return [(str(k), v) for k, v in context.items()]
+        # java.util.Map
+        try:
+            for k in context.keySet().toArray():
+                try:
+                    items.append((str(k), context.get(k)))
+                except Exception:
+                    pass
+            if items:
+                return items
+        except Exception:
+            pass
+        try:
+            for e in context.entrySet().toArray():
+                items.append((str(e.getKey()), e.getValue()))
+            if items:
+                return items
+        except Exception:
+            pass
+        try:
+            for k in context:
+                items.append((str(k), context[k]))
+        except Exception:
+            pass
+        if not items:
+            for k in ("message", "messageObject", "message_object", "account", "dialog_id", "fragment"):
+                try:
+                    v = context.get(k)
+                    if v is not None:
+                        items.append((k, v))
+                except Exception:
+                    pass
+        return items
+
+    def _extract_msg(self, context):
+        """Достаёт MessageObject из контекста пункта меню (формат зависит от версии exteraGram)."""
+        items = self._ctx_items(context)
+        order = ("message", "messageObject", "message_object", "msg", "selectedObject")
+        items.sort(key=lambda kv: order.index(kv[0]) if kv[0] in order else 99)
+        for _k, v in items:
+            if v is None:
+                continue
+            if self._has(v, "messageOwner") or self._has(v, "getDocument"):
+                return v
+        # TLRPC.Message вместо MessageObject: пробуем обернуть
+        for _k, v in items:
+            if v is not None and self._has(v, "media") and self._has(v, "message"):
+                try:
+                    MO = jclass("org.telegram.messenger.MessageObject")
+                    UC = jclass("org.telegram.messenger.UserConfig")
+                    return MO(UC.selectedAccount, v, False, False)
+                except Exception:
+                    pass
+        return None
+
+    def _on_msg_menu(self, context):
+        msg = self._extract_msg(context)
+        if msg is None:
+            desc = ""
+            try:
+                desc = ", ".join(f"{k}={type(v).__name__}" for k, v in self._ctx_items(context))
+            except Exception:
+                pass
+            self._info("Не удалось получить сообщение",
+                       "Плагин не нашёл сообщение в данных меню.\nКонтекст: " + (desc or str(type(context))))
+            return
+        acc = None
+        try:
+            for k, v in self._ctx_items(context):
+                if k == "account" and v is not None:
+                    acc = int(v)
+        except Exception:
+            acc = None
+        if acc is None:
+            try:
+                acc = int(jclass("org.telegram.messenger.UserConfig").selectedAccount)
+            except Exception:
+                acc = 0
+        threading.Thread(target=self._save_from_message, args=(msg, acc), daemon=True).start()
+
+    @staticmethod
+    def _doc_name(doc):
+        try:
+            for a in doc.attributes:
+                fn = getattr(a, "file_name", None)
+                if fn:
+                    return str(fn)
+        except Exception:
+            pass
+        return ""
+
+    @staticmethod
+    def _msg_text(msg):
+        for fn in (lambda: msg.messageText, lambda: msg.caption, lambda: msg.messageOwner.message):
+            try:
+                t = fn()
+                t = str(t) if t is not None else ""
+                if t.strip():
+                    return t
+            except Exception:
+                pass
+        return ""
+
+    @staticmethod
+    def _looks_like_notes(text):
+        if ":::" in text:
+            return True
+        toks = [t for t in re.split(r"[\s,;|]+", text.replace("-", " ")) if t and not t.startswith("#")]
+        if not toks:
+            return False
+        good = sum(1 for t in toks if _norm_token(t))
+        return good >= 2 and good / len(toks) >= 0.6
+
+    def _save_from_message(self, msg, acc):
+        try:
+            doc = None
+            try:
+                doc = msg.getDocument()
+            except Exception:
+                pass
+            if doc is None:
+                text = self._msg_text(msg)
+                if not text.strip():
+                    self._toast("В сообщении нет ни файла, ни текста")
+                    return
+                if not self._looks_like_notes(text):
+                    self._toast("Не нашёл нот в сообщении")
+                    return
+                self._import_text(text, "Из сообщения " + time.strftime("%d.%m %H:%M"))
+                return
+            self._save_from_file_message(msg, doc, acc)
+        except Exception as e:
+            log(f"[PianoSeq] save from msg err: {e}")
+            self._info("Не удалось сохранить мелодию", f"{type(e).__name__}: {e}")
+
+    def _save_from_file_message(self, msg, doc, acc):
+        name = self._doc_name(doc)
+        try:
+            mime = str(doc.mime_type or "")
+        except Exception:
+            mime = ""
+        if not (name.lower().endswith(".txt") or mime.startswith("text/")):
+            self._toast("Это не .txt файл с мелодиями")
+            return
+        FL = jclass("org.telegram.messenger.FileLoader")
+        fl = FL.getInstance(acc)
+        paths = []
+
+        def _add(fn):
+            try:
+                f = fn()
+                if f is None:
+                    return
+                p = str(f.getAbsolutePath()) if hasattr(f, "getAbsolutePath") else str(f)
+                if p and p not in ("None", "") and p not in paths:
+                    paths.append(p)
+            except Exception:
+                pass
+
+        _add(lambda: msg.messageOwner.attachPath)        # свои отправленные файлы
+        _add(lambda: fl.getPathToMessage(msg.messageOwner))
+        _add(lambda: fl.getPathToAttach(doc))
+        _add(lambda: fl.getPathToAttach(doc, True))
+        try:
+            size = int(doc.size)
+        except Exception:
+            size = 0
+
+        def _ready():
+            for p in paths:
+                try:
+                    if p and os.path.isfile(p) and os.path.getsize(p) > 0 and (size <= 0 or os.path.getsize(p) >= size):
+                        return p
+                except Exception:
+                    pass
+            return None
+
+        path = _ready()
+        if not path:
+            self._toast("Скачиваю файл…")
+            for fn in (lambda: fl.loadFile(doc, msg, 1, 0), lambda: fl.loadFile(doc, msg, 0, 0)):
+                try:
+                    fn()
+                    break
+                except Exception as e:
+                    log(f"[PianoSeq] loadFile err: {e}")
+            for _ in range(60):
+                time.sleep(0.5)
+                path = _ready()
+                if path:
+                    break
+        if not path:
+            self._info("Не удалось скачать файл", "Откройте файл в чате (дождитесь загрузки) и повторите.\n\nПроверенные пути:\n" + "\n".join(paths))
+            return
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as fp:
+            text = fp.read(2000000)
+        stem = os.path.splitext(name)[0] if name else ""
+        self._import_text(text, stem)
+
+    # ======================= отправка мелодий в чат ===========================
+
+    def _find_chat_dialog(self):
+        try:
+            f = get_last_fragment()
+            stack = []
+            try:
+                stack = list(f.getParentLayout().getFragmentStack())
+            except Exception:
+                stack = [f] if f else []
+            for fr in reversed(stack):
+                try:
+                    did = int(fr.getDialogId())
+                    if did:
+                        return did
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return 0
+
+    def _me_id(self):
+        try:
+            UC = jclass("org.telegram.messenger.UserConfig")
+            return int(UC.getInstance(UC.selectedAccount).getClientUserId())
+        except Exception:
+            return 0
+
+    def _melody_message(self, name, bars):
+        msgs, cur = [], []
+        for b in bars:
+            cur_try = cur + [b]
+            if cur and len(" | ".join(cur_try)) + len(name) > 3500:
+                msgs.append(cur)
+                cur = [b]
+            else:
+                cur = cur_try
+        if cur:
+            msgs.append(cur)
+        out = []
+        for i, part in enumerate(msgs, 1):
+            nm = name if len(msgs) == 1 else f"{name} (часть {i})"
+            out.append(f"🎹 Melodic Piano Sequencer\n{nm} ::: {' | '.join(part)}")
+        return out
+
+    def _send_text(self, did, text):
+        if _ext_send_message:
+            try:
+                _ext_send_message({"peer": did, "message": text})
+                return True
+            except Exception as e:
+                log(f"[PianoSeq] send_message err: {e}")
+        try:
+            UC = jclass("org.telegram.messenger.UserConfig")
+            SMH = jclass("org.telegram.messenger.SendMessagesHelper")
+            SMP = jclass("org.telegram.messenger.SendMessagesHelper$SendMessageParams")
+            params = SMP.of(text, did, None, None, None, True, None, None, None, True, 0, None, False)
+            SMH.getInstance(UC.selectedAccount).sendMessage(params)
+            return True
+        except Exception as e:
+            log(f"[PianoSeq] java send err: {e}")
+        return False
+
+    def _send_melody(self, did, name, bars):
+        ok = True
+        for text in self._melody_message(name, bars):
+            ok = self._send_text(did, text) and ok
+        if ok:
+            self._toast("Мелодия отправлена")
+        else:
+            text = "\n".join(self._melody_message(name, bars))
+            self._clip_set(text)
+            self._info("Не удалось отправить", "Плагин не смог отправить сообщение сам. Текст мелодии скопирован в буфер обмена, вставьте его в нужный чат.")
+
+    def _dlg_send_target(self, name, bars):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            chat = self._find_chat_dialog()
+            me = self._me_id()
+            targets = []
+            if chat:
+                targets.append(("💬 В открытый чат", chat))
+            if me and me != chat:
+                targets.append(("⭐ В Избранное", me))
+            if not targets:
+                self._info("Некуда отправить", "Откройте нужный чат и вернитесь в настройки плагина.")
+                return
+
+            def _pick(bld, i):
+                bld.dismiss()
+                did = targets[i][1]
+                threading.Thread(target=self._send_melody, args=(did, name, bars), daemon=True).start()
+
+            b = AlertDialogBuilder(act)
+            b.set_title(f"Отправить «{self._short(name, 24)}»")
+            b.set_items([t[0] for t in targets], _pick)
+            b.set_negative_button("Отмена", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _dlg_send_pick(self):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            saved = self._saved()
+            items = []
+            cur = self._get_bars()
+            if cur:
+                items.append(("✏️ Редактор (текущая)", "Редактор", cur))
+            for n, bars in saved.items():
+                items.append((f"★ {n}", n, bars))
+            if not items:
+                self._info("Нет мелодий", "Соберите мелодию в редакторе тактов или сохраните её.")
+                return
+
+            def _pick(bld, i):
+                bld.dismiss()
+                self._dlg_send_target(items[i][1], items[i][2])
+
+            b = AlertDialogBuilder(act)
+            b.set_title("Какую мелодию отправить?")
+            b.set_items([t[0] for t in items], _pick)
+            b.set_negative_button("Отмена", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    # =========================== экспорт / импорт .txt ========================
+
+    def _dlg_exchange(self):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            labels = ["📤 Экспорт мелодий (.txt)", "📨 Отправить мелодию в чат",
+                      "📥 Импорт из файла .txt", "📋 Импорт из буфера обмена"]
+
+            def _pick(bld, i):
+                bld.dismiss()
+                if i == 0:
+                    self._export_file()
+                elif i == 1:
+                    self._dlg_send_pick()
+                elif i == 2:
+                    self._dlg_import_file()
+                else:
+                    self._import_clip()
+
+            b = AlertDialogBuilder(act)
+            b.set_title("Экспорт / импорт мелодий")
+            b.set_items(labels, _pick)
+            b.set_negative_button("Закрыть", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _export_text(self):
+        lines = ["# Melodic Piano Sequencer — мелодии",
+                 "# Формат строки: Название ::: такт | такт | такт",
+                 "# Ноты: C4 D#4 A#3, аккорд C4+E4+G4, такты разделяются знаком |",
+                 ""]
+        saved = self._saved()
+        count = 0
+        for name, bars in saved.items():
+            lines.append(f"{name} ::: {' | '.join(bars)}")
+            count += 1
+        bars = self._get_bars()
+        if bars and bars not in saved.values():
+            lines.append(f"Редактор (текущая) ::: {' | '.join(bars)}")
+            count += 1
+        return "\n".join(lines) + "\n", count
+
+    def _storage_dirs(self):
+        dirs = []
+        try:
+            Env = jclass("android.os.Environment")
+            dirs.append(str(Env.getExternalStoragePublicDirectory("Download").getAbsolutePath()))
+        except Exception:
+            pass
+        ctx = AppLoader.applicationContext
+        for fn in (lambda: ctx.getExternalFilesDir(None), lambda: ctx.getFilesDir()):
+            try:
+                f = fn()
+                if f is not None:
+                    dirs.append(str(f.getAbsolutePath()))
+            except Exception:
+                pass
+        return list(dict.fromkeys(dirs))
+
+    def _export_file(self):
+        text, count = self._export_text()
+        err = None
+        for d in self._storage_dirs():
+            try:
+                os.makedirs(d, exist_ok=True)
+                path = os.path.join(d, LIB_FILE)
+                with open(path, "w", encoding="utf-8") as fp:
+                    fp.write(text)
+                self._put("last_export_path", path)
+                copied = self._clip_set(text)
+                self._info("Экспорт готов",
+                           f"Мелодий в файле: {count}\n\nФайл:\n{path}\n\n"
+                           + ("Текст также скопирован в буфер обмена. " if copied else "")
+                           + "Это обычный текст: его можно открыть, править и отправить в Telegram. "
+                           "Получатель сможет сохранить мелодии через меню сообщения: Плагин → «Сохранить мелодию». "
+                           "Вернуть их у себя можно через «Импорт из файла» или «Импорт из буфера обмена».")
+                return
+            except Exception as e:
+                err = e
+        if self._clip_set(text):
+            self._info("Файл не сохранён",
+                       f"Android не дал записать файл ({err}).\n\nТекст с мелодиями скопирован в буфер обмена: "
+                       "вставьте его, например, в «Избранное».")
+        else:
+            self._info("Не удалось экспортировать", f"Android не дал записать файл ({err}), буфер обмена тоже недоступен.")
+
+    def _clip_set(self, text):
+        try:
+            Context = jclass("android.content.Context")
+            ClipData = jclass("android.content.ClipData")
+            cm = AppLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE)
+            cm.setPrimaryClip(ClipData.newPlainText("PianoSeq", text))
+            return True
+        except Exception as e:
+            log(f"[PianoSeq] clip set err: {e}")
+            return False
+
+    def _clip_get(self):
+        try:
+            Context = jclass("android.content.Context")
+            ctx = AppLoader.applicationContext
+            cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE)
+            clip = cm.getPrimaryClip()
+            if clip is None or clip.getItemCount() == 0:
+                return ""
+            return str(clip.getItemAt(0).coerceToText(ctx))
+        except Exception as e:
+            log(f"[PianoSeq] clip get err: {e}")
+            return ""
+
+    def _default_import_path(self):
+        last = str(self.get_setting("last_export_path", "") or "")
+        if last and os.path.exists(last):
+            return last
+        dirs = self._storage_dirs()
+        for d in dirs:
+            p = os.path.join(d, LIB_FILE)
+            if os.path.exists(p):
+                return p
+        return os.path.join(dirs[0], LIB_FILE) if dirs else LIB_FILE
+
+    def _dlg_import_file(self):
+        def _show():
+            act = self._activity()
+            if not act:
+                return
+            et = self._text_field(act, "/storage/emulated/0/Download/" + LIB_FILE, self._default_import_path(), lines=2)
+            b = AlertDialogBuilder(act)
+            b.set_title("Импорт из файла")
+            b.set_message("Путь к .txt-файлу: экспорт этого плагина или обычный текст с нотами. "
+                          "Если Android не даёт доступ к файлу, скопируйте его текст и выберите «Импорт из буфера обмена».")
+            b.set_view(self._column(act, [et]))
+
+            def _ok(bld, w):
+                path = str(et.getText()).strip()
+                bld.dismiss()
+                self._import_path(path)
+
+            b.set_positive_button("Импортировать", _ok)
+            b.set_negative_button("Отмена", lambda bld, w: bld.dismiss())
+            b.show()
+        run_on_ui_thread(_show)
+
+    def _import_path(self, path):
+        try:
+            with open(path, "r", encoding="utf-8-sig", errors="replace") as fp:
+                text = fp.read(2000000)
+        except Exception as e:
+            self._info("Не удалось прочитать файл",
+                       f"{path}\n\n{e}\n\nЕсли Android не даёт доступ к файлу, скопируйте его текст и выберите "
+                       "«Импорт из буфера обмена».")
+            return
+        self._import_text(text)
+
+    def _import_clip(self):
+        text = self._clip_get()
+        if not text.strip():
+            self._info("Буфер обмена пуст", "Скопируйте текст с мелодиями (экспорт плагина) или просто ноты, например C4 E4 G4 C5.")
+            return
+        self._import_text(text)
+
+    def _parse_library(self, text, default_name=None):
+        """Строки «Название ::: такты» -> несколько мелодий. Текст без ::: -> одна мелодия."""
+        entries = []
+        lines = str(text).splitlines()
+        if any(":::" in ln for ln in lines):
+            for ln in lines:
+                s = ln.strip()
+                if not s or s.startswith("#") or ":::" not in s:
+                    continue
+                name, body = s.split(":::", 1)
+                bars = _text_to_bars(body, chunk=BAR_CHUNK)
+                if bars:
+                    entries.append((self._clean_name(name) or "Импорт", bars))
+        else:
+            body = "\n".join(ln for ln in lines if not ln.strip().startswith("#"))
+            bars = _text_to_bars(body, chunk=BAR_CHUNK)
+            if bars:
+                entries.append((self._clean_name(default_name or "") or ("Импорт " + time.strftime("%d.%m %H:%M")), bars))
+        return entries
+
+    def _import_text(self, text, default_name=None):
+        entries = self._parse_library(text, default_name)
+        if not entries:
+            self._info("Ничего не импортировано",
+                       "Не нашёл нот. Ожидаются записи вида C4 D#4 A#3 или строки «Название ::: такт | такт».")
+            return
+        cur = self._selected_saved_name()
+        saved = self._saved()
+        added = same = 0
+        for name, bars in entries:
+            if name in saved and saved[name] == bars:
+                same += 1
+                continue
+            nm, k = name, 2
+            while nm in saved:
+                nm = f"{name} ({k})"
+                k += 1
+            saved[nm] = bars
+            added += 1
+        self._store_saved(saved, False)
+        if cur:
+            self._select_saved(cur, True)
+        else:
+            self._put("preset", self._pid(), True)
+        msg = f"Импортировано мелодий: {added}."
+        if same:
+            msg += f" Уже были: {same}."
+        self._toast(msg + " Ищите их в «Выбор мелодии» (★)")

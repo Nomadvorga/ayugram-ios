@@ -2,7 +2,7 @@
 
 Coherent manifest (the helper and root entry are integrated in the current tree):
   docs/integration/extera-pill-backup.patch                 original review patch
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillPortableSettings.swift
+  AyuGram/SGSimpleSettings/Sources/ExteraPillPortableSettings.swift
   docs/validation/run_extera_pill_backup_validation.py       this harness/documentation
 
 Policy: extera.pillStack.layout.v1 is a JSON string in the existing version-1 main
@@ -89,7 +89,7 @@ from run_extera_backup_validation import declaration
 
 def proposed_backup(repo):
     """Apply unique exact-context hunks in memory; never ask git to alter the tree."""
-    relative = "Swiftgram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift"
+    relative = "AyuGram/SGSimpleSettings/Sources/ExteraSettingsBackup.swift"
     source = (repo / relative).read_text(encoding="utf-8")
     markers = ["        case pillConfiguration\n", "    private static func pillConfiguration()", "        pillConfiguration(),"]
     present = [marker in source for marker in markers]
@@ -192,7 +192,7 @@ def fixtures():
 
 
 def make_harness(repo):
-    sources = repo / "Swiftgram/SGSimpleSettings/Sources"
+    sources = repo / "AyuGram/SGSimpleSettings/Sources"
     backup, mode = proposed_backup(repo)
     # All code before aiBoolean is the production enum header and its actual type declarations.
     header = backup[:backup.index("    private static func aiBoolean(")]

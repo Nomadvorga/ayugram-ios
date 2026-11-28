@@ -1482,7 +1482,7 @@ final class GiftOptionsScreenComponent: Component {
             }
             let hasAnyGifts = hasGenericGifts || hasTransferGifts
             
-            if isSelfGift || isChannelGift || isPremiumDisabled || { return true }() /* MARK: Swiftgram */  {
+            if isSelfGift || isChannelGift || isPremiumDisabled || { return true }() /* MARK: AyuGram */  {
                 if !self.premiumItems.isEmpty {
                     for (_, itemView) in self.premiumItems {
                         itemView.view?.removeFromSuperview()

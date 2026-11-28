@@ -41,6 +41,7 @@ import BundleIconComponent
 import VideoPlaybackControlsComponent
 import PhotoResources
 import GlassBackgroundComponent
+import SGSimpleSettings // MARK: AyuGram
 
 public enum UniversalVideoGalleryItemContentInfo {
     case message(Message, GalleryMediaSubject?)
@@ -827,11 +828,17 @@ private final class NativePictureInPictureContentImpl: NSObject, AVPictureInPict
         }
     }
     
+    // MARK: AyuGram
+    var isPictureInPictureActive: Bool {
+        return self.pictureInPictureController?.isPictureInPictureActive ?? false
+    }
+    
     func updateIsCentral(isCentral: Bool) {
         guard let pictureInPictureController = self.pictureInPictureController else {
             return
         }
         
+        // MARK: AyuGram — exteraGram "Auto-Pause Videos": minimizing pauses the video instead of moving it into picture-in-picture.
         let isRoundVideo = (self.hiddenMedia?.1 as? TelegramMediaFile)?.isInstantVideo ?? false
         let shouldPause = isRoundVideo ? ExteraMediaSettings.shared.pauseOnMinimizeRound : ExteraMediaSettings.shared.pauseOnMinimizeVideo
         if isCentral && !shouldPause {
@@ -971,6 +978,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private(set) var item: UniversalVideoGalleryItem?
     private var playbackRate: Double?
     private var videoQuality: UniversalVideoContentVideoQuality = .auto
+    private var didApplyPreferOriginalQuality = false // MARK: AyuGram
+    private var didForcePreferredOriginalQuality = false // MARK: AyuGram
     private let playbackRatePromise = ValuePromise<Double>()
     private let videoQualityPromise = ValuePromise<UniversalVideoContentVideoQuality>()
     
@@ -1319,11 +1328,14 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         if case let .playback(_, seekable) = self.footerContentNode.content, seekable {
-            let seekDuration = Double(ExteraMediaSettings.shared.doubleTapSeekDuration)
+            // MARK: AyuGram
+            // "Double Tap Skip Time" (exteraGram): 5, 10, 15 (stock) or 30 seconds. Only this gesture follows the
+            // setting; the on-screen skip buttons keep their "15" label and their 15 seconds.
+            let doubleTapSeekDuration = Double(ExteraSettings.shared.doubleTapSeekDuration)
             if location.x >= self.bounds.width * 0.3 {
-                self.footerContentNode.seekForward?(seekDuration)
+                self.footerContentNode.seekForward?(doubleTapSeekDuration)
             } else {
-                self.footerContentNode.seekBackward?(seekDuration)
+                self.footerContentNode.seekBackward?(doubleTapSeekDuration)
             }
             return true
         }
@@ -1636,6 +1648,12 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             let videoSize = CGSize(width: item.content.dimensions.width * videoScale, height: item.content.dimensions.height * videoScale)
             let actualVideoSize = CGSize(width: item.content.dimensions.width, height: item.content.dimensions.height)
             videoNode.updateLayout(size: videoSize, actualSize: actualVideoSize, transition: .immediate)
+            // MARK: AyuGram
+            self.didApplyPreferOriginalQuality = false
+            if self.didForcePreferredOriginalQuality {
+                self.didForcePreferredOriginalQuality = false
+                self.videoQuality = .auto
+            }
             videoNode.ownsContentNodeUpdated = { [weak self] value in
                 if let strongSelf = self {
                     strongSelf.updateDisplayPlaceholder(!value)
@@ -4139,6 +4157,52 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
 
         self.playbackRatePromise.set(self.playbackRate ?? 1.0)
+    }
+    
+    // MARK: AyuGram
+    // "Prefer Original Quality" (exteraGram, VideoPlayer.getSavedQuality): the gallery's player starts on the best
+    // quality instead of Auto. iOS never plays the source file while a video has HLS qualities, so the best one is the
+    // top entry of the quality menu, selected the way a tap on that entry selects it. Decided once per video, when the
+    // player first owns its content, so a later choice in the menu stays.
+    // exteraGram "Auto-Pause Videos". A video the user already moved into picture-in-picture keeps playing; GIFs are left alone.
+    private func ayuPauseOnMinimizeIfNeeded() {
+        guard ExteraSettings.shared.pauseOnMinimizeVideo, self.isCentral == true, let videoNode = self.videoNode, videoNode.ownsContentNode else {
+            return
+        }
+        if let item = self.item {
+            if let content = item.content as? NativeVideoContent, content.fileReference.media.isAnimated {
+                return
+            }
+            if let content = item.content as? HLSVideoContent, content.fileReference.media.isAnimated {
+                return
+            }
+        }
+        if self.context.sharedContext.mediaManager.currentPictureInPictureNode != nil {
+            return
+        }
+        if #available(iOS 15.0, *), let content = self.nativePictureInPictureContent as? NativePictureInPictureContentImpl, content.isPictureInPictureActive {
+            return
+        }
+        videoNode.pause()
+    }
+
+    private func applyPreferOriginalQualityIfNeeded() {
+        if self.didApplyPreferOriginalQuality {
+            return
+        }
+        if !ExteraSettings.shared.preferOriginalQuality {
+            self.didApplyPreferOriginalQuality = true
+            return
+        }
+        guard let videoNode = self.videoNode, let qualityState = videoNode.videoQualityState() else {
+            return
+        }
+        self.didApplyPreferOriginalQuality = true
+        guard qualityState.available.count > 1, let quality = qualityState.available.max() else {
+            return
+        }
+        self.didForcePreferredOriginalQuality = true
+        self.updateVideoQuality(.quality(quality))
     }
     
     func updateVideoQuality(_ videoQuality: UniversalVideoContentVideoQuality) {

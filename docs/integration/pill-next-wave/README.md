@@ -224,10 +224,10 @@ finite resistance and settings isolation. On Mac after integration:
 ```sh
 OUT="$(mktemp -d)"
 swiftc -swift-version 5 -warnings-as-errors -parse-as-library \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
-  Swiftgram/SGSimpleSettings/Sources/ExteraPillParity.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStrings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillStackSettings.swift \
+  AyuGram/SGSimpleSettings/Sources/ExteraPillParity.swift \
   Tests/ExteraPills/ParityHostTests.swift -o "$OUT/ParityHostTests"
 "$OUT/ParityHostTests"
 ```

@@ -4,9 +4,9 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCES = ROOT / "Swiftgram/SGSimpleSettings/Sources"
+SOURCES = ROOT / "AyuGram/SGSimpleSettings/Sources"
 BACKUP = (SOURCES / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
-UI = (ROOT / "Swiftgram/SGSettingsUI/Sources/ExteraBackupController.swift").read_text(encoding="utf-8")
+UI = (ROOT / "AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift").read_text(encoding="utf-8")
 
 
 class BackupSourceChecks(unittest.TestCase):
@@ -119,7 +119,7 @@ class BackupSourceChecks(unittest.TestCase):
             self.assertIn('"Sources/**/*.swift"', (ROOT / "Swiftgram" / module / "BUILD").read_text())
 
     def test_sticker_slider_range_matches_validation(self):
-        slider = (ROOT / "Swiftgram/SGItemListUI/Sources/SliderPercentageItem.swift").read_text()
+        slider = (ROOT / "AyuGram/SGItemListUI/Sources/SliderPercentageItem.swift").read_text()
         self.assertIn("range: 0.0 ... 100.0", slider)
         self.assertIn("simpleInteger(.stickerSize, \\.stickerSize, range: 0 ... 100", BACKUP)
 

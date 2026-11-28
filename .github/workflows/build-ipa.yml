@@ -2,7 +2,7 @@ name: Build IPA
 
 on:
   push:
-    branches: [master]
+    branches: [master, plugins-test]
     paths-ignore:
       - '**.md'
       - '.github/ISSUE_TEMPLATE/**'
@@ -119,6 +119,12 @@ jobs:
           EOF
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
+      - name: Test Python packaging helpers (offline fixtures)
+        run: |
+          python3 -m unittest \
+            submodules.AyuPluginBridge.Build.prepare_test \
+            submodules.AyuPluginBridge.Build.verify_ipa_test -v
+
       - name: Build
         id: build
         timeout-minutes: 320
@@ -174,6 +180,9 @@ jobs:
           path: build/simulator-validation/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Verify packaged Python dylibs before upload
+        run: python3 third-party/ayu-python/verify_ipa.py build/artifacts/AyuGram.ipa
 
       - name: Upload IPA
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

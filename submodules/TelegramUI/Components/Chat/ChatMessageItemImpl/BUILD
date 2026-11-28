@@ -1,9 +1,10 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
-# MARK: Swiftgram
+# MARK: AyuGram
 sgdeps = [
-    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
-    "//submodules/TranslateUI:TranslateUI"
+    "//AyuGram/SGSimpleSettings:SGSimpleSettings",
+    "//submodules/TranslateUI:TranslateUI",
+    "//submodules/PeerOnlineMarkerNode:PeerOnlineMarkerNode"
 ]
 #
 
@@ -16,7 +17,7 @@ swift_library(
     copts = [
         "-warnings-as-errors",
     ],
-    deps = sgdeps + [ # MARK: Swiftgram
+    deps = sgdeps + [ # MARK: AyuGram
         "//submodules/TelegramUI/Components/StaticGlassBackground",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/AsyncDisplayKit",

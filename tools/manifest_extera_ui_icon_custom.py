@@ -11,13 +11,13 @@ SOURCES = ROOT / "submodules/TelegramPresentationData/UIIconSources"
 
 def main():
     paths = [
-        "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconArchive.swift",
-        "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconPackStore.swift",
-        "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconVector.swift",
-        "Swiftgram/SGSimpleSettings/Sources/ExteraUIIconCatalog.swift",
-        "Swiftgram/SGSettingsUI/Sources/ExteraUIIconPackActions.swift",
-        "Swiftgram/SGSettingsUI/Sources/ExteraUIIconPackEditorController.swift",
-        "Swiftgram/SGSettingsUI/Sources/ExteraUIIconPacksController.swift",
+        "AyuGram/SGSimpleSettings/Sources/ExteraUIIconArchive.swift",
+        "AyuGram/SGSimpleSettings/Sources/ExteraUIIconPackStore.swift",
+        "AyuGram/SGSimpleSettings/Sources/ExteraUIIconVector.swift",
+        "AyuGram/SGSimpleSettings/Sources/ExteraUIIconCatalog.swift",
+        "AyuGram/SGSettingsUI/Sources/ExteraUIIconPackActions.swift",
+        "AyuGram/SGSettingsUI/Sources/ExteraUIIconPackEditorController.swift",
+        "AyuGram/SGSettingsUI/Sources/ExteraUIIconPacksController.swift",
         "submodules/TelegramPresentationData/Sources/ExteraUIIconProvider.swift",
         "submodules/TelegramPresentationData/Sources/ExteraUIIconRendering.swift",
         "submodules/TelegramPresentationData/Sources/ExteraUIIconUpdates.swift",
@@ -45,7 +45,7 @@ def main():
     strings = {}
     literal = r'"((?:[^"\\]|\\.)*)"'
     for name in paths:
-        if name.startswith("Swiftgram/SGSettingsUI/"):
+        if name.startswith("AyuGram/SGSettingsUI/"):
             source = (ROOT / name).read_text(encoding="utf-8")
             for key, en, ru in re.findall(r'\btext\(' + literal + r',\s*' + literal + r',\s*' + literal + r'\)', source):
                 strings["Extera.UIIcons." + key] = {"en": en, "ru": ru}
