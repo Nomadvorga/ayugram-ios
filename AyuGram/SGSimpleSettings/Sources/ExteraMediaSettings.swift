@@ -17,6 +17,9 @@ public final class ExteraMediaSettings: @unchecked Sendable {
             "extera.media.askVideoMessagesCamera": false,
             "extera.media.zoomSlider": true,
             "extera.media.staticZoom": false,
+            "extera.media.extendedFramesPerSecond": false,
+            // iOS stabilizes video messages itself; exteraGram for Android starts with it off.
+            "extera.media.cameraStabilization": true,
             "extera.media.unmuteWithVolumeButtons": false,
             // Preserve AyuGram's existing camera memory by default.
             "extera.media.rememberLastUsedCamera": true
@@ -72,6 +75,18 @@ public final class ExteraMediaSettings: @unchecked Sendable {
 
     /// Keep the current round-video zoom when a pinch or slider gesture ends.
     /// The value belongs to the active lens and recording session, not a persisted startup zoom.
+    /// Video stabilization of the video message camera.
+    public var cameraStabilization: Bool {
+        get { return self.store.bool("extera.media.cameraStabilization") }
+        set { self.store.setBool(newValue, "extera.media.cameraStabilization") }
+    }
+
+    /// Video messages at 60 frames per second where the cameras and the capture budget allow it.
+    public var extendedFramesPerSecond: Bool {
+        get { return self.store.bool("extera.media.extendedFramesPerSecond") }
+        set { self.store.setBool(newValue, "extera.media.extendedFramesPerSecond") }
+    }
+
     public var staticZoom: Bool {
         get { return self.store.bool("extera.media.staticZoom") }
         set { self.store.setBool(newValue, "extera.media.staticZoom") }

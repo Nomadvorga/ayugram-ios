@@ -162,6 +162,8 @@ private enum SGBoolSetting: String {
     case rememberLastUsedCamera
     case zoomSlider
     case staticZoom
+    case cameraStabilization
+    case extendedFramesPerSecond
     case unmuteWithVolumeButtons
     case appleSpeechOnDeviceOnly
     case showCopyPhotoButton
@@ -170,6 +172,7 @@ private enum SGBoolSetting: String {
     case showClearButton
     case showHistoryButton
     case showReportButton
+    case showGenerateButton
     case showDetailsButton
     case showMessageImageExportButton
     case groupMessageMenu
@@ -733,6 +736,8 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
     entries.append(.toggle(id: id.count, section: .camera, settingName: .rememberLastUsedCamera, value: ExteraMediaSettings.shared.rememberLastUsedCamera, text: i18n("Extera.RememberLastUsedCamera", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .camera, settingName: .zoomSlider, value: ExteraMediaSettings.shared.zoomSlider, text: i18n("Extera.ZoomSlider", lang), enabled: true))
     entries.append(.toggle(id: id.count, section: .camera, settingName: .staticZoom, value: ExteraMediaSettings.shared.staticZoom, text: i18n("Extera.StaticZoom", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .camera, settingName: .cameraStabilization, value: ExteraMediaSettings.shared.cameraStabilization, text: i18n("Extera.CameraStabilization", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .camera, settingName: .extendedFramesPerSecond, value: ExteraMediaSettings.shared.extendedFramesPerSecond, text: i18n("Extera.ExtendedFramesPerSecond", lang), enabled: true))
     entries.append(.oneFromManySelector(id: id.count, section: .camera, settingName: .videoMessagesCamera, text: i18n("Extera.VideoMessagesCamera", lang), value: i18n(cameraChoiceKey(ExteraMediaSettings.shared.videoMessagesCamera), lang), enabled: !ExteraMediaSettings.shared.rememberLastUsedCamera))
 
     entries.append(.header(id: id.count, section: .speechRecognition, text: i18n("Extera.SpeechRecognition", lang), badge: nil))
@@ -749,6 +754,7 @@ private func SGControllerAllEntries(presentationData: PresentationData, callList
         (.showClearButton, ExteraMenuSettings.shared.showClearButton, i18n("Extera.MenuClear", lang)),
         (.showHistoryButton, ExteraMenuSettings.shared.showHistoryButton, i18n("Extera.MenuHistory", lang)),
         (.showReportButton, ExteraMenuSettings.shared.showReportButton, i18n("Extera.MenuReport", lang)),
+        (.showGenerateButton, ExteraMenuSettings.shared.showGenerateButton, i18n("Extera.MenuGenerate", lang)),
         (.showDetailsButton, ExteraMenuSettings.shared.showDetailsButton, i18n("Extera.MenuDetails", lang))
     ], state: state)
     entries.append(.toggle(id: id.count, section: .messageMenu, settingName: .groupMessageMenu, value: ExteraMenuSettings.shared.groupMessageMenu, text: i18n("Extera.GroupMessageMenu", lang), enabled: true))
@@ -965,6 +971,7 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
                 ExteraMenuSettings.shared.showClearButton = value
                 ExteraMenuSettings.shared.showHistoryButton = value
                 ExteraMenuSettings.shared.showReportButton = value
+                ExteraMenuSettings.shared.showGenerateButton = value
                 ExteraMenuSettings.shared.showDetailsButton = value
             }
         case .forceSnow:
@@ -1223,6 +1230,10 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraMediaSettings.shared.zoomSlider = value
         case .staticZoom:
             ExteraMediaSettings.shared.staticZoom = value
+        case .cameraStabilization:
+            ExteraMediaSettings.shared.cameraStabilization = value
+        case .extendedFramesPerSecond:
+            ExteraMediaSettings.shared.extendedFramesPerSecond = value
         case .unmuteWithVolumeButtons:
             ExteraMediaSettings.shared.unmuteWithVolumeButtons = value
         case .appleSpeechOnDeviceOnly:
@@ -1239,6 +1250,8 @@ public func sgSettingsController(context: AccountContext, category: SGSettingsCa
             ExteraMenuSettings.shared.showHistoryButton = value
         case .showReportButton:
             ExteraMenuSettings.shared.showReportButton = value
+        case .showGenerateButton:
+            ExteraMenuSettings.shared.showGenerateButton = value
         case .showDetailsButton:
             ExteraMenuSettings.shared.showDetailsButton = value
         case .showMessageImageExportButton:

@@ -34,6 +34,8 @@ public extension ExteraSettings {
             entries.append(.bool(key.rawValue, get: { self.value(key) }, set: { self.set(key, $0) }))
         }
         entries.append(.bool("showRepeatMessageButton", get: { self.showRepeatButton }, set: { self.set(.showRepeatButton, $0) }))
+        entries.append(.bool("extendedFramesPerSecond", get: { ExteraMediaSettings.shared.extendedFramesPerSecond }, set: { ExteraMediaSettings.shared.extendedFramesPerSecond = $0 }))
+        entries.append(.bool("showGenerateButton", get: { ExteraMenuSettings.shared.showGenerateButton }, set: { ExteraMenuSettings.shared.showGenerateButton = $0 }))
 
         entries.append(.int("stickerShape", range: 0 ... 2, get: { self.stickerShape.rawValue }, set: { value in
             if let shape = StickerShape(rawValue: value) {
@@ -139,6 +141,8 @@ public extension ExteraSettings {
 
         // iOS only. These come last, so the camera choice of an iOS backup wins over the Android value above.
         entries.append(.bool("showShareAsImageButton", group: ios, get: { self.value(.showShareAsImageButton) }, set: { self.set(.showShareAsImageButton, $0) }))
+        // Not Android's "cameraStabilization": its default there is off, which would switch off what iOS does by itself.
+        entries.append(.bool("videoMessageStabilization", group: ios, get: { ExteraMediaSettings.shared.cameraStabilization }, set: { ExteraMediaSettings.shared.cameraStabilization = $0 }))
         entries.append(.bool("showProxyCountry", group: ios, get: { self.value(.showProxyCountry) }, set: { self.set(.showProxyCountry, $0) }))
         entries.append(.bool("showSearchImageButton", group: ios, get: { self.value(.showSearchImageButton) }, set: { self.set(.showSearchImageButton, $0) }))
         entries.append(.bool("showExteraBadges", group: ios, get: { self.value(.showExteraBadges) }, set: { self.set(.showExteraBadges, $0) }))

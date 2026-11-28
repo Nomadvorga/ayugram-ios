@@ -1155,7 +1155,9 @@ public class VideoMessageCameraScreen: ViewController {
                     audio: true,
                     photo: false,
                     metadata: false,
-                    isRoundVideo: true
+                    isRoundVideo: true,
+                    videoStabilization: ExteraMediaSettings.shared.cameraStabilization,
+                    roundVideoFrameRate: ExteraMediaSettings.shared.extendedFramesPerSecond ? 60.0 : 30.0
                 ),
                 previewView: self.mainPreviewView,
                 secondaryPreviewView: self.additionalPreviewView

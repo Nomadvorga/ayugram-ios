@@ -1613,6 +1613,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if !isReplyThreadHead, !isPinnedMessages, let historyAction = exteraAuthorHistoryContextMenuAction(state: chatPresentationInterfaceState, message: message, interaction: interfaceInteraction) {
             actions.append(historyAction)
         }
+        if messages.count == 1 || messages.allSatisfy({ $0.groupingKey != nil && $0.groupingKey == message.groupingKey }), let generateAction = exteraGenerateContextMenuAction(context: context, state: chatPresentationInterfaceState, message: message, text: messageText, interaction: controllerInteraction, interfaceInteraction: interfaceInteraction) {
+            actions.append(generateAction)
+        }
         if let detailsAction = exteraMessageDetailsContextMenuAction(state: chatPresentationInterfaceState, message: message) {
             actions.append(detailsAction)
         }

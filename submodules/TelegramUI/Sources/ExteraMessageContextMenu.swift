@@ -9,6 +9,7 @@ import Display
 import Foundation
 import ImageIO
 import PresentationDataUtils
+import SGSettingsUI
 import SGSimpleSettings
 import SGStrings
 import SwiftSignalKit
@@ -214,6 +215,31 @@ func exteraRepeatMessages(context: AccountContext, state: ChatPresentationInterf
         } else {
             send()
         }
+}
+
+/// exteraGram's "Generate": the text of the message becomes the editable prompt of the AI chat. Opening the
+/// chat sends nothing; the request starts when the user presses Send there.
+func exteraGenerateContextMenuAction(context: AccountContext, state: ChatPresentationInterfaceState, message: EngineRawMessage, text: String, interaction: ChatControllerInteraction, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ContextMenuItem? {
+    let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard ExteraMenuSettings.shared.showGenerateButton, !prompt.isEmpty,
+          ExteraAISettings.shared.configuration.selectedService != nil,
+          message.id.namespace == Namespaces.Message.Cloud,
+          !state.copyProtectionEnabled, !state.myCopyProtectionEnabled, !message.isCopyProtected(), !message.containsSecretMedia,
+          !message.media.contains(where: { $0 is TelegramMediaAction }),
+          !message.attributes.contains(where: { $0 is RestrictedContentMessageAttribute }) else {
+        return nil
+    }
+    return .action(ContextMenuActionItem(id: "extera.generate", text: exteraMenuText("Extera.MenuGenerate", fallback: "Generate", state: state), icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
+    }, action: { _, dismiss in
+        dismiss(.default)
+        guard ExteraMenuSettings.shared.showGenerateButton else { return }
+        if let chatController = interfaceInteraction?.chatController() as? ChatControllerImpl {
+            chatController.openExteraAIGenerate(prompt: prompt)
+        } else {
+            interaction.navigationController()?.pushViewController(exteraAIChatController(context: context, initialPrompt: prompt))
+        }
+    }))
 }
 
 func exteraMessageDetailsContextMenuAction(state: ChatPresentationInterfaceState, message: EngineRawMessage) -> ContextMenuItem? {

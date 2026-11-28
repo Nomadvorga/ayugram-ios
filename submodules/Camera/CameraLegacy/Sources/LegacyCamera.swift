@@ -48,13 +48,15 @@ final class CameraDeviceContext {
     private let exclusive: Bool
     private let additional: Bool
     private let isRoundVideo: Bool
+    private let videoStabilization: Bool
     
     let device = CameraDevice()
     let input = CameraInput()
     let output: CameraOutput
         
-    init(session: CameraSession, exclusive: Bool, additional: Bool, ciContext: CIContext, colorSpace: CGColorSpace, isRoundVideo: Bool = false) {
+    init(session: CameraSession, exclusive: Bool, additional: Bool, ciContext: CIContext, colorSpace: CGColorSpace, isRoundVideo: Bool = false, videoStabilization: Bool = true) {
         self.session = session
+        self.videoStabilization = videoStabilization
         self.exclusive = exclusive
         self.additional = additional
         self.isRoundVideo = isRoundVideo
@@ -76,7 +78,7 @@ final class CameraDeviceContext {
         self.input.configure(for: session, device: self.device, audio: audio && switchAudio)
         self.output.configure(for: session, device: self.device, input: self.input, previewView: previewView, audio: audio && switchAudio, photo: photo, metadata: metadata, captureMode: captureMode)
         
-        self.output.configureVideoStabilization()
+        self.output.configureVideoStabilization(enabled: self.videoStabilization)
         
         self.device.resetZoom(neutral: self.exclusive || !self.additional)
     }
@@ -338,11 +340,11 @@ private final class CameraContext {
         if enabled {
             self.configure {
                 self.mainDeviceContext?.invalidate()
-                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, videoStabilization: self.initialConfiguration.videoStabilization)
                 self.mainDeviceContext?.device.queue = self.queue
                 self.mainDeviceContext?.configure(position: .back, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata)
             
-                self.additionalDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: true, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.additionalDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: true, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, videoStabilization: self.initialConfiguration.videoStabilization)
                 self.additionalDeviceContext?.device.queue = self.queue
                 self.additionalDeviceContext?.configure(position: .front, previewView: self.secondaryPreviewView, audio: false, photo: true, metadata: false)
             }
@@ -391,7 +393,7 @@ private final class CameraContext {
                 let preferWide = self.initialConfiguration.preferWide || self.initialConfiguration.isRoundVideo
                 let preferLowerFramerate = self.initialConfiguration.preferLowerFramerate || self.initialConfiguration.isRoundVideo
                 
-                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: true, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: true, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, videoStabilization: self.initialConfiguration.videoStabilization)
                 self.mainDeviceContext?.device.queue = self.queue
                 self.mainDeviceContext?.configure(position: self.positionValue, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata, preferWide: preferWide, preferLowerFramerate: preferLowerFramerate, captureMode: self.captureMode)
                 self.mainDeviceContext?.output.markPositionChange(position: self.positionValue) // MARK: AyuGram

@@ -43,6 +43,8 @@ public enum Camera {
         public let reportAudioLevel: Bool
         public let isRoundVideo: Bool
         public let captureMode: CameraCaptureMode?
+        public let videoStabilization: Bool
+        public let roundVideoFrameRate: Double
 
         public init(
             preset: Preset,
@@ -55,7 +57,9 @@ public enum Camera {
             preferLowerFramerate: Bool = false,
             reportAudioLevel: Bool = false,
             isRoundVideo: Bool = false,
-            captureMode: CameraCaptureMode? = nil
+            captureMode: CameraCaptureMode? = nil,
+            videoStabilization: Bool = true,
+            roundVideoFrameRate: Double = 30.0
         ) {
             self.preset = preset
             self.position = position
@@ -68,6 +72,8 @@ public enum Camera {
             self.reportAudioLevel = reportAudioLevel
             self.isRoundVideo = isRoundVideo
             self.captureMode = captureMode
+            self.videoStabilization = videoStabilization
+            self.roundVideoFrameRate = roundVideoFrameRate
         }
     }
 

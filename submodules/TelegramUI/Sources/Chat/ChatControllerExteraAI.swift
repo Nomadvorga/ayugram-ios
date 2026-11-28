@@ -60,6 +60,35 @@ extension ChatControllerImpl {
         return true
     }
 
+    /// "Generate" of a message's menu: the AI chat with the message text as the prompt. Apply puts the answer
+    /// into an empty message field; a draft or a message being edited is never replaced.
+    func openExteraAIGenerate(prompt: String) {
+        let location = self.chatLocation
+        guard self.exteraAIComposerCanWrite else {
+            self.push(exteraAIChatController(context: self.context, initialPrompt: prompt, applyResult: nil))
+            return
+        }
+        self.push(exteraAIChatController(context: self.context, initialPrompt: prompt, applyResult: { [weak self] result in
+            guard let self, self.isNodeLoaded, self.chatLocation == location, self.exteraAIComposerCanWrite else {
+                throw ExteraAIError.configuration("You can no longer insert text into this chat. The AI result is still available to copy.")
+            }
+            let current = self.chatDisplayNode.textInputPanelNode?.inputTextState ?? self.presentationInterfaceState.interfaceState.effectiveInputState
+            guard self.presentationInterfaceState.interfaceState.editMessage == nil, current.content.isEmpty else {
+                throw ExteraAIError.configuration("The message field already has text. It has been kept; copy the result instead.")
+            }
+            guard case .plain = result else {
+                throw ExteraAIError.configuration("The AI result is empty.")
+            }
+            let inputState = chatTextInputState(fromComposedRichMessage: result)
+            guard !inputState.content.isEmpty else {
+                throw ExteraAIError.configuration("The AI result is empty.")
+            }
+            self.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                state.updatedInterfaceState { $0.withUpdatedEffectiveInputState(inputState) }.updatedInputMode { _ in .text }
+            })
+        }))
+    }
+
     private var exteraAIComposerCanWrite: Bool {
         let state = self.presentationInterfaceState
         if let group = state.renderedPeer?.peer as? TelegramGroup, group.hasBannedPermission(.banSendText) {

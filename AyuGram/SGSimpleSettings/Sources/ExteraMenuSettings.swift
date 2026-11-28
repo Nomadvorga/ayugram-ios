@@ -11,6 +11,7 @@ public final class ExteraMenuSettings: @unchecked Sendable {
         case showClearButton
         case showHistoryButton
         case showReportButton
+        case showGenerateButton
         case showDetailsButton
         case showMessageImageExportButton
         case groupMessageMenu
@@ -28,6 +29,7 @@ public final class ExteraMenuSettings: @unchecked Sendable {
             Self.key(.showClearButton): true,
             Self.key(.showHistoryButton): false,
             Self.key(.showReportButton): true,
+            Self.key(.showGenerateButton): true,
             Self.key(.showDetailsButton): false,
             Self.key(.showMessageImageExportButton): false,
             Self.key(.groupMessageMenu): true,
@@ -67,6 +69,12 @@ public final class ExteraMenuSettings: @unchecked Sendable {
     public var showReportButton: Bool {
         get { return self.store.bool(Self.key(.showReportButton)) }
         set { self.store.setBool(newValue, Self.key(.showReportButton)) }
+    }
+
+    /// The item appears only while an AI service is set up, so the default changes nothing for a stock setup.
+    public var showGenerateButton: Bool {
+        get { return self.store.bool(Self.key(.showGenerateButton)) }
+        set { self.store.setBool(newValue, Self.key(.showGenerateButton)) }
     }
 
     public var showDetailsButton: Bool {

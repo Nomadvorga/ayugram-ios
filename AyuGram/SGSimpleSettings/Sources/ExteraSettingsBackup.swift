@@ -324,6 +324,11 @@ public enum ExteraSettingsBackup {
         exteraBoolean(.hideArchiveFolder),
         exteraBoolean(.archiveOnPull, defaultValue: true),
         exteraBoolean(.disableUnarchiveSwipe, defaultValue: true),
+        exteraBoolean(.disableMarkdown),
+        exteraBoolean(.swipeActionsLoop),
+        exteraBoolean(.swipeActionsReversed),
+        exteraBoolean(.showExteraBadges),
+        exteraBoolean(.showProxyCountry),
         integer("extera.tabTitleStyle", allowed: [0, 1, 2], defaultValue: 0, read: { ExteraSettings.shared.tabTitleStyle.rawValue }, write: {
             if let value = ExteraSettings.TabTitleStyle(rawValue: $0) { ExteraSettings.shared.tabTitleStyle = value }
         }),
@@ -338,6 +343,16 @@ public enum ExteraSettingsBackup {
         }),
         text("extera.customSavePath", maximumLength: 255, allowedCharacters: CharacterSet(charactersIn: "/:").inverted, read: { ExteraSettings.shared.customSavePath }, write: { ExteraSettings.shared.customSavePath = $0 }),
         text("extera.translationTargetLanguage", maximumLength: 64, allowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"), read: { ExteraSettings.shared.translationTargetLanguage }, write: { ExteraSettings.shared.translationTargetLanguage = $0 }),
+        integer("extera.doNotUseProxy", allowed: Set(0 ... 7), defaultValue: 0, read: { ExteraSettings.shared.doNotUseProxy.rawValue }, write: {
+            ExteraSettings.shared.doNotUseProxy = ExteraSettings.ProxyDisableConditions(rawValue: $0)
+        }),
+        // Action ids separated by commas, the form exteraGram stores; an empty text switches the swipe off.
+        // Ids that are not swipe actions and repetitions are dropped on import.
+        Setting(name: "extera.swipeActions", rule: .text(maximumLength: 32, allowedCharacters: CharacterSet(charactersIn: "0123456789,")), defaultValue: .string(ExteraSettings.DoubleTapAction.androidSwipeList([.reply])), read: {
+            return .string(ExteraSettings.DoubleTapAction.androidSwipeList(ExteraSettings.shared.swipeActions))
+        }, write: { value in
+            if case let .string(value) = value { ExteraSettings.shared.swipeActions = ExteraSettings.DoubleTapAction.swipeList(fromAndroid: value) }
+        }),
         Setting(name: "extera.avatarCorners", rule: .integer(0 ... 28), defaultValue: .integer(28), read: {
             return .integer(ExteraSettings.shared.avatarCorners)
         }, write: { value in
@@ -452,6 +467,7 @@ public enum ExteraSettingsBackup {
         boolean("extera.menu.showClearButton", defaultValue: true, read: { ExteraMenuSettings.shared.showClearButton }, write: { ExteraMenuSettings.shared.showClearButton = $0 }),
         boolean("extera.menu.showHistoryButton", read: { ExteraMenuSettings.shared.showHistoryButton }, write: { ExteraMenuSettings.shared.showHistoryButton = $0 }),
         boolean("extera.menu.showReportButton", defaultValue: true, read: { ExteraMenuSettings.shared.showReportButton }, write: { ExteraMenuSettings.shared.showReportButton = $0 }),
+        boolean("extera.menu.showGenerateButton", defaultValue: true, read: { ExteraMenuSettings.shared.showGenerateButton }, write: { ExteraMenuSettings.shared.showGenerateButton = $0 }),
         boolean("extera.menu.showDetailsButton", read: { ExteraMenuSettings.shared.showDetailsButton }, write: { ExteraMenuSettings.shared.showDetailsButton = $0 }),
         boolean("extera.menu.showMessageImageExportButton", read: { ExteraMenuSettings.shared.showMessageImageExportButton }, write: { ExteraMenuSettings.shared.showMessageImageExportButton = $0 }),
         boolean("extera.menu.groupMessageMenu", defaultValue: true, read: { ExteraMenuSettings.shared.groupMessageMenu }, write: { ExteraMenuSettings.shared.groupMessageMenu = $0 }),
@@ -464,6 +480,8 @@ public enum ExteraSettingsBackup {
         boolean("extera.chatMedia.pauseOtherAudio", defaultValue: true, read: { ExteraChatMediaSettings.shared.pauseOtherAudio }, write: { ExteraChatMediaSettings.shared.pauseOtherAudio = $0 }),
         boolean("extera.media.rememberLastUsedCamera", defaultValue: true, read: { ExteraMediaSettings.shared.rememberLastUsedCamera }, write: { ExteraMediaSettings.shared.rememberLastUsedCamera = $0 }),
         boolean("extera.media.zoomSlider", defaultValue: true, read: { ExteraMediaSettings.shared.zoomSlider }, write: { ExteraMediaSettings.shared.zoomSlider = $0 }),
+        boolean("extera.media.cameraStabilization", defaultValue: true, read: { ExteraMediaSettings.shared.cameraStabilization }, write: { ExteraMediaSettings.shared.cameraStabilization = $0 }),
+        boolean("extera.media.extendedFramesPerSecond", read: { ExteraMediaSettings.shared.extendedFramesPerSecond }, write: { ExteraMediaSettings.shared.extendedFramesPerSecond = $0 }),
         boolean("extera.media.staticZoom", read: { ExteraMediaSettings.shared.staticZoom }, write: { ExteraMediaSettings.shared.staticZoom = $0 }),
         boolean("extera.media.unmuteWithVolumeButtons", read: { ExteraMediaSettings.shared.unmuteWithVolumeButtons }, write: { ExteraMediaSettings.shared.unmuteWithVolumeButtons = $0 }),
         Setting(name: ExteraChatAppearanceSettings.swipeActionKey, rule: .string(Set(ExteraChatAppearanceSettings.SwipeAction.allCases.map(\.rawValue))), defaultValue: .string("archive"), read: { .string(ExteraChatAppearanceSettings.shared.swipeAction.rawValue) }, write: {

@@ -45,6 +45,18 @@ public func exteraAIChatController(context: AccountContext, initialPrompt: Strin
     return ExteraAIChatController(context: context, initialPrompt: initialPrompt, action: nil, apply: nil)
 }
 
+/// The conversation opened from a message: the selected role and the saved history apply as in the standalone
+/// chat. With `applyResult` the screen offers Apply, which hands the answer to the caller; throw to keep the
+/// result open to copy. Nothing is sent until the user presses Send.
+public func exteraAIChatController(context: AccountContext, initialPrompt: String, applyResult: ((ComposedRichMessage) throws -> Void)?) -> ViewController {
+    return ExteraAIChatController(context: context, initialPrompt: initialPrompt, action: nil, apply: applyResult.map { applyResult in
+        return { result in
+            let entities = result.quoteRange.map { [MessageTextEntity(range: $0, type: .BlockQuote(isCollapsed: false))] } ?? []
+            try applyResult(.plain(text: result.text, entities: entities))
+        }
+    })
+}
+
 /// Push from a composer/message action. Apply returns the formatted successful result to the caller.
 /// The caller remains responsible for preserving drafts/entities and checking write permission.
 public func exteraAITextProcessingController(context: AccountContext, text: String, action: ExteraAITextAction, apply: ((String) -> Void)? = nil) -> ViewController {

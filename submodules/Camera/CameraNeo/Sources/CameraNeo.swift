@@ -20,6 +20,9 @@ final class CameraNeo: NSObject, CameraProtocol {
     private let configuration: Camera.Configuration
     private let useMultiCam: Bool
     private let roundVideoMode: NeoCameraImpl.RoundVideoMode
+    // The rate the cameras run at: the requested one, or the standard one where a camera or the MultiCam
+    // budget does not allow it.
+    private var captureFrameRate: Double = roundVideoCaptureFrameRate
     private let log: ((String) -> Void)?
     private let previewView: CameraPreviewView?
     private let secondaryPreviewView: CameraPreviewView?
@@ -668,6 +671,7 @@ final class CameraNeo: NSObject, CameraProtocol {
         guard let device = self.makeVideoDevice(position: position) else {
             return false
         }
+        self.captureFrameRate = self.supportedCaptureFrameRate(devices: [device])
         guard self.configureCaptureFormat(device: device) else {
             return false
         }
@@ -682,7 +686,7 @@ final class CameraNeo: NSObject, CameraProtocol {
             return false
         }
         self.session.addInput(videoInput)
-        self.configureFrameRate(roundVideoCaptureFrameRate, device: device, input: videoInput)
+        self.configureFrameRate(self.captureFrameRate, device: device, input: videoInput)
 
         if addOutput {
             guard let output = self.makeVideoOutput(), self.session.canAddOutput(output) else {
@@ -709,6 +713,7 @@ final class CameraNeo: NSObject, CameraProtocol {
               let frontDevice = self.makeVideoDevice(position: .front) else {
             return false
         }
+        self.captureFrameRate = self.supportedCaptureFrameRate(devices: [backDevice, frontDevice])
         guard self.configureCaptureFormat(device: backDevice), self.configureCaptureFormat(device: frontDevice) else {
             return false
         }
@@ -726,8 +731,8 @@ final class CameraNeo: NSObject, CameraProtocol {
 
         multiCamSession.addInputWithNoConnections(backInput)
         multiCamSession.addInputWithNoConnections(frontInput)
-        self.configureFrameRate(roundVideoCaptureFrameRate, device: backDevice, input: backInput)
-        self.configureFrameRate(roundVideoCaptureFrameRate, device: frontDevice, input: frontInput)
+        self.configureFrameRate(self.captureFrameRate, device: backDevice, input: backInput)
+        self.configureFrameRate(self.captureFrameRate, device: frontDevice, input: frontInput)
         multiCamSession.addOutputWithNoConnections(backOutput)
         multiCamSession.addOutputWithNoConnections(frontOutput)
 
@@ -858,8 +863,16 @@ final class CameraNeo: NSObject, CameraProtocol {
         ).devices.first
     }
 
+    private func supportedCaptureFrameRate(devices: [AVCaptureDevice]) -> Double {
+        let requested = self.configuration.roundVideoFrameRate
+        guard requested > roundVideoCaptureFrameRate, devices.allSatisfy({ roundVideoCaptureFormat(for: $0, requiresMultiCam: self.useMultiCam, mode: self.roundVideoMode, frameRate: requested) != nil }) else {
+            return roundVideoCaptureFrameRate
+        }
+        return requested
+    }
+
     private func configureCaptureFormat(device: AVCaptureDevice) -> Bool {
-        guard let selectedFormat = roundVideoCaptureFormat(for: device, requiresMultiCam: self.useMultiCam, mode: self.roundVideoMode) else {
+        guard let selectedFormat = roundVideoCaptureFormat(for: device, requiresMultiCam: self.useMultiCam, mode: self.roundVideoMode, frameRate: self.captureFrameRate) else {
             return false
         }
         return self.applyCaptureFormat(selectedFormat, device: device)
@@ -891,26 +904,32 @@ final class CameraNeo: NSObject, CameraProtocol {
         }
 
         let initialProfile: RoundVideoCaptureProfile = self.roundVideoMode == .vga ? .vga : .high
-        for maximumProfile in RoundVideoCaptureProfile.allCases where maximumProfile.rawValue >= initialProfile.rawValue {
-            if maximumProfile != initialProfile {
-                guard let backFormat = roundVideoCaptureFormat(for: backDevice, requiresMultiCam: true, mode: self.roundVideoMode, maximumProfile: maximumProfile),
-                      let frontFormat = roundVideoCaptureFormat(for: frontDevice, requiresMultiCam: true, mode: self.roundVideoMode, maximumProfile: maximumProfile) else {
-                    continue
+        // A rate above the standard one is tried on every profile first; the standard rate is the fallback.
+        let initialFrameRate = self.captureFrameRate
+        let frameRates = initialFrameRate > roundVideoCaptureFrameRate ? [initialFrameRate, roundVideoCaptureFrameRate] : [initialFrameRate]
+        for frameRate in frameRates {
+            for maximumProfile in RoundVideoCaptureProfile.allCases where maximumProfile.rawValue >= initialProfile.rawValue {
+                if maximumProfile != initialProfile || frameRate != initialFrameRate {
+                    guard let backFormat = roundVideoCaptureFormat(for: backDevice, requiresMultiCam: true, mode: self.roundVideoMode, maximumProfile: maximumProfile, frameRate: frameRate),
+                          let frontFormat = roundVideoCaptureFormat(for: frontDevice, requiresMultiCam: true, mode: self.roundVideoMode, maximumProfile: maximumProfile, frameRate: frameRate) else {
+                        continue
+                    }
+                    session.beginConfiguration()
+                    let backConfigured = self.applyCaptureFormat(backFormat, device: backDevice)
+                    let frontConfigured = self.applyCaptureFormat(frontFormat, device: frontDevice)
+                    self.configureFrameRate(frameRate, device: backDevice, input: backInput)
+                    self.configureFrameRate(frameRate, device: frontDevice, input: frontInput)
+                    session.commitConfiguration()
+                    guard backConfigured && frontConfigured else {
+                        return false
+                    }
+                    self.captureFrameRate = frameRate
+                    self.configureVideoStabilization()
                 }
-                session.beginConfiguration()
-                let backConfigured = self.applyCaptureFormat(backFormat, device: backDevice)
-                let frontConfigured = self.applyCaptureFormat(frontFormat, device: frontDevice)
-                self.configureFrameRate(roundVideoCaptureFrameRate, device: backDevice, input: backInput)
-                self.configureFrameRate(roundVideoCaptureFrameRate, device: frontDevice, input: frontInput)
-                session.commitConfiguration()
-                guard backConfigured && frontConfigured else {
-                    return false
+                self.logCaptureState(reason: "MultiCam budget")
+                if roundVideoCaptureCostsAreSupported(hardwareCost: session.hardwareCost, systemPressureCost: session.systemPressureCost) {
+                    return true
                 }
-                self.configureVideoStabilization()
-            }
-            self.logCaptureState(reason: "MultiCam budget")
-            if roundVideoCaptureCostsAreSupported(hardwareCost: session.hardwareCost, systemPressureCost: session.systemPressureCost) {
-                return true
             }
         }
         return false
@@ -946,7 +965,7 @@ final class CameraNeo: NSObject, CameraProtocol {
                 continue
             }
             let supportsStandard = connection.isVideoStabilizationSupported && device.activeFormat.isVideoStabilizationModeSupported(.standard)
-            connection.preferredVideoStabilizationMode = supportsStandard ? .standard : .off
+            connection.preferredVideoStabilizationMode = supportsStandard && self.configuration.videoStabilization ? .standard : .off
             self.stabilizationObservers.append(connection.observe(\.activeVideoStabilizationMode, options: [.new]) { [weak self, weak connection] _, _ in
                 self?.sessionQueue.async { [weak self, weak connection] in
                     guard let self, let connection,

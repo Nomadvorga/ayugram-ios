@@ -37,7 +37,8 @@ private func selectRoundVideoCaptureFormat(
     requiresMultiCam: Bool,
     preferStabilization: Bool,
     preferMediumProfile: Bool,
-    maximumProfile: RoundVideoCaptureProfile = .high
+    maximumProfile: RoundVideoCaptureProfile = .high,
+    frameRate: Double = roundVideoCaptureFrameRate
 ) -> Int? {
     let eligible = candidates.indices.filter { index in
         let candidate = candidates[index]
@@ -46,7 +47,7 @@ private func selectRoundVideoCaptureFormat(
         }
         return candidate.isNV12
             && (!requiresMultiCam || candidate.supportsMultiCam)
-            && candidate.frameRateRanges.contains(where: { $0.contains(roundVideoCaptureFrameRate) })
+            && candidate.frameRateRanges.contains(where: { $0.contains(frameRate) })
     }
     return eligible.min { lhsIndex, rhsIndex in
         let lhs = candidates[lhsIndex]
@@ -83,7 +84,8 @@ func roundVideoCaptureFormat(
     for device: AVCaptureDevice,
     requiresMultiCam: Bool,
     mode: NeoCameraImpl.RoundVideoMode,
-    maximumProfile: RoundVideoCaptureProfile = .high
+    maximumProfile: RoundVideoCaptureProfile = .high,
+    frameRate: Double = roundVideoCaptureFrameRate
 ) -> AVCaptureDevice.Format? {
     let formats = device.formats
     let candidates = formats.map { format -> RoundVideoCaptureFormatCandidate in
@@ -108,7 +110,8 @@ func roundVideoCaptureFormat(
         requiresMultiCam: requiresMultiCam,
         preferStabilization: mode != .vga && device.position == .back,
         preferMediumProfile: device.position == .front,
-        maximumProfile: mode == .vga ? .vga : maximumProfile
+        maximumProfile: mode == .vga ? .vga : maximumProfile,
+        frameRate: frameRate
     ) else {
         return nil
     }

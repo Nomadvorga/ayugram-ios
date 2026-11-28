@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ROOT / "AyuGram/SGSimpleSettings/Sources"
 BACKUP = (SOURCES / "ExteraSettingsBackup.swift").read_text(encoding="utf-8")
 UI = (ROOT / "AyuGram/SGSettingsUI/Sources/ExteraBackupController.swift").read_text(encoding="utf-8")
+# Keys that no screen shows and no code path reads.
+UNUSED_KEYS = {"showSearchImageButton"}
 
 
 class BackupSourceChecks(unittest.TestCase):
@@ -15,9 +17,22 @@ class BackupSourceChecks(unittest.TestCase):
         for file in ["ExteraSettings.swift", "ExteraChatSettings.swift", "ExteraMenuSettings.swift", "ExteraMessageSettings.swift"]:
             source = (SOURCES / file).read_text(encoding="utf-8")
             keys_body = re.search(r"public enum Keys[^\{]*\{(.*?)\n    \}", source, re.S).group(1)
+            # A bridged key has no storage of its own: the backup has to name the property it forwards to.
+            bridged_body = re.search(r"static let bridged:[^\n]*\n(.*?)\n    \]", source, re.S)
+            bridged = dict(re.findall(r"^\s*\.(\w+): \(\{ [\w.]+\.(\w+)\b", bridged_body.group(1), re.M)) if bridged_body else {}
             for key in re.findall(r"case (\w+)", keys_body):
+                if key in UNUSED_KEYS:
+                    continue
                 with self.subTest(file=file, key=key):
-                    self.assertRegex(BACKUP, rf"(?:\.{key}\b|[.\"]{key}\")")
+                    if key in bridged:
+                        self.assertRegex(BACKUP, rf"\b{bridged[key]}\b")
+                    else:
+                        self.assertRegex(BACKUP, rf"(?:\.{key}\b|[.\"]{key}\")")
+
+    def test_port_values_without_a_key_case_covered(self):
+        for name in ["extera.swipeActions", "extera.doNotUseProxy"]:
+            with self.subTest(name=name):
+                self.assertIn(f'"{name}"', BACKUP)
 
     def test_all_new_singleton_properties_covered(self):
         derived = {"resolvedTargetCurrency", "resolvedImperial", "sizeCoefficient", "recentStickersLimit"}
@@ -116,7 +131,7 @@ class BackupSourceChecks(unittest.TestCase):
 
     def test_source_globs_cover_both_new_files(self):
         for module in ["SGSettingsUI", "SGSimpleSettings"]:
-            self.assertIn('"Sources/**/*.swift"', (ROOT / "Swiftgram" / module / "BUILD").read_text())
+            self.assertIn('"Sources/**/*.swift"', (ROOT / "AyuGram" / module / "BUILD").read_text())
 
     def test_sticker_slider_range_matches_validation(self):
         slider = (ROOT / "AyuGram/SGItemListUI/Sources/SliderPercentageItem.swift").read_text()

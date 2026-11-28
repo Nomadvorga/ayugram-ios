@@ -644,6 +644,8 @@
 "Ayu.Overview.Filters" = "Filters";
 "Ayu.Overview.Customization" = "Customization";
 "Extera.StaticZoom" = "Keep Zoom";
+"Extera.CameraStabilization" = "Video Message Stabilization";
+"Extera.ExtendedFramesPerSecond" = "60 FPS Video Messages";
 "Extera.UnmuteWithVolumeButtons" = "Unmute with Volume Buttons";
 "Extera.UnmuteWithVolumeButtonsInfo" = "Changing the system volume unmutes a playing video. iOS also reports changes made in Control Center.";
 "Extera.AppIcon.Select" = "Select";
@@ -899,6 +901,7 @@
 "Extera.MenuHistory" = "Messages from This Author";
 "Extera.MenuReport" = "Report";
 "Extera.MenuDetails" = "Message Details";
+"Extera.MenuGenerate" = "Generate";
 "Extera.ModifiedVersionNotice" = "AyuGram is a distinct modified version based on exteraGram. It is developed independently and is not an official exteraGram release.";
 "Extera.UpstreamSource" = "exteraGram Source Code";
 "Extera.SettingsBackup" = "Settings Backup";

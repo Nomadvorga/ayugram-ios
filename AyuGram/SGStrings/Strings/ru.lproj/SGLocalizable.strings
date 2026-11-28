@@ -629,6 +629,8 @@
 "Ayu.Overview.Filters" = "Фильтры";
 "Ayu.Overview.Customization" = "Кастомизация";
 "Extera.StaticZoom" = "Сохранять масштаб";
+"Extera.CameraStabilization" = "Стабилизация видеосообщений";
+"Extera.ExtendedFramesPerSecond" = "Видеосообщения в 60 FPS";
 "Extera.UnmuteWithVolumeButtons" = "Включать звук кнопками громкости";
 "Extera.UnmuteWithVolumeButtonsInfo" = "Изменение системной громкости включает звук воспроизводимого видео. iOS также сообщает об изменениях через Пункт управления.";
 "Extera.AppIcon.Select" = "Выбрать";
@@ -887,6 +889,7 @@
 "Extera.MenuHistory" = "Сообщения этого автора";
 "Extera.MenuReport" = "Пожаловаться";
 "Extera.MenuDetails" = "Сведения о сообщении";
+"Extera.MenuGenerate" = "Генерировать";
 "Extera.ModifiedVersionNotice" = "AyuGram — отдельная модифицированная версия на основе exteraGram. Она разрабатывается независимо и не является официальным выпуском exteraGram.";
 "Extera.UpstreamSource" = "Исходный код exteraGram";
 "Extera.SettingsBackup" = "Резервная копия настроек";
