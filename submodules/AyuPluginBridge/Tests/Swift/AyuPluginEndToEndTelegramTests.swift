@@ -902,4 +902,145 @@ final class AyuPluginEndToEndTelegramTests: XCTestCase {
         XCTAssertEqual(backend.state.value.outgoing.map { "\($0.peer):\($0.message ?? "<nil>")" }, ["77:x y"])
         await stack.remove(id)
     }
+
+    /// Android's cancel, change, `sendMessage(params)`: the delivered object is sent again as a new
+    /// message when the host described all of the original, and refused otherwise.
+    func testAHookSendsItsDeliveredParametersAgain() async throws {
+        let stack = try AyuEndToEnd.shared()
+        let (backend, _) = self.bind(stack)
+        defer { self.unbind(stack) }
+        let source = AyuEndToEnd.source(id: "e2e_tg_resend", """
+        from base_plugin import BasePlugin, HookResult, HookStrategy
+        from android_utils import run_on_ui_thread
+        from client_utils import get_send_messages_helper, run_on_queue
+        from java.util import ArrayList
+        from org.telegram.tgnet import TLRPC
+        \(AyuEndToEnd.recorder)
+
+
+        class LookupPlugin(Recorder, BasePlugin):
+            def on_plugin_load(self):
+                self.add_on_send_message_hook()
+
+            def on_send_message_hook(self, account, params):
+                if not hasattr(params, "message") or not isinstance(params.message, str):
+                    return HookResult()
+                if not params.message.startswith(".wiki "):
+                    return HookResult()
+                query = params.message[6:].strip()
+                run_on_queue(lambda: self._answer(params, query))
+                return HookResult(strategy=HookStrategy.CANCEL)
+
+            def _answer(self, params, query):
+                params.message = "Wikipedia: " + query
+                if not hasattr(params, "entities") or params.entities is None:
+                    params.entities = ArrayList()
+                entity = TLRPC.TL_messageEntityBold()
+                entity.offset, entity.length = 0, 9
+                params.entities.add(entity)
+                run_on_ui_thread(lambda: self.record("sent:" + query, lambda: self._send(params)))
+
+            def _send(self, params):
+                get_send_messages_helper().sendMessage(params)
+                return "sent"
+        """)
+        let preview = try await stack.preview(source)
+        XCTAssertEqual(preview.plugin.blockers, [], "the path has no static blocker")
+        let id = try await stack.start(source)
+        let bridge = AyuPluginTelegramBridge.shared
+        func send(_ text: String, complete: Bool) async -> String {
+            var message = AyuPluginTelegramHookedMessage(peer: 77)
+            message.message = text
+            message.notify = false
+            message.isComplete = complete
+            let decision = await withCheckedContinuation { continuation in bridge.interceptSendMessage(account: 0, message: message) { continuation.resume(returning: $0) } }
+            guard case let .send(sent, _) = decision else { return "<held>" }
+            return sent.message ?? "<nil>"
+        }
+        let untouched = await send("hello", complete: true)
+        XCTAssertEqual(untouched, "hello")
+
+        let held = await send(".wiki cats", complete: true)
+        XCTAssertEqual(held, "<held>")
+        let sent = await stack.waitForStored(id, "sent:cats")
+        XCTAssertEqual(sent, .string("sent"))
+        let outgoing = backend.state.value.outgoing
+        XCTAssertEqual(outgoing.map { "\($0.peer):\($0.message ?? "<nil>")" }, ["77:Wikipedia: cats"])
+        XCTAssertEqual(outgoing.first?.entities?.count, 1)
+        XCTAssertEqual(outgoing.first?.booleans["notify"], false, "what the original said is kept")
+
+        // An original the host could only describe in part would lose that part: refused, nothing sent.
+        let partial = await send(".wiki dogs", complete: false)
+        XCTAssertEqual(partial, "<held>")
+        let refused = await stack.waitForStored(id, "sent:dogs")
+        XCTAssertEqual(refused.string?.contains("UNSUPPORTED_API: A SendMessageParams delivered to the send-message hook cannot be sent again"), true, "\(refused)")
+        XCTAssertEqual(backend.state.value.outgoing.count, 1)
+        await stack.remove(id)
+    }
+
+    func testBrowserOpenUrlHooksSeeRewriteAndCancelTheURLTheAppOpens() async throws {
+        let stack = try AyuEndToEnd.shared()
+        _ = self.bind(stack)
+        defer { self.unbind(stack) }
+        // The shape of a link interceptor: one hook object on both methods, the URL found by scanning the arguments.
+        let source = AyuEndToEnd.source(id: "e2e_tg_url_open", """
+        from base_plugin import BasePlugin, MethodHook
+        from hook_utils import find_class
+        \(AyuEndToEnd.recorder)
+
+
+        class LinkHook(MethodHook):
+            def __init__(self, plugin):
+                self.plugin = plugin
+
+            def before_hooked_method(self, param):
+                for arg in param.args:
+                    text = str(arg).strip() if arg is not None else ""
+                    if text.startswith("https://music.example/"):
+                        self.plugin.record("held", lambda: text)
+                        param.setResult(None)
+                        return
+                    if text.startswith("https://short.example/"):
+                        param.args[1] = "https://long.example/" + text.rsplit("/", 1)[1]
+                        return
+
+
+        class LinkPlugin(Recorder, BasePlugin):
+            def on_plugin_load(self):
+                browser = find_class("org.telegram.messenger.browser.Browser")
+                self.unhooks = []
+                for name in ("openUrl", "openUrlInSystemBrowser"):
+                    self.unhooks.extend(self.hook_all_methods(browser, name, LinkHook(self)) or [])
+                self.record("hooks", lambda: len(self.unhooks))
+        """)
+        let preview = try await stack.preview(source)
+        XCTAssertEqual(preview.plugin.blockers, [], "the path has no static blocker")
+        let bridge = AyuPluginTelegramBridge.shared
+        func open(_ url: String, system: Bool = false) async -> String {
+            await withCheckedContinuation { continuation in
+                bridge.interceptOpenURL(url, systemBrowser: system) { continuation.resume(returning: $0 ?? "<cancelled>") }
+            }
+        }
+        XCTAssertFalse(bridge.hasURLOpenHooks)
+        let id = try await stack.start(source)
+        let hooks = await stack.waitForStored(id, "hooks")
+        XCTAssertEqual(hooks, .integer(2), "\(hooks)")
+        XCTAssertTrue(bridge.hasURLOpenHooks)
+
+        let untouched = await open("https://a.example/page")
+        XCTAssertEqual(untouched, "https://a.example/page")
+        let rewritten = await open("https://short.example/abc")
+        XCTAssertEqual(rewritten, "https://long.example/abc")
+        let external = await open("https://short.example/xyz", system: true)
+        XCTAssertEqual(external, "https://long.example/xyz", "openUrlInSystemBrowser runs its own hooks")
+        let cancelled = await open("https://music.example/track/1")
+        XCTAssertEqual(cancelled, "<cancelled>")
+        let held = await stack.waitForStored(id, "held")
+        XCTAssertEqual(held, .string("https://music.example/track/1"))
+
+        await stack.remove(id)
+        XCTAssertFalse(bridge.hasURLOpenHooks, "A removed plugin is no longer asked")
+        let after = await open("https://music.example/track/1")
+        XCTAssertEqual(after, "https://music.example/track/1")
+    }
 }

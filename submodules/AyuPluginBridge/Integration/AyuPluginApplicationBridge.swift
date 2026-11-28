@@ -80,8 +80,10 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     @MainActor private var localeIdentifierSource: (() -> String)?
     @MainActor private var presenterSource: (() -> UIViewController?)?
     @MainActor private var urlOpenerSource: ((AyuPluginScreenSnapshot, URL) -> Void)?
+    @MainActor private var screenCloserSource: ((AyuPluginScreenSnapshot, Bool) -> Void)?
     // Read by worker-side preparation; written by bindScreen under `lock`.
     private var urlRouteBound = false
+    private var closeRouteBound = false
     @MainActor private var alertPresenter: ((UIAlertController) -> Void)?
     @MainActor private var dialogs: [String: UIViewController] = [:]
     @MainActor private var bulletins: [String: UIView] = [:]
@@ -120,11 +122,14 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
     /// Explicit app-owned root only. No key-window discovery or private APIs.
     @MainActor public func bindScreen(screen: @escaping () -> AyuPluginScreenSnapshot?, presenter: @escaping () -> UIViewController?, presentAlert: ((UIAlertController) -> Void)? = nil,
                                       openURL: ((AyuPluginScreenSnapshot, URL) -> Void)? = nil,
+                                      closeScreen: ((AyuPluginScreenSnapshot, Bool) -> Void)? = nil,
                                       localeIdentifier: (() -> String)? = nil) {
         self.invalidatePresentations()
         self.screenSource = screen; self.presenterSource = presenter; self.alertPresenter = presentAlert; self.urlOpenerSource = openURL
+        self.screenCloserSource = closeScreen
         self.localeIdentifierSource = localeIdentifier
         self.lock.lock(); self.urlRouteBound = openURL != nil; self.lock.unlock()
+        self.lock.lock(); self.closeRouteBound = closeScreen != nil; self.lock.unlock()
     }
 
     /// Lock/background/account transitions remove only bridge-owned UI. No
@@ -274,6 +279,24 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                       current.accountIndex == screen.accountIndex else { return }
                 self.clipboardWriter(text)
                 self.showBulletin("Copied to clipboard")
+            }
+        })
+    }
+
+    /// `BaseFragment.finishFragment([animated])`: closes the screen the fragment handle stands for
+    /// and answers true, or false for a handle whose screen is no longer the visible one (Android:
+    /// a fragment that already finished). The screen is checked again when the queued effect runs.
+    private func prepareFinishFragment(state: [String: AyuBridgeValue], arguments: [AyuBridgeValue]) throws -> AyuBridgeProviderResult {
+        guard arguments.isEmpty || (arguments.count == 1 && arguments[0].bool != nil) else { throw Self.invalid() }
+        let animated = arguments.first?.bool ?? true
+        self.lock.lock(); let bound = self.closeRouteBound; self.lock.unlock()
+        guard bound else { throw AyuBridgeFailure("screen_unavailable", "The application's close route is not bound") }
+        guard let screen = try? self.screen(state: state) else { return AyuBridgeProviderResult(.value(.bool(false))) }
+        return AyuBridgeProviderResult(.value(.bool(true)), commit: { _ in
+            DispatchQueue.main.async {
+                guard let current = self.screenSource?(), current.identity == screen.identity,
+                      current.accountIndex == screen.accountIndex else { return }
+                self.screenCloserSource?(screen, animated)
             }
         })
     }
@@ -573,6 +596,7 @@ public final class AyuPluginApplicationBridge: AyuPluginHostProvider, AyuPluginS
                 return .value(.integer(id))
             },
             "getParentActivity": { state, args, _ in guard args.isEmpty else { throw Self.invalid() }; return .instance(className: Self.context, state: try self.screen(state: state).state) },
+            "finishFragment": { state, args, _ in .prepared(try self.prepareFinishFragment(state: state, arguments: args)) },
             "getContext": { state, args, _ in guard args.isEmpty else { throw Self.invalid() }; return .instance(className: Self.context, state: try self.screen(state: state).state) }
         ], results: ["getAccountInstance": Self.accountInstance, "getUserConfig": Self.userConfig, "getMessagesController": Self.messagesController, "getParentActivity": Self.context, "getContext": Self.context], validateState: { state in try Self.validateIdentityState(state, identity: "screenIdentity") })
         let contextAdapter = AyuBridgeClassAdapter(name: Self.context, methods: [

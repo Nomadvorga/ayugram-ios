@@ -81,4 +81,71 @@ import UIKit
         XCTAssertEqual(provider.presented.value.count, 3)
         _ = try await self.call(host, "plugin.deactivate")
     }
+
+    /// Android: the dialog is min(356dp, screen - 48dp) wide and the custom view is as tall as its content,
+    /// scrolling once the screen is too short for it.
+    func testTheCustomViewIsMeasuredAndScrollsWhenTheScreenIsShort() async throws {
+        let provider = DialogProvider()
+        let host = AyuPluginNativeHost(defaults: UserDefaults(suiteName: "AyuCustomDialogTests." + UUID().uuidString)!, provider: provider,
+                                       classRegistry: .standard, trustedOwner: { "alpha" }, callback: { _, _, _ in })
+        let authorized = try await self.call(host, "plugin.authorize", ["metadata": .object(["id": .string("alpha")]), "classes": .array([]), "requirements": .array([]), "imports": .array([])])
+        XCTAssertEqual(authorized["result"], .bool(true), "\(authorized)")
+        func invoke(_ target: AyuBridgeValue, _ name: String, _ args: [AyuBridgeValue]) async throws {
+            let answer = try await self.call(host, "java.invoke", ["target": target, "name": .string(name), "args": .array(args)])
+            XCTAssertEqual(answer["error"], .null, "\(name): \(answer)")
+        }
+        func construct(_ name: String, _ args: [AyuBridgeValue] = []) async throws -> AyuBridgeValue {
+            let answer = try await self.call(host, "java.construct", ["class_name": .string(name), "args": .array(args)])
+            XCTAssertEqual(answer["error"], .null, "\(name): \(answer)")
+            return answer["result"]
+        }
+        let column = try await construct("android.widget.LinearLayout")
+        try await invoke(column, "setOrientation", [.integer(1)])
+        try await invoke(column, "setPadding", [.integer(0), .integer(10), .integer(0), .integer(10)])
+        for index in 0..<5 {
+            let box = try await construct("android.view.View")
+            try await invoke(box, "setBackgroundColor", [.integer(index % 2 == 0 ? 0xFF22_9AF0 - 0x1_0000_0000 : 0xFF96_A2AD - 0x1_0000_0000)])
+            try await invoke(column, "addView", [box, try await construct("android.widget.LinearLayout$LayoutParams", [.integer(-1), .integer(60)])])
+        }
+        let presented = try await self.call(host, "ui.present", ["kind": .string("alert"), "config": .object(["title": .string("Board"), "view": column])])
+        XCTAssertEqual(presented["error"], .null, "\(presented)")
+        let dialog = try XCTUnwrap(provider.presented.value.last as? AyuBridgeDialogViewController)
+        dialog.loadViewIfNeeded()
+        let content = try XCTUnwrap(self.views(of: AyuBridgeView.self, in: dialog.view).first)
+        let scroll = try XCTUnwrap(content.superview as? UIScrollView)
+        func layout(_ size: CGSize) {
+            dialog.view.frame = CGRect(origin: .zero, size: size)
+            for _ in 0..<3 { dialog.view.setNeedsLayout(); dialog.view.layoutIfNeeded() }
+        }
+
+        layout(CGSize(width: 500, height: 900))
+        XCTAssertEqual(content.frame, CGRect(x: 0, y: 0, width: 356, height: 320))
+        XCTAssertEqual(scroll.frame.height, 320, accuracy: 0.5)
+        XCTAssertEqual(content.bridgeChildren.first?.frame, CGRect(x: 0, y: 10, width: 356, height: 60))
+
+        // A phone: 390 - 48.
+        layout(CGSize(width: 390, height: 844))
+        XCTAssertEqual(content.frame.width, 342)
+        XCTAssertEqual(scroll.frame.height, 320, accuracy: 0.5)
+        if let directory = ProcessInfo.processInfo.environment["AYU_PLUGIN_TEST_SNAPSHOT_DIR"] {
+            let image = UIGraphicsImageRenderer(bounds: dialog.view.bounds).image { dialog.view.layer.render(in: $0.cgContext) }
+            try? image.pngData()?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("custom-dialog.png"))
+        }
+
+        // Too short for the view: the dialog stays inside the screen and the view scrolls.
+        layout(CGSize(width: 390, height: 300))
+        XCTAssertEqual(content.frame.height, 320)
+        XCTAssertEqual(scroll.contentSize.height, 320)
+        XCTAssertLessThan(scroll.frame.height, 252)
+        XCTAssertGreaterThan(scroll.frame.height, 100)
+
+        // The plugin adds a row while the dialog is open.
+        layout(CGSize(width: 390, height: 844))
+        let late = try await construct("android.view.View")
+        try await invoke(column, "addView", [late, try await construct("android.widget.LinearLayout$LayoutParams", [.integer(-1), .integer(40)])])
+        _ = try await self.call(host, "java.invoke", ["target": column, "name": .string("getChildCount"), "args": .array([])])
+        for _ in 0..<3 { dialog.view.layoutIfNeeded() }
+        XCTAssertEqual(content.frame.height, 360)
+        XCTAssertEqual(scroll.frame.height, 360, accuracy: 0.5)
+    }
 }

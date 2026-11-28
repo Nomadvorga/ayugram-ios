@@ -112,6 +112,21 @@ extension AyuPluginTelegramBridge {
         self.lock.unlock()
     }
 
+    /// `hooks.url_open {priority, callback}`: the generation's one dispatcher for its
+    /// `Browser.openUrl` hooks; a second call replaces the first.
+    func prepareURLOpenHook(owner: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
+        try Self.closed(arguments, required: ["priority", "callback"])
+        let hook = URLHook(priority: Int32(try Self.integer(arguments["priority"], Self.int32Range, "priority")),
+                           callbackID: try Self.callback(arguments["callback"], context: context).id)
+        return AyuBridgeProviderResult(.value(.null), commit: { _ in
+            self.lock.lock()
+            var state = self.owners[owner] ?? Owner()
+            state.urlHook = hook
+            self.owners[owner] = state
+            self.lock.unlock()
+        })
+    }
+
     /// Recomputes the union filter. Returns it only when it changed, with the
     /// backend to tell; the caller holds `lock` and notifies after unlocking.
     func refreshFilterLocked() -> (AyuPluginTelegramHookFilter?, AyuPluginTelegramBackend?) {
@@ -222,6 +237,30 @@ extension AyuPluginTelegramBridge {
             completion(state.map { .send($0.message, remapEntities: $0.remapEntities) } ?? .cancel)
         })
     }
+
+    /// Whether any plugin hooks the URLs the app opens.
+    public var hasURLOpenHooks: Bool {
+        self.lock.lock(); defer { self.lock.unlock() }
+        return self.owners.values.contains { $0.urlHook != nil }
+    }
+
+    /// Before the app opens a URL (`systemBrowser`: outside the app). Each
+    /// hooking plugin is asked once; `completion` gets the URL to open, which a
+    /// plugin may have replaced, or nil when one cancelled the opening.
+    public func interceptOpenURL(_ url: String, systemBrowser: Bool, completion: @escaping @Sendable (String?) -> Void) {
+        let participants = self.participants { $0.urlHook.map { ($0.priority, $0.callbackID) } }
+        self.runChain(participants, state: url, arguments: { current, _ in
+            // A URL too long to show a plugin passes it by unchanged.
+            current.utf8.count <= Self.maximumURLBytes ? [.string(current), .bool(systemBrowser)] : nil
+        }, apply: { current, _, answer in
+            guard let fields = answer.object, Set(fields.keys) == ["url"], let value = fields["url"] else { return .next(current) }
+            if value == .null { return .cancel }
+            guard let next = value.string, !next.isEmpty, next.utf8.count <= Self.maximumURLBytes else { return .next(current) }
+            return .next(next)
+        }, completion: completion)
+    }
+
+    static let maximumURLBytes = 8192
 
     // MARK: Chains
 
@@ -385,6 +424,10 @@ extension AyuPluginTelegramBridge {
         if message.monoForumPeer != 0 { params["monoForumPeer"] = .integer(message.monoForumPeer) }
         if message.quickReplyShortcutID != 0 { params["quick_reply_shortcut_id"] = .integer(Int64(message.quickReplyShortcutID)) }
         if message.payStars != 0 { params["payStars"] = .integer(message.payStars) }
+        // A reply target a plugin of the chain changed is an id without its message: no longer the whole description.
+        if message.isComplete, message.replyTo?.messageID == message.replyToMessageID, message.replyToTop?.messageID == message.replyToTopMessageID {
+            params["complete"] = .bool(true)
+        }
         return params
     }
 

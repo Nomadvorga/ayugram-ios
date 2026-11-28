@@ -204,6 +204,36 @@ class MessageTopicTests(PeerCase):
             with self.assertRaises(TypeError):
                 objects.getTopicId(0)
 
+    def test_sender_of_a_message_follows_where_it_was_saved_from(self):
+        objects = messenger.MessageObject
+        user, channel, chat = (lambda value: peer(R.TL_peerUser, user_id=value)), (lambda value: peer(R.TL_peerChannel, channel_id=value)), (
+            lambda value: peer(R.TL_peerChat, chat_id=value))
+
+        def sender(from_id=None, post=False, origin=..., saved=None, peer_id=None):
+            owner = self.message(channel_id=7) if peer_id is None else self.message(**peer_id)
+            owner.from_id, owner.post = from_id, post
+            if origin is not ...:
+                owner.fwd_from = rights(R.TL_messageFwdHeader, from_id=origin, saved_from_peer=saved)
+            return objects(0, owner).getSenderId()
+        scope = self.load()
+        with bridge.runtime.context(scope):
+            self.assertEqual([sender(user(5)), sender(channel(8)), sender(chat(9)), sender(), sender(post=True)], [5, -8, -9, 0, 7])
+            # A forward that was not saved from anywhere keeps the message's own sender.
+            self.assertEqual(sender(user(5), origin=user(6)), 5)
+            # Saved from a private chat: the original author when it is a user, else that chat.
+            self.assertEqual([sender(user(5), origin=user(6), saved=user(11)), sender(user(5), origin=channel(8), saved=user(11)),
+                              sender(user(5), origin=None, saved=user(11))], [6, 11, 11])
+            # Saved from a basic group.
+            self.assertEqual([sender(origin=user(6), saved=chat(12)), sender(origin=channel(8), saved=chat(12)),
+                              sender(origin=chat(9), saved=chat(12)), sender(origin=None, saved=chat(12))], [6, -8, -9, -12])
+            # Saved from a channel: the author counts only in a megagroup, which the controller's cache decides.
+            self.assertEqual([sender(origin=user(6), saved=channel(13)), sender(origin=channel(8), saved=channel(13)),
+                              sender(origin=chat(9), saved=channel(13)), sender(origin=None, saved=channel(13))], [-13, -8, -9, -13])
+            self.peers[("chat", 13)] = rights(R.TL_channel, id=13, megagroup=True)
+            self.assertEqual([sender(origin=user(6), saved=channel(13)), sender(origin=channel(8), saved=channel(13))], [6, -8])
+            self.assertEqual((objects(0, self.message(channel_id=7)).isSavedFromMegagroup(), sender(user(5), origin=user(6), saved=user(0))),
+                             (False, 0))
+
     def test_instance_topic_reads_the_dialogs_chat_and_fields(self):
         objects = messenger.MessageObject
         scope = self.load()

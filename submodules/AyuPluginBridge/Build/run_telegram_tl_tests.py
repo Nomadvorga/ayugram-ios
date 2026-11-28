@@ -232,6 +232,27 @@ def expectations(R):
             "can_set_username": True, "can_set_stickers": True, "hidden_prehistory": True, "has_scheduled": True,
             "can_view_stats": True, "participants_hidden": True, "translations_disabled": True, "antispam": True,
         }),
+        "dialog.min": (R.Dialog, {
+            "_": "TL_dialog", "flags": 0, "peer._": "TL_peerUser", "peer.user_id": 130, "pinned": False,
+            "unread_mark": False, "top_message": 0, "read_inbox_max_id": 0, "read_outbox_max_id": 0, "unread_count": 0,
+            "unread_mentions_count": 0, "unread_reactions_count": 0, "unread_poll_votes_count": 0, "folder_id": 0,
+            "pts": 0, "draft": None, "notify_settings._": "TL_peerNotifySettings", "notify_settings.flags": 0,
+        }),
+        "dialog.full": (R.Dialog, {
+            "_": "TL_dialog", "peer._": "TL_peerChannel", "peer.channel_id": 131, "pinned": True, "unread_mark": True,
+            "view_forum_as_messages": False, "top_message": 132, "read_inbox_max_id": 133, "read_outbox_max_id": 134,
+            "unread_count": 135, "unread_mentions_count": 136, "unread_reactions_count": 137,
+            "unread_poll_votes_count": 138, "notify_settings.show_previews": True,
+            "notify_settings.mute_until": 2 ** 31 - 1, "pts": 139, "folder_id": 1, "draft": None, "ttl_period": 0,
+        }),
+        "dialog.group": (R.Dialog, {"_": "TL_dialog", "flags": 16, "peer._": "TL_peerChat", "peer.chat_id": 140,
+                                    "folder_id": 1, "pinned": False}),
+        "dialog.folder": (R.Dialog, {
+            "_": "TL_dialogFolder", "pinned": True, "folder._": "TL_folder", "folder.id": 1,
+            "folder.title": "Archived Chats", "folder.photo": None, "peer._": "TL_peerChat", "peer.chat_id": 141,
+            "top_message": 142, "unread_muted_peers_count": 143, "unread_unmuted_peers_count": 144,
+            "unread_muted_messages_count": 145, "unread_unmuted_messages_count": 146,
+        }),
         "forward": (R.MessageFwdHeader, {
             "from_id._": "TL_peerChannel", "from_id.channel_id": 60, "from_name": "Hidden", "date": 300,
             "channel_post": 61, "post_author": "Author", "saved_from_peer._": "TL_peerUser",

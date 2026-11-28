@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import _ayu_intents
+import _ayu_operations
 import _ayu_xposed
 
 
@@ -39,7 +40,15 @@ ANDROID_ABSENT = frozenset({"ui.dialogs", "client_utils.get_current_fragment", "
 # that absorbs it, a blanket one included, runs the same fallback on both platforms.
 ANDROID_ABSENT_MEMBERS = frozenset("org.telegram.ui.ActionBar.Theme." + key for key in (
     "key_dialogTextRed", "key_dialogButtonRed", "key_dialogTextBlue3", "key_listSelectorSDK21", "key_chat_attachAudioText",
-    "key_chat_attachFileText", "key_chat_attachLocationText", "key_chat_attachPollText"))
+    "key_chat_attachFileText", "key_chat_attachLocationText", "key_chat_attachPollText")) | frozenset(
+    # Names their Android class does not have (checked against the exteraGram sources, superclasses included).
+    "org.telegram." + name for name in (
+        "messenger.MessagesController.callCallbackQuery", "messenger.MessagesController.editMessageReplyMarkup",
+        "messenger.MessagesController.getChannel", "messenger.MessagesController.getChatByUsername",
+        "messenger.AndroidUtilities.showToast", "messenger.UserObject.isUserOnline",
+        "messenger.SendMessagesHelper.forwardMessages", "ui.ActionBar.Theme.getTypeface",
+        "tgnet.TLRPC.TL_inputReplyToForumTopic", "tgnet.TLRPC.TL_initConnection", "tgnet.TLRPC.TL_invokeWithLayer")) | frozenset(
+    {"com.exteragram.messenger.plugins.PluginsController.isPluginEnabled"})
 
 
 def _bounded_nodes(tree):
@@ -576,7 +585,7 @@ def import_inventory(tree, sdk_modules):
     # methods without defining them (plugin and client methods are reached through any receiver).
     references = {module + "." + symbol for module, symbols in imports.items() if owned(module)
                   for symbol in symbols if symbol != "*"}
-    called, defined = set(), set()
+    called, defined, fields = set(), set(), set()
     packages.update(module for module in imports if module.startswith(NATIVE_PREFIXES) and not owned(module))
     package_parents = {".".join(name.split(".")[:index]) for name in packages
                        for index in range(1, name.count(".") + 2)}
@@ -610,7 +619,9 @@ def import_inventory(tree, sdk_modules):
             called.add(node.func.attr)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             defined.add(node.name)
-    return {"sdk_references": sorted(references), "method_calls": sorted(called - defined),
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load) and node.attr in _ayu_operations.FIELDS:
+            fields.add(node.attr)
+    return {"sdk_references": sorted(references), "method_calls": sorted(called - defined), "field_reads": sorted(fields),
             "send_hook_fields": send_hook_fields(tree), "send_hook_resend": send_hook_resend(tree),
             "hook_targets": _ayu_xposed.static_targets(tree), "intent_actions": _ayu_intents.static_actions(tree),
             "window_services": _window_services(tree),

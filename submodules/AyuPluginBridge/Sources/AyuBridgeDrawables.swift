@@ -10,6 +10,9 @@ enum AyuBridgeDrawables {
     static let orientationName = "android.graphics.drawable.GradientDrawable$Orientation"
     static let shapeName = "android.graphics.drawable.ShapeDrawable"
     static let rippleName = "android.graphics.drawable.RippleDrawable"
+    static let stateListName = "android.graphics.drawable.StateListDrawable"
+    static let colorName = "android.graphics.drawable.ColorDrawable"
+    static let maximumStates = 16
     static let orientations = ["TOP_BOTTOM", "TR_BL", "RIGHT_LEFT", "BR_TL", "BOTTOM_TOP", "BL_TR", "LEFT_RIGHT", "TL_BR"]
     private static let baseKeys: Set<String> = ["color", "shape", "corner_radius", "stroke_width", "stroke_color"]
     private static let gradientKeys: Set<String> = ["colors", "gradient_type", "orientation", "corner_radii", "gradient_radius", "center_x", "center_y", "alpha"]
@@ -25,8 +28,46 @@ enum AyuBridgeDrawables {
             style["ripple_color"] = state["ripple_color"]
             style["ripple_mask"] = state["mask"]
             return style
+        case stateListName: return ["state_list": state["states"] ?? .array([])]
         default: return nil
         }
+    }
+
+    /// One `StateListDrawable.addState` entry: the state spec and the drawable as it is when added.
+    /// (Android keeps the drawable itself; a change made to it after `addState` is not followed here.)
+    static func stateListEntry(spec: [AyuBridgeValue], drawable: AyuBridgeAdapterSnapshot) throws -> AyuBridgeValue {
+        let states = try spec.map { value -> AyuBridgeValue in
+            guard let state = value.integer, Int32(exactly: state) != nil else { throw AyuBridgeFailure("invalid_arguments", "A state set holds ints") }
+            return .integer(state)
+        }
+        if drawable.className == Self.colorName, let color = drawable.state["color"]?.integer {
+            return .object(["spec": .array(states), "color": .integer(color)])
+        }
+        guard drawable.className != Self.stateListName, let style = Self.backgroundStyle(className: drawable.className, state: drawable.state) else {
+            throw AyuBridgeFailure.unsupported("StateListDrawable.addState drawable")
+        }
+        return .object(["spec": .array(states), "style": .object(style)])
+    }
+
+    static func validateStateList(_ state: [String: AyuBridgeValue]) throws {
+        guard Set(state.keys) == ["states"], let entries = state["states"]?.array, entries.count <= Self.maximumStates else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid StateListDrawable state")
+        }
+        for entry in entries {
+            guard let fields = entry.object, let spec = fields["spec"]?.array, spec.allSatisfy({ $0.integer != nil }),
+                  (fields["color"]?.integer != nil) != (fields["style"]?.object != nil), fields.count == 2 else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid StateListDrawable state")
+            }
+        }
+    }
+
+    /// `StateSet.stateSetMatches`: every positive state of the spec is set, every negated one is not; 0 ends the spec.
+    static func stateSpec(_ spec: [Int64], matches states: Set<Int64>) -> Bool {
+        for value in spec {
+            if value == 0 { break }
+            if value > 0 ? !states.contains(value) : states.contains(-value) { return false }
+        }
+        return true
     }
 
     static func color(_ value: AyuBridgeValue, _ what: String) throws -> Int64 {
@@ -231,7 +272,31 @@ enum AyuBridgeDrawables {
 
 extension AyuBridgeJavaRuntime {
     /// Adapters of classes this file family adds to the standard registry.
-    static var memberAdapters: [AyuBridgeClassAdapter] { [gradientOrientation, shapeDrawable, rippleDrawable] }
+    static var memberAdapters: [AyuBridgeClassAdapter] { [gradientOrientation, shapeDrawable, rippleDrawable, stateListDrawable] }
+
+    static var stateListDrawable: AyuBridgeClassAdapter {
+        AyuBridgeClassAdapter(name: "android.graphics.drawable.StateListDrawable",
+            constructor: { args, _ in
+                guard args.isEmpty else { throw AyuBridgeFailure.unsupported("StateListDrawable constructor overload") }
+                return ["states": .array([])]
+            },
+            methods: [
+                "addState": { state, args, context in
+                    guard args.count == 2 else { throw AyuBridgeFailure("invalid_arguments", "addState takes a state set and a drawable") }
+                    guard let spec = try AyuBridgeDrawables.list(args[0], context: context) else {
+                        throw AyuBridgeFailure("invalid_arguments", "addState needs a state set")
+                    }
+                    // Android ignores a null drawable.
+                    if args[1] == .null { return .value(.null) }
+                    var entries = state["states"]?.array ?? []
+                    guard entries.count < AyuBridgeDrawables.maximumStates else { throw AyuBridgeFailure("resource_limit", "Too many states") }
+                    entries.append(try AyuBridgeDrawables.stateListEntry(spec: spec, drawable: try context.snapshot(of: args[1])))
+                    state["states"] = .array(entries)
+                    return .value(.null)
+                },
+            ],
+            validateState: { try AyuBridgeDrawables.validateStateList($0) })
+    }
 
     private static func gradientUpdate(_ count: Int, _ body: @escaping @Sendable (inout [String: AyuBridgeValue], [AyuBridgeValue], AyuBridgeAdapterContext) throws -> Void) -> AyuBridgeClassAdapter.InstanceMethod {
         { state, args, context in

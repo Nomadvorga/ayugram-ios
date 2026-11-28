@@ -101,6 +101,22 @@ enum AyuBridgeLayoutParams {
         return result & ~self.relativeFlag
     }
 
+    /// `generateDefaultLayoutParams` of the parent, for a child added without LayoutParams.
+    static func defaults(parentClassName: String, vertical: Bool) -> Request {
+        func fields(_ width: Double, _ height: Double) -> [String: AyuBridgeValue] { ["width": .number(width), "height": .number(height)] }
+        switch parentClassName {
+        case "android.widget.LinearLayout":
+            var result = fields(vertical ? -1 : -2, -2)
+            result["weight"] = .number(0)
+            return Request(className: self.linearClassName, fields: result)
+        case AyuBridgeGridLayout.className:
+            return Request(className: AyuBridgeGridLayout.paramsClassName, fields: fields(-2, -2))
+        default:
+            // FrameLayout, and the scroll views that extend it.
+            return Request(className: self.frameClassName, fields: fields(-1, -1))
+        }
+    }
+
     static func childGravity(_ parameters: [String: AyuBridgeValue]) -> Int64? { parameters["gravity"]?.integer }
 
     /// A field as Java reads it: the margins are one stored array, an unset gravity is -1.

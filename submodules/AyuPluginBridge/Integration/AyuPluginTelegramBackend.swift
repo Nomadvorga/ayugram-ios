@@ -217,6 +217,10 @@ public struct AyuPluginTelegramHookedMessage: Sendable, Equatable {
     public var monoForumPeer: Int64 = 0
     public var quickReplyShortcutID: Int32 = 0
     public var payStars: Int64 = 0
+    /// True when these fields are all there is to the message: no attachment, quote, preview option
+    /// or other part the struct cannot carry. A plugin may then send its hook's object again as a
+    /// new message (Android's cancel, change, `sendMessage(params)`); otherwise the SDK refuses that.
+    public var isComplete = false
     public init(peer: Int64) { self.peer = peer }
 }
 
@@ -266,6 +270,10 @@ public protocol AyuPluginTelegramBackend: AnyObject, Sendable {
     /// One entry per id, in order: the boxed `Message` rebuilt from the local store, or nil.
     func messages(account: AyuPluginTelegramAccount, dialogID: Int64, ids: [Int32],
                   completion: @escaping @Sendable (Result<[Data?], AyuPluginTelegramBackendError>) -> Void)
+    /// The account's chat list for `telegram.dialogs`: at most
+    /// `AyuPluginTelegramBridge.dialogListLimit` entries; the default refuses.
+    func dialogs(account: AyuPluginTelegramAccount,
+                 completion: @escaping @Sendable (Result<[AyuPluginTelegramDialogEntry], AyuPluginTelegramBackendError>) -> Void)
     /// Completes once navigation is queued on main.
     func navigate(account: AyuPluginTelegramAccount, target: AyuPluginTelegramNavigationTarget,
                   completion: @escaping @Sendable (Result<Void, AyuPluginTelegramBackendError>) -> Void)
@@ -280,14 +288,40 @@ public protocol AyuPluginTelegramBackend: AnyObject, Sendable {
     func player(action: AyuPluginTelegramPlayerAction,
                 completion: @escaping @Sendable (Result<AyuPluginTelegramPlayerState, AyuPluginTelegramBackendError>) -> Void)
     /// A `telegram.action.*` operation the backend lists (`AyuPluginTelegramActions.swift`).
-    /// Completes once the change is applied locally or queued; the default refuses.
+    /// Completes once the change is applied locally or queued, with nil or, for
+    /// `addDialogsToFolder`, the action's result; the default refuses.
     func perform(account: AyuPluginTelegramAccount, action: AyuPluginTelegramAction,
-                 completion: @escaping @Sendable (Result<Void, AyuPluginTelegramBackendError>) -> Void)
+                 completion: @escaping @Sendable (Result<Int32?, AyuPluginTelegramBackendError>) -> Void)
+}
+
+/// One row of the chat list with what Android keeps beside the TL object.
+public struct AyuPluginTelegramDialogEntry: Sendable, Equatable {
+    /// A boxed `Dialog`: `dialog`, or `dialogFolder` for the archive's row in the main list.
+    public let dialog: Data
+    /// Date of the dialog's newest message, 0 when it has none (Android's `last_message_date`).
+    public let lastMessageDate: Int32
+    /// Android's `pinnedNum`: 0 for an unpinned dialog, otherwise larger for a higher row.
+    public let pinnedNumber: Int32
+
+    public init(dialog: Data, lastMessageDate: Int32, pinnedNumber: Int32) {
+        self.dialog = dialog
+        self.lastMessageDate = lastMessageDate
+        self.pinnedNumber = pinnedNumber
+    }
+}
+
+public extension AyuPluginTelegramBackend {
+    func dialogs(account: AyuPluginTelegramAccount,
+                 completion: @escaping @Sendable (Result<[AyuPluginTelegramDialogEntry], AyuPluginTelegramBackendError>) -> Void) {
+        completion(.failure(.unsupported("telegram.dialogs")))
+    }
 }
 
 /// `{"tl": "<base64>"}` values and the few TL primitives the bridge reads itself.
 enum AyuPluginTelegramTL {
     static let errorConstructor: UInt32 = 0xc4b9f9bb
+    /// `dialog` and `dialogFolder` of the layer in `protocol-telegram.md`.
+    static let dialogConstructors: Set<UInt32> = [0xfc89f7f3, 0x71bd134c]
 
     static func encode(_ data: Data) -> AyuBridgeValue { .object(["tl": .string(data.base64EncodedString())]) }
 

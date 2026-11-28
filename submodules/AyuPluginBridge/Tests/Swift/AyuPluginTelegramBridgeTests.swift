@@ -27,6 +27,7 @@ private final class FakeTelegramBackend: AyuPluginTelegramBackend, @unchecked Se
         var connection = AyuPluginTelegramConnectionState(timeMilliseconds: 1_700_000_123_456, timeDifference: -2, status: .connected, datacenterID: 2)
         var peer: Data?
         var messages: [Data?] = []
+        var dialogs: [AyuPluginTelegramDialogEntry] = []
         var path = "/var/mobile/cache/file"
         var player = AyuPluginTelegramPlayerState(accountIndex: 0, paused: true)
         var outgoing: [AyuPluginTelegramOutgoingMessage] = []
@@ -80,6 +81,10 @@ private final class FakeTelegramBackend: AyuPluginTelegramBackend, @unchecked Se
     func messages(account: AyuPluginTelegramAccount, dialogID: Int64, ids: [Int32],
                   completion: @escaping @Sendable (Result<[Data?], AyuPluginTelegramBackendError>) -> Void) {
         self.answer(self.state.value.messages, completion)
+    }
+    func dialogs(account: AyuPluginTelegramAccount,
+                 completion: @escaping @Sendable (Result<[AyuPluginTelegramDialogEntry], AyuPluginTelegramBackendError>) -> Void) {
+        self.answer(self.state.value.dialogs, completion)
     }
     func navigate(account: AyuPluginTelegramAccount, target: AyuPluginTelegramNavigationTarget,
                   completion: @escaping @Sendable (Result<Void, AyuPluginTelegramBackendError>) -> Void) {
@@ -624,6 +629,54 @@ final class AyuPluginTelegramBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.hasSendMessageHooks)
     }
 
+    func testURLOpenHooksRewriteAndCancelInPriorityOrder() throws {
+        let backend = FakeTelegramBackend()
+        let bridge = self.makeBridge(backend)
+        func open(_ answers: [String: AyuBridgeValue?], _ url: String = "https://a.example/", system: Bool = false) throws -> (String?, [(String, [AyuBridgeValue])]) {
+            let asked = self.script(bridge, answers)
+            let opened: String? = try self.await { bridge.interceptOpenURL(url, systemBrowser: system, completion: $0) }
+            return (opened, asked.value)
+        }
+        func answer(_ url: AyuBridgeValue) -> AyuBridgeValue { .object(["url": url]) }
+        XCTAssertFalse(bridge.hasURLOpenHooks)
+        var result = try open([:])
+        XCTAssertEqual(result.0, "https://a.example/")
+        XCTAssertTrue(result.1.isEmpty, "Nobody hooks: nobody is asked")
+
+        func register(_ owner: String, _ priority: Int64, _ id: String) throws {
+            _ = try self.call(bridge, "hooks.url_open", ["priority": .integer(priority), "callback": callback(id)], owner: owner)
+        }
+        try register("low", 10, "low:url")
+        try register("high", 90, "high:old")
+        try register("high", 90, "high:url")
+        XCTAssertTrue(bridge.hasURLOpenHooks)
+        XCTAssertEqual(self.code(try self.call(bridge, "hooks.url_open", ["callback": callback("x")])), "INVALID_ARGUMENTS")
+
+        result = try open(["high": answer(.string("https://b.example/")), "low": answer(.string("https://b.example/"))], system: true)
+        XCTAssertEqual(result.0, "https://b.example/")
+        XCTAssertEqual(result.1.map { $0.0 }, ["high:url", "low:url"], "Descending priority; the second registration replaced the first")
+        XCTAssertEqual(result.1[0].1, [.string("https://a.example/"), .bool(true)])
+        XCTAssertEqual(result.1[1].1, [.string("https://b.example/"), .bool(true)], "The next plugin sees the rewritten URL")
+
+        result = try open(["high": answer(.null), "low": answer(.string("https://c.example/"))])
+        XCTAssertNil(result.0, "A cancellation ends the chain")
+        XCTAssertEqual(result.1.map { $0.0 }, ["high:url"])
+
+        // A missing answer (timeout), an answer of the wrong shape and an empty URL change nothing.
+        result = try open(["low": .object(["url": .string("https://c.example/"), "extra": .bool(true)])])
+        XCTAssertEqual(result.0, "https://a.example/")
+        result = try open(["high": answer(.string("")), "low": answer(.integer(1))])
+        XCTAssertEqual(result.0, "https://a.example/")
+
+        let long = "https://a.example/" + String(repeating: "x", count: AyuPluginTelegramBridge.maximumURLBytes)
+        result = try open(["high": answer(.null), "low": answer(.null)], long)
+        XCTAssertEqual(result.0, long)
+        XCTAssertTrue(result.1.isEmpty, "A URL too long to show a plugin passes it by")
+
+        backend.state.update { $0.operations.remove("hooks.url_open") }
+        XCTAssertEqual(self.code(try self.call(bridge, "hooks.url_open", ["priority": .integer(1), "callback": callback("x")])), "UNSUPPORTED_API")
+    }
+
     func testTypedAndThreeFieldSendHooksShareOneOrderedChain() throws {
         let backend = FakeTelegramBackend()
         let bridge = self.makeBridge(backend)
@@ -786,6 +839,44 @@ final class AyuPluginTelegramBridgeTests: XCTestCase {
         XCTAssertEqual(self.code(try edit(["text": .string("x")])), "INVALID_ARGUMENTS")
     }
 
+    func testDialogsAreListedWithTheirLocalFields() throws {
+        let backend = FakeTelegramBackend()
+        let bridge = self.makeBridge(backend) { $0.outboundTLBytes = 64 }
+        func dialogs(_ extra: [String: AyuBridgeValue] = [:]) throws -> AyuBridgeValue {
+            try self.call(bridge, "telegram.dialogs", ["account": AyuBridgeValue.integer(0)].merging(extra) { $1 })
+        }
+        XCTAssertEqual(try dialogs(), .array([]))
+        let dialog = tl(0xfc89f7f3, words: 12), folder = tl(0x71bd134c, words: 10)
+        backend.state.update {
+            $0.dialogs = [AyuPluginTelegramDialogEntry(dialog: folder, lastMessageDate: 0, pinnedNumber: 3),
+                          AyuPluginTelegramDialogEntry(dialog: dialog, lastMessageDate: 1_700_000_000, pinnedNumber: 0)]
+        }
+        XCTAssertEqual(try dialogs(), .array([
+            .object(["dialog": wire(folder), "last_message_date": .integer(0), "pinned_num": .integer(3)]),
+            .object(["dialog": wire(dialog), "last_message_date": .integer(1_700_000_000), "pinned_num": .integer(0)]),
+        ]))
+        XCTAssertEqual(self.code(try dialogs(["folder_id": .integer(0)])), "INVALID_ARGUMENTS")
+        XCTAssertEqual(self.code(try self.call(bridge, "telegram.dialogs", ["account": .integer(1)])), "ACCOUNT_UNAVAILABLE")
+        // What is not a dialog of this layer, or carries an impossible local field, is not passed on.
+        let invalid = [AyuPluginTelegramDialogEntry(dialog: tl(0x31774388, words: 3), lastMessageDate: 1, pinnedNumber: 0),
+                       AyuPluginTelegramDialogEntry(dialog: Data([0xf3, 0xf7, 0x89, 0xfc, 1]), lastMessageDate: 1, pinnedNumber: 0),
+                       AyuPluginTelegramDialogEntry(dialog: dialog, lastMessageDate: -1, pinnedNumber: 0),
+                       AyuPluginTelegramDialogEntry(dialog: dialog, lastMessageDate: 1, pinnedNumber: -1)]
+        for entry in invalid {
+            backend.state.update { $0.dialogs = [entry] }
+            XCTAssertEqual(self.code(try dialogs()), "INVALID_STATE")
+        }
+        backend.state.update { $0.dialogs = [AyuPluginTelegramDialogEntry(dialog: tl(0xfc89f7f3, words: 16), lastMessageDate: 1, pinnedNumber: 0)] }
+        XCTAssertEqual(self.code(try dialogs()), "RESOURCE_LIMIT")
+        let one = AyuPluginTelegramDialogEntry(dialog: dialog, lastMessageDate: 1, pinnedNumber: 0)
+        backend.state.update { $0.dialogs = Array(repeating: one, count: AyuPluginTelegramBridge.dialogListLimit) }
+        XCTAssertEqual(try dialogs().array?.count, 2000)
+        backend.state.update { $0.dialogs.append(one) }
+        XCTAssertEqual(self.code(try dialogs()), "INVALID_STATE")
+        backend.state.update { $0.dialogs = []; $0.failure = .unsupported("telegram.dialogs") }
+        XCTAssertEqual(self.code(try dialogs()), "UNSUPPORTED_API")
+    }
+
     func testPeerMessagesFilesAndPlayer() throws {
         let backend = FakeTelegramBackend()
         let bridge = self.makeBridge(backend) { $0.outboundTLBytes = 64 }
@@ -917,7 +1008,7 @@ final class AyuPluginTelegramBridgeTests: XCTestCase {
         let host = AyuPluginNativeHost(defaults: UserDefaults(suiteName: "AyuPluginTelegramHostTests." + UUID().uuidString)!, provider: provider,
                                        limits: limits, trustedOwner: { "alpha" }, callback: { _, id, arguments in delivered.update { $0.append((id, arguments)) } })
         func operations() async throws -> [String] {
-            try await self.call(host, "runtime.capabilities")["result"]["operations"].array?.compactMap(\.string).filter { $0.hasPrefix("telegram.") } ?? []
+            try await self.call(host, "runtime.capabilities")["result"]["operations"].array?.compactMap(\.string).filter { $0.hasPrefix("telegram.") || $0 == "hooks.url_open" } ?? []
         }
         let authorized = try await self.call(host, "plugin.authorize")
         XCTAssertEqual(authorized["result"], .bool(true))
@@ -939,6 +1030,10 @@ final class AyuPluginTelegramBridgeTests: XCTestCase {
         XCTAssertEqual(unknownAccount["error"]["code"], .string("ACCOUNT_UNAVAILABLE"))
         let screen = try await self.call(host, "telegram.screen")
         XCTAssertEqual(screen["result"], .object(["kind": .string("chat"), "account": .integer(0), "dialog_id": .integer(42)]))
+        XCTAssertFalse(bridge.hasURLOpenHooks)
+        let routed = try await self.call(host, "hooks.url_open", ["priority": .integer(50), "callback": callback("g:url")])
+        XCTAssertEqual(routed["result"], .null, "\(routed)")
+        XCTAssertTrue(bridge.hasURLOpenHooks, "The host and the composite provider route the operation to the Telegram bridge")
         let undeclared = try await self.call(host, "telegram.stickers")
         XCTAssertEqual(undeclared["error"]["code"], .string("UNSUPPORTED_API"))
 

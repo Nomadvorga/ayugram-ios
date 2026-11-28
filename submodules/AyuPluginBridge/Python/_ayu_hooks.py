@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 
+import _ayu_mvel
 import _ayu_operations
 import _ayu_threads
 from ayu_bridge import BridgeError, ProtocolError, Registration, UnsupportedAPI, runtime
@@ -282,6 +283,19 @@ def _menu_context(wire):
     return context
 
 
+def _mvel_condition(compiled, text):
+    logged = []
+
+    def condition(context):
+        shown, known = _ayu_mvel.evaluate(compiled, context)
+        if not known and not logged:
+            # Once per item: Android may show it where a model of the SDK could not answer.
+            logged.append(True)
+            _log(f"Menu item {text!r} is hidden where its condition reads something the SDK does not model")
+        return shown
+    return condition
+
+
 def add_menu_item(plugin, item):
     """``PluginsController.addMenuItem``: returns the item id, replacing this plugin's item of that id."""
     from client_utils import account_scope
@@ -289,10 +303,16 @@ def add_menu_item(plugin, item):
     menu_type = str(getattr(item.menu_type, "value", item.menu_type)).lower()
     if menu_type not in MENU_TYPES:
         raise UnsupportedAPI(f"Unknown menu type: {menu_type}")
-    if isinstance(item.condition, str):
-        raise UnsupportedAPI("MVEL menu conditions are not evaluated; pass a Python callable")
-    if item.condition is not None and not callable(item.condition):
-        raise TypeError("condition must be callable")
+    condition = item.condition
+    if isinstance(condition, str):
+        # Android's form: an MVEL expression over the context map (``MenuItemRecord.checkCondition``).
+        try:
+            compiled = _ayu_mvel.compile(condition)
+        except _ayu_mvel.Unsupported as error:
+            raise UnsupportedAPI(f"This MVEL menu condition is not evaluated ({error}); pass a Python callable") from None
+        condition = None if compiled is None else _mvel_condition(compiled, item.text)
+    if condition is not None and not callable(condition):
+        raise TypeError("condition must be a string or callable")
     if item.icon is not None and not isinstance(item.icon, str):
         raise TypeError("icon must be a drawable name")
     if item.subtext is not None and not isinstance(item.subtext, str):
@@ -320,8 +340,7 @@ def add_menu_item(plugin, item):
         config["subtext"] = item.subtext
     if item.on_long_click is not None:
         config["on_long_click"] = bound(item.on_long_click)
-    if item.condition is not None:
-        condition = item.condition
+    if condition is not None:
         config["condition"] = bound(lambda context: bool(condition(context)), False)
     previous = state.menus.pop(item_id, None)
     if previous is not None:

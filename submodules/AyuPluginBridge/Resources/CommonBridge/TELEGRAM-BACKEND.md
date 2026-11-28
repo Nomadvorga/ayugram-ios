@@ -10,13 +10,14 @@ operation only while `AyuPluginTelegramAdapter` lists it.
 | `telegram.request`, `telegram.request.cancel`, `telegram.connection` | served |
 | `telegram.send_message`, `telegram.edit_message` | served; keys the send queue cannot honour are refused by name |
 | `telegram.peer`, `telegram.messages` | served from the local store (lossy, see *What the rebuilt TL lacks*) |
+| `telegram.dialogs` | served from the local chat list (see below); type-checked only |
 | `telegram.files.path`, `telegram.files.load` | served for `Message`, `Document`, `Photo`; `PhotoSize`/`VideoSize` are `UNSUPPORTED_API` |
 | `telegram.screen` | served from the binding's screen snapshot |
 | `telegram.hooks.send_message` | served for messages sent from the chat screen |
 | `telegram.navigation.open` | served through a closure the application binding injects |
 | `telegram.hooks.set` | served: main-session requests and responses, pushed containers, their updates, difference `other_updates` (see *Request and update hooks*); type-checked only |
 | `telegram.player` | served through a closure the application binding injects over the shared media player; type-checked only |
-| `telegram.action.delete_messages`, `.read_dialog`, `.process_updates`, `.store_peers`, `.load_full_peer` | served through the engine call of the same user action (`TelegramCore/Sources/AyuPlugins/AyuPluginActions.swift`); type-checked only |
+| `telegram.action.delete_messages`, `.read_dialog`, `.read_all_dialogs`, `.process_updates`, `.store_peers`, `.load_full_peer`, `.add_dialogs_to_folder` | served through the engine call of the same user action (`TelegramCore/Sources/AyuPlugins/AyuPluginActions.swift`); type-checked only |
 
 ## Layers
 
@@ -98,6 +99,17 @@ attachment are refused by name.
 id, names the channel with that id if it is cached, else the basic group. A service message is `null` in the
 result of `telegram.messages` (`messageService` and its actions are not rebuilt); it is never returned as a wrong
 object.
+
+**`telegram.dialogs`.** One Postbox transaction, no request (`ayuPluginDialogsTL`): the top 2,000 entries of the
+main list and of the archive, cut to the 2,000 pinned and most recent dialogs. A `dialog` carries the peer, the
+pinned and marked-unread bits, the newest cloud message id, the cloud read state (read maxima, unread count), the
+unseen mention, reaction and poll-vote counts, the notify settings (`mute_until`, `show_previews`), a channel's
+`pts` and `folder_id` 1 in the archive. Not rebuilt: `draft`, `ttl_period`, `view_forum_as_messages`; a forum's
+`unread_count` is what the store keeps for the channel itself, not the sum of its topics. The archive's
+`dialogFolder` has the fixed title "Archived Chats" (Android's is localized), the peer and top message of its
+newest dialog, and unread counters summed over the listed archived dialogs, where a dialog with default
+notification settings counts as unmuted. A promoted chat that is not in the chat list is not listed (Android puts
+it first). Secret chats are left out.
 
 **`telegram.player`.** `AyuPluginApplicationBinding.installPluginPlayer` reads
 `mediaManager.globalMediaPlayerState` (voice messages and music) on main, issues `playlistControl` (`stop` clears

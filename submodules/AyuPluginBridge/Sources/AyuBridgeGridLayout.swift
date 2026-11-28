@@ -6,6 +6,38 @@ import CoreGraphics
 enum AyuBridgeGridLayout {
     enum AlignmentMode: Int { case bounds = 0, margins = 1 }
 
+    static let className = "android.widget.GridLayout"
+    static let paramsClassName = "android.widget.GridLayout$LayoutParams"
+    static let specClassName = "android.widget.GridLayout$Spec"
+    /// `GridLayout.UNDEFINED`, also what `getRowCount`/`getColumnCount` answer before a count is set.
+    static let undefined = Int64(Int32.min)
+    /// `GridLayout.LayoutParams` has no gravity field (`setGravity` is not modelled).
+    static let paramsFields: Set<String> = ["width", "height", "leftMargin", "topMargin", "rightMargin", "bottomMargin"]
+    static let maximumCount: Int64 = 64
+
+    /// `GridLayout.spec(int)`: one cell at `start`. The overloads with a size, an alignment or a weight are not modelled.
+    static func specIndex(_ args: [AyuBridgeValue]) throws -> Int64 {
+        guard args.count == 1 else { throw AyuBridgeFailure.unsupported("GridLayout.spec with a size, alignment or weight") }
+        guard let index = args[0].integer, index == self.undefined || (0..<self.maximumCount).contains(index) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid GridLayout cell index")
+        }
+        return index
+    }
+
+    /// `setRowCount`/`setColumnCount` argument: `UNDEFINED` or a count the 64-child limit can fill.
+    static func count(_ value: AyuBridgeValue?) throws -> Int64 {
+        guard let count = value?.integer, count == self.undefined || (1...self.maximumCount).contains(count) else {
+            throw AyuBridgeFailure("invalid_arguments", "Invalid GridLayout row or column count")
+        }
+        return count
+    }
+
+    /// A stored cell index or count; nil for `UNDEFINED` and for a missing value.
+    static func defined(_ value: AyuBridgeValue?) -> Int? {
+        guard let value = value?.integer, value != self.undefined else { return nil }
+        return Int(value)
+    }
+
     struct Child: Equatable {
         var row: Int?
         var column: Int?

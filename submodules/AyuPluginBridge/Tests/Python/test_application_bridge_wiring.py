@@ -89,6 +89,27 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         self.assertIn('context.schedule(callback, delayMilliseconds: delay)', app)
         self.assertIn('"cancelRunOnUIThread"', (BRIDGE / "Tests/Swift/AyuPluginApplicationBridgeTests.swift").read_text())
 
+    def test_finish_fragment_pops_the_visible_screen_through_the_apps_close_route(self):
+        app = (BRIDGE / "Integration/AyuPluginApplicationBridge.swift").read_text()
+        self.assertIn('"finishFragment": { state, args, _ in .prepared(try self.prepareFinishFragment(state: state, arguments: args)) }', app)
+        finish = app[app.index("private func prepareFinishFragment("):app.index("private func prepareBrowserOpenURL(")]
+        self.assertIn('guard bound else { throw AyuBridgeFailure("screen_unavailable"', finish)
+        self.assertIn("return AyuBridgeProviderResult(.value(.bool(false)))", finish)
+        self.assertIn("DispatchQueue.main.async {", finish)
+        self.assertNotIn("DispatchQueue.main.sync", finish)
+        self.assertIn("current.identity == screen.identity", finish)
+        self.assertIn("self.screenCloserSource?(screen, animated)", finish)
+        self.assertIn("self.lock.lock(); self.closeRouteBound = closeScreen != nil; self.lock.unlock()", app)
+
+        binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()
+        self.assertIn("self?.closePluginScreen(screen, animated: animated)", binding)
+        close = binding[binding.index("private func closePluginScreen("):binding.index("private func openPluginURL(")]
+        for text in ("guard self.active, !self.locked,", "current.identity == expected.identity", "accountID == self.primaryID",
+                     "navigationController.viewControllers.count > 1", "navigationController.popViewController(animated: animated)"):
+            self.assertIn(text, close)
+        self.assertNotIn("dismiss(", close)
+
+
     def test_browser_open_url_is_narrow_queued_and_uses_telegram_route(self):
         app = (BRIDGE / "Integration/AyuPluginApplicationBridge.swift").read_text()
         self.assertIn('private static let browser = "org.telegram.messenger.browser.Browser"', app)
@@ -117,7 +138,8 @@ class ApplicationBridgeWiringTests(unittest.TestCase):
         self.assertIn('current.accountIndex == expected.accountIndex', binding)
         self.assertIn('accountID == self.primaryID', binding)
         self.assertIn('self.slots[accountID] == expected.accountIndex', binding)
-        self.assertIn('sharedContext.openExternalUrl(context: accountContext, urlContext: .generic', binding)
+        # Below the plugins' ``url.open`` hooks: a plugin is not asked about a URL a plugin opens.
+        self.assertIn('openExternalUrlImpl(context: accountContext, urlContext: .generic', binding)
         self.assertIn('forceExternal: false', binding)
         self.assertIn('navigationController: navigationController', binding)
         self.assertNotIn('UIApplication.shared.open', binding)

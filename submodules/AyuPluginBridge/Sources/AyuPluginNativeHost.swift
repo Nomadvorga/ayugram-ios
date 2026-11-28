@@ -495,7 +495,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                 return (remote.className, remote.fields)
             }
         case "client.call", "hooks.register", "hooks.unregister", "menus.register", "menus.unregister", "menus.add", "resources.resolve", "ui.present",
-             "plugins.list", "plugins.settings", "intents.launch",
+             "plugins.list", "plugins.settings", "intents.launch", "hooks.url_open",
+             "speech.speak", "speech.stop", "speech.language", "speech.speaking",
              _ where operation.hasPrefix("telegram."):
             if operation == "ui.present", let kind = arguments["kind"]?.string, let config = arguments["config"]?.object {
                 if kind == "alert", config["view"] != nil {
@@ -542,6 +543,18 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             try self.validateAdapterResponse(self.reference(String(repeating: "0", count: 36), className: name))
             return try self.store(owner: owner, className: name, kind: "adapter", fields: fields)
         }
+        if name == AyuBridgeGridLayout.paramsClassName {
+            guard args.isEmpty || args.count == 2 else { throw AyuBridgeFailure.unsupported("constructor " + name) }
+            var fields: [String: AyuBridgeValue] = ["width": .number(-2), "height": .number(-2)]
+            for (key, argument) in zip(["row", "column"], args) {
+                let spec = try self.remote(self.handle(argument), owner: owner)
+                guard spec.kind == "grid_spec", let index = spec.fields["index"]?.integer else {
+                    throw AyuBridgeFailure("invalid_arguments", "GridLayout.LayoutParams requires a row and a column Spec")
+                }
+                fields[key] = .integer(index)
+            }
+            return try self.store(owner: owner, className: name, kind: "layout", fields: fields)
+        }
         if name.hasSuffix("$LayoutParams") {
             let isLinearParams = name == "android.widget.LinearLayout$LayoutParams"
             guard args.count == 2 || (isLinearParams && args.count == 3) else {
@@ -582,6 +595,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             viewFields["progress"] = .integer(0)
         }
         if name == "android.widget.CheckBox" { viewFields["checked"] = .bool(false) }
+        if name == "android.widget.Button" { viewFields.merge(AyuBridgeButtonDefaults.fields) { $1 } }
         if let contextValue = args.first, contextValue != .null {
             let contextHandle = try self.handle(contextValue)
             let context = try self.remote(contextHandle, owner: owner)
@@ -674,6 +688,21 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             }
             if remote.className == "java.lang.reflect.Array" {
                 return try self.reflectArray(method, arguments: arguments["args"]?.array ?? [], owner: owner)
+            }
+            if remote.className == Self.androidUtilitiesName, method == "shakeView", self.classRegistry.adapters[remote.className] != nil {
+                let args = arguments["args"]?.array ?? []
+                guard args.count == 1 else { throw AyuBridgeFailure("invalid_arguments", "AndroidUtilities.shakeView takes one View") }
+                // Android returns at once for a null view.
+                if args[0] == .null { return .null }
+                let view = try self.handle(args[0])
+                guard try self.remote(view, owner: owner).kind == "view" else { throw AyuBridgeFailure("invalid_arguments", "AndroidUtilities.shakeView takes one View") }
+                try self.ui.enqueue([AyuBridgeUI.Command(owner: owner, generation: generation, handle: view, method: "shakeView", arguments: [],
+                                                         backgroundDrawableHandle: nil, layoutClassName: nil, layoutHandle: nil)])
+                return .null
+            }
+            if remote.className == AyuBridgeGridLayout.className, method == "spec" {
+                let index = try AyuBridgeGridLayout.specIndex(arguments["args"]?.array ?? [])
+                return try self.store(owner: owner, className: AyuBridgeGridLayout.specClassName, kind: "grid_spec", fields: ["index": .integer(index)])
             }
             if remote.className == "java.lang.Class", method == "forName" {
                 guard let args = arguments["args"]?.array, args.count == 1,
@@ -1007,11 +1036,11 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let handle = try self.target(arguments)
         if method == "requestFocus" {
             guard (arguments["args"]?.array ?? []).isEmpty else { throw AyuBridgeFailure("invalid_arguments", "requestFocus takes no arguments") }
-            guard remote.className == "android.widget.EditText" else { throw AyuBridgeFailure.unsupported(remote.className + ".requestFocus") }
+            guard Self.isEditTextClass(remote.className) else { throw AyuBridgeFailure.unsupported(remote.className + ".requestFocus") }
             return .bool(DispatchQueue.main.sync { self.ui.requestFocus(owner: owner, handle: handle) })
         }
         if method == "setSelection" {
-            guard remote.className == "android.widget.EditText" else { throw AyuBridgeFailure.unsupported(remote.className + ".setSelection") }
+            guard Self.isEditTextClass(remote.className) else { throw AyuBridgeFailure.unsupported(remote.className + ".setSelection") }
             guard let args = arguments["args"]?.array, args.count == 1,
                   let rawOffset = args[0].integer, let offset = Int(exactly: rawOffset), offset >= 0 else {
                 throw AyuBridgeFailure("invalid_arguments", "EditText.setSelection expects one nonnegative UTF-16 offset")
@@ -1202,7 +1231,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             self.objects[handle]?.fields["layout_params_handle"] = reference["$handle"]
             return reference
         }
-        if method == "getText", remote.className == "android.widget.EditText" {
+        if method == "getText", Self.isEditTextClass(remote.className) {
             let text = try DispatchQueue.main.sync { try self.ui.readText(owner: owner, handle: handle) }
             return try self.store(owner: owner, className: "java.lang.String", kind: "adapter", fields: ["value": .string(text)])
         }
@@ -1245,8 +1274,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         }
         if Self.readMethods.contains(method) || (Self.isScrollViewClass(remote.className) && Self.scrollReadMethods.contains(method)) {
             guard (arguments["args"]?.array ?? []).isEmpty else { throw AyuBridgeFailure("invalid_arguments", method + " takes no arguments") }
-            guard method != "getText" || ["android.widget.TextView", "android.widget.CheckBox"].contains(remote.className) else { throw AyuBridgeFailure.unsupported(method) }
-            if ["hasFocus", "getSelectionStart", "getSelectionEnd"].contains(method), remote.className != "android.widget.EditText" {
+            guard method != "getText" || ["android.widget.TextView", "android.widget.Button", "android.widget.CheckBox"].contains(remote.className) else { throw AyuBridgeFailure.unsupported(method) }
+            if ["hasFocus", "getSelectionStart", "getSelectionEnd"].contains(method), !Self.isEditTextClass(remote.className) {
                 throw AyuBridgeFailure.unsupported(remote.className + "." + method)
             }
             return try DispatchQueue.main.sync { try self.ui.read(owner: owner, handle: handle, method: method) }
@@ -1474,10 +1503,10 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         guard validArity else { throw AyuBridgeFailure("invalid_arguments", "Wrong argument count for " + method) }
         try self.validateReferences(.array(args), owner: owner)
         if ["setText", "setTextColor", "setTextSize", "setHint", "setHintTextColor", "setSingleLine", "setMinLines"].contains(method),
-           !["android.widget.TextView", "android.widget.EditText", "android.widget.CheckBox"].contains(remote.className) { throw AyuBridgeFailure.unsupported(method) }
-        if ["setMaxLines", "setEllipsize", "setTextAlignment"].contains(method), remote.className != "android.widget.TextView" { throw AyuBridgeFailure.unsupported(method) }
-        if method == "setTypeface", !["android.widget.TextView", "android.widget.EditText"].contains(remote.className) { throw AyuBridgeFailure.unsupported(method) }
-        if method == "setInputType", remote.className != "android.widget.EditText" { throw AyuBridgeFailure.unsupported(method) }
+           !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.CheckBox"].contains(remote.className) { throw AyuBridgeFailure.unsupported(method) }
+        if ["setMaxLines", "setEllipsize", "setTextAlignment"].contains(method), !Self.isTextViewClass(remote.className) { throw AyuBridgeFailure.unsupported(method) }
+        if method == "setTypeface", !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor"].contains(remote.className) { throw AyuBridgeFailure.unsupported(method) }
+        if method == "setInputType", !Self.isEditTextClass(remote.className) { throw AyuBridgeFailure.unsupported(method) }
         if ["setMax", "setProgress", "setProgressTintList"].contains(method),
            remote.className != "android.widget.ProgressBar" || remote.fields["progress_mode"] != .string("horizontal") {
             throw AyuBridgeFailure.unsupported(remote.className + "." + method)
@@ -1486,7 +1515,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
            remote.className != "android.widget.CheckBox" {
             throw AyuBridgeFailure.unsupported(remote.className + "." + method)
         }
-        if ["clearFocus", "hasFocus", "requestFocus"].contains(method), remote.className != "android.widget.EditText" { throw AyuBridgeFailure.unsupported(method) }
+        if ["clearFocus", "hasFocus", "requestFocus"].contains(method), !Self.isEditTextClass(remote.className) { throw AyuBridgeFailure.unsupported(method) }
         if method == "setScaleType", !Self.isImageViewClass(remote.className) { throw AyuBridgeFailure.unsupported(method) }
         if method == "setOrientation", remote.className != "android.widget.LinearLayout" { throw AyuBridgeFailure.unsupported(method) }
         if ["setImageBase64", "setImageBitmap", "setImageDrawable", "setImageResource"].contains(method), !Self.isImageViewClass(remote.className) { throw AyuBridgeFailure.unsupported(method) }
@@ -1514,6 +1543,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                     guard layout.kind == "layout" else { throw AyuBridgeFailure("invalid_arguments", "Expected LayoutParams") }
                     let accepted = remote.className == "android.widget.LinearLayout"
                         ? ["android.view.ViewGroup$LayoutParams", "android.widget.LinearLayout$LayoutParams"].contains(layout.className)
+                        : remote.className == AyuBridgeGridLayout.className
+                        ? ["android.view.ViewGroup$LayoutParams", AyuBridgeGridLayout.paramsClassName].contains(layout.className)
                         : ["android.view.ViewGroup$LayoutParams", "android.widget.FrameLayout$LayoutParams"].contains(layout.className)
                     guard accepted else { throw AyuBridgeFailure("invalid_arguments", "LayoutParams do not match the parent") }
                     if args.count == 2 {
@@ -1530,10 +1561,16 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
                         args = [args[0], .object(layout.fields), .integer(index == -1 ? Int64(childCount) : index)]
                     }
                 }
+                // `ViewGroup.addView`: a child that never had LayoutParams gets the parent's defaults.
+                if layoutClassName == nil, childRemote.fields["layout_params"] == nil {
+                    let defaults = AyuBridgeLayoutParams.defaults(parentClassName: remote.className, vertical: remote.fields["m_orientation"]?.integer == 1)
+                    layoutClassName = defaults.className
+                    args = args.count == 3 ? [args[0], .object(defaults.fields), args[2]] : [args[0], .object(defaults.fields)]
+                }
             } else if childRemote.fields["parent"]?.string != handle { throw AyuBridgeFailure("invalid_state", "View is not a child of this parent") }
         }
         if method == "addTextChangedListener" || method == "removeTextChangedListener" {
-            guard ["android.widget.TextView", "android.widget.EditText"].contains(remote.className) else {
+            guard ["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor"].contains(remote.className) else {
                 throw AyuBridgeFailure.unsupported(method)
             }
             let listenerHandle = try self.handle(args[0])
@@ -1580,7 +1617,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         } else if method == "setLayoutParams" {
             let layout = try self.remote(self.handle(args[0]), owner: owner)
             guard layout.kind == "layout" else { throw AyuBridgeFailure("invalid_arguments", "Expected LayoutParams") }
-            guard ["android.view.ViewGroup$LayoutParams", "android.widget.LinearLayout$LayoutParams", "android.widget.FrameLayout$LayoutParams"].contains(layout.className) else {
+            guard ["android.view.ViewGroup$LayoutParams", "android.widget.LinearLayout$LayoutParams", "android.widget.FrameLayout$LayoutParams", AyuBridgeGridLayout.paramsClassName].contains(layout.className) else {
                 throw AyuBridgeFailure("invalid_arguments", "Unsupported LayoutParams class")
             }
             layoutClassName = layout.className
@@ -1798,7 +1835,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             guard lines >= 0, lines <= 64, lines == lines.rounded() else { throw AyuBridgeFailure("invalid_arguments", "Invalid line count") }
         } else if method == "setGravity" {
             guard let gravity = try? AyuBridgeViewGravity(args[0]) else { throw AyuBridgeFailure("invalid_arguments", "Unsupported gravity value") }
-            if remote.className == "android.widget.EditText", ![.unspecified, .center].contains(gravity.vertical) {
+            if Self.isEditTextClass(remote.className), ![.unspecified, .center].contains(gravity.vertical) {
                 throw AyuBridgeFailure.unsupported("EditText vertical gravity")
             }
             args[0] = .integer(gravity.rawValue)
@@ -1922,6 +1959,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             let numbers = try args.map(self.number)
             if method == "setVisibility", ![0, 4, 8].contains(numbers[0]) { throw AyuBridgeFailure("invalid_arguments", "Invalid visibility") }
             if method == "setOrientation", ![0, 1].contains(numbers[0]) { throw AyuBridgeFailure("invalid_arguments", "Invalid orientation") }
+            if method == "setOrientation" { self.objects[handle]?.fields["m_orientation"] = .integer(Int64(numbers[0])) }
             if method == "setAlpha", !(0...1).contains(numbers[0]) { throw AyuBridgeFailure("invalid_arguments", "Invalid alpha") }
             if method == "setFrame", numbers[2] < 0 || numbers[3] < 0 { throw AyuBridgeFailure("invalid_arguments", "Negative frame size") }
         }
@@ -2022,7 +2060,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
     }
 
     private func isReadableLayoutField(_ name: String, className: String) -> Bool {
-        Self.layoutFields.contains(name) || (className == "android.widget.LinearLayout$LayoutParams" && name == "weight")
+        if className == AyuBridgeGridLayout.paramsClassName { return AyuBridgeGridLayout.paramsFields.contains(name) }
+        return Self.layoutFields.contains(name) || (className == "android.widget.LinearLayout$LayoutParams" && name == "weight")
     }
 
     /// `token` marks a timer and `substitute` a callback whose producer bounds how many are
@@ -2415,7 +2454,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         if requested == "android.widget.ImageView" { return Self.isImageViewClass(actual) }
         if requested == "android.view.ViewGroup" || requested == "android.view.ViewParent" { return Self.viewGroupClasses.contains(actual) }
         if requested == "android.widget.TextView" {
-            return ["android.widget.TextView", "android.widget.EditText", "android.widget.CheckBox"].contains(actual)
+            return ["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.CheckBox"].contains(actual)
         }
         if requested == "android.widget.CompoundButton" {
             return actual == "android.widget.CheckBox"
@@ -2443,6 +2482,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         let adapterMethods = Set(self.classRegistry.adapters[name]?.staticMethods.keys.map { $0 } ?? [])
         if name == "java.lang.Class" { return adapterMethods.union(Self.classFactoryMethods) }
         if name == "android.text.TextUtils" { return adapterMethods.union(["isEmpty"]) }
+        if name == AyuBridgeGridLayout.className { return adapterMethods.union(["spec"]) }
+        // Served here because it animates a view of this host; only where the application declares the class.
+        if name == Self.androidUtilitiesName, self.classRegistry.adapters[name] != nil { return adapterMethods.union(["shakeView"]) }
         if name == "java.lang.reflect.Array" { return adapterMethods.union(Self.arrayMethods) }
         return adapterMethods
     }
@@ -2669,6 +2711,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             if isLayout {
                 fields = Self.layoutFields
                 if name == "android.widget.LinearLayout$LayoutParams" { fields.insert("weight") }
+                if name == AyuBridgeGridLayout.paramsClassName { fields = AyuBridgeGridLayout.paramsFields }
                 writableFields = fields
             }
             var staticFields = Set(self.constants(for: name).keys)
@@ -2736,9 +2779,9 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         return String(data: (try? JSONEncoder().encode(manifest)) ?? Data(), encoding: .utf8) ?? "{}"
     }
 
-    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView", "android.widget.ImageButton", "android.widget.EditText", "android.widget.ScrollView", "android.widget.HorizontalScrollView", "android.widget.ProgressBar", "android.widget.CheckBox"]
-    private static let viewGroupClasses: Set<String> = ["android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView", "android.widget.HorizontalScrollView"]
-    private static let backgroundDrawableClasses: Set<String> = ["android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.graphics.drawable.ShapeDrawable", "android.graphics.drawable.RippleDrawable"]
+    private static let viewClasses: Set<String> = ["android.view.View", "android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.TextView", "android.widget.ImageView", "android.widget.ImageButton", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.ScrollView", "android.widget.HorizontalScrollView", "android.widget.ProgressBar", "android.widget.CheckBox", "android.widget.GridLayout", "android.widget.Button"]
+    private static let viewGroupClasses: Set<String> = ["android.widget.FrameLayout", "android.widget.LinearLayout", "android.widget.ScrollView", "android.widget.HorizontalScrollView", "android.widget.GridLayout"]
+    private static let backgroundDrawableClasses: Set<String> = ["android.graphics.drawable.ColorDrawable", "android.graphics.drawable.GradientDrawable", "android.graphics.drawable.ShapeDrawable", "android.graphics.drawable.RippleDrawable", "android.graphics.drawable.StateListDrawable"]
     private static let layoutFields: Set<String> = ["width", "height", "x", "y", "gravity", "leftMargin", "topMargin", "rightMargin", "bottomMargin"]
     private static let classes: [String: [String: AyuBridgeValue]] = [
         "android.view.View": ["VISIBLE": .integer(0), "INVISIBLE": .integer(4), "GONE": .integer(8)],
@@ -2752,12 +2795,15 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "android.view.ViewGroup": [:], "android.view.ViewParent": [:],
         "android.view.ViewGroup$LayoutParams": ["MATCH_PARENT": .integer(-1), "WRAP_CONTENT": .integer(-2)],
         "android.widget.FrameLayout": [:], "android.widget.LinearLayout": ["HORIZONTAL": .integer(0), "VERTICAL": .integer(1)],
-        "android.widget.TextView": [:], "android.widget.ImageView": [:], "android.widget.ImageButton": [:], "android.widget.EditText": [:], "android.widget.ScrollView": [:], "android.widget.HorizontalScrollView": [:], "android.widget.ProgressBar": [:], "android.widget.CheckBox": [:], "android.widget.CompoundButton": [:], "android.widget.CompoundButton$OnCheckedChangeListener": [:],
+        "android.widget.TextView": [:], "android.widget.Button": [:], "android.widget.ImageView": [:], "android.widget.ImageButton": [:], "android.widget.EditText": [:], "org.telegram.ui.Components.EditTextBoldCursor": [:], "android.widget.ScrollView": [:], "android.widget.HorizontalScrollView": [:], "android.widget.ProgressBar": [:], "android.widget.CheckBox": [:], "android.widget.CompoundButton": [:], "android.widget.CompoundButton$OnCheckedChangeListener": [:],
         "android.view.ViewPropertyAnimator": [:],
         "android.text.TextUtils": [:], "android.text.TextWatcher": [:],
         "android.text.InputType": ["TYPE_CLASS_TEXT": .integer(1), "TYPE_TEXT_VARIATION_PASSWORD": .integer(0x80), "TYPE_TEXT_FLAG_MULTI_LINE": .integer(0x2_0000), "TYPE_TEXT_FLAG_NO_SUGGESTIONS": .integer(0x8_0000)],
         "android.widget.FrameLayout$LayoutParams": ["MATCH_PARENT": .integer(-1), "WRAP_CONTENT": .integer(-2)],
         "android.widget.LinearLayout$LayoutParams": ["MATCH_PARENT": .integer(-1), "WRAP_CONTENT": .integer(-2)],
+        "android.widget.GridLayout": ["HORIZONTAL": .integer(0), "VERTICAL": .integer(1), "UNDEFINED": .integer(-2_147_483_648), "ALIGN_BOUNDS": .integer(0), "ALIGN_MARGINS": .integer(1)],
+        "android.widget.GridLayout$LayoutParams": ["MATCH_PARENT": .integer(-1), "WRAP_CONTENT": .integer(-2)],
+        "android.widget.GridLayout$Spec": [:],
         "java.lang.Class": [:], "java.lang.reflect.Method": [:], "java.lang.reflect.Array": [:], "[B": [:], "[S": [:], "[C": [:], "[I": [:], "[J": [:], "[F": [:], "[D": [:], "[Z": [:],
         "java.lang.Runnable": [:], "android.view.View$OnClickListener": [:], "android.view.View$OnTouchListener": [:], "android.view.View$OnLongClickListener": [:], "android.view.View$OnFocusChangeListener": [:]
     ]
@@ -2767,8 +2813,8 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "setClipToPadding": 1, "setOverScrollMode": 1, "scrollTo": 2, "scrollBy": 2, "smoothScrollTo": 2]
     private static let otherWriteMethods: [String: Int] = ["setImageBitmap": 1, "setBackgroundDrawable": 1, "setMax": 1, "setProgress": 1, "setProgressTintList": 1, "setChecked": 1, "setButtonTintList": 1, "setOnCheckedChangeListener": 1,
         "setIncludeFontPadding": 1, "setLineSpacing": 2, "setLetterSpacing": 1, "setMinHeight": 1, "setMinWidth": 1, "setTextIsSelectable": 1, "setShadowLayer": 4,
-        "setSelectAllOnFocus": 1, "setCursorVisible": 1, "setOnFocusChangeListener": 1, "setOnLongClickListener": 1, "setLongClickable": 1,
-        "setWeightSum": 1, "setIndeterminate": 1, "setIndeterminateTintList": 1, "setProgressBackgroundTintList": 1]
+        "setSelectAllOnFocus": 1, "setCursorVisible": 1, "setCursorColor": 1, "setCursorSize": 1, "setCursorWidth": 1, "setLineColors": 3, "setOnFocusChangeListener": 1, "setOnLongClickListener": 1, "setLongClickable": 1,
+        "setWeightSum": 1, "setAllCaps": 1, "setColumnCount": 1, "setRowCount": 1, "setAlignmentMode": 1, "setIndeterminate": 1, "setIndeterminateTintList": 1, "setProgressBackgroundTintList": 1]
     /// Commands accepted by `AyuBridgeUI.apply`. Keep transaction input narrower
     /// than the general View method registry: direct-only methods such as
     /// requestFocus, setSelection, findViewById, post/postDelayed and setTag
@@ -2788,7 +2834,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         "bringToFront", "setOnClickListener", "setOnTouchListener", "addTextChangedListener", "removeTextChangedListener",
         "setImageBase64", "setImageBitmap", "setImageDrawable", "setImageResource", "setColorFilter", "clearColorFilter", "unmount", "animate",
     ]
-    private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getId", "getMinimumWidth", "getMinimumHeight", "getElevation", "getAlpha", "getRotation", "getRotationX", "getRotationY", "getPivotX", "getPivotY", "getCameraDistance", "getScaleX", "getScaleY", "getTranslationX", "getTranslationY", "getVisibility", "getOrientation", "getGravity", "getClipChildren", "getClipToOutline", "getOutlineProvider", "getBackground", "getContext", "getResources", "isEnabled", "isClickable", "isFocusable", "isSelected", "isShown", "hasFocus", "getSelectionStart", "getSelectionEnd", "getColorFilter", "isAttachedToWindow", "getText", "getContentDescription", "getPaddingLeft", "getPaddingTop", "getPaddingRight", "getPaddingBottom", "getParent", "getRootView", "getTag", "getChildCount", "getChildAt", "getLayoutParams", "getTypeface", "getIncludeFontPadding", "getLineSpacingExtra", "getLineSpacingMultiplier", "getLetterSpacing", "getMinHeight", "getMinWidth", "isTextSelectable", "getShadowRadius", "getShadowDx", "getShadowDy", "getShadowColor", "getLocationOnScreen", "getLocationInWindow", "isCursorVisible", "isLongClickable", "getWeightSum", "isIndeterminate"]
+    private static let readMethods: Set<String> = ["getWidth", "getHeight", "getMeasuredWidth", "getMeasuredHeight", "getX", "getY", "getId", "getMinimumWidth", "getMinimumHeight", "getElevation", "getAlpha", "getRotation", "getRotationX", "getRotationY", "getPivotX", "getPivotY", "getCameraDistance", "getScaleX", "getScaleY", "getTranslationX", "getTranslationY", "getVisibility", "getOrientation", "getGravity", "getClipChildren", "getClipToOutline", "getOutlineProvider", "getBackground", "getContext", "getResources", "isEnabled", "isClickable", "isFocusable", "isSelected", "isShown", "hasFocus", "getSelectionStart", "getSelectionEnd", "getColorFilter", "isAttachedToWindow", "getText", "getContentDescription", "getPaddingLeft", "getPaddingTop", "getPaddingRight", "getPaddingBottom", "getParent", "getRootView", "getTag", "getChildCount", "getChildAt", "getLayoutParams", "isAllCaps", "getColumnCount", "getRowCount", "getAlignmentMode", "getTypeface", "getIncludeFontPadding", "getLineSpacingExtra", "getLineSpacingMultiplier", "getLetterSpacing", "getMinHeight", "getMinWidth", "isTextSelectable", "getShadowRadius", "getShadowDx", "getShadowDy", "getShadowColor", "getLocationOnScreen", "getLocationInWindow", "isCursorVisible", "getCursorColor", "isLongClickable", "getWeightSum", "isIndeterminate"]
     private static let writeMethods: [String: Int] = ["setAlpha": 1, "setTranslationX": 1, "setTranslationY": 1, "setRotation": 1, "setRotationX": 1, "setRotationY": 1, "setPivotX": 1, "setPivotY": 1, "setCameraDistance": 1, "setScaleX": 1, "setScaleY": 1, "setVisibility": 1, "setId": 1, "findViewById": 1, "setTag": 1, "setEnabled": 1, "setClickable": 1, "setFocusable": 1, "setSelected": 1, "setMinimumWidth": 1, "setMinimumHeight": 1, "setElevation": 1, "setClipChildren": 1, "setClipToOutline": 1, "setOutlineProvider": 1, "requestLayout": 0, "invalidate": 0, "post": 1, "postDelayed": 2, "performHapticFeedback": 1, "setBackgroundColor": 1, "setBackground": 1, "setText": 1, "setTextColor": 1, "setTextSize": 1, "setTypeface": 1, "setMaxLines": 1, "setEllipsize": 1, "setTextAlignment": 1, "setHint": 1, "setHintTextColor": 1, "setInputType": 1, "setScaleType": 1, "setSingleLine": 1, "setMinLines": 1, "setSelection": 1, "setColorFilter": 1, "clearColorFilter": 0, "setGravity": 1, "setOrientation": 1, "setPadding": 4, "setLayoutParams": 1, "setFrame": 4, "addView": 1, "removeView": 1, "removeAllViews": 0, "bringToFront": 0, "setOnClickListener": 1, "setOnTouchListener": 1, "addTextChangedListener": 1, "removeTextChangedListener": 1, "clearFocus": 0, "requestFocus": 0, "setContentDescription": 1, "setImageBase64": 1, "setImageDrawable": 1, "setImageResource": 1, "unmount": 0, "animate": 1]
     private static func methods(for name: String) -> Set<String> {
         if name == "android.view.ViewPropertyAnimator" {
@@ -2797,6 +2843,7 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         }
         if name == "java.lang.reflect.Method" { return ["getName"] }
         if name.hasSuffix("$LayoutParams") { return ["getClass", "setMargins"] }
+        if name == AyuBridgeGridLayout.specClassName { return ["getClass"] }
         guard self.viewClasses.contains(name) else { return [] }
         var result = self.readMethods.union(self.writeMethods.keys).union(["getClass"])
         result.formUnion(Self.otherWriteMethods.keys)
@@ -2804,21 +2851,21 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
         else { result.subtract(Self.progressReadMethods); result.subtract(["setMax", "setProgress", "setProgressTintList"]) }
         if name == "android.widget.CheckBox" { result.formUnion(["getText", "setText", "setTextSize", "setTextColor", "isChecked", "setChecked", "setButtonTintList", "setOnCheckedChangeListener"]) }
         else { result.subtract(["isChecked", "setChecked", "setButtonTintList", "setOnCheckedChangeListener"]) }
-        if !["android.widget.TextView", "android.widget.EditText", "android.widget.CheckBox"].contains(name) { result.subtract(["getText", "setText", "setTextSize", "setTextColor", "setHint", "setHintTextColor", "setSingleLine", "setMinLines", "addTextChangedListener", "removeTextChangedListener"]) }
-        if !["android.widget.TextView", "android.widget.EditText"].contains(name) { result.subtract(["setTypeface", "getTypeface"]) }
-        if name == "android.widget.EditText" { result.formUnion(["setInputType", "setSelection", "getSelectionStart", "getSelectionEnd"]) }
+        if !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.CheckBox"].contains(name) { result.subtract(["getText", "setText", "setTextSize", "setTextColor", "setHint", "setHintTextColor", "setSingleLine", "setMinLines", "addTextChangedListener", "removeTextChangedListener"]) }
+        if !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor"].contains(name) { result.subtract(["setTypeface", "getTypeface"]) }
+        if Self.isEditTextClass(name) { result.formUnion(["setInputType", "setSelection", "getSelectionStart", "getSelectionEnd"]) }
         if Self.isImageViewClass(name) { result.formUnion(["setColorFilter", "clearColorFilter", "getColorFilter", "setScaleType", "setImageBase64", "setImageBitmap", "setImageDrawable", "setImageResource"]) }
         if !Self.isImageViewClass(name) { result.subtract(["setColorFilter", "clearColorFilter", "getColorFilter", "setScaleType", "setImageBase64", "setImageBitmap", "setImageDrawable", "setImageResource"]) }
         if !self.viewGroupClasses.contains(name) { result.subtract(["setClipChildren", "getClipChildren"]) }
         if Self.isScrollViewClass(name) { result.subtract(["setClipChildren", "getClipChildren"]) }
-        if name != "android.widget.TextView" { result.subtract(["setMaxLines", "setEllipsize"]) }
-        if name != "android.widget.TextView" { result.remove("setTextAlignment") }
-        if name != "android.widget.EditText" { result.subtract(["hasFocus", "clearFocus", "requestFocus", "setSelection", "getSelectionStart", "getSelectionEnd"]) }
+        if !Self.isTextViewClass(name) { result.subtract(["setMaxLines", "setEllipsize"]) }
+        if !Self.isTextViewClass(name) { result.remove("setTextAlignment") }
+        if !Self.isEditTextClass(name) { result.subtract(["hasFocus", "clearFocus", "requestFocus", "setSelection", "getSelectionStart", "getSelectionEnd"]) }
         if !self.viewGroupClasses.contains(name) { result.subtract(["getChildCount", "getChildAt"]) }
         if name != "android.widget.LinearLayout" { result.remove("setOrientation") }
         if name != "android.widget.LinearLayout" { result.remove("getOrientation") }
-        if !["android.widget.TextView", "android.widget.EditText", "android.widget.LinearLayout"].contains(name) { result.remove("setGravity") }
-        if !["android.widget.TextView", "android.widget.EditText", "android.widget.LinearLayout"].contains(name) { result.remove("getGravity") }
+        if !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.LinearLayout"].contains(name) { result.remove("setGravity") }
+        if !["android.widget.TextView", "android.widget.Button", "android.widget.EditText", "org.telegram.ui.Components.EditTextBoldCursor", "android.widget.LinearLayout"].contains(name) { result.remove("getGravity") }
         if !self.viewGroupClasses.contains(name) { result.subtract(["addView", "removeView", "removeAllViews", "getChildCount"]) }
         result.subtract(AyuBridgeViewMembers.unavailable(for: name))
         if Self.isScrollViewClass(name) {
@@ -2828,6 +2875,18 @@ public final class AyuPluginNativeHost: @unchecked Sendable {
             if name == "android.widget.HorizontalScrollView" { result.remove("setVerticalScrollBarEnabled") }
         }
         return result
+    }
+
+    private static let androidUtilitiesName = "org.telegram.messenger.AndroidUtilities"
+
+    /// `Button extends TextView`: every TextView member applies to it.
+    private static func isTextViewClass(_ name: String) -> Bool {
+        name == "android.widget.TextView" || name == "android.widget.Button"
+    }
+
+    /// `EditTextBoldCursor extends EditText`: every EditText member applies to it.
+    private static func isEditTextClass(_ name: String) -> Bool {
+        name == "android.widget.EditText" || name == "org.telegram.ui.Components.EditTextBoldCursor"
     }
 
     private static func isImageViewClass(_ name: String) -> Bool {

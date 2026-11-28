@@ -20,6 +20,7 @@ import math
 import os
 import re
 import secrets
+import time
 import unicodedata
 import zlib
 
@@ -64,6 +65,34 @@ def _client():
 def _operations():
     import _ayu_operations
     return _ayu_operations
+
+
+def _java_util():
+    from . import java_util
+    return java_util
+
+
+# One ``telegram.dialogs`` answer serves the reads of the next quarter second, so a loop over
+# ``getDialog`` or ``dialogs_dict`` is one host call. Any state change made through this module drops it.
+_DIALOGS_TTL = 0.25
+_dialog_cache = {}
+
+
+def _dialog_entries(account):
+    now = time.monotonic()
+    cached = _dialog_cache.get(account)
+    if cached is not None and 0 <= now - cached[0] < _DIALOGS_TTL:
+        return cached[1]
+    result = _call("telegram.dialogs", {"account": account})
+    if not isinstance(result, list) or len(result) > 2000:
+        raise _runtime_error("Host returned an invalid dialog list")
+    for entry in result:
+        if (not isinstance(entry, dict) or set(entry) != {"dialog", "last_message_date", "pinned_num"}
+                or any(type(entry[key]) is not int or not 0 <= entry[key] < 1 << 31 for key in ("last_message_date", "pinned_num"))):
+            raise _runtime_error("Host returned an invalid dialog")
+    _dialog_cache.clear()
+    _dialog_cache[account] = (now, result)
+    return result
 
 
 def _int(value, bits, what):
@@ -216,6 +245,17 @@ class DialogObject(_Java):
     def isFolderDialogId(dialogId):
         value = _int(dialogId, 64, "dialogId") & 0xFFFFFFFFFFFFFFFF
         return value & 0x2000000000000000 != 0 and value & 0x8000000000000000 == 0
+
+    @staticmethod
+    def initDialog(dialog):
+        """Sets the local ``id`` of a dialog that has none: from its peer, or from its folder."""
+        if dialog is None or dialog.id != 0:
+            return
+        if isinstance(dialog, TLRPC.TL_dialogFolder):
+            if dialog.folder is not None:
+                dialog.id = DialogObject.makeFolderDialogId(dialog.folder.id)
+        elif isinstance(dialog, TLRPC.TL_dialog) and dialog.peer is not None:
+            dialog.id = DialogObject.getPeerDialogId(dialog.peer)
 
     @staticmethod
     def getDialogId(obj):
@@ -973,6 +1013,35 @@ class MessageObject(_Java):
     def getFromChatId(self):
         return MessageObject.getPeerId(MessageObject._owner(self).from_id)
 
+    def isSavedFromMegagroup(self):
+        forward = self.messageOwner.fwd_from
+        if forward is None or forward.saved_from_peer is None or forward.saved_from_peer.channel_id == 0:
+            return False
+        controller = MessagesController._ayu_usable().getInstance(self.currentAccount)
+        return ChatObject.isMegagroup(controller.getChat(forward.saved_from_peer.channel_id))
+
+    def getSenderId(self):
+        """Who wrote the message; for one saved from another chat, who wrote it there."""
+        message = self.messageOwner
+        forward = message.fwd_from
+        saved = forward.saved_from_peer if forward is not None else None
+        if saved is None:
+            if message.from_id is not None:
+                return MessageObject.getPeerId(message.from_id)
+            # Android answers the bare channel id of a post here, not the negative dialog id.
+            return message.peer_id.channel_id if message.post else 0
+        origin = forward.from_id
+        from_user = isinstance(origin, TLRPC.TL_peerUser)
+        if saved.user_id != 0:
+            return origin.user_id if from_user else saved.user_id
+        if saved.channel_id == 0 and saved.chat_id == 0:
+            return 0
+        if from_user and (saved.channel_id == 0 or self.isSavedFromMegagroup()):
+            return origin.user_id
+        if isinstance(origin, (TLRPC.TL_peerChannel, TLRPC.TL_peerChat)):
+            return MessageObject.getPeerId(origin)
+        return -saved.channel_id if saved.channel_id != 0 else -saved.chat_id
+
     # Topics
     @staticmethod
     def _saved_peer(peer):
@@ -1672,7 +1741,8 @@ class MessagesController(_Java):
         if operation not in _runtime().capabilities["operations"]:
             raise _unsupported("MessagesController." + member + " needs host operation " + operation)
         arguments["account"] = self.currentAccount
-        _call(operation, arguments)
+        _dialog_cache.clear()
+        return _call(operation, arguments)
 
     def deleteMessages(self, messages, randoms, encryptedChat, dialogId, *rest):
         """Every Android overload: ``(..., dialogId, [topicId,] forAll, mode[, cacheOnly, ...])``.
@@ -1703,6 +1773,41 @@ class MessagesController(_Java):
             raise _unsupported("MessagesController.markDialogAsRead of a thread is not implemented")
         self._action("read_dialog", "markDialogAsRead", dialog_id=_int(dialogId, 64, "dialogId"),
                      max_id=_int(maxPositiveId, 32, "maxPositiveId"))
+
+    def addDialogToFolder(self, dialogIds, folderId, pinnedNum, *rest):
+        """Both Android overloads: ``(dialogId, folderId, pinnedNum, taskId)`` and
+        ``(dialogIds, folderId, pinnedNum, peers, taskId)``.
+
+        Moves dialogs of the chat list into the main list (folder 0) or the archive (1), unpinned,
+        and returns Android's result: 0 when no dialog was moved, 2 when the archive appeared with
+        the move, otherwise 1. Pinning the moved dialog (``pinnedNum`` above zero), a secret chat
+        and resuming a pending task (``taskId``) have no host operation and raise.
+        """
+        single = type(dialogIds) is int
+        if len(rest) != (1 if single else 2):
+            raise TypeError("addDialogToFolder(dialogId, folderId, pinnedNum, taskId) or "
+                            "(dialogIds, folderId, pinnedNum, peers, taskId)")
+        folder = _int(folderId, 32, "folderId")
+        if _int(rest[-1], 64, "taskId"):
+            raise _unsupported("MessagesController.addDialogToFolder for a pending task is not implemented")
+        if _int(pinnedNum, 32, "pinnedNum") > 0:
+            raise _unsupported("MessagesController.addDialogToFolder with a pinned position is not implemented")
+        if folder not in (0, 1):
+            raise _unsupported("MessagesController.addDialogToFolder moves dialogs to the main list or the archive only")
+        dialogs = []
+        for item in ([dialogIds] if single else list(dialogIds or ())):
+            dialog = _int(item, 64, "dialogId")
+            if DialogObject.isEncryptedDialog(dialog):
+                raise _unsupported("MessagesController.addDialogToFolder of a secret chat is not implemented")
+            if dialog != 0 and not DialogObject.isFolderDialogId(dialog) and dialog not in dialogs:
+                dialogs.append(dialog)
+        result = 0
+        for start in range(0, len(dialogs), 100):
+            moved = self._action("add_dialogs_to_folder", "addDialogToFolder", dialog_ids=dialogs[start:start + 100], folder_id=folder)
+            if type(moved) is not int or moved not in (0, 1, 2):
+                raise _runtime_error("Host returned an invalid folder result")
+            result = max(result, moved)
+        return result
 
     def processUpdates(self, updates, fromQueue=False):
         if not isinstance(updates, TLRPC.Updates):
@@ -1742,6 +1847,58 @@ class MessagesController(_Java):
 
     def loadFullChat(self, chatId, classGuid, force):
         self._action("load_full_peer", "loadFullChat", kind="chat", id=_int(chatId, 64, "chatId"))
+
+    # The chat list (``telegram.dialogs``). Android keeps live lists; here every read returns a new
+    # snapshot of the host's answer, in Android's order (drafts do not move a dialog up).
+
+    def _dialogs(self, member):
+        operation = "telegram.dialogs"
+        if operation not in _runtime().capabilities["operations"]:
+            raise _unsupported("MessagesController." + member + " needs host operation " + operation)
+        dialogs, seen = [], set()
+        try:
+            for entry in _dialog_entries(self.currentAccount):
+                dialog = tl.from_bridge(entry["dialog"], TLRPC.Dialog)
+                DialogObject.initDialog(dialog)
+                if dialog is None or dialog.id == 0 or dialog.id in seen:
+                    raise _runtime_error("Host returned an invalid dialog")
+                seen.add(dialog.id)
+                dialog.last_message_date, dialog.pinnedNum = entry["last_message_date"], entry["pinned_num"]
+                dialog.isFolder = isinstance(dialog, TLRPC.TL_dialogFolder)
+                dialogs.append(dialog)
+        except Exception:
+            # An answer that cannot be decoded is not kept for the next read.
+            _dialog_cache.clear()
+            raise
+        # ``dialogComparator``: the archive's row, pinned dialogs by ``pinnedNum``, then the newest first.
+        dialogs.sort(key=lambda dialog: (not dialog.isFolder, not dialog.pinned,
+                                         -dialog.pinnedNum if dialog.pinned else -dialog.last_message_date))
+        return dialogs
+
+    @property
+    def allDialogs(self):
+        return _java_util().ArrayList(self._dialogs("allDialogs"))
+
+    def getAllDialogs(self):
+        return _java_util().ArrayList(self._dialogs("getAllDialogs"))
+
+    def getDialogs(self, folderId):
+        """The dialogs of the main list (0, the archive's row included) or of the archive (1)."""
+        folder = _int(folderId, 32, "folderId")
+        return _java_util().ArrayList([dialog for dialog in self._dialogs("getDialogs")
+                                       if (0 if dialog.isFolder else dialog.folder_id) == folder])
+
+    @property
+    def dialogs_dict(self):
+        from .android_util import LongSparseArray
+        result = LongSparseArray()
+        for dialog in self._dialogs("dialogs_dict"):
+            result.put(dialog.id, dialog)
+        return result
+
+    def getDialog(self, did):
+        did = _int(did, 64, "did")
+        return next((dialog for dialog in self._dialogs("getDialog") if dialog.id == did), None)
 
     def getUserConfig(self):
         return _client().get_user_config(self.currentAccount)
@@ -1982,13 +2139,17 @@ class SendMessageParams(_Java):
     @staticmethod
     def _ayu_from_wire(wire, account):
         """Parameters of an outgoing message as the host describes them to the send-message hook."""
-        if not isinstance(wire, dict) or type(wire.get("peer")) is not int or not set(wire) <= set(SendMessageParams._WIRE):
+        wire = dict(wire) if isinstance(wire, dict) else None
+        # ``complete``: the keys describe the whole message, every other Android field has its Java default.
+        complete = False if wire is None else wire.pop("complete", False)
+        if wire is None or type(wire.get("peer")) is not int or not set(wire) <= set(SendMessageParams._WIRE) or type(complete) is not bool:
             raise _runtime_error("Host sent invalid send-message parameters")
         params = SendMessageParams()
         params.notify = True
-        # A field the host cannot describe is absent, so reading it raises instead of answering a default.
-        for name in set(params.__dict__).difference(SendMessageParams._WIRE):
-            del params.__dict__[name]
+        if not complete:
+            # A field the host cannot describe is absent, so reading it raises instead of answering a default.
+            for name in set(params.__dict__).difference(SendMessageParams._WIRE):
+                del params.__dict__[name]
         for name, value in wire.items():
             if name == "entities":
                 value = tl._array_list([tl.from_bridge(item, TLRPC.MessageEntity) for item in value or ()])
@@ -1999,6 +2160,7 @@ class SendMessageParams(_Java):
                 value = tl.from_bridge(value, TLRPC.TL_document if name == "document" else TLRPC.TL_photo)
             object.__setattr__(params, name, value)
         params.__dict__["_ayu_delivered"] = dict(params.__dict__)
+        params.__dict__["_ayu_complete"] = complete
         return params
 
     def _ayu_to_wire(self):
@@ -2051,9 +2213,10 @@ class SendMessagesHelper(_Java):
             raise _unsupported("SendMessagesHelper.sendMessage accepts a SendMessageParams object")
         values = {name: value for name, value in vars(args[0]).items()
                   if name != "sendMessageChatArguments" and not name.startswith("_")}
-        if "_ayu_delivered" in vars(args[0]):
+        if "_ayu_delivered" in vars(args[0]) and not vars(args[0]).get("_ayu_complete"):
+            # Sent again it would lose what the host could not describe (an attachment, a quote, preview options).
             raise _unsupported("A SendMessageParams delivered to the send-message hook cannot be sent again: "
-                               "the host does not tell the hook every field of the message")
+                               "the host did not describe every field of this message")
         if args[0].sendMessageChatArguments is not None:
             raise _unsupported("SendMessageChatArguments are not forwarded")
         client = _client()
@@ -2081,6 +2244,14 @@ class MessagesStorage(_Java):
         if not isinstance(result, list) or len(result) != 1:
             raise _runtime_error("Host returned an invalid message list")
         return tl.from_bridge(result[0], TLRPC.Message)
+
+    def readAllDialogs(self, folderId):
+        """Marks every dialog with unread messages as read: of one folder, or of all for a negative id."""
+        operation = "telegram.action.read_all_dialogs"
+        if operation not in _runtime().capabilities["operations"]:
+            raise _unsupported("MessagesStorage.readAllDialogs needs host operation " + operation)
+        _dialog_cache.clear()
+        _call(operation, {"account": self.currentAccount, "folder_id": _int(folderId, 32, "folderId")})
 
 
 class MediaController(_Java):

@@ -329,7 +329,35 @@ def _install(plugin, targets, xposed_hook, priority, before, after, before_filte
         # Xposed runs the higher priority first; equal priorities keep the order they were added in.
         installed.sort(key=lambda item: (-item.priority, item.order))
         unhooks.append(Unhook(hook))
+    if any(target.point is URL_OPEN_POINT for target in targets):
+        _route_url_open(store)
     return unhooks
+
+
+def _deliver_url(url, system_browser):
+    """The host's ``hooks.url_open`` callback: ``{"url": ...}``, None for a cancelled opening."""
+    return {"url": open_url(url, system_browser=system_browser is True) if isinstance(url, str) else url}
+
+
+def _route_url_open(store):
+    """Give the host this generation's ``url.open`` dispatcher, at its highest hook priority.
+
+    Xposed orders the callbacks of every plugin in one list; the host asks plugin by plugin, so a
+    plugin stands where its highest-priority hook does.
+    """
+    from ayu_bridge import runtime
+    import _ayu_threads
+    if _ayu_threads.off_queue(runtime):
+        return _ayu_threads.marshal(runtime, _route_url_open, store)
+    priority = max(hook.priority for target in (URL_OPEN, URL_OPEN_SYSTEM) for hook in store.get(target, ()))
+    priority = max(-2 ** 31, min(2 ** 31 - 1, priority))
+    route = _lang().scoped_store("xposed_url_open")
+    if route.get("priority") == priority:
+        return
+    if "callback" not in route:
+        route["callback"] = runtime.callback(_deliver_url)
+    runtime.call(URL_OPEN_POINT.operation, {"priority": priority, "callback": route["callback"]})
+    route["priority"] = priority
 
 
 def hook_method(plugin, member, xposed_hook=None, priority=None, *, before=None, after=None,

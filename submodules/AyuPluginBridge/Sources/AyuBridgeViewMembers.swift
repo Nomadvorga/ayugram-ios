@@ -8,25 +8,33 @@ import UIKit.UIGestureRecognizerSubclass
 /// `read` run on the host worker; everything taking a view runs on main.
 enum AyuBridgeViewMembers {
     private static let textView = "android.widget.TextView"
+    private static let button = AyuBridgeButtonDefaults.className
     private static let editText = "android.widget.EditText"
+    private static let boldCursorEditText = "org.telegram.ui.Components.EditTextBoldCursor"
     private static let progressBar = "android.widget.ProgressBar"
     private static let linearLayout = "android.widget.LinearLayout"
+    private static let gridLayout = AyuBridgeGridLayout.className
     private static let colorStateList = "android.content.res.ColorStateList"
 
     /// Classes that implement each member; a member missing here is one every view class has.
     private static let classes: [String: Set<String>] = [
-        "setIncludeFontPadding": [textView, editText], "getIncludeFontPadding": [textView, editText],
-        "setLineSpacing": [textView, editText], "getLineSpacingExtra": [textView, editText], "getLineSpacingMultiplier": [textView, editText],
-        "setLetterSpacing": [textView, editText], "getLetterSpacing": [textView, editText],
-        "setMinHeight": [textView, editText], "setMinWidth": [textView, editText],
-        "getMinHeight": [textView, editText], "getMinWidth": [textView, editText],
-        "setTextIsSelectable": [textView], "isTextSelectable": [textView],
-        "setShadowLayer": [textView], "getShadowRadius": [textView], "getShadowDx": [textView], "getShadowDy": [textView], "getShadowColor": [textView],
-        "setSelectAllOnFocus": [editText], "setCursorVisible": [editText], "isCursorVisible": [editText],
-        "setOnFocusChangeListener": [editText],
+        "setIncludeFontPadding": [textView, button, editText, boldCursorEditText], "getIncludeFontPadding": [textView, button, editText, boldCursorEditText],
+        "setLineSpacing": [textView, button, editText, boldCursorEditText], "getLineSpacingExtra": [textView, button, editText, boldCursorEditText], "getLineSpacingMultiplier": [textView, button, editText, boldCursorEditText],
+        "setLetterSpacing": [textView, button, editText, boldCursorEditText], "getLetterSpacing": [textView, button, editText, boldCursorEditText],
+        "setMinHeight": [textView, button, editText, boldCursorEditText], "setMinWidth": [textView, button, editText, boldCursorEditText],
+        "getMinHeight": [textView, button, editText, boldCursorEditText], "getMinWidth": [textView, button, editText, boldCursorEditText],
+        "setTextIsSelectable": [textView, button], "isTextSelectable": [textView, button],
+        "setShadowLayer": [textView, button], "getShadowRadius": [textView, button], "getShadowDx": [textView, button], "getShadowDy": [textView, button], "getShadowColor": [textView, button],
+        "setSelectAllOnFocus": [editText, boldCursorEditText], "setCursorVisible": [editText, boldCursorEditText], "isCursorVisible": [editText, boldCursorEditText],
+        "setOnFocusChangeListener": [editText, boldCursorEditText],
+        "setCursorColor": [boldCursorEditText], "getCursorColor": [boldCursorEditText], "setCursorSize": [boldCursorEditText],
+        "setCursorWidth": [boldCursorEditText], "setLineColors": [boldCursorEditText],
         "setWeightSum": [linearLayout], "getWeightSum": [linearLayout],
+        "setColumnCount": [gridLayout], "getColumnCount": [gridLayout], "setRowCount": [gridLayout], "getRowCount": [gridLayout],
+        "setAlignmentMode": [gridLayout], "getAlignmentMode": [gridLayout],
         "setIndeterminate": [progressBar], "isIndeterminate": [progressBar],
         "setIndeterminateTintList": [progressBar], "setProgressBackgroundTintList": [progressBar],
+        "setAllCaps": [textView, button], "isAllCaps": [textView, button],
     ]
 
     /// Members of this file that `className` does not have.
@@ -44,6 +52,14 @@ enum AyuBridgeViewMembers {
     private static func flag(_ args: [AyuBridgeValue], _ what: String) throws -> Bool {
         guard let value = args.first?.bool else { throw AyuBridgeFailure("invalid_arguments", "Expected a boolean for " + what) }
         return value
+    }
+
+    /// An Android colour int, as Python passes it signed or unsigned; stored signed.
+    private static func argb(_ value: AyuBridgeValue, _ what: String) throws -> Int64 {
+        guard let color = value.integer, Int32(exactly: color) != nil || UInt32(exactly: color) != nil else {
+            throw AyuBridgeFailure("invalid_arguments", "Expected a colour for " + what)
+        }
+        return Int64(Int32(truncatingIfNeeded: color))
     }
 
     private static func tint(_ value: AyuBridgeValue, _ what: String, resolve: (AyuBridgeValue) throws -> AyuBridgeAdapterSnapshot) throws -> AyuBridgeValue {
@@ -100,6 +116,21 @@ enum AyuBridgeViewMembers {
         case "setCursorVisible":
             let visible = try self.flag(args, method)
             return Prepared(method: method, arguments: [.bool(visible)], fields: ["m_cursor_visible": .bool(visible)])
+        case "setCursorColor":
+            return Prepared(method: method, arguments: [.integer(try self.argb(args[0], method))],
+                            fields: ["m_cursor_color": .integer(try self.argb(args[0], method))])
+        case "setCursorSize":
+            guard let size = args[0].integer, (0...10_000).contains(size) else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid cursor size")
+            }
+            return Prepared(method: method, arguments: [.integer(size)])
+        case "setCursorWidth":
+            guard let width = args[0].number, width.isFinite, (0...1_000).contains(width) else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid cursor width")
+            }
+            return Prepared(method: method, arguments: [.number(width)])
+        case "setLineColors":
+            return Prepared(method: method, arguments: try args.map { .integer(try self.argb($0, method)) })
         case "setOnLongClickListener", "setOnFocusChangeListener":
             if args[0] == .null { return Prepared(method: method, arguments: [.null]) }
             let id = try callback(args[0], method == "setOnLongClickListener" ? "onLongClick" : "onFocusChange")
@@ -114,6 +145,17 @@ enum AyuBridgeViewMembers {
                 throw AyuBridgeFailure("invalid_arguments", "Invalid weight sum")
             }
             return Prepared(method: method, arguments: [.number(max(0, sum))], fields: ["m_weight_sum": .number(max(0, sum))])
+        case "setAllCaps":
+            let caps = try self.flag(args, method)
+            return Prepared(method: method, arguments: [.bool(caps)], fields: ["m_all_caps": .bool(caps)])
+        case "setColumnCount", "setRowCount":
+            let count = try AyuBridgeGridLayout.count(args.first)
+            return Prepared(method: method, arguments: [.integer(count)], fields: [method == "setRowCount" ? "m_grid_rows" : "m_grid_columns": .integer(count)])
+        case "setAlignmentMode":
+            guard let mode = args.first?.integer, AyuBridgeGridLayout.AlignmentMode(rawValue: Int(clamping: mode)) != nil else {
+                throw AyuBridgeFailure("invalid_arguments", "Invalid GridLayout alignment mode")
+            }
+            return Prepared(method: method, arguments: [.integer(mode)], fields: ["m_grid_alignment": .integer(mode)])
         case "setIndeterminate":
             let indeterminate = try self.flag(args, method)
             // A ProgressBar of the default (circular) style is indeterminate only: Android ignores the call.
@@ -143,8 +185,14 @@ enum AyuBridgeViewMembers {
         case "getShadowDy": value = fields["m_shadow_dy"] ?? .number(0)
         case "getShadowColor": value = fields["m_shadow_color"] ?? .integer(0)
         case "isCursorVisible": value = fields["m_cursor_visible"] ?? .bool(true)
+        // The colour of the cursor drawable EditTextBoldCursor creates for itself.
+        case "getCursorColor": value = fields["m_cursor_color"] ?? .integer(Int64(Int32(bitPattern: 0xff54_a1db)))
         case "isLongClickable": value = fields["m_long_clickable"] ?? .bool(false)
         case "getWeightSum": value = fields["m_weight_sum"] ?? .number(0)
+        case "isAllCaps": value = fields["m_all_caps"] ?? .bool(false)
+        case "getColumnCount": value = fields["m_grid_columns"] ?? .integer(AyuBridgeGridLayout.undefined)
+        case "getRowCount": value = fields["m_grid_rows"] ?? .integer(AyuBridgeGridLayout.undefined)
+        case "getAlignmentMode": value = fields["m_grid_alignment"] ?? .integer(Int64(AyuBridgeGridLayout.AlignmentMode.margins.rawValue))
         case "isIndeterminate": value = fields["progress_mode"] == .string("horizontal") ? fields["m_indeterminate"] ?? .bool(false) : .bool(true)
         default: return nil
         }
@@ -199,8 +247,22 @@ enum AyuBridgeViewMembers {
         case "setSelectAllOnFocus":
             members.selectAllOnFocus = args[0].bool ?? false; members.observeEditing(view)
         case "setCursorVisible":
-            // The caret takes the tint color; nil restores the inherited one.
-            view.textField?.tintColor = args[0].bool == false ? .clear : nil
+            if let field = view.textField as? AyuBridgeBoldCursorField {
+                field.cursorVisible = args[0].bool != false
+            } else {
+                // The caret takes the tint color; nil restores the inherited one.
+                view.textField?.tintColor = args[0].bool == false ? .clear : nil
+            }
+        case "setCursorColor":
+            (view.textField as? AyuBridgeBoldCursorField)?.cursorColor = self.color(args[0].integer ?? 0)
+        case "setCursorSize":
+            (view.textField as? AyuBridgeBoldCursorField)?.cursorSize = CGFloat(args[0].integer ?? 0)
+        case "setCursorWidth":
+            (view.textField as? AyuBridgeBoldCursorField)?.cursorWidth = CGFloat(args[0].number ?? 0)
+        case "setLineColors":
+            let line = args[0].integer ?? 0
+            (view.textField as? AyuBridgeBoldCursorField)?.setLineColors(line == 0 ? nil : self.color(line), active: self.color(args[1].integer ?? 0))
+            view.setNeedsLayout()
         case "setOnFocusChangeListener":
             members.focusCallback = args[0]["$callback"].string; members.observeEditing(view)
         case "setOnLongClickListener":
@@ -211,6 +273,14 @@ enum AyuBridgeViewMembers {
             members.longClickable = args[0].bool ?? false; members.updateLongPress(view)
         case "setWeightSum":
             members.weightSum = CGFloat(args[0].number ?? 0); view.invalidateBridgeLayout()
+        case "setAllCaps":
+            view.setBridgeAllCaps(args[0].bool ?? false); members.restyleText(view)
+        case "setColumnCount":
+            members.gridColumnCount = AyuBridgeGridLayout.defined(args[0]); view.invalidateBridgeLayout()
+        case "setRowCount":
+            members.gridRowCount = AyuBridgeGridLayout.defined(args[0]); view.invalidateBridgeLayout()
+        case "setAlignmentMode":
+            members.gridAlignment = AyuBridgeGridLayout.AlignmentMode(rawValue: Int(args[0].integer ?? 1)) ?? .margins; view.invalidateBridgeLayout()
         case "setIndeterminate":
             members.setIndeterminate(args[0].bool ?? false, view: view)
         case "setIndeterminateTintList":
@@ -274,6 +344,9 @@ enum AyuBridgeViewMembers {
     var textMinimumWidth: CGFloat = 0
     /// `LinearLayout.setWeightSum`; 0 means the sum of the children's weights.
     var weightSum: CGFloat = 0
+    var gridRowCount: Int?
+    var gridColumnCount: Int?
+    var gridAlignment = AyuBridgeGridLayout.AlignmentMode.margins
     var longClickCallback: String?
     var longClickable = false
     private var longPress: UILongPressGestureRecognizer?

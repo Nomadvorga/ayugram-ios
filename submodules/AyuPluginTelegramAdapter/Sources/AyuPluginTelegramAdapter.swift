@@ -40,6 +40,7 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
         var bridge: AyuPluginTelegramBridge?
         var describesScreen = false
         var routesSendHook = false
+        var routesURLOpen = false
         var navigator: Navigator?
         var player: Player?
     }
@@ -51,7 +52,7 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
 
     private static let coreOperations: Set<String> = [
         "telegram.request", "telegram.request.cancel", "telegram.connection", "telegram.send_message", "telegram.edit_message",
-        "telegram.peer", "telegram.messages", "telegram.files.path", "telegram.files.load",
+        "telegram.peer", "telegram.messages", "telegram.dialogs", "telegram.files.path", "telegram.files.load",
     ]
     /// Every action of the bridge has its TelegramCore call in `perform` below.
     private static let actionOperations = AyuPluginTelegramAction.operations
@@ -73,14 +74,16 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
         self.write { $0.slots = Dictionary(slots.map { ($0.index, $0) }, uniquingKeysWith: { _, last in last }) }
     }
 
-    /// Makes this adapter the bridge's backend. `describesScreen` and `routesSendHook` state what
-    /// the caller wired: that its screen snapshot fills `telegram`, and that outgoing messages of
-    /// the chat screen pass `applySendHooks`. The two operations are listed only then.
-    public func bind(to bridge: AyuPluginTelegramBridge = .shared, describesScreen: Bool, routesSendHook: Bool) {
+    /// Makes this adapter the bridge's backend. `describesScreen`, `routesSendHook` and
+    /// `routesURLOpen` state what the caller wired: that its screen snapshot fills `telegram`,
+    /// that outgoing messages of the chat screen pass `applySendHooks`, and that the URLs the
+    /// app opens pass `applyURLOpenHooks`. The three operations are listed only then.
+    public func bind(to bridge: AyuPluginTelegramBridge = .shared, describesScreen: Bool, routesSendHook: Bool, routesURLOpen: Bool) {
         self.write {
             $0.bridge = bridge
             $0.describesScreen = describesScreen
             $0.routesSendHook = routesSendHook
+            $0.routesURLOpen = routesURLOpen
         }
         bridge.bind(backend: self)
     }
@@ -124,6 +127,7 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
         var result = Self.coreOperations.union(Self.actionOperations)
         if state.describesScreen { result.insert("telegram.screen") }
         if state.routesSendHook { result.insert("telegram.hooks.send_message") }
+        if state.routesURLOpen { result.insert("hooks.url_open") }
         if ayuPluginInterceptsAllHookStreams { result.insert("telegram.hooks.set") }
         if state.navigator != nil { result.insert("telegram.navigation.open") }
         if state.player != nil { result.insert("telegram.player") }
@@ -235,6 +239,14 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
         })
     }
 
+    public func dialogs(account: AyuPluginTelegramAccount,
+                        completion: @escaping @Sendable (Result<[AyuPluginTelegramDialogEntry], AyuPluginTelegramBackendError>) -> Void) {
+        guard let target = self.account(account) else { completion(.failure(.accountUnavailable)); return }
+        let _ = ayuPluginDialogsTL(account: target, limit: AyuPluginTelegramBridge.dialogListLimit).start(next: { rows in
+            completion(.success(rows.map { AyuPluginTelegramDialogEntry(dialog: $0.dialog, lastMessageDate: $0.lastMessageDate, pinnedNumber: $0.pinnedNumber) }))
+        })
+    }
+
     public func messages(account: AyuPluginTelegramAccount, dialogID: Int64, ids: [Int32],
                          completion: @escaping @Sendable (Result<[Data?], AyuPluginTelegramBackendError>) -> Void) {
         guard let target = self.account(account) else { completion(.failure(.accountUnavailable)); return }
@@ -288,7 +300,7 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
     }
 
     public func perform(account: AyuPluginTelegramAccount, action: AyuPluginTelegramAction,
-                        completion: @escaping @Sendable (Result<Void, AyuPluginTelegramBackendError>) -> Void) {
+                        completion: @escaping @Sendable (Result<Int32?, AyuPluginTelegramBackendError>) -> Void) {
         guard let target = self.account(account) else { completion(.failure(.accountUnavailable)); return }
         let signal: Signal<Never, AyuPluginCoreError>
         switch action {
@@ -296,18 +308,28 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
             signal = ayuPluginDeleteMessages(account: target, dialogId: dialogID, ids: ids, forEveryone: revoke)
         case let .readDialog(dialogID, maxID):
             signal = ayuPluginReadDialog(account: target, dialogId: dialogID, maxId: maxID)
+        case let .readAllDialogs(folderID):
+            signal = ayuPluginReadAllDialogs(account: target, folderId: folderID)
         case let .processUpdates(updates):
-            do { try ayuPluginProcessUpdates(account: target, updates: updates); completion(.success(())) } catch { completion(.failure(Self.backendError(error))) }
+            do { try ayuPluginProcessUpdates(account: target, updates: updates); completion(.success(nil)) } catch { completion(.failure(Self.backendError(error))) }
             return
         case let .storePeers(users, chats):
             signal = ayuPluginStorePeers(account: target, users: users, chats: chats)
         case let .loadFullPeer(kind, id):
             signal = ayuPluginLoadFullPeer(account: target, isUser: kind == .user, id: id)
+        case let .addDialogsToFolder(dialogIDs, folderID):
+            // The transaction yields its one value, Android's result, and nothing else.
+            let _ = ayuPluginAddDialogsToFolder(account: target, dialogIds: dialogIDs, folderId: folderID).start(next: { result in
+                completion(.success(result))
+            }, error: { error in
+                completion(.failure(Self.backendError(error)))
+            })
+            return
         }
         let _ = signal.start(error: { error in
             completion(.failure(Self.backendError(error)))
         }, completed: {
-            completion(.success(()))
+            completion(.success(nil))
         })
     }
 
@@ -370,6 +392,21 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
 
     // MARK: Send-message hook (called by the chat screen)
 
+    /// Shows a URL the app is about to open to the plugins that hook Android's `Browser.openUrl`
+    /// (`systemBrowser`: `openUrlInSystemBrowser`, a URL that leaves the app). `completion` gets
+    /// the URL to open, which a plugin may have replaced, or nil when one cancelled the opening:
+    /// at once on the caller's thread while no plugin hooks, on main otherwise.
+    public func applyURLOpenHooks(url: String, systemBrowser: Bool, completion: @escaping (String?) -> Void) {
+        guard let bridge = self.read({ $0.routesURLOpen ? $0.bridge : nil }), bridge.hasURLOpenHooks else {
+            completion(url)
+            return
+        }
+        let completion = AyuPluginURLOpenCompletion(completion)
+        bridge.interceptOpenURL(url, systemBrowser: systemBrowser) { opened in
+            Queue.mainQueue().async { completion.body(opened) }
+        }
+    }
+
     /// Whether any plugin hooks outgoing messages. Cheap; the chat screen checks it before
     /// taking the asynchronous path of `applySendHooks`.
     public var hasSendMessageHooks: Bool {
@@ -393,6 +430,12 @@ public final class AyuPluginTelegramAdapter: AyuPluginTelegramBackend, @unchecke
             run.step(0)
         })
     }
+}
+
+/// Carries a main-thread completion through the bridge's queue.
+private final class AyuPluginURLOpenCompletion: @unchecked Sendable {
+    let body: (String?) -> Void
+    init(_ body: @escaping (String?) -> Void) { self.body = body }
 }
 
 /// One pass of the send hooks over a batch of outgoing messages.
@@ -464,6 +507,7 @@ enum AyuPluginSendHookValues {
         message.invertMedia = described.invertsMedia
         message.effectID = described.effectId
         message.hasMediaSpoilers = described.hasSpoiler
+        message.isComplete = described.isComplete
         return message
     }
 

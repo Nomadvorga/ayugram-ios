@@ -9,6 +9,7 @@ private final class ActionBackend: AyuPluginTelegramBackend, @unchecked Sendable
     let performed = AyuTestBox<[(Int64, AyuPluginTelegramAction)]>([])
     let failure = AyuTestBox<AyuPluginTelegramBackendError?>(nil)
     let answers = AyuTestBox(true)
+    let result = AyuTestBox<Int32?>(nil)
 
     var operations: Set<String> { self.listed.value }
     var sendMessageParameters: Set<String> { [] }
@@ -44,10 +45,10 @@ private final class ActionBackend: AyuPluginTelegramBackend, @unchecked Sendable
         completion(.failure(.unsupported("player")))
     }
     func perform(account: AyuPluginTelegramAccount, action: AyuPluginTelegramAction,
-                 completion: @escaping @Sendable (Result<Void, AyuPluginTelegramBackendError>) -> Void) {
+                 completion: @escaping @Sendable (Result<Int32?, AyuPluginTelegramBackendError>) -> Void) {
         self.performed.update { $0.append((account.index, action)) }
         guard self.answers.value else { return }
-        completion(self.failure.value.map { .failure($0) } ?? .success(()))
+        completion(self.failure.value.map { .failure($0) } ?? .success(self.result.value))
     }
 }
 
@@ -182,12 +183,20 @@ final class AyuPluginTelegramActionsTests: XCTestCase {
         XCTAssertEqual(try self.call(bridge, "telegram.action.store_peers", ["account": .integer(0), "users": .array([wire(user)]), "chats": .array([wire(chat)])]), .null)
         XCTAssertEqual(try self.call(bridge, "telegram.action.store_peers", ["account": .integer(0), "users": .array([]), "chats": .array([wire(chat)])]), .null)
         XCTAssertEqual(try self.call(bridge, "telegram.action.load_full_peer", ["account": .integer(0), "kind": .string("chat"), "id": .integer(44)]), .null)
+        for folder in [Int64(-1), 0, 1] {
+            XCTAssertEqual(try self.call(bridge, "telegram.action.read_all_dialogs", ["account": .integer(0), "folder_id": .integer(folder)]), .null)
+        }
         XCTAssertEqual(backend.performed.value.map(\.1), [.processUpdates(updates), .storePeers(users: [user], chats: [chat]),
-                                                          .storePeers(users: [], chats: [chat]), .loadFullPeer(kind: .chat, id: 44)])
+                                                          .storePeers(users: [], chats: [chat]), .loadFullPeer(kind: .chat, id: 44),
+                                                          .readAllDialogs(folderID: -1), .readAllDialogs(folderID: 0), .readAllDialogs(folderID: 1)])
         backend.performed.value = []
         let refused: [(String, [String: AyuBridgeValue])] = [
             ("telegram.action.read_dialog", ["account": .integer(0), "dialog_id": .integer(5), "max_id": .integer(0)]),
             ("telegram.action.read_dialog", ["account": .integer(0), "dialog_id": .integer(5)]),
+            ("telegram.action.read_all_dialogs", ["account": .integer(0)]),
+            ("telegram.action.read_all_dialogs", ["account": .integer(0), "folder_id": .string("0")]),
+            ("telegram.action.read_all_dialogs", ["account": .integer(0), "folder_id": .integer(Int64(Int32.max) + 1)]),
+            ("telegram.action.read_all_dialogs", ["account": .integer(0), "folder_id": .integer(0), "dialog_id": .integer(5)]),
             ("telegram.action.process_updates", ["account": .integer(0), "updates": .string("AAAA")]),
             ("telegram.action.process_updates", ["account": .integer(0), "updates": .object(["tl": .string("AAA=")])]),
             ("telegram.action.process_updates", ["account": .integer(0), "updates": wire(updates), "from_queue": .bool(false)]),
@@ -200,6 +209,43 @@ final class AyuPluginTelegramActionsTests: XCTestCase {
         ]
         for (operation, arguments) in refused { XCTAssertEqual(self.code(try self.call(bridge, operation, arguments)), "INVALID_ARGUMENTS", operation) }
         XCTAssertTrue(backend.performed.value.isEmpty)
+    }
+
+    func testAddDialogsToFolderAnswersTheBackendsResult() throws {
+        let backend = ActionBackend()
+        let bridge = self.makeBridge(backend)
+        let operation = "telegram.action.add_dialogs_to_folder"
+        func arguments(_ ids: [Int64], _ folder: Int64) -> [String: AyuBridgeValue] {
+            ["account": .integer(0), "dialog_ids": self.ids(ids), "folder_id": .integer(folder)]
+        }
+        for (result, folder) in [(Int32(0), Int64(1)), (1, 0), (2, 1)] {
+            backend.result.value = result
+            XCTAssertEqual(try self.call(bridge, operation, arguments([42, -1_000_000_000_123], folder)), .integer(Int64(result)))
+        }
+        XCTAssertEqual(backend.performed.value.map(\.1), [.addDialogsToFolder(dialogIDs: [42, -1_000_000_000_123], folderID: 1),
+                                                          .addDialogsToFolder(dialogIDs: [42, -1_000_000_000_123], folderID: 0),
+                                                          .addDialogsToFolder(dialogIDs: [42, -1_000_000_000_123], folderID: 1)])
+        // A backend that answers nothing, or a number Android never returns, is not passed on.
+        for result in [nil, Int32(3), -1] {
+            backend.result.value = result
+            XCTAssertEqual(self.code(try self.call(bridge, operation, arguments([42], 1))), "INVALID_STATE")
+        }
+        // Every other action answers null whatever the backend said.
+        backend.result.value = 2
+        XCTAssertEqual(try self.call(bridge, "telegram.action.read_all_dialogs", ["account": .integer(0), "folder_id": .integer(0)]), .null)
+        backend.performed.value = []
+        var extra = arguments([42], 1)
+        extra["pinned_num"] = .integer(0)
+        let refused: [[String: AyuBridgeValue]] = [
+            arguments([], 1), arguments(Array(1...101), 1), arguments([42, 42], 1), arguments([0], 1), arguments([42], 2), arguments([42], -1),
+            ["account": .integer(0), "dialog_ids": .integer(42), "folder_id": .integer(1)],
+            ["account": .integer(0), "dialog_ids": .array([.string("42")]), "folder_id": .integer(1)],
+            ["account": .integer(0), "dialog_ids": self.ids([42])], extra,
+        ]
+        for arguments in refused { XCTAssertEqual(self.code(try self.call(bridge, operation, arguments)), "INVALID_ARGUMENTS") }
+        XCTAssertEqual(self.code(try self.call(bridge, operation, ["account": .integer(1), "dialog_ids": self.ids([42]), "folder_id": .integer(1)])), "ACCOUNT_UNAVAILABLE")
+        XCTAssertTrue(backend.performed.value.isEmpty, "A refused call never reaches the backend")
+        XCTAssertEqual(try self.call(bridge, operation, arguments(Array(1...100), 0)), .integer(2))
     }
 
     func testBackendFailuresAndSilenceAreReported() throws {

@@ -594,6 +594,7 @@ final class AyuPluginNativeHostTests: XCTestCase {
         try await self.authorize(host)
         let scroll = try await self.construct(host, "android.widget.ScrollView")
         let linear = try await self.construct(host, "android.widget.LinearLayout")
+        _ = try await self.invoke(host, linear["result"], "setOrientation", [.integer(1)])
         let layout = try await self.construct(host, "android.widget.FrameLayout$LayoutParams", [.integer(-1), .integer(-2)])
         _ = try await self.invoke(host, scroll["result"], "addView", [linear["result"], layout["result"]])
 

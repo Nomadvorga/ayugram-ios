@@ -1,7 +1,7 @@
 # AyuPluginBridge Telegram host contract
 
 Operations the Python SDK uses to reach Telegram itself: API requests, request/update/send hooks, sending and
-editing, cached peers and messages, the visible screen, files, the audio player, menus and the plugin list.
+editing, cached peers and messages, the chat list, the visible screen, files, the audio player, menus and the plugin list.
 Everything here extends `protocol.md` (transport, ownership, generations, limits) and nothing replaces it.
 
 **No operation of this document is declared by the Swift host yet.** The SDK side exists and is tested against a
@@ -192,6 +192,15 @@ When it is not declared the SDK uses the existing `hooks.register` kind `send_me
 `hasMediaSpoilers`, `monoForumPeer`, `quick_reply_shortcut_id`, `payStars`. A key the host omits has Android's Java
 default in the plugin's object (`notify` true).
 
+`complete: true` (never `false`) says that these keys are all there is to the message: no attachment, reply quote,
+story reply, chosen link-preview option or other part the keys cannot carry (the default link preview of a text
+counts as described: the server builds it again). A host that declares this operation MUST send it for every such
+message. The plugin's object then has the Java default in every other Android field, and
+`SendMessagesHelper.sendMessage(params)` on it (Android's cancel, change, send again) queues a NEW message through
+`telegram.send_message` with the fields as the plugin left them. Without `complete` the fields the keys do not
+name are unreadable (`UNSUPPORTED_API`) and sending the object again is refused, because the new message would
+silently lose what was not described; a hook that cancelled such a message has then dropped it.
+
 `params` from the plugin (MODIFY/MODIFY_FINAL): `peer`, `message`, `caption`, `entities` (`[{tl}]` or `null` for
 none), `replyToMsg`, `replyToTopMsg` (message id or `null`), `notify`, `scheduleDate`, `scheduleRepeatPeriod`,
 `searchLinks`, `invert_media`, `effect_id`, `hasMediaSpoilers`. The host applies text, caption and entities as given
@@ -201,6 +210,35 @@ but not removed, emptied or moved between `message` and `caption`. CANCEL suppre
 
 Hooks registered here and three-field hooks registered through `hooks.register` run as one chain in the order
 above; a plugin that registered both ways is called through this hook only.
+
+### `hooks.url_open`
+
+Backs Xposed hooks on `org.telegram.messenger.browser.Browser.openUrl` and `openUrlInSystemBrowser` (hook point
+`url.open`). Declared only by a host that asks before it opens a URL the user chose.
+
+| | |
+|---|---|
+| Arguments | `{priority:int32, callback:$callback}` |
+| Result | null. One dispatcher per generation: a second call replaces the first. The SDK calls it when the generation's highest hook priority on the point changes |
+| Callback | `(url:string, system_browser:bool)` → `{url:string|null}`, called before the URL is opened; `system_browser` is true when the app opens it outside itself |
+
+The SDK runs the generation's hooks of the method (`openUrlInSystemBrowser` for `system_browser`) in Xposed order
+with `args = [Context, url]` and no `thisObject`, and answers with `args[1]` as the hooks left it, or `url: null`
+when a before hook set a result or a throwable (Xposed then skips the original). The host asks the plugins in
+descending `priority` (ties in ascending plugin id), hands each the URL the previous one answered, stops at the
+first `null` and then opens nothing. No answer within the hook timeout, an answer of another shape, an empty URL or
+one above 8192 UTF-8 bytes changes nothing; a URL above 8192 bytes is opened without asking.
+
+Differences from Android: Xposed orders the callbacks of all plugins in one list, the host asks plugin by plugin;
+Android's `openUrl` overloads call each other, so a `hook_all_methods` hook runs several times for one tap there
+and once here, always with the `(Context, String)` arguments.
+
+What the iOS app routes: every URL that reaches its external-URL opener (a tapped link that is not a Telegram link
+the app resolved itself, a link button, a link another screen opens; `system_browser` when the caller forces the
+opening outside the app). Not routed: a Telegram link a chat resolves to a chat, profile or other in-app
+destination, and a URL a plugin opens itself: `startActivity(ACTION_VIEW)` never enters `Browser.openUrl` on Android,
+and a hook that cancels a link and opens another must not be asked about its own URL. A plugin's own call of
+`Browser.openUrl` shares that route, so unlike on Android it does not run the hooks either.
 
 ## Sending and editing
 
@@ -273,7 +311,21 @@ Where the iOS host shows them: the message context menu; the context menu of the
 of the plugin manager screen, because iOS Telegram has neither a drawer nor a global main menu. An `icon` name is
 looked up in the host's drawable table (see `resources.resolve`); a name it lacks shows no icon.
 
-Android's MVEL condition strings are not evaluated; the SDK refuses them before calling the host.
+A `condition` is a Python callable or, as on Android, an MVEL expression string over the context map. The host
+only ever sees a callback: the SDK evaluates the string itself (`_ayu_mvel.py`) with the rules of exteraGram's
+`MenuItemRecord.checkCondition`: an empty string always holds; an evaluation that throws on Android (a name the
+map lacks, a member of `null`, a non-boolean result) hides the item. Implemented: `null`/`nil`, `true`, `false`,
+numbers, quoted strings, names of the map, `a.b` (field, `getB()`/`isB()`, or a method `b()`), `a.m(...)`, static
+members of a fully qualified class, `!`, `&&`, `||`, `==`, `!=`, `<`, `<=`, `>`, `>=`, parentheses, and on a
+string `length`, `isEmpty`, `equals`, `equalsIgnoreCase`, `contains`, `startsWith`, `endsWith`, `toLowerCase`,
+`toUpperCase`, `trim`. Any other MVEL (arithmetic, `contains`/`instanceof`/`empty`, ternaries, indexing, `new`,
+assignments) raises `UNSUPPORTED_API` when the item is added, and a literal such condition is a preflight blocker
+(`sdk.unprovided_member (MenuItemData condition, …)`), as is a member of `message`, `user`, `chat`, `userFull`,
+`chatFull` or a named class that the SDK's model of that class lacks (`MEMBER`). A condition computed at run time
+is only a preflight warning (`DYNAMIC_MENU_CONDITIONS`). Deviation: where a condition reads something the SDK
+cannot answer (`MessageObject.messageText` of a media or service message, which is a localized label on
+Android), that operand is unknown; `&&` and `||` still answer when the other operand decides, and otherwise the
+item is hidden and the fact is logged once per item. Without `menus.add` a string condition stays unsupported.
 
 ## State
 
@@ -302,6 +354,31 @@ Backs `MessagesStorage.getMessage`. Arguments `{account:int, dialog_id:int64, id
 a list of the same length, each `{tl Message}` rebuilt from the local store or `null` when it is not stored.
 `null` is also the answer for a stored message the host cannot rebuild as a `message` (a service message): a
 wrong object is never returned in its place.
+
+### `telegram.dialogs`
+
+Backs `MessagesController.allDialogs`, `getAllDialogs`, `getDialogs`, `dialogs_dict` and `getDialog`.
+
+Arguments `{account:int}`. Result: a list of at most 2,000 entries
+`{dialog:{tl Dialog}, last_message_date:int, pinned_num:int}`, the chat list as the app holds it locally (main
+list and archive; no request is made), in any order:
+
+- `dialog` is a `dialog` rebuilt from the local store: `peer`, `folder_id` (1 for an archived dialog), `pinned`,
+  `unread_mark`, `unread_count`, `unread_mentions_count`, `unread_reactions_count`, `top_message`, the read maxima
+  and `notify_settings` as far as the store knows them; or, once and only while the archive holds a chat, the
+  `dialogFolder` of the archive's row (`folder.id` 1, `pinned`).
+- `last_message_date` is the date of the dialog's newest message, 0 when it has none (Android's local field of
+  that name); `pinned_num` is Android's `pinnedNum`: 0 for an unpinned dialog, otherwise larger for a higher row.
+- No dialog appears twice. An account with more dialogs than the bound gets its pinned and most recent ones.
+  Secret chats are not listed.
+
+The SDK sets each object's local `id`, `last_message_date`, `pinnedNum` and `isFolder` and orders the list as
+Android's `dialogComparator` does: the archive's row, pinned dialogs by `pinnedNum`, then the newest first.
+`getDialogs(0)` is the main list with the archive's row, `getDialogs(1)` the archive. Deviations: Android's lists
+are live objects, here every read returns a new snapshot (a change to a returned object or list does not reach
+the app), built from one host answer for the reads of a quarter second, which a state change made through the
+SDK ends early; a draft does not move a dialog up; Android lists what it has loaded so far, the host what
+the bound allows. `dialogsServerOnly`, `dialogsForward` and the other filtered lists are not provided.
 
 ### `telegram.screen`
 
@@ -361,24 +438,26 @@ part of the operation.
 
 Backs the `MessagesController` members that change state. Each action is its own operation, so a host declares
 exactly the ones it carries out; there is no generic "call a controller method". Every action takes `account`,
-returns `null` once the change is applied locally or queued for the server (delivery is asynchronous, as on
-Android), and goes through the same code as the app's own user action, so the app's rules apply (ghost mode,
+returns `null` (`add_dialogs_to_folder`: its result) once the change is applied locally or queued for the server
+(delivery is asynchronous, as on Android), and goes through the same code as the app's own user action, so the app's rules apply (ghost mode,
 what a deletion removes for whom, how cached peers are merged).
 
 | Operation | Arguments | Backs | Effect |
 |---|---|---|---|
 | `telegram.action.delete_messages` | `{account, dialog_id:int64, ids:[int], revoke:bool}`; 1 to 100 distinct positive ids | `deleteMessages` (every overload) | Deletes the cloud messages `ids` of the dialog, for this account only or, with `revoke` (Android's `forAll`), for everyone; in a channel always for everyone. Ids that are not stored are ignored |
 | `telegram.action.read_dialog` | `{account, dialog_id:int64, max_id:int}` | `markDialogAsRead` | Marks incoming messages up to the stored message `max_id` as read; `invalid_arguments` when that message is not stored |
+| `telegram.action.read_all_dialogs` | `{account, folder_id:int32}` | `MessagesStorage.readAllDialogs` | Marks every dialog that has unread messages as read, forum topics included: the main list (`folder_id` 0), the archive (1), both (negative); any other folder holds nothing. A dialog with no unread message that is only marked unread keeps its mark |
 | `telegram.action.process_updates` | `{account, updates:{tl Updates}}` | `processUpdates` | Processes the container as if the server had sent it, update hooks included |
 | `telegram.action.store_peers` | `{account, users:[{tl User}], chats:[{tl Chat}]}`; at most 200 each, not both empty | `putUser`, `putUsers`, `putChat`, `putChats` | Merges the objects into the peer cache as the users and chats of a response are merged (a `min` object does not replace a full one); `fromCache` has no meaning here |
 | `telegram.action.load_full_peer` | `{account, kind:"user"|"chat", id:int64}` | `loadFullUser`, `loadFullChat` | Starts the request that refreshes the cached `UserFull`/`ChatFull`, which `telegram.peer` then returns; `invalid_arguments` for a peer the account does not know |
+| `telegram.action.add_dialogs_to_folder` | `{account, dialog_ids:[int64], folder_id:int}`; 1 to 100 distinct dialog ids, `folder_id` 0 (main list) or 1 (archive) | `addDialogToFolder` (both overloads) | Moves the dialogs into the folder as the chat list's Archive and Unarchive do, which unpins them. Skipped, as on Android: a dialog that is not in the chat list, and for the archive Saved Messages, the service notifications chat (777000) and a promoted chat. Returns Android's integer: 0 when no dialog was accepted, 2 when the archive held no chat before the move, otherwise 1 (also for a dialog that already is in the folder) |
 
 `invalid_arguments` also answers a `dialog_id` the account does not know and bytes that are not an object of the
 named type. The SDK splits longer lists into several calls, and raises `UNSUPPORTED_API` for what no action
 covers: a secret chat, scheduled or quick-reply messages, a cache-only deletion, reading a thread, a
-`loadFullUser` callback. `addDialogToFolder`, `deleteDialog`, `pinMessage`, `forwardMessages`, `sendTyping`,
-`blockPeer`, `markReactionsAsRead` and the dialog list (`getDialogs`, `getAllDialogs`, `dialogs_dict`) have no
-operation.
+`loadFullUser` callback, `addDialogToFolder` with a pinned position (`pinnedNum` above zero) or a pending task
+(`taskId`). `deleteDialog`, `pinMessage`, `forwardMessages`, `sendTyping`,
+`blockPeer` and `markReactionsAsRead` have no operation.
 
 ## Plugins and layout
 
@@ -540,7 +619,7 @@ The SDK names these operations in preflight blockers. They have no contract and 
 | `telegram.contacts`, `telegram.location`, `telegram.notifications`, `telegram.secret_chats`, `telegram.downloads` | the matching `client_utils.get_*` controller getters | not designed |
 | `resources.strings` | `R.string.<name>` (`LocaleController.getString(R.string.x)`) | Android string names have no iOS table; the corpus uses 59 names and the host has no `getString` member |
 | `resources.android` | `R.style`, `R.id`, `R.color`, `R.dimen`, `R.attr`, `R.layout` and the other Android-only kinds | No iOS counterpart |
-| `sdk.unprovided_member` | A call, on any receiver, of a member listed in `_ayu_operations.UNPROVIDED_MEMBERS` (`addDialogToFolder`, `readAllDialogs`, `MessageObject.applyNewText`, `getWindow().getDecorView()`, ...) | Neither a host adapter nor a Python-local class provides the member, so the call fails wherever it is made. The list comes from auditing plugins that otherwise pass preflight; it is not complete (see *Member coverage*) |
+| `sdk.unprovided_member` | A call, on any receiver, of a member listed in `_ayu_operations.UNPROVIDED_MEMBERS` (`smoothScrollBy`, `MessageObject.applyNewText`, `getWindow().getDecorView()`, ...) | Neither a host adapter nor a Python-local class provides the member, so the call fails wherever it is made. The list comes from auditing plugins that otherwise pass preflight; it is not complete (see *Member coverage*) |
 
 ### Member coverage
 

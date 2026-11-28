@@ -649,6 +649,127 @@ public func ayuPluginMessagesTL(account: Account, dialogId: Int64, ids: [Int32])
     |> castError(AyuPluginCoreError.self)
 }
 
+/// One row of the chat list for `telegram.dialogs`.
+public struct AyuPluginDialogEntry {
+    /// A boxed `dialog`, or the `dialogFolder` of the archive's row in the main list.
+    public let dialog: Data
+    /// Date of the newest message, 0 when there is none (Android's `last_message_date`).
+    public let lastMessageDate: Int32
+    /// Android's `pinnedNum`: 0 for an unpinned dialog, otherwise larger for a higher row.
+    public let pinnedNumber: Int32
+}
+
+private struct AyuPluginDialogRow {
+    var dialog: AyuPluginTL.Dialog
+    var date: Int32
+    var pinnedNumber: Int32
+    var isMuted: Bool
+}
+
+/// The cloud dialogs of one chat list in its own order, at most `limit` list entries deep.
+/// Secret chats have no Android dialog id here and are left out.
+private func ayuPluginDialogRows(transaction: Transaction, groupId: PeerGroupId, folderId: Int32?, limit: Int, timestamp: Int32) -> [AyuPluginDialogRow] {
+    var rows: [AyuPluginDialogRow] = []
+    var pinningIndices: [UInt16?] = []
+    for entry in transaction.getTopChatListEntries(groupId: groupId, count: limit) {
+        let peerId = entry.peerId
+        guard let (_, index) = transaction.getPeerChatListIndex(peerId) else {
+            continue
+        }
+        let id = peerId.id._internalGetInt64Value()
+        let reference: AyuPluginTL.PeerReference
+        switch peerId.namespace {
+        case Namespaces.Peer.CloudUser:
+            reference = .user(id)
+        case Namespaces.Peer.CloudGroup:
+            reference = .chat(id)
+        case Namespaces.Peer.CloudChannel:
+            reference = .channel(id)
+        default:
+            continue
+        }
+        var dialog = AyuPluginTL.Dialog(peer: reference)
+        dialog.isPinned = index.pinningIndex != nil
+        dialog.folderId = folderId
+        dialog.topMessageId = transaction.getTopPeerMessageId(peerId: peerId, namespace: Namespaces.Message.Cloud)?.id ?? 0
+        if let readState = transaction.getCombinedPeerReadState(peerId) {
+            dialog.isMarkedUnread = readState.markedUnread
+            for (namespace, state) in readState.states where namespace == Namespaces.Message.Cloud {
+                if case let .idBased(maxIncomingReadId, maxOutgoingReadId, _, count, _) = state {
+                    dialog.readInboxMaxId = maxIncomingReadId
+                    dialog.readOutboxMaxId = maxOutgoingReadId
+                    dialog.unreadCount = max(0, count)
+                }
+            }
+        }
+        func tagged(_ tag: MessageTags) -> Int32 {
+            return max(0, transaction.getMessageTagSummary(peerId: peerId, threadId: nil, tagMask: tag, namespace: Namespaces.Message.Cloud, customTag: nil)?.count ?? 0)
+        }
+        dialog.unreadMentionsCount = tagged(.unseenPersonalMessage)
+        dialog.unreadReactionsCount = tagged(.unseenReaction)
+        dialog.unreadPollVotesCount = tagged(.unseenPollVote)
+        dialog.notifySettings = ayuPluginNotifySettings(transaction.getPeerNotificationSettings(id: peerId))
+        if peerId.namespace == Namespaces.Peer.CloudChannel {
+            dialog.pts = (transaction.getPeerChatState(peerId) as? ChannelState)?.pts
+        }
+        rows.append(AyuPluginDialogRow(dialog: dialog, date: max(0, index.messageIndex.timestamp), pinnedNumber: 0, isMuted: (dialog.notifySettings.muteUntil ?? 0) > timestamp))
+        pinningIndices.append(index.pinningIndex)
+    }
+    // The store counts pinned rows from the top (0 is the highest), Android from the bottom.
+    if let lowest = pinningIndices.compactMap({ $0 }).max() {
+        for (position, pinningIndex) in pinningIndices.enumerated() {
+            if let pinningIndex {
+                rows[position].pinnedNumber = Int32(lowest - pinningIndex) + 1
+            }
+        }
+    }
+    return rows
+}
+
+/// The chat list as the store holds it, for `telegram.dialogs`: the cloud dialogs of the main
+/// list and of the archive as `dialog` objects and, while the archive holds one, the archive's
+/// row as a `dialogFolder`. At most `limit` entries, the pinned and most recent dialogs first;
+/// the order is otherwise unspecified. No request is made.
+public func ayuPluginDialogsTL(account: Account, limit: Int) -> Signal<[AyuPluginDialogEntry], NoError> {
+    return account.postbox.transaction { transaction -> [AyuPluginDialogEntry] in
+        guard limit > 0 else {
+            return []
+        }
+        let timestamp = Int32(clamping: Int64(Date().timeIntervalSince1970))
+        let archiveGroup = Namespaces.PeerGroup.archive
+        let archived = ayuPluginDialogRows(transaction: transaction, groupId: archiveGroup, folderId: archiveGroup.rawValue, limit: limit, timestamp: timestamp)
+        var rows = ayuPluginDialogRows(transaction: transaction, groupId: .root, folderId: nil, limit: limit, timestamp: timestamp) + archived
+        var result: [AyuPluginDialogEntry] = []
+        if let newest = archived.max(by: { $0.date < $1.date }) {
+            var row = AyuPluginTL.FolderRow(folderId: archiveGroup.rawValue, title: "Archived Chats", topPeer: newest.dialog.peer, topMessageId: newest.dialog.topMessageId)
+            for item in archived where item.dialog.unreadCount > 0 || item.dialog.isMarkedUnread {
+                if item.isMuted {
+                    row.unreadMutedPeersCount += 1
+                    row.unreadMutedMessagesCount = row.unreadMutedMessagesCount &+ item.dialog.unreadCount
+                } else {
+                    row.unreadUnmutedPeersCount += 1
+                    row.unreadUnmutedMessagesCount = row.unreadUnmutedMessagesCount &+ item.dialog.unreadCount
+                }
+            }
+            let highest = rows.map({ $0.pinnedNumber }).max() ?? 0
+            result.append(AyuPluginDialogEntry(dialog: AyuPluginTL.serialize(AyuPluginTL.folderRow(row)), lastMessageDate: newest.date, pinnedNumber: highest + 1))
+        }
+        if rows.count > limit - result.count {
+            rows.sort { lhs, rhs in
+                if (lhs.pinnedNumber > 0) != (rhs.pinnedNumber > 0) {
+                    return lhs.pinnedNumber > 0
+                }
+                return lhs.date > rhs.date
+            }
+            rows.removeSubrange((limit - result.count)...)
+        }
+        for row in rows {
+            result.append(AyuPluginDialogEntry(dialog: AyuPluginTL.serialize(AyuPluginTL.dialog(row.dialog)), lastMessageDate: row.date, pinnedNumber: row.pinnedNumber))
+        }
+        return result
+    }
+}
+
 /// A message the app holds as a boxed `Message`; nil when it is not a cloud message or cannot
 /// be rebuilt (a service message, a message of a secret chat).
 public func ayuPluginMessageTL(_ message: EngineRawMessage) -> Data? {

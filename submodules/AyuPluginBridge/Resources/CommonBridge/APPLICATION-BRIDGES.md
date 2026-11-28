@@ -39,7 +39,7 @@ a plugin works.
   each use as an `OPERATION` blocker.
 - Preflight does not check individual Java members. A curated list of 21 host
   members that nothing provides (`getWindow`, `getDecorView`,
-  `getDeclaredField`, `addDialogToFolder`, ...) is blocked under the reserved
+  `getDeclaredField`, `smoothScrollBy`, ...) is blocked under the reserved
   `sdk.unprovided_member`. A review found 12 of 20 passing corpus plugins to be
   false passes before this gating; false passes may remain.
 - UI degradations are explicit: alert cancel/back listeners raise
@@ -63,7 +63,10 @@ a plugin works.
   or replacement. The returned `BaseFragment` provides
   `getCurrentAccount`, `getDialogId` for supported cloud peer chats, and
   `getContext`/`getParentActivity` as an explicit native context descriptor, not
-  an Android Activity. It also supplies `getAccountInstance`, `getUserConfig` and
+  an Android Activity. `finishFragment([animated])` pops that screen through the
+  app's close route and returns true; a handle whose screen is no longer the
+  visible one returns false and closes nothing (Android closes whatever fragment
+  is on top), and the first screen of the stack stays (Android closes the app). It also supplies `getAccountInstance`, `getUserConfig` and
   `getMessagesController`, after checking the visible screen identity.
   `MessagesController.getInstance(index)` and `getUser(id)` expose only the active
   account's own public profile; other user ids return a cache miss (`null`).

@@ -39,6 +39,9 @@ public struct AyuPluginHookedOutgoingMessage: Equatable {
     public var invertsMedia: Bool
     public var effectId: Int64
     public var hasSpoiler: Bool
+    /// True when the fields above are all there is to the message, so that sending them as a new
+    /// message loses nothing: what lets a plugin send its hook's object again.
+    public var isComplete: Bool = false
 }
 
 /// The fields `ayuPluginApplySendHook` writes back, by their `SendMessageParams` names.
@@ -62,10 +65,13 @@ public func ayuPluginDescribeOutgoingMessages(account: Account, peerId: PeerId, 
     }
     return account.postbox.transaction { transaction -> [AyuPluginHookedOutgoingMessage?] in
         return messages.map { message -> AyuPluginHookedOutgoingMessage? in
-            guard case let .message(text, attributes, _, mediaReference, threadId, replyToMessageId, _, _, _, _) = message else {
+            guard case let .message(text, attributes, inlineStickers, mediaReference, threadId, replyToMessageId, replyToStoryId, localGroupingKey, _, _) = message else {
                 return nil
             }
-            var result = AyuPluginHookedOutgoingMessage(dialogId: dialogId, text: text, isMedia: mediaReference != nil, entities: [], replyTo: nil, replyToTop: nil, replyToMessageId: nil, path: nil, document: nil, photo: nil, silent: false, scheduleTime: 0, scheduleRepeatPeriod: 0, disablesLinkPreview: false, invertsMedia: false, effectId: 0, hasSpoiler: false)
+            // A link preview rides as the message's media; the message is still a text message.
+            let isLinkPreview = mediaReference?.media is TelegramMediaWebpage
+            var isComplete = (mediaReference == nil || isLinkPreview) && inlineStickers.isEmpty && replyToStoryId == nil && localGroupingKey == nil
+            var result = AyuPluginHookedOutgoingMessage(dialogId: dialogId, text: text, isMedia: mediaReference != nil && !isLinkPreview, entities: [], replyTo: nil, replyToTop: nil, replyToMessageId: nil, path: nil, document: nil, photo: nil, silent: false, scheduleTime: 0, scheduleRepeatPeriod: 0, disablesLinkPreview: false, invertsMedia: false, effectId: 0, hasSpoiler: false)
             for attribute in attributes {
                 if let attribute = attribute as? TextEntitiesMessageAttribute {
                     var peers = SimpleDictionary<PeerId, Peer>()
@@ -77,23 +83,36 @@ public func ayuPluginDescribeOutgoingMessages(account: Account, peerId: PeerId, 
                     result.entities = apiEntitiesFromMessageTextEntities(attribute.entities, associatedPeers: peers).map { AyuPluginTL.serialize($0) }
                 } else if let attribute = attribute as? NotificationInfoMessageAttribute {
                     result.silent = attribute.flags.contains(.muted)
+                    if !attribute.flags.subtracting(.muted).isEmpty { isComplete = false }
                 } else if let attribute = attribute as? OutgoingScheduleInfoMessageAttribute {
                     result.scheduleTime = attribute.scheduleTime
                     result.scheduleRepeatPeriod = attribute.repeatPeriod ?? 0
                 } else if let attribute = attribute as? OutgoingContentInfoMessageAttribute {
                     result.disablesLinkPreview = attribute.flags.contains(.disableLinkPreviews)
+                    if !attribute.flags.subtracting(.disableLinkPreviews).isEmpty { isComplete = false }
                 } else if attribute is InvertMediaMessageAttribute {
                     result.invertsMedia = true
                 } else if let attribute = attribute as? EffectMessageAttribute {
                     result.effectId = attribute.id
                 } else if attribute is MediaSpoilerMessageAttribute {
                     result.hasSpoiler = true
+                } else if let attribute = attribute as? WebpagePreviewMessageAttribute {
+                    // The server builds the default preview of a re-sent text by itself; a chosen size or link it cannot know.
+                    if attribute.forceLargeMedia != nil || attribute.isManuallyAdded { isComplete = false }
+                    if attribute.leadingPreview && !attributes.contains(where: { $0 is InvertMediaMessageAttribute }) { isComplete = false }
+                } else {
+                    isComplete = false
                 }
+            }
+            if let reply = replyToMessageId {
+                if reply.quote != nil || reply.innerSubject != nil { isComplete = false }
             }
             if let replyId = replyToMessageId?.messageId, replyId.namespace == Namespaces.Message.Cloud {
                 result.replyToMessageId = replyId.id
                 result.replyTo = ayuPluginReference(transaction: transaction, id: replyId)
             }
+            // A reply or a thread the hook cannot be shown would be dropped by a new message.
+            if replyToMessageId != nil && result.replyTo == nil { isComplete = false }
             if let threadId, let topId = Int32(exactly: threadId), topId > 0, peerId.namespace == Namespaces.Peer.CloudChannel {
                 result.replyToTop = ayuPluginReference(transaction: transaction, id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: topId))
             }
@@ -108,6 +127,7 @@ public func ayuPluginDescribeOutgoingMessages(account: Account, peerId: PeerId, 
                     result.photo = AyuPluginTL.serialize(photo)
                 }
             }
+            result.isComplete = isComplete && (threadId == nil || result.replyToTop != nil)
             return result
         }
     }

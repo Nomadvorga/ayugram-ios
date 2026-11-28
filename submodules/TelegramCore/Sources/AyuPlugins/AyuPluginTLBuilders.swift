@@ -649,4 +649,46 @@ enum AyuPluginTL {
         let flags2: Int32 = bit(channel.antispam, 1) | bit(channel.participantsHidden, 2) | bit(channel.translationsDisabled, 3)
         return .channelFull(.init(flags: flags, flags2: flags2, id: channel.id, about: channel.about, participantsCount: channel.participantsCount, adminsCount: channel.adminsCount, kickedCount: kickedCount, bannedCount: bannedCount, onlineCount: nil, readInboxMaxId: channel.readInboxMaxId, readOutboxMaxId: channel.readOutboxMaxId, unreadCount: channel.unreadCount, chatPhoto: channel.chatPhoto ?? .photoEmpty(.init(id: 0)), notifySettings: notifySettings(channel.notifySettings), exportedInvite: nil, botInfo: [], migratedFromChatId: channel.migratedFrom?.chatId, migratedFromMaxId: channel.migratedFrom?.maxId, pinnedMsgId: channel.pinnedMessageId, stickerset: nil, availableMinId: channel.availableMinId, folderId: nil, linkedChatId: channel.linkedChatId, location: nil, slowmodeSeconds: channel.slowmodeSeconds, slowmodeNextSendDate: channel.slowmodeNextSendDate, statsDc: nil, pts: channel.pts, call: nil, ttlPeriod: channel.ttlPeriod, pendingSuggestions: nil, groupcallDefaultJoinAs: nil, themeEmoticon: nil, requestsPending: nil, recentRequesters: nil, defaultSendAs: nil, availableReactions: nil, reactionsLimit: nil, stories: nil, wallpaper: nil, boostsApplied: nil, boostsUnrestrict: nil, emojiset: nil, botVerification: nil, stargiftsCount: nil, sendPaidMessagesStars: nil, mainTab: nil, guardBotId: nil, shareTheme: nil))
     }
+
+    // MARK: Dialogs
+
+    struct Dialog {
+        var peer: PeerReference
+        var isPinned = false
+        var isMarkedUnread = false
+        var topMessageId: Int32 = 0
+        var readInboxMaxId: Int32 = 0
+        var readOutboxMaxId: Int32 = 0
+        var unreadCount: Int32 = 0
+        var unreadMentionsCount: Int32 = 0
+        var unreadReactionsCount: Int32 = 0
+        var unreadPollVotesCount: Int32 = 0
+        var notifySettings = NotifySettings()
+        /// A channel's update counter.
+        var pts: Int32?
+        /// Nil for a dialog of the main list.
+        var folderId: Int32?
+    }
+
+    static func dialog(_ dialog: Dialog) -> Api.Dialog {
+        let flags = some(dialog.pts, 0) | bit(dialog.isPinned, 2) | bit(dialog.isMarkedUnread, 3) | some(dialog.folderId, 4)
+        return .dialog(.init(flags: flags, peer: dialog.peer.api, topMessage: dialog.topMessageId, readInboxMaxId: dialog.readInboxMaxId, readOutboxMaxId: dialog.readOutboxMaxId, unreadCount: dialog.unreadCount, unreadMentionsCount: dialog.unreadMentionsCount, unreadReactionsCount: dialog.unreadReactionsCount, unreadPollVotesCount: dialog.unreadPollVotesCount, notifySettings: notifySettings(dialog.notifySettings), pts: dialog.pts, draft: nil, folderId: dialog.folderId, ttlPeriod: nil))
+    }
+
+    /// The row a folder has in the main list. It is always pinned there.
+    struct FolderRow {
+        var folderId: Int32
+        var title: String
+        /// The folder's newest dialog and that dialog's newest message.
+        var topPeer: PeerReference
+        var topMessageId: Int32 = 0
+        var unreadMutedPeersCount: Int32 = 0
+        var unreadUnmutedPeersCount: Int32 = 0
+        var unreadMutedMessagesCount: Int32 = 0
+        var unreadUnmutedMessagesCount: Int32 = 0
+    }
+
+    static func folderRow(_ row: FolderRow) -> Api.Dialog {
+        return .dialogFolder(.init(flags: 1 << 2, folder: .folder(.init(flags: 0, id: row.folderId, title: row.title, photo: nil)), peer: row.topPeer.api, topMessage: row.topMessageId, unreadMutedPeersCount: row.unreadMutedPeersCount, unreadUnmutedPeersCount: row.unreadUnmutedPeersCount, unreadMutedMessagesCount: row.unreadMutedMessagesCount, unreadUnmutedMessagesCount: row.unreadUnmutedMessagesCount))
+    }
 }

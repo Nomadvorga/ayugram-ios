@@ -734,7 +734,7 @@ class Runtime:
                                  inventory["sdk_references"], inventory["method_calls"],
                                  inventory["send_hook_fields"], inventory.get("hook_targets"),
                                  inventory.get("intent_actions", ()), inventory.get("window_services", ()),
-                                 inventory.get("send_hook_resend", False)),
+                                 inventory.get("send_hook_resend", False), inventory.get("field_reads", ())),
                             "unguarded_native_imports": inventory["unguarded_native_imports"],
                             "dynamic_class_lookup_lines": inventory["dynamic_class_lookup_lines"]}, allow_nan=False)
 
@@ -790,6 +790,15 @@ class Runtime:
             block("OPERATION", finding)
         for finding in report["member_accesses"].pop("missing"):
             block("MEMBER", finding)
+        # Android's menu conditions are MVEL strings; the typed menus evaluate a subset of it.
+        import _ayu_mvel
+        conditions, dynamic = _ayu_mvel.static_conditions(ast.parse(source, filename=filename))
+        report["menu_conditions"] = conditions
+        for code, detail in _ayu_mvel.preflight(conditions, capabilities):
+            if {"code": code, "detail": detail} not in blockers:
+                block(code, detail)
+        if dynamic:
+            report["warnings"].append("DYNAMIC_MENU_CONDITIONS: computed menu conditions are checked only at runtime")
         if report["dynamic_class_lookup_lines"]:
             report["warnings"].append("DYNAMIC_CLASSES: computed native classes are checked only at runtime")
         report["blockers"] = blockers

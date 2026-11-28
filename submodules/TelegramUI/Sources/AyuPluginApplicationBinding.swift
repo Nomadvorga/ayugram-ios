@@ -34,13 +34,15 @@ import UIKit
     init(sharedContext: SharedAccountContextImpl, bridge: AyuPluginApplicationBridge = .shared, root: @escaping () -> (AccountRecordId, UIViewController)?) {
         self.sharedContext = sharedContext; self.bridge = bridge; self.root = root
         AyuTelegramPluginApplicationBinding.current = self
-        AyuPluginTelegramAdapter.shared.bind(describesScreen: true, routesSendHook: true)
+        AyuPluginTelegramAdapter.shared.bind(describesScreen: true, routesSendHook: true, routesURLOpen: true)
         self.installPluginNavigator()
         self.installPluginPlayer()
         bridge.bindScreen(screen: { [weak self] in self?.screen() }, presenter: { [weak self] in self?.visibleController()?.1 }, presentAlert: { [weak sharedContext] alert in
             sharedContext?.mainWindow?.presentNative(alert)
         }, openURL: { [weak self] screen, url in
             self?.openPluginURL(url, screen: screen)
+        }, closeScreen: { [weak self] screen, animated in
+            self?.closePluginScreen(screen, animated: animated)
         }, localeIdentifier: { [weak sharedContext] in
             sharedContext?.currentPresentationData.with { $0 }.strings.baseLanguageCode ?? Locale.current.identifier
         })
@@ -435,6 +437,20 @@ import UIKit
         return AyuPluginScreenSnapshot(identity: self.screenIdentity, accountIndex: slot, dialogID: dialogID, isGroup: isGroup, isChannel: isChannel, telegram: telegram)
     }
 
+    /// `BaseFragment.finishFragment`: pops the screen the plugin's fragment stands for. The first
+    /// screen of the stack stays: Android closes the app's window there, which a plugin must not do here.
+    private func closePluginScreen(_ expected: AyuPluginScreenSnapshot, animated: Bool) {
+        guard self.active, !self.locked,
+              let (accountID, rootController) = self.root(),
+              let current = self.screen(), current.identity == expected.identity,
+              current.accountIndex == expected.accountIndex,
+              accountID == self.primaryID,
+              let navigationController = rootController as? NavigationController,
+              navigationController.viewControllers.count > 1 else { return }
+        navigationController.view.endEditing(true)
+        let _ = navigationController.popViewController(animated: animated)
+    }
+
     private func openPluginURL(_ url: URL, screen expected: AyuPluginScreenSnapshot) {
         guard self.active, !self.locked,
               let (accountID, rootController) = self.root(),
@@ -445,7 +461,9 @@ import UIKit
               let sharedContext = self.sharedContext, let accountContext = self.accountContexts[accountID],
               let navigationController = rootController as? NavigationController else { return }
         let presentationData = sharedContext.currentPresentationData.with { $0 }
-        sharedContext.openExternalUrl(context: accountContext, urlContext: .generic, url: url.absoluteString,
+        // Past the plugins' `Browser.openUrl` hooks: a plugin's own `startActivity(ACTION_VIEW)` never enters that
+        // method on Android, and a hook that cancels a link and opens another one would be asked about its own URL.
+        openExternalUrlImpl(context: accountContext, urlContext: .generic, url: url.absoluteString,
             forceExternal: false, presentationData: presentationData, navigationController: navigationController,
             dismissInput: { [weak navigationController] in navigationController?.view.endEditing(true) })
     }

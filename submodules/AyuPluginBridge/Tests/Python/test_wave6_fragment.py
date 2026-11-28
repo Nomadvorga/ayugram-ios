@@ -38,18 +38,18 @@ class AyuStateTests(HostCase):
 
 class KeptRefusalsTests(HostCase):
     def test_members_without_a_faithful_host_stay_refusals(self):
-        for name in ("finishFragment", "findMessageCell", "applyNewText", "queryFinalized", "getDeclaredField"):
+        for name in ("findMessageCell", "applyNewText", "queryFinalized", "getDeclaredField"):
             with self.subTest(name=name):
                 self.assertIn(name, _ayu_operations.UNPROVIDED_MEMBERS)
 
-    def test_closing_the_current_screen_blocks(self):
+    def test_closing_the_current_screen_is_the_host_fragments_member(self):
         imports = "from client_utils import get_last_fragment\n"
         body = ("    def on_plugin_load(self):\n"
                 "        fragment = get_last_fragment()\n"
                 "        if fragment:\n"
                 "            fragment.finishFragment()\n")
-        found = self.blockers(imports, body, code="OPERATION")
-        self.assertTrue(any("finishFragment" in item for item in found), found)
+        self.assertNotIn("finishFragment", _ayu_operations.UNPROVIDED_MEMBERS)
+        self.assertEqual(self.blockers(imports, body), [])
 
 
 if __name__ == "__main__":

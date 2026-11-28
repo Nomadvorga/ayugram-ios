@@ -240,23 +240,25 @@ public final class AyuPluginMenuHostProvider: AyuPluginHostProvider, AyuPluginSe
     private let application: AyuPluginApplicationBridge
     private let menus: AyuPluginMenuBridge
     private let telegram: AyuPluginTelegramBridge
-    public init(application: AyuPluginApplicationBridge, menus: AyuPluginMenuBridge = .shared, telegram: AyuPluginTelegramBridge = .shared) {
-        self.application = application; self.menus = menus; self.telegram = telegram
+    private let speech: AyuPluginSpeechBridge
+    public init(application: AyuPluginApplicationBridge, menus: AyuPluginMenuBridge = .shared, telegram: AyuPluginTelegramBridge = .shared, speech: AyuPluginSpeechBridge = .shared) {
+        self.application = application; self.menus = menus; self.telegram = telegram; self.speech = speech
         menus.typed.setTLSource { [weak telegram] in telegram?.menuContextSource() }
         telegram.setEnvironment(application.telegramEnvironment())
     }
-    public var capabilities: [String] { self.application.capabilities + self.menus.capabilities + self.telegram.capabilities }
+    public var capabilities: [String] { self.application.capabilities + self.menus.capabilities + self.telegram.capabilities + self.speech.capabilities }
     public func call(pluginID: String, operation: String, arguments: [String: AyuBridgeValue]) throws -> AyuBridgeValue {
         try self.application.call(pluginID: pluginID, operation: operation, arguments: arguments)
     }
     public func prepareCall(pluginID: String, operation: String, arguments: [String: AyuBridgeValue], context: AyuBridgeAdapterContext) throws -> AyuBridgeProviderResult {
         if self.menus.capabilities.contains(operation) { return try self.menus.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context) }
-        if operation.hasPrefix("telegram.") { return try self.telegram.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context) }
+        if operation.hasPrefix("telegram.") || operation == AyuPluginTelegramBridge.Operation.hooksURLOpen { return try self.telegram.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context) }
         // A token of `telegram.hooks.send_message` is removed here; any other goes to the three-field hook's owner.
+        if operation.hasPrefix("speech.") { return try self.speech.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments) }
         if operation == "hooks.unregister", let result = try self.telegram.prepareUnregister(pluginID: pluginID, arguments: arguments) { return result }
         return try self.application.prepareCall(pluginID: pluginID, operation: operation, arguments: arguments, context: context)
     }
-    public func detach(pluginID: String) { self.menus.detach(pluginID: pluginID); self.application.detach(pluginID: pluginID); self.telegram.detach(pluginID: pluginID) }
+    public func detach(pluginID: String) { self.menus.detach(pluginID: pluginID); self.application.detach(pluginID: pluginID); self.telegram.detach(pluginID: pluginID); self.speech.detach(pluginID: pluginID) }
     public func sendHooks() -> [AyuPluginSendHook] { self.application.sendHooks() }
     public func reserveDialogToken(_ token: String, pluginID: String) throws { try self.application.reserveDialogToken(token, pluginID: pluginID) }
     @MainActor public func presentBridgeDialog(_ controller: UIViewController, token: String, pluginID: String) throws { try self.application.presentBridgeDialog(controller, token: token, pluginID: pluginID) }

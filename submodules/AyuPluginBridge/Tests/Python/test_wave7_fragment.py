@@ -48,5 +48,5 @@ class PrivateFieldTests(HostCase):
                 java_lang.Class._of(telegram_ui.DialogsActivity).getDeclaredField("dialog_id")
 
     def test_the_curated_refusals_of_the_lane_stay(self):
-        for name in ("getDeclaredField", "finishFragment", "queryFinalized"):
+        for name in ("getDeclaredField", "queryFinalized"):
             self.assertIn(name, _ayu_operations.UNPROVIDED_MEMBERS)

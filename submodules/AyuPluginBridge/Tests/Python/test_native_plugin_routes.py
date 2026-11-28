@@ -256,12 +256,38 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn('if state.player != nil { result.insert("telegram.player") }', adapter)
         self.assertIn("var result = Self.coreOperations.union(Self.actionOperations)", adapter)
         actions = (core / "AyuPlugins/AyuPluginActions.swift").read_text()
-        for call in ("ayuPluginDeleteMessages(account:", "ayuPluginReadDialog(account:", "ayuPluginProcessUpdates(account:",
-                     "ayuPluginStorePeers(account:", "ayuPluginLoadFullPeer(account:"):
+        for call in ("ayuPluginDeleteMessages(account:", "ayuPluginReadDialog(account:", "ayuPluginReadAllDialogs(account:",
+                     "ayuPluginProcessUpdates(account:",
+                     "ayuPluginStorePeers(account:", "ayuPluginLoadFullPeer(account:", "ayuPluginAddDialogsToFolder(account:"):
             self.assertIn("public func " + call, actions)
             self.assertIn(call + " target, ", adapter)
         bridge = (INTEGRATION / "AyuPluginTelegramActions.swift").read_text()
-        for operation in ("delete_messages", "read_dialog", "process_updates", "store_peers", "load_full_peer"):
+        # Read-all goes dialog by dialog through the chat list's own "Mark as Read" and leaves a bare unread mark alone.
+        read_all = actions[actions.index("public func ayuPluginReadAllDialogs("):actions.index("public func ayuPluginProcessUpdates(")]
+        self.assertIn("transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: nil", read_all)
+        self.assertIn("state.count == 0, state.markedUnread", read_all)
+        self.assertIn("_internal_togglePeerUnreadMarkInteractively(transaction: transaction", read_all)
+        self.assertIn("setToValue: false)", read_all)
+        # A move goes through the chat list's own archive call; a dialog outside the list and the chats Android keeps out are skipped.
+        move = actions[actions.index("public func ayuPluginAddDialogsToFolder("):actions.index("public func ayuPluginProcessUpdates(")]
+        self.assertIn("_internal_updatePeerGroupIdInteractively(transaction: transaction, peerId: peerId, groupId: groupId)", move)
+        self.assertIn("guard transaction.getPeerChatListIndex(peerId) != nil else", move)
+        self.assertIn("peerId == accountPeerId || dialogId == 777000 || promoted.contains(peerId)", move)
+        self.assertIn("return !added ? 0 : (createsArchive ? 2 : 1)", move)
+        self.assertIn("completion(.success(result))", adapter)
+        # The chat list comes from one transaction over both lists and is bounded by the bridge's limit.
+        self.assertIn('"telegram.peer", "telegram.messages", "telegram.dialogs",', adapter)
+        self.assertIn("ayuPluginDialogsTL(account: target, limit: AyuPluginTelegramBridge.dialogListLimit)", adapter)
+        postbox = (core / "AyuPlugins/AyuPluginTLFromPostbox.swift").read_text()
+        dialogs = postbox[postbox.index("private func ayuPluginDialogRows("):postbox.index("public func ayuPluginMessageTL(")]
+        self.assertIn("transaction.getTopChatListEntries(groupId: groupId, count: limit)", dialogs)
+        self.assertIn("public func ayuPluginDialogsTL(account: Account, limit: Int) -> Signal<[AyuPluginDialogEntry], NoError>", dialogs)
+        self.assertIn("groupId: archiveGroup, folderId: archiveGroup.rawValue", dialogs)
+        self.assertIn("rows[position].pinnedNumber = Int32(lowest - pinningIndex) + 1", dialogs)
+        self.assertIn("rows.removeSubrange((limit - result.count)...)", dialogs)
+        self.assertIn("AyuPluginTL.serialize(AyuPluginTL.folderRow(row))", dialogs)
+        for operation in ("delete_messages", "read_dialog", "read_all_dialogs", "process_updates", "store_peers", "load_full_peer",
+                          "add_dialogs_to_folder"):
             self.assertIn('"telegram.action.' + operation + '"', bridge)
         binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()
         self.assertIn("self.installPluginPlayer()", binding)
@@ -295,6 +321,28 @@ class NativePluginRouteTests(unittest.TestCase):
         self.assertIn("chain.apply(result)", service)
         self.assertIn("completion(chain.message, chain.caption, chain.isCancelled)", service)
         self.assertIn("self.pythonGenerations[hook.pluginID] == generation", service)
+
+    def test_url_open_hooks_gate_the_urls_the_app_opens_but_not_a_plugins_own(self):
+        shared = (ROOT / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text()
+        gate = shared[shared.index("public func openExternalUrl(context: AccountContext"):]
+        gate = gate[:gate.index("public func chatAvailableMessageActions")]
+        self.assertIn("AyuPluginTelegramAdapter.shared.applyURLOpenHooks(url: url, systemBrowser: forceExternal) { url in", gate)
+        self.assertIn("guard let url else { return }", gate)
+        self.assertEqual(gate.count("openExternalUrlImpl("), 1)
+        # The implementation has no other caller that would pass the hooks by, except the plugins' own opener.
+        sources = {path: path.read_text() for path in (ROOT / "submodules/TelegramUI/Sources").glob("*.swift")}
+        callers = sorted(path.name for path, text in sources.items() if "openExternalUrlImpl(" in text)
+        self.assertEqual(callers, ["AyuPluginApplicationBinding.swift", "OpenUrl.swift", "SharedAccountContext.swift"])
+        binding = (ROOT / "submodules/TelegramUI/Sources/AyuPluginApplicationBinding.swift").read_text()
+        self.assertIn("bind(describesScreen: true, routesSendHook: true, routesURLOpen: true)", binding)
+        opener = binding[binding.index("private func openPluginURL("):]
+        self.assertIn("openExternalUrlImpl(context: accountContext", opener)
+        self.assertNotIn("sharedContext.openExternalUrl(", opener)
+        # The operation is declared only by a caller that routes the URLs, and costs nothing while nobody hooks.
+        adapter = (ROOT / "submodules/AyuPluginTelegramAdapter/Sources/AyuPluginTelegramAdapter.swift").read_text()
+        self.assertIn('if state.routesURLOpen { result.insert("hooks.url_open") }', adapter)
+        self.assertIn("guard let bridge = self.read({ $0.routesURLOpen ? $0.bridge : nil }), bridge.hasURLOpenHooks else {\n"
+                      "            completion(url)\n            return", adapter)
 
     def test_no_supplied_plugin_sources_are_vendored(self):
         names = {"sand_box.plugin", "ball.plugin", "group_mentions.plugin",

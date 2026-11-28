@@ -32,6 +32,7 @@ import sys
 import types
 import zipfile
 
+import _ayu_mvel
 import _ayu_operations
 import _ayu_policy
 import _ayu_threads
@@ -482,7 +483,8 @@ def analyze(package):
     imported_symbols, unsupported, texts = {}, {}, {}
     # What the package uses of the SDK's host-backed entry points. A package is one plugin, so a
     # method name counts as its own when any of its modules defines a function of that name.
-    references, called, defined = set(), set(), set()
+    references, called, defined, fields = set(), set(), set(), set()
+    conditions, dynamic_conditions = set(), False
     environment = {"settings", "refmap", "metainfo", "import_module"}
     if package.assets:
         environment.add("assets")
@@ -523,6 +525,10 @@ def analyze(package):
         references.update(reference for reference in inventory["sdk_references"]
                           if reference.split(".", 1)[0] not in local)
         called.update(inventory["method_calls"])
+        fields.update(inventory.get("field_reads", ()))
+        found, computed = _ayu_mvel.static_conditions(tree)
+        conditions.update(found)
+        dynamic_conditions = dynamic_conditions or bool(computed)
         defined.update(node.name for node in ast.walk(tree)
                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
     if package.main.endswith(".pyc") or package.bytecode_files():
@@ -535,6 +541,8 @@ def analyze(package):
     warnings = []
     if dynamic:
         warnings.append("DYNAMIC_CLASSES: computed native classes are checked only at runtime")
+    if dynamic_conditions:
+        warnings.append("DYNAMIC_MENU_CONDITIONS: computed menu conditions are checked only at runtime")
     if any(name.rsplit(".", 1)[-1] in ("dex", "dexan", "so", "jar", "apk") or name.endswith(".dex.gz")
            for name in package.files):
         warnings.append("NATIVE_PAYLOAD: Android binaries in the package cannot be loaded")
@@ -549,8 +557,9 @@ def analyze(package):
         "unsupported_imports": unsupported_imports,
         "imported_symbols": {module: sorted(names) for module, names in sorted(imported_symbols.items())},
         "unsupported_sdk_symbols": {module: sorted(names) for module, names in sorted(unsupported.items())},
-        "sdk_requirements": _ayu_operations.requirements(sorted(references), sorted(called - defined)),
-        "package_findings": findings,
+        "sdk_requirements": _ayu_operations.requirements(sorted(references), sorted(called - defined),
+                                                         field_reads=sorted(fields)),
+        "package_findings": findings, "menu_conditions": sorted(conditions),
     }
     try:
         json.dumps(report, allow_nan=False)
@@ -587,6 +596,9 @@ def _blockers(runtime, report, capabilities):
     # SDK entry points the package references whose host operations are not declared.
     for finding in _ayu_operations.missing(report["sdk_requirements"], capabilities["operations"]):
         block("OPERATION", finding)
+    for code, detail in _ayu_mvel.preflight(report["menu_conditions"], capabilities):
+        if {"code": code, "detail": detail} not in blockers:
+            block(code, detail)
     for finding in report["package_findings"]:
         block("PACKAGE", finding)
     return blockers

@@ -266,6 +266,24 @@ channelFull.translationsDisabled = true
 channelFull.antispam = true
 emit("channelFull.full", AyuPluginTL.channelFull(channelFull))
 
+emit("dialog.min", AyuPluginTL.dialog(AyuPluginTL.Dialog(peer: .user(130))))
+private var dialog = AyuPluginTL.Dialog(peer: .channel(131))
+dialog.isPinned = true
+dialog.isMarkedUnread = true
+dialog.topMessageId = 132
+dialog.readInboxMaxId = 133
+dialog.readOutboxMaxId = 134
+dialog.unreadCount = 135
+dialog.unreadMentionsCount = 136
+dialog.unreadReactionsCount = 137
+dialog.unreadPollVotesCount = 138
+dialog.notifySettings = AyuPluginTL.NotifySettings(showPreviews: true, muteUntil: Int32.max)
+dialog.pts = 139
+dialog.folderId = 1
+emit("dialog.full", AyuPluginTL.dialog(dialog))
+emit("dialog.group", AyuPluginTL.dialog(AyuPluginTL.Dialog(peer: .chat(140), folderId: 1)))
+emit("dialog.folder", AyuPluginTL.folderRow(AyuPluginTL.FolderRow(folderId: 1, title: "Archived Chats", topPeer: .chat(141), topMessageId: 142, unreadMutedPeersCount: 143, unreadUnmutedPeersCount: 144, unreadMutedMessagesCount: 145, unreadUnmutedMessagesCount: 146)))
+
 // `AyuPluginOrderedGate` (the ordering of hooked requests and update containers): one line,
 // `gate<TAB>ok` or the failed checks.
 

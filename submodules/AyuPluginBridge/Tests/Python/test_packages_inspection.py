@@ -265,6 +265,27 @@ class AnalysisTests(Case):
         self.host.capabilities["operations"].append("telegram.edit_message")
         self.assertEqual(self.preflight(files)["blockers"], [])
 
+    def test_menu_conditions_of_every_module_are_checked(self):
+        item = ("from base_plugin import MenuItemData, MenuItemType\n"
+                "def add(plugin):\n    plugin.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text='x',\n"
+                "        on_click=print, condition={}))\n")
+        files = {"main.py": MAIN + "import menus\n", "menus.py": item.format("'message != null && message.isPhoto()'")}
+
+        def blockers(files):
+            report = self.preflight(files)
+            return [(entry["code"], entry["detail"]) for entry in report["blockers"]], report["menu_conditions"], report["warnings"]
+        # Without the typed menus a string condition is refused at run time.
+        self.assertEqual(blockers(files), ([("OPERATION", "menus.add (MenuItemData condition)")], ["message != null && message.isPhoto()"], []))
+        self.host.capabilities["operations"] += ["menus.add"]
+        self.assertEqual(blockers(files)[0], [])
+        files["menus.py"] = item.format("'message.isNoSuchThing() || message.getId() + 1 > 2'") + item.format("'message.isNoSuchThing()'")
+        self.assertEqual(blockers(files)[0], [
+            ("MEMBER", "org.telegram.messenger.MessageObject.isNoSuchThing"),
+            ("OPERATION", "sdk.unprovided_member (MenuItemData condition, unexpected text at offset 43: "
+                          "message.isNoSuchThing() || message.getId() + 1 > 2)")])
+        files["menus.py"] = item.format("' '.join(['message', '!=', 'null'])")
+        self.assertEqual(blockers(files), ([], [], ["DYNAMIC_MENU_CONDITIONS: computed menu conditions are checked only at runtime"]))
+
 
 class MeterTests(Case):
     def test_corpus_meter_counts_packages_without_executing_them(self):

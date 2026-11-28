@@ -1430,6 +1430,12 @@ enum AyuBridgeJavaRuntime {
                     guard let typeface = state["typeface"]?.object else { return .value(.null) }
                     return .instance(className: AyuBridgeTypefaceValue.className, state: typeface)
                 },
+                "hasGlyph": { state, args, _ in
+                    try Self.arity(args, 1)
+                    guard let text = args[0].string else { throw AyuBridgeFailure("invalid_arguments", "Paint.hasGlyph expects a string") }
+                    let typeface = try state["typeface"]?.object.map { try AyuBridgeTypefaceValue(state: $0) } ?? .default
+                    return .value(.bool(AyuBridgeGlyphCoverage.hasGlyph(text, typeface: typeface)))
+                },
             ], results: ["setTypeface": "android.graphics.Typeface", "getTypeface": "android.graphics.Typeface",
                          "getStyle": Self.paintStyleName, "getStrokeCap": Self.paintCapName, "getStrokeJoin": Self.paintJoinName],
                validateState: { _ = try Self.paintState($0) })

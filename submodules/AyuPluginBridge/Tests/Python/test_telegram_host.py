@@ -20,6 +20,7 @@ from base_plugin import HookResult, HookStrategy, MenuItemData, MenuItemType
 
 R = tl.TLRPC
 PROTOCOL = Path(__file__).resolve().parents[2] / "Python" / "protocol-telegram.md"
+IMAGE_PROTOCOL = Path(__file__).resolve().parents[2] / "Python" / "protocol-images.md"
 OPERATIONS = [
     "telegram.request", "telegram.request.cancel", "telegram.connection", "telegram.hooks.set",
     "telegram.hooks.send_message", "telegram.send_message", "telegram.edit_message", "menus.add", "telegram.peer",
@@ -459,7 +460,7 @@ class MenuTests(TelegramCase):
             named = plugin.add_menu_item(MenuItemData(MenuItemType.MESSAGE_CONTEXT_MENU, "Copy", seen.append, item_id="copy"))
             self.assertEqual(named, "copy")
             with self.assertRaises(bridge.UnsupportedAPI):
-                plugin.add_menu_item(MenuItemData(MenuItemType.DRAWER_MENU, "Cond", seen.append, condition="user != null"))
+                plugin.add_menu_item(MenuItemData(MenuItemType.DRAWER_MENU, "Cond", seen.append, condition="user.id + 1 > 2"))
         self.assertIsInstance(item_id, str)
         config = next(arguments for name, arguments in self.host.calls if name == "menus.add")
         self.assertEqual({key: config[key] for key in ("type", "item_id", "text", "icon", "subtext", "priority")},
@@ -750,13 +751,13 @@ class PreflightTests(TelegramCase):
             body="    def on_plugin_load(self):\n        get_client().get_file_loader()\n        get_client().get_user_config()\n"
                  "        Requests.send(None, None)\n        HookUtils.get_private_field(self, 'x')\n"
                  "        HookUtils.hook_before(None, None)\n        zwylib.hook_max_args_method(None, 'x', None)\n"
-                 "        self.root = self.activity.getWindow().getDecorView()\n        self.controller.addDialogToFolder(1, 1, -1, 0)\n"
+                 "        self.root = self.activity.getWindow().getDecorView()\n        self.list.smoothScrollBy(0, 5)\n"
                  "        self.getPhoto()\n    def getPhoto(self):\n        return None\n")
         expected = [("OPERATION", "hooks.java_method (zwylib.HookUtils.hook_before)"),
                     ("OPERATION", "hooks.java_method (zwylib.hook_max_args_method)"),
-                    ("OPERATION", "sdk.unprovided_member (addDialogToFolder())"),
                     ("OPERATION", "sdk.unprovided_member (getDecorView())"),
                     ("OPERATION", "sdk.unprovided_member (getWindow())"),
+                    ("OPERATION", "sdk.unprovided_member (smoothScrollBy())"),
                     ("OPERATION", "telegram.files.path (get_file_loader())"),
                     ("OPERATION", "telegram.request (zwylib.Requests.send)")]
         self.assertEqual(self.blockers(text)[1], expected)
@@ -793,7 +794,7 @@ class PreflightTests(TelegramCase):
         self.assertEqual(len(set(_ayu_operations.UNPROVIDED_MEMBERS)), len(_ayu_operations.UNPROVIDED_MEMBERS))
 
     def test_every_gated_operation_is_specified(self):
-        document = PROTOCOL.read_text("utf-8")
+        documents = {"telegram": PROTOCOL.read_text("utf-8"), "image": IMAGE_PROTOCOL.read_text("utf-8")}
         named = {operation for groups in list(_ayu_operations.SYMBOLS.values()) + list(_ayu_operations.METHODS.values())
                  for group in groups for operation in group}
         for cls in _ayu_javalib.local_classes().values():
@@ -801,7 +802,8 @@ class PreflightTests(TelegramCase):
                 named.update(_ayu_javalib.requirements(cls))
         for operation in sorted(named | set(OPERATIONS)):
             with self.subTest(operation=operation):
-                self.assertIn("`" + operation + "`", document)
+                contract = documents["image"] if operation.startswith("image.") else documents["telegram"]
+                self.assertIn("`" + operation + "`", contract)
 
 
 if __name__ == "__main__":

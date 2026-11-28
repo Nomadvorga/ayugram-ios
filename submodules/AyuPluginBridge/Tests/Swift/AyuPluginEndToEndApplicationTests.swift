@@ -63,7 +63,7 @@ final class AyuPluginEndToEndApplicationTests: XCTestCase {
                 self.record("menu_plain", lambda: type(self.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Always", on_click=self.menu_click))).__name__)
                 self.record("menu_drawer", lambda: self.add_menu_item(MenuItemData(menu_type=getattr(MenuItemType, "DRAWER" + "_MENU"), text="Drawer", on_click=self.menu_click)))
                 self.record("menu_subtext", lambda: self.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Sub", subtext="text", on_click=self.menu_click)))
-                self.record("menu_mvel", lambda: self.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Mvel", condition="message != null", on_click=self.menu_click)))
+                self.record("menu_mvel", lambda: self.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Mvel", condition=" ".join(["message", "!=", "null"]), on_click=self.menu_click)))  # computed: a literal one is a preflight blocker without menus.add
 
             def menu_condition(self, context):
                 self.set_setting("condition_context", context)

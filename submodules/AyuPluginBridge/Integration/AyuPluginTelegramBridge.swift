@@ -49,17 +49,19 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
         static let connection = "telegram.connection"
         static let hooksSet = "telegram.hooks.set"
         static let hooksSendMessage = "telegram.hooks.send_message"
+        static let hooksURLOpen = "hooks.url_open"
         static let sendMessage = "telegram.send_message"
         static let editMessage = "telegram.edit_message"
         static let peer = "telegram.peer"
         static let messages = "telegram.messages"
+        static let dialogs = "telegram.dialogs"
         static let screen = "telegram.screen"
         static let navigationOpen = "telegram.navigation.open"
         static let filesPath = "telegram.files.path"
         static let filesLoad = "telegram.files.load"
         static let player = "telegram.player"
-        static let served: Set<String> = [request, requestCancel, connection, hooksSet, hooksSendMessage, sendMessage,
-            editMessage, peer, messages, screen, navigationOpen, filesPath, filesLoad, player]
+        static let served: Set<String> = [request, requestCancel, connection, hooksSet, hooksSendMessage, hooksURLOpen, sendMessage,
+            editMessage, peer, messages, dialogs, screen, navigationOpen, filesPath, filesLoad, player]
     }
 
     struct Request {
@@ -85,12 +87,18 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
         var committed: Bool
     }
 
+    struct URLHook {
+        let priority: Int32
+        let callbackID: String
+    }
+
     struct Owner {
         let epoch = UUID()
         var requests: [Int32: Request] = [:]
         var nextRequestID: Int32 = 1
         var hooks: HookSet?
         var sendHooks: [String: SendHook] = [:]
+        var urlHook: URLHook?
     }
 
     final class AnswerBox: @unchecked Sendable {
@@ -212,6 +220,8 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
             return try self.prepareHookSet(owner: pluginID, arguments: arguments, context: context)
         case Operation.hooksSendMessage:
             return try self.prepareSendHook(owner: pluginID, arguments: arguments, context: context)
+        case Operation.hooksURLOpen:
+            return try self.prepareURLOpenHook(owner: pluginID, arguments: arguments, context: context)
         case Operation.sendMessage:
             try Self.closed(arguments, required: ["account", "params"])
             let account = try Self.account(arguments["account"], environment: environment)
@@ -239,6 +249,19 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
             let stored: [Data?] = try self.wait(operation) { backend.messages(account: account, dialogID: dialogID, ids: ids, completion: $0) }
             guard stored.count == ids.count else { throw AyuBridgeFailure("invalid_state", "Telegram backend returned a message list of the wrong length") }
             return AyuBridgeProviderResult(.value(.array(try stored.map { try self.outbound($0, what: operation) })))
+        case Operation.dialogs:
+            try Self.closed(arguments, required: ["account"])
+            let account = try Self.account(arguments["account"], environment: environment)
+            let dialogs: [AyuPluginTelegramDialogEntry] = try self.wait(operation) { backend.dialogs(account: account, completion: $0) }
+            guard dialogs.count <= Self.dialogListLimit else { throw AyuBridgeFailure("invalid_state", "Telegram backend returned too many dialogs") }
+            return AyuBridgeProviderResult(.value(.array(try dialogs.map { entry in
+                guard AyuPluginTelegramTL.isBoxed(entry.dialog), AyuPluginTelegramTL.dialogConstructors.contains(AyuPluginTelegramTL.constructor(of: entry.dialog)),
+                      entry.lastMessageDate >= 0, entry.pinnedNumber >= 0 else {
+                    throw AyuBridgeFailure("invalid_state", "Telegram backend returned an invalid dialog")
+                }
+                return .object(["dialog": try self.outbound(entry.dialog, what: operation),
+                                "last_message_date": .integer(Int64(entry.lastMessageDate)), "pinned_num": .integer(Int64(entry.pinnedNumber))])
+            })))
         case Operation.screen:
             return AyuBridgeProviderResult(.value(try Self.screen(arguments, environment: environment)))
         case Operation.navigationOpen:
@@ -261,8 +284,8 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
         case _ where AyuPluginTelegramAction.operations.contains(operation):
             let action = try self.action(operation, arguments)
             let account = try Self.account(arguments["account"], environment: environment)
-            let _: Void = try self.wait(operation) { backend.perform(account: account, action: action, completion: $0) }
-            return AyuBridgeProviderResult(.value(.null))
+            let result: Int32? = try self.wait(operation) { backend.perform(account: account, action: action, completion: $0) }
+            return AyuBridgeProviderResult(.value(try Self.actionResult(action, result)))
         default:
             throw AyuBridgeFailure.unsupported(operation)
         }
@@ -567,6 +590,8 @@ public final class AyuPluginTelegramBridge: @unchecked Sendable {
     // MARK: Values
 
     static let int32Range = Int64(Int32.min)...Int64(Int32.max)
+    /// How many dialogs one `telegram.dialogs` answer holds at most.
+    public static let dialogListLimit = 2000
 
     static func invalid(_ message: String) -> AyuBridgeFailure { AyuBridgeFailure("invalid_arguments", message) }
 

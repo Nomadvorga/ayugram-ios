@@ -96,6 +96,57 @@ import UIKit
         }.value
     }
 
+    func testFinishFragmentClosesTheVisibleScreenOnce() async throws {
+        let provider = AyuPluginApplicationBridge()
+        provider.updateAccounts([AyuPluginAccountSnapshot(index: 0, identity: UUID(), userID: 12)], selected: 0)
+        let first = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0)
+        let currentScreen = ScreenBox(first)
+        let closed = ClipboardBox()
+        provider.bindScreen(screen: { currentScreen.get() }, presenter: { nil }, closeScreen: { screen, animated in
+            closed.append(screen.identity.uuidString + (animated ? " animated" : " at once"))
+        })
+        let host = self.host(provider, registry: try provider.classRegistry())
+        try await self.authorize(host)
+
+        let fragment = try await self.client(host, "get_last_fragment")
+        let wrong = try await self.invoke(host, fragment["result"], "finishFragment", args: [.integer(1)])
+        XCTAssertEqual(wrong["error"]["code"], .string("INVALID_ARGUMENTS"))
+        let finished = try await self.invoke(host, fragment["result"], "finishFragment")
+        XCTAssertEqual(finished["result"], .bool(true))
+        await self.flushMain()
+        XCTAssertEqual(closed.values(), [first.identity.uuidString + " animated"])
+
+        // The app popped the screen: the handle stands for a fragment that finished.
+        let second = AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0)
+        currentScreen.set(second)
+        let again = try await self.invoke(host, fragment["result"], "finishFragment", args: [.bool(false)])
+        XCTAssertEqual(again["result"], .bool(false))
+        await self.flushMain()
+        XCTAssertEqual(closed.values().count, 1)
+
+        // A screen that changes between the call and its queued effect is not closed.
+        let finish = try XCTUnwrap(try provider.classRegistry().adapters["org.telegram.ui.ActionBar.BaseFragment"]?.methods["finishFragment"])
+        let adapterContext = AyuBridgeAdapterContext(pluginID: "alpha", resolveCallback: { _ in
+            throw AyuBridgeFailure.unsupported("Synthetic fragment callback")
+        }, resolve: { _ in throw AyuBridgeFailure.unsupported("snapshot") })
+        let prepared = try await Task.detached {
+            var state = second.state
+            guard case let .prepared(result) = try finish(&state, [.bool(false)], adapterContext) else {
+                throw AyuBridgeFailure("test_failure", "finishFragment did not prepare its native effect")
+            }
+            return result
+        }.value
+        currentScreen.set(AyuPluginScreenSnapshot(identity: UUID(), accountIndex: 0))
+        prepared.commit(.bool(true))
+        await self.flushMain()
+        XCTAssertEqual(closed.values().count, 1)
+
+        provider.bindScreen(screen: { currentScreen.get() }, presenter: { nil })
+        let unbound = try await self.client(host, "get_last_fragment")
+        let refused = try await self.invoke(host, unbound["result"], "finishFragment")
+        XCTAssertEqual(refused["error"]["code"], .string("SCREEN_UNAVAILABLE"))
+    }
+
     func testBrowserOpenURLStringAndUriOverloadsUseQueuedAppRoute() async throws {
         let provider = AyuPluginApplicationBridge()
         provider.updateAccounts([AyuPluginAccountSnapshot(index: 0, identity: UUID(), userID: 12)], selected: 0)

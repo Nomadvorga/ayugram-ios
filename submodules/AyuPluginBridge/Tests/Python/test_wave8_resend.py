@@ -1,4 +1,4 @@
-"""Re-sending the parameters delivered to the send-message hook: refused by the SDK, so reported by preflight."""
+"""Re-sending the parameters delivered to the send-message hook: a new message when the host described all of it."""
 from __future__ import annotations
 
 import ast
@@ -66,22 +66,65 @@ class ResendOfHookParametersTests(HostCase):
         self.assertFalse(resend(ELSEWHERE))
         self.assertFalse(resend(LOAD))
 
-    def test_the_requirement_is_the_reserved_unprovided_member(self):
+    def test_the_requirement_is_the_typed_hook_and_the_send_route(self):
         found = _ayu_operations.requirements((), (), send_hook_resend=True)
-        self.assertEqual(found, {DETAIL: [["sdk.unprovided_member"]]})
+        self.assertEqual(found, {DETAIL: [["telegram.hooks.send_message", "telegram.send_message"]]})
         self.assertEqual(_ayu_operations.requirements((), ()), {})
 
-    def test_preflight_blocks_the_resend_and_only_the_resend(self):
-        for body in (DEFERRED, DIRECT):
+    def test_preflight_passes_the_resend_only_with_both_operations(self):
+        for body in (DEFERRED, DIRECT, FRESH, ELSEWHERE):
             with self.subTest(body=body):
-                self.assertIn(BLOCKER, self.blockers(IMPORTS, body))
-        self.assertEqual(self.blockers(IMPORTS, FRESH), [])
-        self.assertEqual(self.blockers(IMPORTS, ELSEWHERE), [])
+                self.assertEqual(self.blockers(IMPORTS, body), [])
+        # The three-field fallback hook delivers an object that cannot be sent at all.
+        self.operations("hooks.register", remove=("telegram.hooks.send_message",))
+        self.assertIn(("OPERATION", f"telegram.hooks.send_message ({DETAIL})"), self.blockers(IMPORTS, DEFERRED))
+        self.assertNotIn(DETAIL, " ".join(detail for _, detail in self.blockers(IMPORTS, FRESH)))
 
-    def test_the_sdk_refuses_the_resend_the_rule_reports(self):
+    def sent(self):
+        """Records what reaches ``telegram.send_message``."""
+        calls, perform = [], self.host.perform
+
+        def recording(request):
+            if request["operation"] == "telegram.send_message":
+                calls.append(request["arguments"])
+                return None
+            return perform(request)
+
+        self.host.perform = recording
+        return calls
+
+    def test_a_completely_described_message_is_sent_again_with_the_plugins_changes(self):
+        calls = self.sent()
         scope = self.load(imports=IMPORTS)
         with bridge.runtime.context(scope):
             helper = java.jclass("org.telegram.messenger.SendMessagesHelper")
-            delivered = helper.SendMessageParams._ayu_from_wire({"peer": 7, "message": "text"}, 0)
-            with self.assertRaises(bridge.UnsupportedAPI):
-                helper.getInstance(0).sendMessage(delivered)
+            delivered = helper.SendMessageParams._ayu_from_wire(
+                {"peer": 7, "message": ".wiki cats", "notify": False, "scheduleDate": 90, "complete": True}, 0)
+            # Fields the host does not list have their Java defaults, as on Android.
+            self.assertIsNone(delivered.webPage)
+            self.assertIsNone(delivered.replyMarkup)
+            self.assertEqual(delivered.ttl, 0)
+            delivered.message = "Wikipedia: Cat"
+            helper.getInstance(0).sendMessage(delivered)
+            self.assertEqual(calls, [{"account": 0, "params": {"peer": 7, "message": "Wikipedia: Cat", "notify": False,
+                                                                "scheduleDate": 90}}])
+            # The qrcode shape: the text becomes the caption of a picture.
+            delivered.message, delivered.caption, delivered.path = None, "cats", "/tmp/qr.jpg"
+            helper.getInstance(0).sendMessage(delivered)
+            self.assertEqual(calls[1]["params"], {"peer": 7, "caption": "cats", "path": "/tmp/qr.jpg", "notify": False,
+                                                  "scheduleDate": 90})
+
+    def test_a_partly_described_message_is_refused(self):
+        calls = self.sent()
+        scope = self.load(imports=IMPORTS)
+        with bridge.runtime.context(scope):
+            helper = java.jclass("org.telegram.messenger.SendMessagesHelper")
+            for wire in ({"peer": 7, "message": "text"}, {"peer": 7, "caption": "text", "path": "/tmp/a.jpg", "complete": False}):
+                delivered = helper.SendMessageParams._ayu_from_wire(wire, 0)
+                with self.assertRaises(bridge.UnsupportedAPI):
+                    helper.getInstance(0).sendMessage(delivered)
+                with self.assertRaises(bridge.UnsupportedAPI):
+                    delivered.webPage
+            with self.assertRaises(RuntimeError):
+                helper.SendMessageParams._ayu_from_wire({"peer": 7, "message": "text", "complete": 1}, 0)
+        self.assertEqual(calls, [])

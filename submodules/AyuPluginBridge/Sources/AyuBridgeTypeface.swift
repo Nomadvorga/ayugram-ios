@@ -143,7 +143,7 @@ struct AyuBridgeTypefaceValue: Equatable, Sendable {
         }
     }
 
-    @MainActor func font(size: CGFloat) -> UIFont {
+    func font(size: CGFloat) -> UIFont {
         var font: UIFont
         switch self.design {
         case .sans: font = .systemFont(ofSize: size, weight: self.fontWeight)

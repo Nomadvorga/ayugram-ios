@@ -22,6 +22,7 @@ PEER = (("telegram.peer",),)
 FILES = (("telegram.files.path", "telegram.files.load"),)
 CONNECTION = (("telegram.request", "telegram.request.cancel", "telegram.connection"),)
 UNPROVIDED = (("sdk.unprovided_member",),)
+DIALOGS = (("telegram.dialogs",),)
 # Fields the ``hooks.register`` send hook carries; a hook that touches any other needs the typed one,
 # which carries these. No host can tell a hook the remaining Android fields.
 FALLBACK_SEND_FIELDS = frozenset({"peer", "message", "caption"})
@@ -136,6 +137,7 @@ METHODS = {
     # ``MessagesController`` state changes, one host operation each.
     "deleteMessages": (("telegram.action.delete_messages",),),
     "markDialogAsRead": (("telegram.action.read_dialog",),),
+    "readAllDialogs": (("telegram.action.read_all_dialogs",),),
     "processUpdates": (("telegram.action.process_updates",),),
     "putUser": (("telegram.action.store_peers",),),
     "putUsers": (("telegram.action.store_peers",),),
@@ -143,15 +145,25 @@ METHODS = {
     "putChats": (("telegram.action.store_peers",),),
     "loadFullUser": (("telegram.action.load_full_peer",),),
     "loadFullChat": (("telegram.action.load_full_peer",),),
+    "addDialogToFolder": (("telegram.action.add_dialogs_to_folder",),),
+    # ``MessagesController``: the chat list.
+    "getAllDialogs": DIALOGS,
+    "getDialogs": DIALOGS,
+    "getDialog": DIALOGS,
+}
+# Fields whose read reaches the host, by name on any receiver like ``METHODS``: a field is read,
+# not called, so static inspection reports it apart (``field_reads``).
+FIELDS = {
+    "allDialogs": DIALOGS,
+    "dialogs_dict": DIALOGS,
 }
 # Android members that no host adapter and no Python-local class provides, so a call fails
 # wherever it is made. Found by auditing plugins that otherwise pass; this is a list, not a
 # proof that every other member exists. Remove a name when something implements it.
 UNPROVIDED_MEMBERS = (
-    "addDialogToFolder", "readAllDialogs",                                  # MessagesController, MessagesStorage
     "applyNewText",                                                        # MessageObject (needs its text layout)
     "prepareSendingPhoto", "prepareSendingDocument",                       # SendMessagesHelper
-    "findMessageCell", "finishFragment",                                    # ChatActivity, BaseFragment
+    "findMessageCell",                                                      # ChatActivity
     "getWindow", "getDecorView",                                            # Activity
     "smoothScrollBy",                                                       # views
     "getDeclaredField", "queryFinalized",                                   # reflection, SQLiteDatabase
@@ -166,7 +178,7 @@ METHOD_NAMES = frozenset(METHODS)
 
 
 def requirements(references, method_calls, send_hook_fields=None, hook_targets=None, intent_actions=(),
-                 window_services=(), send_hook_resend=False):
+                 window_services=(), send_hook_resend=False, field_reads=()):
     """Requirements of what a source references, keyed by the SDK symbol or ``<method>()``.
 
     ``send_hook_fields`` is what ``on_send_message_hook`` touches of its parameters (None when
@@ -179,6 +191,7 @@ def requirements(references, method_calls, send_hook_fields=None, hook_targets=N
     # ``client_utils.send_request(...)`` is one use, already found as the symbol.
     direct = {name.rpartition(".")[2] for name in found}
     found.update({name + "()": METHODS[name] for name in method_calls if name in METHODS and name not in direct})
+    found.update({name: FIELDS[name] for name in field_reads if name in FIELDS})
     if SEND_HOOK in found:
         if send_hook_fields is None:
             extra = lost = None
@@ -202,8 +215,9 @@ def requirements(references, method_calls, send_hook_fields=None, hook_targets=N
     # ``_ayu_javalib.android_view.static_window_services``: the window service is not provided.
     found.update(dict.fromkeys(window_services, UNPROVIDED))
     if send_hook_resend:
-        # ``_ayu_inspection.send_hook_resend``: ``SendMessagesHelper.sendMessage`` refuses a delivered object.
-        found["sendMessage(on_send_message_hook params)"] = UNPROVIDED
+        # ``_ayu_inspection.send_hook_resend``: a delivered object is sent again as a new message, which
+        # takes the typed hook (it says when its description is complete) and the send route.
+        found["sendMessage(on_send_message_hook params)"] = (("telegram.hooks.send_message", "telegram.send_message"),)
     return {name: [list(group) for group in groups] for name, groups in sorted(found.items())}
 
 

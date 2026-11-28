@@ -69,3 +69,148 @@ final class AyuWave8GridlayoutTests: XCTestCase {
         XCTAssertNil(AyuBridgeGridLayout.place([self.square(10), self.square(10), self.square(10)], rowCount: 1, columnCount: 2))
     }
 }
+
+/// The class as a plugin drives it through the host: `GridLayout(ctx)`, `spec`, `LayoutParams`, counts.
+@MainActor
+final class AyuWave8GridlayoutHostTests: XCTestCase {
+    private let grid = "android.widget.GridLayout"
+    private let params = "android.widget.GridLayout$LayoutParams"
+
+    private func cell(_ session: AyuMemberTestHost, _ layout: AyuBridgeValue, side: Int64, margins: [Int64]) async throws -> AyuBridgeValue {
+        _ = try await session.call("java.set_field", ["target": layout, "name": .string("width"), "value": .integer(side)])
+        _ = try await session.call("java.set_field", ["target": layout, "name": .string("height"), "value": .integer(side)])
+        _ = try await session.invoke(layout, "setMargins", margins.map(AyuBridgeValue.integer))
+        let view = try await session.construct("android.widget.TextView")
+        _ = try await session.invoke(view, "setLayoutParams", [layout])
+        return view
+    }
+
+    private func frame(_ session: AyuMemberTestHost, _ view: AyuBridgeValue) async throws -> [AyuBridgeValue] {
+        var result: [AyuBridgeValue] = []
+        for getter in ["getX", "getY", "getWidth", "getHeight"] { result.append(try await session.invoke(view, getter)) }
+        return result
+    }
+
+    func testCellsWithExplicitSpecsAreLaidOutAndTheGridWrapsThem() async throws {
+        let session = try await AyuMemberTestHost()
+        let root = try await session.construct("android.widget.FrameLayout")
+        let grid = try await session.construct(self.grid)
+        ayuExpect(try await session.invoke(grid, "getColumnCount"), .integer(-2_147_483_648))
+        ayuExpect(try await session.invoke(grid, "getAlignmentMode"), .integer(1))
+        ayuExpect(try await session.invoke(grid, "setColumnCount", [.integer(2)]), .null)
+        ayuExpect(try await session.invoke(grid, "setRowCount", [.integer(2)]), .null)
+        ayuExpect(try await session.field(self.grid, "ALIGN_BOUNDS"), .integer(0))
+        _ = try await session.invoke(grid, "setAlignmentMode", [.integer(0)])
+        var cells: [AyuBridgeValue] = []
+        for row in 0..<2 {
+            for column in 0..<2 {
+                let rowSpec = try await session.invokeStatic(self.grid, "spec", [.integer(Int64(row))])
+                let columnSpec = try await session.invokeStatic(self.grid, "spec", [.integer(Int64(column))])
+                let view = try await self.cell(session, try await session.construct(self.params, [rowSpec, columnSpec]), side: 40, margins: [2, 2, 2, 2])
+                _ = try await session.invoke(grid, "addView", [view])
+                cells.append(view)
+            }
+        }
+        _ = try await session.invoke(root, "addView", [grid])
+        _ = try await session.mount(root, size: CGSize(width: 300, height: 300))
+        ayuExpect(try await session.invoke(grid, "getColumnCount"), .integer(2))
+        ayuExpect(try await session.invoke(grid, "getRowCount"), .integer(2))
+        ayuExpect(try await session.invoke(grid, "getAlignmentMode"), .integer(0))
+        ayuExpect(try await session.invoke(grid, "getChildCount"), .integer(4))
+        let size: [AyuBridgeValue] = [.integer(40), .integer(40)]
+        // Added without LayoutParams, the grid fills the frame (FrameLayout's default); its cells stay at the top-left.
+        ayuExpect(.array(try await self.frame(session, grid)), .array([.integer(0), .integer(0), .integer(300), .integer(300)]))
+        let wrap = try await session.construct("android.widget.FrameLayout$LayoutParams", [.integer(-2), .integer(-2)])
+        _ = try await session.invoke(grid, "setLayoutParams", [wrap])
+        ayuExpect(.array(try await self.frame(session, grid)), .array([.integer(0), .integer(0), .integer(88), .integer(88)]))
+        ayuExpect(.array(try await self.frame(session, cells[0])), .array([.integer(2), .integer(2)] + size))
+        ayuExpect(.array(try await self.frame(session, cells[1])), .array([.integer(46), .integer(2)] + size))
+        ayuExpect(.array(try await self.frame(session, cells[2])), .array([.integer(2), .integer(46)] + size))
+        ayuExpect(.array(try await self.frame(session, cells[3])), .array([.integer(46), .integer(46)] + size))
+    }
+
+    func testCellsWithoutSpecsFlowAlongTheColumnCount() async throws {
+        let session = try await AyuMemberTestHost()
+        let grid = try await session.construct(self.grid)
+        _ = try await session.invoke(grid, "setColumnCount", [.integer(3)])
+        var cells: [AyuBridgeValue] = []
+        for index in 0..<5 {
+            // Sudoku-style: a 2 point gap after the last column, none elsewhere.
+            let view = try await self.cell(session, try await session.construct(self.params), side: 30, margins: [0, 0, index % 3 == 2 ? 2 : 0, 0])
+            _ = try await session.invoke(grid, "addView", [view])
+            cells.append(view)
+        }
+        _ = try await session.mount(grid, size: CGSize(width: 200, height: 200))
+        ayuExpect(.array(try await self.frame(session, cells[2])), .array([.integer(60), .integer(0), .integer(30), .integer(30)]))
+        ayuExpect(.array(try await self.frame(session, cells[3])), .array([.integer(0), .integer(30), .integer(30), .integer(30)]))
+        ayuExpect(.array(try await self.frame(session, cells[4])), .array([.integer(30), .integer(30), .integer(30), .integer(30)]))
+    }
+
+    func testWhatTheGridDoesNotModelIsRefused() async throws {
+        let session = try await AyuMemberTestHost()
+        let grid = try await session.construct(self.grid)
+        var code = await session.failure { try await session.invokeStatic(self.grid, "spec", [.integer(0), .integer(2)]) }
+        XCTAssertEqual(code, "UNSUPPORTED_API")
+        code = await session.failure { try await session.invoke(grid, "setOrientation", [.integer(1)]) }
+        XCTAssertEqual(code, "UNSUPPORTED_API")
+        code = await session.failure { try await session.construct(self.params, [.integer(40), .integer(40)]) }
+        XCTAssertNotNil(code)
+        code = await session.failure { try await session.invoke(grid, "setColumnCount", [.integer(0)]) }
+        XCTAssertEqual(code, "INVALID_ARGUMENTS")
+        let layout = try await session.construct(self.params)
+        code = await session.failure { try await session.call("java.set_field", ["target": layout, "name": .string("gravity"), "value": .integer(17)]) }
+        XCTAssertEqual(code, "UNSUPPORTED_API")
+        let frame = try await session.construct("android.widget.FrameLayout")
+        code = await session.failure { try await session.invoke(frame, "setColumnCount", [.integer(2)]) }
+        XCTAssertEqual(code, "UNSUPPORTED_API")
+    }
+}
+
+/// A board game shaped like the corpus ones, through the real SDK and its member-aware preflight.
+@MainActor
+final class AyuWave8GridlayoutEndToEndTests: XCTestCase {
+    func testABoardOfCellsIsBuiltAsThePluginsBuildIt() async throws {
+        let stack = try AyuEndToEnd.shared()
+        stack.bindApplication()
+        let id = try await stack.start(AyuEndToEnd.source(id: "e2e_wave8_gridlayout", """
+        from android.widget import FrameLayout, TextView
+        from base_plugin import BasePlugin
+        from hook_utils import find_class
+        from org.telegram.messenger import ApplicationLoader
+
+        GridLayout = find_class("android.widget.GridLayout")
+
+        \(AyuEndToEnd.recorder)
+
+
+        class BoardPlugin(Recorder, BasePlugin):
+            def on_plugin_load(self):
+                context = ApplicationLoader.applicationContext
+                grid = GridLayout(context); grid.setColumnCount(3); grid.setRowCount(3)
+                grid.setAlignmentMode(GridLayout.ALIGN_BOUNDS)
+                container = FrameLayout(context); container.addView(grid)
+                cells = {}
+                for r in range(3):
+                    for c in range(3):
+                        cell = TextView(context)
+                        params = GridLayout.LayoutParams(GridLayout.spec(r), GridLayout.spec(c))
+                        params.width = params.height = 40
+                        params.setMargins(2, 2, 2, 2)
+                        cell.setLayoutParams(params)
+                        grid.addView(cell)
+                        cells[(r, c)] = cell
+                self.record("built", lambda: [grid.getChildCount(), grid.getColumnCount(), grid.getRowCount(), grid.getAlignmentMode(),
+                                              GridLayout.ALIGN_MARGINS, GridLayout.UNDEFINED])
+                flow = GridLayout.LayoutParams()
+                flow.width = 30
+                self.record("params", lambda: [flow.width, flow.height, flow.leftMargin, cells[(2, 1)].getLayoutParams().width,
+                                               cells[(2, 1)].getLayoutParams().getClass().getName()])
+                self.record("spec_class", lambda: GridLayout.spec(1).getClass().getName())
+        """))
+        func stored(_ key: String) -> AyuBridgeValue { stack.stored(id, key) }
+        XCTAssertEqual(stored("built"), .array([.integer(9), .integer(3), .integer(3), .integer(0), .integer(1), .integer(-2_147_483_648)]))
+        XCTAssertEqual(stored("params"), .array([.integer(30), .integer(-2), .integer(0), .integer(40), .string("android.widget.GridLayout$LayoutParams")]))
+        XCTAssertEqual(stored("spec_class"), .string("android.widget.GridLayout$Spec"))
+        await stack.remove(id)
+    }
+}

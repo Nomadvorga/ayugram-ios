@@ -26,7 +26,12 @@ final class AyuPluginEndToEndMenusTests: XCTestCase {
             self.record("drawer", lambda: self.add_menu_item(MenuItemData(
                 menu_type=MenuItemType.DRAWER_MENU, text="Drawer row", item_id="drawer", on_click=self.drawer_clicked)))
             self.record("mvel", lambda: self.add_menu_item(MenuItemData(
-                menu_type=MenuItemType.CHAT_ACTION_MENU, text="MVEL", item_id="mvel", on_click=self.clicked, condition="user != null")))
+                menu_type=MenuItemType.CHAT_ACTION_MENU, text="MVEL", item_id="mvel", on_click=self.clicked, condition="user != null && user.id == 77")))
+            self.record("mvel_hidden", lambda: self.add_menu_item(MenuItemData(
+                menu_type=MenuItemType.CHAT_ACTION_MENU, text="MVEL hidden", item_id="mvel_hidden", on_click=self.clicked, condition="chat != null || user.id != 77")))
+            self.record("mvel_refused", lambda: self.add_menu_item(MenuItemData(
+                menu_type=MenuItemType.CHAT_ACTION_MENU, text="MVEL refused", item_id="mvel_refused", on_click=self.clicked,
+                condition=" ".join(["user.id", "+", "1", ">", "2"]))))      # computed: a literal would be a preflight blocker
 
         def shown(self, context):
             self.set_setting("condition", sorted(context))
@@ -77,10 +82,13 @@ final class AyuPluginEndToEndMenusTests: XCTestCase {
         XCTAssertEqual(stack.stored(id, "chat"), .string("chat"))
         XCTAssertEqual(stack.stored(id, "message"), .string("message"))
         XCTAssertEqual(stack.stored(id, "drawer"), .string("drawer"))
-        XCTAssertTrue(stack.stored(id, "mvel").string?.hasPrefix("!UnsupportedAPI") == true, "\(stack.stored(id, "mvel"))")
+        // Android's condition strings: evaluated by the SDK where it implements the expression, refused otherwise.
+        XCTAssertEqual(stack.stored(id, "mvel"), .string("mvel"))
+        XCTAssertEqual(stack.stored(id, "mvel_hidden"), .string("mvel_hidden"))
+        XCTAssertTrue(stack.stored(id, "mvel_refused").string?.hasPrefix("!UnsupportedAPI") == true, "\(stack.stored(id, "mvel_refused"))")
 
         let chat = await menus.open(AyuPluginMenuRequest(kind: .chatActionMenu, accountKey: nil), isPresented: { true })
-        XCTAssertEqual(chat.entries.map(\.identifier), ["e2e_menus:chat"])
+        XCTAssertEqual(chat.entries.map(\.identifier), ["e2e_menus:chat", "e2e_menus:mvel"])
         let row = try XCTUnwrap(chat.entries.first)
         XCTAssertEqual(row.text, "Chat row")
         XCTAssertEqual(row.subtext, "Synthetic")

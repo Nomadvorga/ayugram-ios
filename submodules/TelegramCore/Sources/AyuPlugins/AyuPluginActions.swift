@@ -54,6 +54,75 @@ public func ayuPluginReadDialog(account: Account, dialogId: Int64, maxId: Int32)
     }
 }
 
+/// Marks every dialog with unread messages as read, each the way the chat list's "Mark as Read"
+/// does (the topics of a forum included): the main list (`folderId` 0), the archive (1) or,
+/// with a negative `folderId`, both. A dialog with no unread message that is only marked unread
+/// by hand keeps its mark: Android reads the dialogs whose `unread_count` is above zero.
+public func ayuPluginReadAllDialogs(account: Account, folderId: Int32) -> Signal<Never, AyuPluginCoreError> {
+    let network: Network = account.network
+    let viewTracker: AccountViewTracker = account.viewTracker
+    let groups: [PeerGroupId]
+    if folderId < 0 {
+        groups = [.root, Namespaces.PeerGroup.archive]
+    } else if folderId == 0 {
+        groups = [.root]
+    } else if folderId == Namespaces.PeerGroup.archive.rawValue {
+        groups = [Namespaces.PeerGroup.archive]
+    } else {
+        groups = []
+    }
+    return account.postbox.transaction { transaction -> Void in
+        for groupId in groups {
+            for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: nil, additionalFilter: nil, stopOnFirstMatch: false) {
+                if let state = transaction.getCombinedPeerReadState(peerId), state.count == 0, state.markedUnread {
+                    continue
+                }
+                _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
+            }
+        }
+    }
+    |> castError(AyuPluginCoreError.self)
+    |> ignoreValues
+}
+
+/// Moves dialogs into the main list (`folderId` 0) or the archive (1) the way the chat list's
+/// "Archive" and "Unarchive" do, which also unpins them. As on Android, a dialog that is not in
+/// the chat list is skipped, and Saved Messages, the service notifications chat and a promoted
+/// chat never go to the archive. The value is Android's result: 0 when no dialog was accepted,
+/// 2 when the archive held no chat before, otherwise 1.
+public func ayuPluginAddDialogsToFolder(account: Account, dialogIds: [Int64], folderId: Int32) -> Signal<Int32, AyuPluginCoreError> {
+    let groupId: PeerGroupId
+    if folderId == 0 {
+        groupId = .root
+    } else if folderId == Namespaces.PeerGroup.archive.rawValue {
+        groupId = Namespaces.PeerGroup.archive
+    } else {
+        return .fail(.invalidArguments("folder_id must be 0 or 1"))
+    }
+    let accountPeerId = account.peerId
+    return account.postbox.transaction { transaction -> Int32 in
+        let toArchive = groupId != .root
+        let createsArchive = toArchive && transaction.getTopChatListEntries(groupId: groupId, count: 1).isEmpty
+        let promoted = Set(transaction.getAdditionalChatListItems().map { $0.peerId })
+        var added = false
+        for dialogId in dialogIds {
+            guard let peerId = ayuPluginCachedPeer(transaction: transaction, dialogId: dialogId)?.id else {
+                continue
+            }
+            if toArchive && (peerId == accountPeerId || dialogId == 777000 || promoted.contains(peerId)) {
+                continue
+            }
+            guard transaction.getPeerChatListIndex(peerId) != nil else {
+                continue
+            }
+            added = true
+            _internal_updatePeerGroupIdInteractively(transaction: transaction, peerId: peerId, groupId: groupId)
+        }
+        return !added ? 0 : (createsArchive ? 2 : 1)
+    }
+    |> castError(AyuPluginCoreError.self)
+}
+
 /// Hands a boxed `Updates` to the account's state manager, as a caller of `Network.request`
 /// does with a response. It passes the update hooks like a container the server pushed.
 public func ayuPluginProcessUpdates(account: Account, updates: Data) throws {

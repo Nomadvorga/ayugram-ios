@@ -7,6 +7,7 @@ import UserNotifications
 import AsyncDisplayKit
 import TelegramCore
 import SwiftSignalKit
+import AyuPluginTelegramAdapter
 import WebProxyTransport
 import Display
 import ComponentFlow
@@ -2381,7 +2382,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func openExternalUrl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
-        openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+        // Plugins that hook Android's `Browser.openUrl` see the URL first: they may replace it or cancel the opening.
+        // Without such a hook the completion runs at once.
+        AyuPluginTelegramAdapter.shared.applyURLOpenHooks(url: url, systemBrowser: forceExternal) { url in
+            guard let url else { return }
+            openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+        }
     }
     
     public func chatAvailableMessageActions(engine: TelegramEngine, accountPeerId: EnginePeer.Id, messageIds: Set<EngineMessage.Id>, keepUpdated: Bool) -> Signal<ChatAvailableMessageActions, NoError> {

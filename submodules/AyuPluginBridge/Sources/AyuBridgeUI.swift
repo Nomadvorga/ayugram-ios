@@ -226,7 +226,7 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "getSelectionStart": return .integer(Int64(self.selectionOffset(view.textField, isEnd: false)))
         case "getSelectionEnd": return .integer(Int64(self.selectionOffset(view.textField, isEnd: true)))
         case "isAttachedToWindow": return .bool(view.window != nil)
-        case "getText": return .string(view.label?.text ?? "")
+        case "getText": return .string(view.label == nil ? "" : view.bridgeText)
         case "getContentDescription": return view.contentDescription.map(AyuBridgeValue.string) ?? .null
         case "getPaddingLeft": return .integer(Int64(view.padding.left.rounded()))
         case "getPaddingTop": return .integer(Int64(view.padding.top.rounded()))
@@ -266,8 +266,8 @@ final class AyuBridgeUI: @unchecked Sendable {
               metadata.generation == command.generation else {
             throw AyuBridgeFailure("invalid_handle", "View is unavailable")
         }
-        let supportsMultiline = metadata.className == "android.widget.TextView"
-        guard supportsMultiline || metadata.className == "android.widget.EditText" else {
+        let supportsMultiline = metadata.className == "android.widget.TextView" || metadata.className == AyuBridgeButtonDefaults.className
+        guard supportsMultiline || AyuBridgeView.isEditTextClass(metadata.className) else {
             throw AyuBridgeFailure.unsupported(command.method)
         }
         guard let value = command.arguments.first else {
@@ -439,7 +439,7 @@ final class AyuBridgeUI: @unchecked Sendable {
         case "setFocusable":
             if let focusable = args.first?.bool { view.bridgeFocusable = focusable }
         case "setSelected":
-            if let selected = args.first?.bool { view.bridgeSelected = selected }
+            if let selected = args.first?.bool { view.bridgeSelected = selected; view.refreshBackgroundState() }
         case "setClickable":
             if let clickable = args.first?.bool { view.setBridgeClickable(clickable) }
         case "setMinimumWidth":
@@ -457,9 +457,12 @@ final class AyuBridgeUI: @unchecked Sendable {
                 view.childContainer.clipsToBounds = clips
             }
         case "requestLayout": view.invalidateBridgeLayout()
+        case "shakeView": view.shake()
         case "invalidate": view.setNeedsDisplay()
         case "clearFocus": _ = view.textField?.resignFirstResponder()
         case "setBackgroundColor":
+            view.removeButtonBackground()
+            view.forgetBackgroundStates()
             view.bridgeBackgroundColor = AyuBridgeUI.color(args[0].number ?? 0)
             view.backgroundShape = 0
             view.backgroundCornerRadius = 0
@@ -468,7 +471,18 @@ final class AyuBridgeUI: @unchecked Sendable {
             view.bridgeHasOutline = true
             view.updateBackgroundStyle()
         case "setBackgroundStyle":
+            view.removeButtonBackground()
             let style = args[0].object ?? [:]
+            if let states = style["state_list"]?.array {
+                // A StateListDrawable: the entry matching the view's state is applied as the background it is.
+                view.setBackgroundStates(states) { [weak self, weak view] method, arguments in
+                    guard let self, let view else { return }
+                    self.apply(Command(owner: command.owner, generation: command.generation, handle: command.handle, method: method,
+                                       arguments: arguments, backgroundDrawableHandle: nil, layoutClassName: nil, layoutHandle: nil), to: view)
+                }
+                break
+            }
+            view.forgetBackgroundStates()
             view.bridgeBackgroundColor = AyuBridgeUI.color(style["color"]?.number ?? 0)
             view.backgroundShape = Int(style["shape"]?.number ?? 0)
             view.backgroundCornerRadius = CGFloat(style["corner_radius"]?.number ?? 0)
@@ -481,6 +495,8 @@ final class AyuBridgeUI: @unchecked Sendable {
             }
             view.updateBackgroundStyle()
         case "clearBackground":
+            view.removeButtonBackground()
+            view.forgetBackgroundStates()
             view.bridgeBackgroundColor = .clear
             view.backgroundShape = 0
             view.backgroundCornerRadius = 0
@@ -1049,6 +1065,11 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     let className: String
     let label: AyuBridgeTextLabel?
     let checkBoxButton: UIButton?
+    /// Telegram's `EditTextBoldCursor` is an `EditText`.
+    static func isEditTextClass(_ name: String) -> Bool {
+        name == "android.widget.EditText" || name == "org.telegram.ui.Components.EditTextBoldCursor"
+    }
+
     let textField: UITextField?
     let image: UIImageView?
     let scrollingView: UIScrollView?
@@ -1059,7 +1080,8 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     var bridgeChecked = false
     var checkedChangeCallbackID: String?
     var hintColor: UIColor = .secondaryLabel
-    var orientation = 1
+    /// `LinearLayout` is horizontal until `setOrientation`.
+    var orientation = 0
     var visibility = 0
     var parameters: [String: AyuBridgeValue] = ["width": .number(-2), "height": .number(-2)]
     var padding = UIEdgeInsets.zero
@@ -1116,9 +1138,9 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
 
     init(owner: String, className: String, isIndeterminateProgressBar: Bool = false) {
         self.owner = owner; self.className = className
-        self.label = ["android.widget.TextView", "android.widget.CheckBox"].contains(className) ? AyuBridgeTextLabel() : nil
+        self.label = ["android.widget.TextView", "android.widget.CheckBox", AyuBridgeButtonDefaults.className].contains(className) ? AyuBridgeTextLabel() : nil
         self.checkBoxButton = className == "android.widget.CheckBox" ? UIButton(type: .system) : nil
-        self.textField = className == "android.widget.EditText" ? UITextField() : nil
+        self.textField = className == AyuBridgeBoldCursorField.className ? AyuBridgeBoldCursorField() : AyuBridgeView.isEditTextClass(className) ? UITextField() : nil
         self.image = ["android.widget.ImageView", "android.widget.ImageButton"].contains(className) ? UIImageView() : nil
         self.scrollingView = AyuBridgeUI.isScrollViewClass(className) ? UIScrollView() : nil
         self.progressBar = className == "android.widget.ProgressBar" && !isIndeterminateProgressBar ? UIProgressView(progressViewStyle: .bar) : nil
@@ -1126,6 +1148,8 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
         super.init(frame: .zero)
         if let label = self.label {
             label.numberOfLines = 0
+            // `TextAppearance.Material.Small`, the text appearance of a TextView without one: 14sp.
+            label.font = .systemFont(ofSize: 14)
             if self.checkBoxButton == nil { self.addSubview(label) }
         }
         if let checkBoxButton = self.checkBoxButton {
@@ -1160,13 +1184,150 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
             activityIndicator.startAnimating()
             self.addSubview(activityIndicator)
         }
+        if className == AyuBridgeButtonDefaults.className { self.applyButtonDefaults() }
     }
     required init?(coder: NSCoder) { return nil }
+
+    /// Set while a Button still has the background of its style.
+    private(set) var buttonBackground: AyuBridgeButtonBackground?
+    private var buttonPress: AyuBridgePressRecognizer?
+    /// `TextView.setAllCaps`: the text is shown in upper case and read back as it was set.
+    private(set) var bridgeAllCaps = false
+    var bridgeText: String { self.lastTextValue }
+
+    private func applyButtonDefaults() {
+        typealias Defaults = AyuBridgeButtonDefaults
+        self.bridgeAllCaps = true
+        self.padding = Defaults.padding
+        self.bridgeMinimumWidth = Defaults.minimumWidth
+        self.bridgeMinimumHeight = Defaults.minimumHeight
+        self.members.textMinimumWidth = Defaults.minimumWidth
+        self.members.textMinimumHeight = Defaults.minimumHeight
+        self.textTypefaceStyle = Defaults.typeface.packed
+        self.label?.font = Defaults.typeface.font(size: Defaults.textSize)
+        self.label?.textColor = Defaults.textColor
+        if let gravity = try? AyuBridgeViewGravity(.integer(Defaults.gravity)) {
+            self.gravity = gravity
+            self.label?.bridgeGravity = gravity
+        }
+        self.setBridgeClickable(true)
+        let background = AyuBridgeButtonBackground()
+        self.layer.insertSublayer(background.layer, at: 0)
+        self.buttonBackground = background
+        let press = AyuBridgePressRecognizer()
+        press.onChange = { [weak self] pressed in
+            guard let self else { return }
+            self.buttonBackground?.setPressed(pressed && self.bridgeEnabled && self.bridgeClickable)
+        }
+        self.addGestureRecognizer(press)
+        self.buttonPress = press
+    }
+
+    /// `AndroidUtilities.shakeView`: `translationX = 4x(1 - x) * sin(4 * pi * x) * 4dp` for 300 ms, x eased as
+    /// Android's default interpolator eases it; a running shake is replaced and the translation ends at zero.
+    static func shakeOffsets(steps: Int = 36) -> [CGFloat] {
+        (0...steps).map { index in
+            let time = Double(index) / Double(steps)
+            let x = cos((time + 1) * Double.pi) / 2 + 0.5
+            return CGFloat(4 * x * (1 - x) * sin(4 * x * Double.pi) * 4)
+        }
+    }
+
+    @MainActor func shake() {
+        self.translationX = 0
+        self.updateTransform()
+        let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        animation.values = Self.shakeOffsets()
+        animation.duration = 0.3
+        animation.calculationMode = .linear
+        animation.isAdditive = true
+        self.layer.add(animation, forKey: "ayu.shake")
+    }
+
+    // MARK: StateListDrawable background
+
+    private var backgroundStates: [(spec: [Int64], method: String, arguments: [AyuBridgeValue])]?
+    private var applyBackgroundState: ((String, [AyuBridgeValue]) -> Void)?
+    private var statePress: AyuBridgePressRecognizer?
+    private var statePressed = false
+    private var isApplyingBackgroundState = false
+
+    /// The drawable state Android matches a state list against.
+    var bridgeDrawableState: Set<Int64> {
+        var states: Set<Int64> = [16_842_909]
+        if self.bridgeEnabled { states.insert(16_842_910) }
+        if self.statePressed { states.insert(16_842_919) }
+        if self.bridgeSelected { states.insert(16_842_913) }
+        if self.bridgeChecked { states.insert(16_842_912) }
+        if self.textField?.isFirstResponder == true { states.insert(16_842_908) }
+        return states
+    }
+
+    @MainActor func setBackgroundStates(_ entries: [AyuBridgeValue], apply: @escaping (String, [AyuBridgeValue]) -> Void) {
+        self.backgroundStates = entries.compactMap { entry in
+            guard let fields = entry.object, let spec = fields["spec"]?.array?.compactMap(\.integer) else { return nil }
+            if let color = fields["color"] { return (spec, "setBackgroundColor", [color]) }
+            return fields["style"].map { (spec, "setBackgroundStyle", [$0]) }
+        }
+        self.applyBackgroundState = apply
+        if self.statePress == nil {
+            let press = AyuBridgePressRecognizer()
+            press.onChange = { [weak self] pressed in
+                guard let self else { return }
+                // Only a clickable or long-clickable enabled view is ever pressed.
+                let accepted = pressed && self.bridgeEnabled && (self.bridgeClickable || self.members.longClickable)
+                if accepted != self.statePressed { self.statePressed = accepted; self.refreshBackgroundState() }
+            }
+            self.addGestureRecognizer(press)
+            self.statePress = press
+        }
+        self.refreshBackgroundState()
+    }
+
+    /// A plain background replaces the state list.
+    @MainActor func forgetBackgroundStates() {
+        guard !self.isApplyingBackgroundState, self.backgroundStates != nil else { return }
+        self.backgroundStates = nil
+        self.applyBackgroundState = nil
+        self.statePressed = false
+        if let press = self.statePress { self.removeGestureRecognizer(press); self.statePress = nil }
+    }
+
+    /// Shows the first entry whose spec the view's state matches; none draws nothing, as on Android.
+    @MainActor func refreshBackgroundState() {
+        guard let entries = self.backgroundStates, let apply = self.applyBackgroundState else { return }
+        let states = self.bridgeDrawableState
+        self.isApplyingBackgroundState = true
+        defer { self.isApplyingBackgroundState = false }
+        if let entry = entries.first(where: { AyuBridgeDrawables.stateSpec($0.spec, matches: states) }) {
+            apply(entry.method, entry.arguments)
+        } else {
+            apply("clearBackground", [])
+        }
+    }
+
+    /// Any background a plugin sets, also none, replaces the one of the Button style.
+    @MainActor func removeButtonBackground() {
+        self.buttonBackground?.layer.removeFromSuperlayer()
+        self.buttonBackground = nil
+        if let press = self.buttonPress { self.removeGestureRecognizer(press); self.buttonPress = nil }
+    }
+
+    @MainActor func setBridgeAllCaps(_ caps: Bool) {
+        guard caps != self.bridgeAllCaps else { return }
+        self.bridgeAllCaps = caps
+        self.label?.text = self.displayedText(self.lastTextValue)
+        self.invalidateBridgeLayout()
+    }
+
+    private func displayedText(_ text: String) -> String {
+        self.bridgeAllCaps ? text.uppercased(with: Locale.current) : text
+    }
 
     @MainActor func setTextValue(_ text: String, notifyTextWatchers: Bool) {
         let previous = self.lastTextValue
         self.lastTextValue = text
-        self.label?.text = text
+        self.label?.text = self.displayedText(text)
         self.textField?.text = text
         self.checkBoxButton?.setTitle(text, for: .normal)
         self.checkBoxButton?.accessibilityLabel = text
@@ -1513,6 +1674,7 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     }
     @MainActor func setBridgeEnabled(_ enabled: Bool) {
         self.bridgeEnabled = enabled
+        self.refreshBackgroundState()
         self.textField?.isEnabled = enabled
         self.checkBoxButton?.isEnabled = enabled
         self.tap?.isEnabled = enabled && self.bridgeClickable
@@ -1520,6 +1682,7 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     @MainActor func setBridgeChecked(_ checked: Bool, notify: Bool) {
         guard self.bridgeChecked != checked else { return }
         self.bridgeChecked = checked
+        self.refreshBackgroundState()
         self.checkBoxButton?.isSelected = checked
         self.checkBoxButton?.accessibilityValue = checked ? "Checked" : "Not checked"
         if notify, let callbackID = self.checkedChangeCallbackID {
@@ -1557,36 +1720,51 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { super.touchesEnded(touches, with: event); self.touch(touches, action: 1) }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { super.touchesCancelled(touches, with: event); self.touch(touches, action: 3) }
 
+    /// The Android measured size: the content inside the padding plus the padding. Minimum sizes
+    /// (`setMinimumWidth`, `TextView.setMinHeight`...) bound the padded size, so the content sees them reduced.
     override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let horizontal = self.padding.left + self.padding.right
+        let vertical = self.padding.top + self.padding.bottom
+        let fit = self.contentSizeThatFits(
+            CGSize(width: size.width.isFinite && size.width > 0 ? max(1, size.width - horizontal) : size.width,
+                   height: size.height.isFinite && size.height > 0 ? max(1, size.height - vertical) : size.height),
+            minimumWidth: max(0, self.bridgeMinimumWidth - horizontal), minimumHeight: max(0, self.bridgeMinimumHeight - vertical),
+            textMinimumWidth: max(0, self.members.textMinimumWidth - horizontal),
+            textMinimumHeight: self.members.textMinimumHeight.map { max(0, $0 - vertical) })
+        return CGSize(width: fit.width + horizontal, height: fit.height + vertical)
+    }
+
+    private func contentSizeThatFits(_ size: CGSize, minimumWidth: CGFloat, minimumHeight: CGFloat,
+                                     textMinimumWidth: CGFloat, textMinimumHeight: CGFloat?) -> CGSize {
         if let label = self.label {
             let fit = label.sizeThatFits(size)
-            let minimumHeight = self.members.textMinimumHeight ?? CGFloat(self.textLayoutOptions.minimumHeight(lineHeight: Double(label.font.lineHeight)))
-            return CGSize(width: max(fit.width, self.bridgeMinimumWidth, self.members.textMinimumWidth), height: max(max(fit.height, minimumHeight), self.bridgeMinimumHeight))
+            let textHeight = textMinimumHeight ?? CGFloat(self.textLayoutOptions.minimumHeight(lineHeight: Double(label.font.lineHeight)))
+            return CGSize(width: max(fit.width, minimumWidth, textMinimumWidth), height: max(max(fit.height, textHeight), minimumHeight))
         }
         if let textField = self.textField {
-            let height = max(self.className == "android.widget.EditText" ? max(36, textField.sizeThatFits(size).height) : 0, self.bridgeMinimumHeight, self.members.textMinimumHeight ?? 0)
+            let height = max(AyuBridgeView.isEditTextClass(self.className) ? max(36, textField.sizeThatFits(size).height) : 0, minimumHeight, textMinimumHeight ?? 0)
             let width = size.width.isFinite && size.width > 0 ? size.width : textField.sizeThatFits(size).width
-            return CGSize(width: max(width, self.bridgeMinimumWidth, self.members.textMinimumWidth), height: height)
+            return CGSize(width: max(width, minimumWidth, textMinimumWidth), height: height)
         }
         if let image = self.image {
             let size = image.image?.size ?? .zero
-            return CGSize(width: max(size.width, self.bridgeMinimumWidth), height: max(size.height, self.bridgeMinimumHeight))
+            return CGSize(width: max(size.width, minimumWidth), height: max(size.height, minimumHeight))
         }
         if let progressBar = self.progressBar {
             let fit = progressBar.sizeThatFits(size)
-            return CGSize(width: max(fit.width, self.bridgeMinimumWidth), height: max(fit.height, self.bridgeMinimumHeight))
+            return CGSize(width: max(fit.width, minimumWidth), height: max(fit.height, minimumHeight))
         }
         if let activityIndicator = self.indeterminateProgressBar {
             let fit = activityIndicator.sizeThatFits(size)
-            return CGSize(width: max(fit.width, self.bridgeMinimumWidth), height: max(fit.height, self.bridgeMinimumHeight))
+            return CGSize(width: max(fit.width, minimumWidth), height: max(fit.height, minimumHeight))
         }
         if let checkBoxButton = self.checkBoxButton {
             let fit = checkBoxButton.sizeThatFits(size)
-            return CGSize(width: max(fit.width, self.bridgeMinimumWidth), height: max(fit.height, self.bridgeMinimumHeight))
+            return CGSize(width: max(fit.width, minimumWidth), height: max(fit.height, minimumHeight))
         }
 
         let children = self.bridgeChildren.filter { $0.visibility != 8 }
-        guard !children.isEmpty else { return CGSize(width: self.bridgeMinimumWidth, height: self.bridgeMinimumHeight) }
+        guard !children.isEmpty else { return CGSize(width: minimumWidth, height: minimumHeight) }
         let fittingWidth = size.width.isFinite && size.width > 0 ? size.width : 0
         let fittingHeight = size.height.isFinite && size.height > 0 ? size.height : 0
         let plans = children.map { child -> (view: AyuBridgeView, left: CGFloat, top: CGFloat, right: CGFloat, bottom: CGFloat, width: CGFloat, height: CGFloat) in
@@ -1605,18 +1783,33 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
             let cross = plans.reduce(CGFloat.zero) { total, plan in
                 max(total, vertical ? plan.left + plan.width + plan.right : plan.top + plan.height + plan.bottom)
             }
-            return vertical ? CGSize(width: max(cross, self.bridgeMinimumWidth), height: max(main, self.bridgeMinimumHeight)) : CGSize(width: max(main, self.bridgeMinimumWidth), height: max(cross, self.bridgeMinimumHeight))
+            return vertical ? CGSize(width: max(cross, minimumWidth), height: max(main, minimumHeight)) : CGSize(width: max(main, minimumWidth), height: max(cross, minimumHeight))
+        }
+
+        if self.className == AyuBridgeGridLayout.className {
+            let grid = self.gridPlacement(plans.map { ($0.view, CGSize(width: $0.width, height: $0.height)) })?.size ?? .zero
+            return CGSize(width: max(grid.width, minimumWidth), height: max(grid.height, minimumHeight))
         }
 
         if self.className == "android.widget.ScrollView" || self.className == "android.widget.HorizontalScrollView" {
             let plan = plans[0]
-            return CGSize(width: max(plan.left + plan.width + plan.right, self.bridgeMinimumWidth), height: max(plan.top + plan.height + plan.bottom, self.bridgeMinimumHeight))
+            return CGSize(width: max(plan.left + plan.width + plan.right, minimumWidth), height: max(plan.top + plan.height + plan.bottom, minimumHeight))
         }
 
         let result = plans.reduce(CGSize.zero) { result, plan in
             CGSize(width: max(result.width, plan.left + plan.width + plan.right), height: max(result.height, plan.top + plan.height + plan.bottom))
         }
-        return CGSize(width: max(result.width, self.bridgeMinimumWidth), height: max(result.height, self.bridgeMinimumHeight))
+        return CGSize(width: max(result.width, minimumWidth), height: max(result.height, minimumHeight))
+    }
+
+    /// Cells of a `GridLayout`; nil where Android refuses the children's specs (it throws while measuring).
+    private func gridPlacement(_ children: [(view: AyuBridgeView, size: CGSize)]) -> AyuBridgeGridLayout.Placement? {
+        AyuBridgeGridLayout.place(children.map { child in
+            let margins = child.view.bridgeMargins
+            return AyuBridgeGridLayout.Child(row: AyuBridgeGridLayout.defined(child.view.parameters["row"]),
+                column: AyuBridgeGridLayout.defined(child.view.parameters["column"]), size: child.size,
+                left: margins.left, top: margins.top, right: margins.right, bottom: margins.bottom)
+        }, rowCount: self.members.gridRowCount, columnCount: self.members.gridColumnCount, alignmentMode: self.members.gridAlignment)
     }
 
     private var bridgeMargins: (left: CGFloat, top: CGFloat, right: CGFloat, bottom: CGFloat) {
@@ -1632,20 +1825,27 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
         return (0, 0, 0, 0)
     }
 
+    /// A child's size while its parent is being measured. `MATCH_PARENT` is the content size here, as
+    /// Android measures it against a wrapping parent; `layoutSubviews` stretches it to the final size.
     private func bridgeDimension(_ key: String, available: CGFloat, intrinsic: CGFloat) -> CGFloat {
         let raw = self.parameters[key]?.number ?? -2
-        if raw == -1 { return available }
+        if raw == -1 { return available > 0 ? min(available, max(0, intrinsic)) : max(0, intrinsic) }
         if raw == -2 { return max(0, intrinsic) }
         return raw.isFinite && raw >= 0 ? CGFloat(raw) : 0
     }
 
+    /// Set on a root view by whoever sizes it from its content (the custom-view dialog).
+    var onRootLayoutInvalidated: (() -> Void)?
+
     @MainActor func invalidateBridgeLayout() {
         self.setNeedsLayout()
+        var root = self
         var current: UIView? = self.superview
         while let view = current {
-            if let bridge = view as? AyuBridgeView { bridge.setNeedsLayout() }
+            if let bridge = view as? AyuBridgeView { bridge.setNeedsLayout(); root = bridge }
             current = view.superview
         }
+        root.onRootLayoutInvalidated?()
     }
 
     @MainActor func layoutBridgeHierarchy() {
@@ -1664,10 +1864,12 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
         self.label?.frame = content
         self.checkBoxButton?.frame = content
         self.textField?.frame = content
+        (self.textField as? AyuBridgeBoldCursorField)?.layoutLine(in: self)
         self.image?.frame = content
         self.scrollingView?.frame = content
         self.progressBar?.frame = content
         self.indeterminateProgressBar?.frame = content
+        self.buttonBackground?.layout(bounds: self.bounds)
         let children = self.bridgeChildren.filter { $0.visibility != 8 }
         var plans: [(view: AyuBridgeView, left: CGFloat, top: CGFloat, right: CGFloat, bottom: CGFloat, width: CGFloat, height: CGFloat)] = []
         for child in children {
@@ -1683,8 +1885,11 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
                 let raw = child.parameters[key]?.number ?? -2
                 return raw == -1 ? available : raw == -2 ? intrinsic : CGFloat(raw)
             }
-            let width = dimension("width", available: availableWidth, intrinsic: fit.width)
-            let height = dimension("height", available: availableHeight, intrinsic: fit.height)
+            // A scroll view measures its child unbounded along the scroll axis, whatever its LayoutParams ask.
+            let width = self.className == "android.widget.HorizontalScrollView" && child.parameters["width"]?.number == -1
+                ? fit.width : dimension("width", available: availableWidth, intrinsic: fit.width)
+            let height = self.className == "android.widget.ScrollView" && child.parameters["height"]?.number == -1
+                ? fit.height : dimension("height", available: availableHeight, intrinsic: fit.height)
             plans.append((child, left, top, right, bottom, width, height))
         }
 
@@ -1729,6 +1934,14 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
                 let maximum = max(0, scroll.contentSize.width - scroll.bounds.width)
                 let offset = min(max(0, scroll.contentOffset.x), maximum)
                 if scroll.contentOffset.x != offset { scroll.setContentOffset(CGPoint(x: offset, y: 0), animated: false) }
+            }
+        } else if self.className == AyuBridgeGridLayout.className {
+            let placement = self.gridPlacement(plans.map { ($0.view, CGSize(width: $0.width, height: $0.height)) })
+            for (index, plan) in plans.enumerated() {
+                // Without a placement every child keeps a zero frame: Android shows nothing either (it throws).
+                let frame = placement?.frames[index] ?? .zero
+                plan.view.bounds = CGRect(origin: .zero, size: frame.size)
+                plan.view.center = CGPoint(x: content.minX + frame.midX, y: content.minY + frame.midY)
             }
         } else if self.className == "android.widget.LinearLayout" {
             let isVertical = self.orientation == 1
@@ -1807,6 +2020,8 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     private let actions: [AyuBridgeUI.DialogAction]
     private let cancelable: Bool
     private var bulletin: UIView?
+    private var contentScroll: UIScrollView?
+    private var contentHeight: NSLayoutConstraint?
     var onDismiss: (() -> Void)?
     private var didReportDismissal = false
 
@@ -1860,7 +2075,7 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
             label.font = .preferredFont(forTextStyle: .headline)
             label.textAlignment = .center
             label.numberOfLines = 0
-            stack.addArrangedSubview(label)
+            stack.addArrangedSubview(Self.inset(label, horizontal: Self.textInset))
         }
         if let message = self.dialogMessage, !message.isEmpty {
             let label = UILabel()
@@ -1869,13 +2084,24 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
             label.textColor = .secondaryLabel
             label.textAlignment = .center
             label.numberOfLines = 0
-            stack.addArrangedSubview(label)
+            stack.addArrangedSubview(Self.inset(label, horizontal: Self.textInset))
         }
 
-        let contentHeight = max(88, CGFloat(max(1, self.content.bridgeChildren.count)) * 52 + self.content.padding.top + self.content.padding.bottom)
-        self.content.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(self.content)
-        self.content.heightAnchor.constraint(equalToConstant: contentHeight).isActive = true
+        // Android's AlertDialog puts the custom view, MATCH_PARENT by WRAP_CONTENT, into its scroll container.
+        let scroll = UIScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.alwaysBounceVertical = false
+        self.content.translatesAutoresizingMaskIntoConstraints = true
+        self.content.autoresizingMask = []
+        scroll.addSubview(self.content)
+        stack.addArrangedSubview(scroll)
+        let contentHeight = scroll.heightAnchor.constraint(equalToConstant: 0)
+        // Below a label's compression resistance: a tall view scrolls before the title or buttons are squeezed.
+        contentHeight.priority = UILayoutPriority(740)
+        contentHeight.isActive = true
+        self.contentScroll = scroll
+        self.contentHeight = contentHeight
+        self.content.onRootLayoutInvalidated = { [weak self] in self?.viewIfLoaded?.setNeedsLayout() }
 
         let buttonRow = UIStackView()
         buttonRow.axis = .horizontal
@@ -1890,16 +2116,19 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
             button.addAction(UIAction { [weak self] _ in self?.perform(action) }, for: .touchUpInside)
             buttonRow.addArrangedSubview(button)
         }
-        if !self.actions.isEmpty { stack.addArrangedSubview(buttonRow) }
+        if !self.actions.isEmpty { stack.addArrangedSubview(Self.inset(buttonRow, horizontal: 16)) }
 
+        // Android: min(356dp, screen - 48dp) wide; the custom view spans the whole width.
+        let preferredWidth = card.widthAnchor.constraint(equalToConstant: Self.maximumWidth)
+        preferredWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             card.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
             card.centerYAnchor.constraint(equalTo: self.view.centerYAnchor),
-            card.leadingAnchor.constraint(greaterThanOrEqualTo: self.view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            card.trailingAnchor.constraint(lessThanOrEqualTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            card.widthAnchor.constraint(lessThanOrEqualToConstant: 440),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            preferredWidth,
+            card.widthAnchor.constraint(lessThanOrEqualTo: self.view.safeAreaLayoutGuide.widthAnchor, constant: -Self.screenMargin),
+            card.heightAnchor.constraint(lessThanOrEqualTo: self.view.safeAreaLayoutGuide.heightAnchor, constant: -Self.screenMargin),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
         ])
@@ -1913,6 +2142,33 @@ final class AyuBridgeView: UIView, UITextFieldDelegate {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         self.content.setNeedsLayout()
+        guard let scroll = self.contentScroll, let contentHeight = self.contentHeight, scroll.bounds.width > 0 else { return }
+        let size = Self.contentSize(of: self.content, width: scroll.bounds.width)
+        if self.content.frame != CGRect(origin: .zero, size: size) { self.content.frame = CGRect(origin: .zero, size: size) }
+        if scroll.contentSize != size { scroll.contentSize = size }
+        // A new constant lays the card out again; the measured height is then the same and the pass ends.
+        if contentHeight.constant != size.height { contentHeight.constant = size.height }
+    }
+
+    static let maximumWidth: CGFloat = 356
+    static let screenMargin: CGFloat = 48
+    private static let textInset: CGFloat = 24
+
+    /// The custom view as the dialog measures it: the given width, the height of its content.
+    static func contentSize(of content: AyuBridgeView, width: CGFloat) -> CGSize {
+        CGSize(width: width, height: ceil(content.sizeThatFits(CGSize(width: width, height: 0)).height))
+    }
+
+    private static func inset(_ view: UIView, horizontal: CGFloat) -> UIView {
+        let container = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: container.topAnchor), view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            view.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: horizontal),
+            view.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -horizontal),
+        ])
+        return container
     }
 
     override func viewDidDisappear(_ animated: Bool) {
